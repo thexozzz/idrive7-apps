@@ -205,6 +205,7 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             noteStart('ready');
+            self._showMenu();
             self._watchNetwork();
             self._watchCar();
             if (foregroundStart) {
@@ -227,7 +228,23 @@ AirPlayApp.prototype._setupRhmi = function () {
     if (!this._state || !this._rows.airNet || !this._rows.airAddr || !this._rows.airState) {
         return Promise.reject(new Error('uiDescription has no AirPlay rows'));
     }
+    self._write('tileAir', 'AirPlay');
+    self._write('tileRdp', 'RDP');
+    self._write('tileVnc', 'VNC');
+    self._write('tileHost', 'Adres');
     return Promise.resolve();
+};
+
+AirPlayApp.prototype._showMenu = function () {
+    var rhmi = this.rhmiApplication;
+    if (!rhmi || typeof rhmi.openState !== 'function') {
+        noteStart('no-openState');
+        return;
+    }
+    noteStart('open-menu');
+    Promise.resolve(rhmi.openState('ST_OnlineApps_G21AirPlay_Menu')).catch(function (err) {
+        noteStart('open-menu ' + (err && err.message));
+    });
 };
 
 AirPlayApp.prototype._secret = function (kind) {
@@ -474,6 +491,9 @@ AirPlayApp.prototype._setVisible = function (visible) {
         return;
     }
     this._visible = visible;
+    if (visible) {
+        this._showMenu();
+    }
     if (!this._initialized || !this._appStatusService) {
         return;
     }

@@ -11,56 +11,29 @@
           "properties": { "Visible": { "value": 1, "type": "UInt" } },
           "rows": [ { "Text": { "value": "SID_AIRPLAY_TITLE", "type": "StringId" } } ]
         },
-        "23": {
+        "2": {
           "type": "label",
-          "name": "airState",
+          "name": "airCanvas",
           "properties": {
             "Visible": { "value": 1, "type": "UInt" },
             "Focusable": { "value": 0, "type": "UInt" }
           },
-          "rows": [ { "Text": { "value": "waiting", "type": "Text" } } ]
+          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
         },
-        "31": {
+        "3": {
           "type": "button",
-          "name": "tileAir",
+          "name": "airOpen",
           "properties": {
             "Visible": { "value": 1, "type": "UInt" },
             "Focusable": { "value": 3, "type": "UInt" }
           },
-          "rows": [ { "Text": { "value": "SID_TILE_AIRPLAY", "type": "StringId" } } ]
-        },
-        "32": {
-          "type": "button",
-          "name": "tileRdp",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "SID_TILE_RDP", "type": "StringId" } } ]
-        },
-        "33": {
-          "type": "button",
-          "name": "tileVnc",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "SID_TILE_VNC", "type": "StringId" } } ]
-        },
-        "34": {
-          "type": "button",
-          "name": "tileHost",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "SID_TILE_HOST", "type": "StringId" } } ]
+          "rows": [ { "Text": { "value": "Menu", "type": "Text" } } ]
         }
       }
     },
     "2": {
       "type": "state",
-      "name": "ST_OnlineApps_G21AirPlay_Status",
+      "name": "ST_OnlineApps_G21AirPlay_Menu",
       "components": {
         "21": {
           "type": "label",
@@ -79,6 +52,51 @@
             "Focusable": { "value": 0, "type": "UInt" }
           },
           "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
+        },
+        "23": {
+          "type": "label",
+          "name": "airState",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 0, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "waiting", "type": "Text" } } ]
+        },
+        "31": {
+          "type": "button",
+          "name": "tileAir",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
+        },
+        "32": {
+          "type": "button",
+          "name": "tileRdp",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "RDP", "type": "Text" } } ]
+        },
+        "33": {
+          "type": "button",
+          "name": "tileVnc",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "VNC", "type": "Text" } } ]
+        },
+        "34": {
+          "type": "button",
+          "name": "tileHost",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "Adres", "type": "Text" } } ]
         }
       }
     }

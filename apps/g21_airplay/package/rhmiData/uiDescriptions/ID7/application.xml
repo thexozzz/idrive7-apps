@@ -3,23 +3,14 @@
     <container id="1" type="state" widget="LT_State_Laptimer">
         <layoutGroup id="5" name="List">
             <property id="3" value="1"/>
-            <component id="23" type="label" widget="LT_Label_1Graphic_Scalable">
+            <component id="2" type="label" widget="LT_Label_1Graphic_Scalable">
                 <property id="2" value="1"/>
                 <property id="3" value="0"/>
             </component>
         </layoutGroup>
         <layoutGroup id="6" name="Bar">
             <property id="3" value="1"/>
-            <component id="31" type="button" widget="LT_Button_1Row_Laptimer">
-                <property id="3" value="3"/>
-            </component>
-            <component id="32" type="button" widget="LT_Button_1Row_Laptimer">
-                <property id="3" value="3"/>
-            </component>
-            <component id="33" type="button" widget="LT_Button_1Row_Laptimer">
-                <property id="3" value="3"/>
-            </component>
-            <component id="34" type="button" widget="LT_Button_1Row_Laptimer">
+            <component id="3" type="button" widget="LT_Button_1Row_Laptimer">
                 <property id="3" value="3"/>
             </component>
         </layoutGroup>
@@ -38,6 +29,26 @@
             <component id="22" type="label" widget="LT_Label_1Row">
                 <property id="2" value="1"/>
                 <property id="3" value="0"/>
+            </component>
+            <component id="23" type="label" widget="LT_Label_1Row">
+                <property id="2" value="1"/>
+                <property id="3" value="0"/>
+            </component>
+            <component id="31" type="button" widget="LT_Button_1Row">
+                <property id="2" value="1"/>
+                <property id="3" value="3"/>
+            </component>
+            <component id="32" type="button" widget="LT_Button_1Row">
+                <property id="2" value="1"/>
+                <property id="3" value="3"/>
+            </component>
+            <component id="33" type="button" widget="LT_Button_1Row">
+                <property id="2" value="1"/>
+                <property id="3" value="3"/>
+            </component>
+            <component id="34" type="button" widget="LT_Button_1Row">
+                <property id="2" value="1"/>
+                <property id="3" value="3"/>
             </component>
         </layoutGroup>
     </container>

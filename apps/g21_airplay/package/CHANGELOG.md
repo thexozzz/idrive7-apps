@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.8
+
+- Po starcie otwiera stronę z napisami AirPlay, RDP, VNC i Adres. Pusta strona startowa zostaje tylko podkładem.
+
 ## 0.1.7
 
 - Start dostaje też WakeUpOnDemand, WodControl i Provisioning, tak jak MGU Store. Bez nich OnlineApp przerywa otwieranie na następnym brakującym interfejsie.
