@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.3.0",
+  "application": {
+    "uuid": "8f3c1a20-6c4e-4b1a-9d2e-1a0b7c6d5e4f",
+    "type": "OnlineApp",
+    "name": "g21_hello",
+    "vendor": "owner",
+    "version": "0.1.0",
+    "defaultLanguage": "en_GB",
+    "uiDescriptions": [
+      {
+        "applicationFilePath": "./uiDescriptions/ID7/application.xml",
+        "uiDescriptionFilePath": "./uiDescriptions/ID7/uiDescription.json",
+        "hmi": ["ID7"]
+      }
+    ],
+    "stringBundleUuid": "a1b2c3d4-e5f6-4789-8012-3456789abcde",
+    "resourceBundleUuid": "b2c3d4e5-f6a7-4890-b123-456789abcdef",
+    "variantGroups": [
+      {
+        "stringsPath": "./variantGroups/Common/texts",
+        "resourcesPath": "./variantGroups/Common/images",
+        "hmi": ["ID7"],
+        "brands": ["BMW"]
+      }
+    ],
+    "entryPoints": [
+      {
+        "name": "g21_hello",
+        "uuid": "c3d4e5f6-a7b8-4901-8234-56789abcdef0",
+        "textId": "SID_HELLO_TITLE",
+        "icon": "hello_icon.png",
+        "insertionStateId": 24107,
+        "insertionFocusId": 2,
+        "insertionMode": "INSERT_BELOW",
+        "insertionOrder": 0,
+        "insertionPriority": 0,
+        "previewType": "NONE",
+        "bookmarkable": true,
+        "private": null,
+        "appearance": "DEFAULT",
+        "isGroupHeader": false,
+        "insertionGroup": 0
+      }
+    ]
+  }
+}

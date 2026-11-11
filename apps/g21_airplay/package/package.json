@@ -1,0 +1,39 @@
+{
+  "name": "g21_airplay",
+  "version": "0.1.0",
+  "description": "Lustro ekranu iPhone przez AirPlay w sieci Wi-Fi, do ktorej jest podlaczony MGU Store.",
+  "private": false,
+  "main": "javascript/runner.js",
+  "oapAppSettings": {
+    "maxDiskUsage": 10485760,
+    "cpuLimit": 20,
+    "memoryThresholdKB": 131072,
+    "priority": "PRIO_MEDIUM",
+    "visibility": "FOREGROUND",
+    "latencyClass": "FOREGROUND",
+    "loggingId": "AIRP",
+    "userLoginRequired": false,
+    "backgroundPriority": 150,
+    "someipManifest": "manifest.json"
+  },
+  "files": [
+    "config",
+    "rhmiData",
+    "package.json",
+    "npm-shrinkwrap.json",
+    "permissions.json",
+    "javascript",
+    "manifest.json",
+    "CHANGELOG.md"
+  ],
+  "dependencies": {
+    "oap-sdk": "24.10.2"
+  },
+  "engines": {
+    "node": ">=8.7.0"
+  },
+  "license": "MIT",
+  "mguLocalOnly": true,
+  "mguInternet": true,
+  "mguHmi": ["ID7"]
+}

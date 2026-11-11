@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "g21_airplay",
+  "version": "0.1.0",
+  "tree": "package",
+  "internet": true,
+  "modules": [
+    "src/main.js",
+    "src/uplink.js",
+    "src/settings_manager.js",
+    "src/display_output.js",
+    "src/parked_gate.js",
+    "src/video_decoder.js",
+    "src/cluster_render_adapter.js",
+    "src/cluster_render_client.js"
+  ],
+  "sdk": [
+    "oap-sdk/src/core/OnlineApp.js",
+    "oap-sdk/src/logging/logging"
+  ]
+}

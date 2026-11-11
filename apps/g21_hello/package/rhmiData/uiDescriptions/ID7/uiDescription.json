@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.3.0",
+  "containers": {
+    "1": {
+      "type": "state",
+      "name": "ST_OnlineApps_G21Hello",
+      "components": {
+        "10": {
+          "type": "title",
+          "name": "helloTitle",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" }
+          },
+          "rows": [
+            { "Text": { "value": "SID_HELLO_TITLE", "type": "StringId" } }
+          ]
+        },
+        "21": {
+          "type": "label",
+          "name": "helloStatus",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 0, "type": "UInt" }
+          },
+          "rows": [
+            { "Text": { "value": "Template ready", "type": "Text" } }
+          ]
+        }
+      }
+    }
+  }
+}

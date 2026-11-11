@@ -1,0 +1,7 @@
+{
+  "requires": {
+    "mgu-deploy": "0.2.0"
+  },
+  "uninstallable": true,
+  "mguHmi": ["ID7"]
+}

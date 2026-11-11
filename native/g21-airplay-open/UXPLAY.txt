@@ -1,0 +1,10 @@
+UxPlay sources are in third_party/UxPlay.
+
+Upstream: https://github.com/FDH2/UxPlay
+Tag: v1.73.7
+Commit: df67c212a433cf6dda3676dd40c097900d24e645
+License: GPL-3.0-only (third_party/UxPlay/LICENSE). Those files stay under that license.
+The rest of this repository is MIT.
+
+build-uxplay.sh compiles them for the head unit. The service starts the
+resulting uxplay binary only while MGU Store's uplink is Wi-Fi.

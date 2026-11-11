@@ -1,0 +1,14 @@
+{
+  "name": "bmw-g21-mgu-dev",
+  "private": true,
+  "description": "Local development environment for iDrive 7 apps on a BMW G21 2020. Packages are published as source. This repository does not contain BMW oap-sdk.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tools/test_all.js",
+    "validate": "node tools/validate_repo.js"
+  }
+}

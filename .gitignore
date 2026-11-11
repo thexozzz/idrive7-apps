@@ -1,0 +1,28 @@
+# BMW oap-sdk is extracted from the owner's head unit and is not redistributable.
+oap-sdk/
+**/node_modules/oap-sdk/
+
+# Built packages contain the SDK when linked on a machine that has a donor.
+dist/
+*.mgu
+*.tgz
+native/g21-airplay-open/uxplay
+native/g21-airplay-open/build/
+
+# Vehicle and credential material. Never commit these.
+.env
+.env.*
+*.pem
+*.key
+id_rsa
+id_ed25519
+id_ecdsa
+connect.txt
+data/enrollments/
+known_hosts
+
+# Local head-unit copies used only for signal checks.
+reference/
+preview/
+*.log
+node_modules/

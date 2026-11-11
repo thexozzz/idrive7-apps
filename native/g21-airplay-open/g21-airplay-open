@@ -1,0 +1,160 @@
+#!/bin/sh
+# Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) on the Wi-Fi network
+# MGU Store is using. The binary is uxplay next to this script, or $UXPLAY,
+# or uxplay on PATH. It is not built into this source tree.
+#
+# Inbound accept, only from that lease subnet and only on that interface:
+# UDP 5353 (mDNS) and UxPlay -p legacy ports
+# TCP 7100, 7000, 7001 and UDP 6000, 6001, 7011.
+# Documented in FDH2/UxPlay README, "After installation" and option -p.
+set -u
+
+TABLE=g21_airplay
+STATUS=/run/mgu-uplink/status.json
+LEASE=/run/mgu-uplink/lease.json
+STAMP=/run/g21-airplay.stamp
+REPORT=/run/g21-airplay.status
+UXPID=
+
+field() {
+    sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "$2" | head -n 1
+}
+
+number() {
+    sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p" "$2" | head -n 1
+}
+
+subnet() {
+    awk -v ip="$1" -v prefix="$2" 'BEGIN {
+        n = split(ip, o, ".")
+        if (n != 4 || prefix < 1 || prefix > 32) exit 1
+        for (i = 1; i <= 4; i++) if (o[i] < 0 || o[i] > 255) exit 1
+        acc = o[1] * 16777216 + o[2] * 65536 + o[3] * 256 + o[4]
+        shift = 32 - prefix
+        if (shift > 0) {
+            size = 1
+            for (i = 0; i < shift; i++) size *= 2
+            acc = int(acc / size) * size
+        }
+        printf "%d.%d.%d.%d/%d\n", int(acc / 16777216) % 256, int(acc / 65536) % 256, int(acc / 256) % 256, acc % 256, prefix
+    }'
+}
+
+find_ux() {
+    if [ -n "${UXPLAY:-}" ] && [ -x "$UXPLAY" ]; then
+        printf '%s\n' "$UXPLAY"
+        return 0
+    fi
+    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    if [ -x "$dir/uxplay" ]; then
+        printf '%s\n' "$dir/uxplay"
+        return 0
+    fi
+    command -v uxplay 2>/dev/null
+}
+
+report() {
+    printf '%s\n' "$1" > "$REPORT"
+}
+
+clear_table() {
+    nft delete table inet "$TABLE" 2>/dev/null || true
+}
+
+stop_ux() {
+    if [ -n "$UXPID" ]; then
+        kill "$UXPID" 2>/dev/null || true
+        UXPID=
+    fi
+}
+
+idle() {
+    stop_ux
+    if [ -f "$STAMP" ]; then
+        clear_table
+        rm -f "$STAMP"
+    fi
+}
+
+open_ports() {
+    iface=$1
+    net=$2
+    nft -f - <<EOF
+add table inet $TABLE
+delete table inet $TABLE
+table inet $TABLE {
+    chain input {
+        type filter hook input priority -10; policy accept;
+        iifname "$iface" ip saddr $net udp dport 5353 accept
+        iifname "$iface" ip saddr $net tcp dport 7100 accept
+        iifname "$iface" ip saddr $net tcp dport 7000 accept
+        iifname "$iface" ip saddr $net tcp dport 7001 accept
+        iifname "$iface" ip saddr $net udp dport 6000 accept
+        iifname "$iface" ip saddr $net udp dport 6001 accept
+        iifname "$iface" ip saddr $net udp dport 7011 accept
+    }
+}
+EOF
+}
+
+start_ux() {
+    ssid=$1
+    ip=$2
+    bin=$(find_ux) || true
+    if [ -z "$bin" ]; then
+        stop_ux
+        report "missing|$ssid|$ip"
+        return 0
+    fi
+    if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
+        report "running|$ssid|$ip"
+        return 0
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export G21_YUV=/run/g21-airplay/latest.yuv
+    mkdir -p /run/g21-airplay
+    "$bin" -n G21 -nh -p -vsync no -fs -vs waylandsink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
+    UXPID=$!
+    report "running|$ssid|$ip"
+}
+
+apply() {
+    kind=$(field kind "$STATUS")
+    link=$(field link "$STATUS")
+    iface=$(field interface "$LEASE")
+    ip=$(field ip "$LEASE")
+    prefix=$(number prefix "$LEASE")
+    ssid=$(field ssid "$STATUS")
+    case $kind in
+        wifi) ;;
+        *) idle; report "idle|uplink-not-wifi|"; return 0 ;;
+    esac
+    case $link in
+        online|connected) ;;
+        *) idle; report "idle|wifi-down|"; return 0 ;;
+    esac
+    case $iface in
+        ""|*[!A-Za-z0-9._-]*) idle; report "idle|bad-interface|"; return 0 ;;
+    esac
+    net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
+    stamp="$iface $net"
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        open_ports "$iface" "$net"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    start_ux "$ssid" "$ip"
+}
+
+stop() {
+    stop_ux
+    clear_table
+    rm -f "$STAMP"
+    report "idle|stopped|"
+    exit 0
+}
+
+trap stop TERM INT
+while true; do
+    apply
+    sleep 5
+done

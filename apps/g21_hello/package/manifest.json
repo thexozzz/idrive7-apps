@@ -1,0 +1,25 @@
+{
+  "proxies": {
+    "de.bmw.infotainment.telematic.oapcontroller.OAPController": "*",
+    "de.bmw.infotainment.hmi.remote.RemoteHmi": "*",
+    "de.bmw.infotainment.hmi.remote.RemoteHmiApplication": "*",
+    "de.bmw.infotainment.hmi.entrypoint.EntryPoint": "*",
+    "de.bmw.infotainment.hmi.entrypoint.EntryPointManager": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement.ResourceManager": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement.ResourceBundle": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement.StringBundle": "*",
+    "de.bmw.infotainment.telematic.oap.PrivateEntryPoint": {
+      "instances": ["${userId}"],
+      "methods": ["registerEntryPoint", "unregisterEntryPoint", "setSelected", "setAvailability"]
+    },
+    "de.bmw.infotainment.hmi.hmicontext.HMIContext": {
+      "instances": ["HMI_CID"],
+      "attributes": { "currentDisplayLanguage": "rs" }
+    }
+  },
+  "services": {
+    "de.bmw.infotainment.telematic.oap.AppStatus": {
+      "instances": ["${userId}"]
+    }
+  }
+}

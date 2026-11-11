@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "g21_hello",
+  "version": "0.1.0",
+  "tree": "package",
+  "modules": [
+    "src/main.js"
+  ],
+  "sdk": [
+    "oap-sdk/src/core/OnlineApp.js",
+    "oap-sdk/src/logging/logging"
+  ]
+}

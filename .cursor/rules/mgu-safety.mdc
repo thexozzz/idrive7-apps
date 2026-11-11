@@ -1,0 +1,15 @@
+---
+description: Safety and documentation rules for BMW MGU iDrive 7 app work
+alwaysApply: true
+---
+
+# MGU app work
+
+Read `AGENTS.md` before editing apps, scripts, or `docs/`.
+
+- Apps target the infotainment head unit only. Do not change DSC, DME, DDE, VTG, or safety configuration, and do not add write flags for those interfaces.
+- Do not run SSH, installers, or publish scripts unless the current user message explicitly approves that exact command.
+- Never commit `oap-sdk/`, `*.mgu`, private keys, VIN files, or head-unit logs.
+- App JavaScript under `apps/` and `lib/` must run on Node 8: no optional chaining, nullish coalescing, or later standard-library APIs.
+- A behavior change updates `docs/` in the same change and labels unconfirmed G21 behavior as a hypothesis.
+- New apps stay `uninstallable: true` and out of `mgu-repo.json` until their local tests pass.

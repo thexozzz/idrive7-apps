@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "components": [
+    {
+      "id": "g21_hello",
+      "kind": "app",
+      "path": "apps/g21_hello",
+      "build": "unit",
+      "title": "G21 Hello",
+      "description": "Szablon aplikacji iDrive 7 instalowanej przez MGU Store. Ekran statusu, bez zapisu do sterowników.",
+      "uninstallable": true,
+      "mguHmi": ["ID7"]
+    },
+    {
+      "id": "g21_airplay",
+      "kind": "app",
+      "path": "apps/g21_airplay",
+      "build": "unit",
+      "title": "G21 AirPlay",
+      "description": "Lustro ekranu iPhone przez AirPlay w sieci Wi-Fi MGU Store.",
+      "uninstallable": true,
+      "mguHmi": ["ID7"],
+      "requires": { "g21-airplay-open": "0.1.0", "cluster-render": "0.5.4" }
+    }
+  ],
+  "tools": [
+    {
+      "id": "g21-airplay-open",
+      "path": "native/g21-airplay-open",
+      "version": "0.1.0",
+      "title": "AirPlay na Wi-Fi Store",
+      "description": "Wpuszcza AirPlay tylko z podsieci Wi-Fi, do ktorej jest podlaczony MGU Store.",
+      "mguHmi": ["ID7"],
+      "service": {
+        "exec": "g21-airplay-open",
+        "groups": ["video"],
+        "environment": { "XDG_RUNTIME_DIR": "/run/wayland" },
+        "wantedBy": "multi-user.target"
+      }
+    }
+  ]
+}
