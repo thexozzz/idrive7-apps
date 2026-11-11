@@ -8,7 +8,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H2 | Firmware zachowuje się jak `P18_23w44.2` z `idrive7-apps` | osobny odczyt wersji, jeszcze nie ma go w skrypcie diagnostycznym, żeby nie zbierać danych pojazdu przy pierwszym połączeniu |
 | H3 | Dawca `x_call` na tej jednostce ma SDK 24.10.x z `OnlineApp` i `logging` | budowa `g21_hello` przez Store; błąd linkowania wskaże brakującą nazwę |
 | H4 | Minimalny RHMI szablonu otwiera kafelek i jedną etykietę | pierwsza instalacja `g21_hello` z UI Store |
-| H5 | `insertionStateId` 24107 nie koliduje z innym ekranem | H4; przy kolizji kafelek się nie pokaże albo otworzy obcy stan |
+| H5 | Lista aplikacji iDrive 7 to stan `20974`, ten sam co w `robertn_waze_cluster` | po aktualizacji kafelek `g21_airplay` jest w menu aplikacji, nie tylko na stronie Installed w Store |
 | H6 | G21 z HUD przyjmie `cluster-render` tak jak G05 z dokumentacji mapy | osobny projekt, po H1 i po instalacji renderera ze Store, nie z tego repozytorium |
 | H7 | Aplikacja z `mguInternet` dosięgnie adresu w sieci LAN hotspotu, a nie tylko internetu publicznego | próba połączenia na postoju do serwera, który uruchomi właściciel |
 | H8 | Hotspot iPhone’a da się dołączyć z poziomu `mgu-uplink`, jeśli ogłasza WPA2 | ustawienia Wi-Fi Store; sieć tylko WPA3 na radiu Broadcom jest z góry opisana jako nieskuteczna |
