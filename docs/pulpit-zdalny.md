@@ -24,7 +24,7 @@ Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12
 
 ## Postój
 
-Sesja startuje tylko po próbce prędkości i tylko gdy bramka postoju mówi, że auto stoi. Brak próbki blokuje start (`speed-unknown`). Jazda albo utrata próbki rozłącza aktywną sesję. Usługa `g21-airplay-open` uruchamia UxPlay dopiero, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow`. Bez tego pliku odbiornik nie wstaje sam z Wi-Fi.
+AirPlay startuje bez próbki prędkości i nie jest gaszony przez jazdę. RDP i VNC nadal startują tylko po próbce i tylko na postoju. Brak próbki blokuje te dwa (`speed-unknown`). Jazda albo utrata próbki rozłącza ich aktywną sesję. Usługa `g21-airplay-open` uruchamia UxPlay, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow`. Bez tego pliku odbiornik nie wstaje sam z Wi-Fi.
 
 ## Protokoły
 

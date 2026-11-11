@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.16
+
+- AirPlay startuje bez prędkości i nie jest gaszony w jeździe.
+
 ## 0.1.15
 
 - Rysunek nie zakrywa kolumny wstecz i nie przejmuje pokrętła. Po wejściu da się wrócić do iDrive.

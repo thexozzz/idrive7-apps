@@ -31,9 +31,11 @@ function createSessionManager(opts) {
     }
 
     function connect(name, nextTarget) {
-        var check = gateCheck();
-        if (!check.ok) {
-            return Promise.resolve(check);
+        if (name !== 'airplay') {
+            var check = gateCheck();
+            if (!check.ok) {
+                return Promise.resolve(check);
+            }
         }
         if (!sessions[name] || typeof sessions[name].connect !== 'function') {
             return Promise.resolve({ ok: false, reason: 'unknown-protocol' });
@@ -93,7 +95,7 @@ function createSessionManager(opts) {
         sendMouseScroll: function (delta) { return forward('sendMouseScroll', [delta]); },
         sendKey: function (key, down) { return forward('sendKey', [key, down]); },
         onVehicle: function () {
-            if (active && gate.hudAllowed() !== true) {
+            if (active && active !== 'airplay' && gate.hudAllowed() !== true) {
                 return disconnect().then(function () {
                     return { ok: false, reason: gate.known() ? 'not-parked' : 'speed-unknown', stopped: true };
                 });

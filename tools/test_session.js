@@ -25,6 +25,11 @@ var vncCalls = { connect: 0, disconnect: 0 };
 var manager = sessions.createSessionManager({
     gate: gate,
     sessions: {
+        airplay: {
+            connect: function () { return { ok: true, state: 'starting' }; },
+            disconnect: function () { return { ok: true }; },
+            getStatus: function () { return { state: 'starting' }; },
+        },
         vnc: {
             connect: function () {
                 vncCalls.connect += 1;
@@ -47,7 +52,17 @@ var manager = sessions.createSessionManager({
     },
 });
 
-manager.connect('vnc', { host: '10.0.0.8' }).then(function (blocked) {
+manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
+    assert.strictEqual(startedAir.ok, true);
+    assert.strictEqual(manager.active(), 'airplay');
+    return manager.onVehicle();
+}).then(function (kept) {
+    assert.notStrictEqual(kept.stopped, true);
+    assert.strictEqual(manager.active(), 'airplay');
+    return manager.disconnect();
+}).then(function () {
+    return manager.connect('vnc', { host: '10.0.0.8' });
+}).then(function (blocked) {
     assert.strictEqual(blocked.reason, 'speed-unknown');
     assert.strictEqual(vncCalls.connect, 0);
     gate.sample(10000);
