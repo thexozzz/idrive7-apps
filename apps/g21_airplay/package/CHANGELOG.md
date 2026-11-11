@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.13
+
+- `menu_draw.js` jest na liście modułów. Bez tego Store nie buduje paczki.
+
 ## 0.1.12
 
 - Menu jest rysowane pikselami na rendererze. Lista RHMI na tej jednostce otwiera się pusta.

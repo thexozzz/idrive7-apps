@@ -122,6 +122,24 @@ function checkTree(errors) {
                 fail(errors, component.id + ' missing module ' + mod);
             }
         });
+        meta.modules.forEach(function (mod) {
+            if (!mod.endsWith('.js')) {
+                return;
+            }
+            var text = fs.readFileSync(path.join(appDir, mod), 'utf8');
+            var re = /require\('\.\/([^']+)'\)/g;
+            var match;
+            while ((match = re.exec(text))) {
+                var target = match[1];
+                if (target.slice(-3) !== '.js') {
+                    target += '.js';
+                }
+                var listed = 'src/' + target;
+                if (meta.modules.indexOf(listed) === -1) {
+                    fail(errors, component.id + ' ' + mod + ' requires ./' + match[1] + ' but mgu-app.json does not list ' + listed);
+                }
+            }
+        });
         meta.sdk.forEach(function (mod) {
             if (mod.indexOf('oap-sdk/') !== 0) {
                 fail(errors, component.id + ' sdk entry must be an oap-sdk path: ' + mod);
