@@ -83,7 +83,7 @@ function screenOutputs(app) {
 }
 
 function AirPlayApp() {
-    OnlineApp.call(this);
+    noteStart('construct');
     this._state = null;
     this._rows = {};
     this._visible = false;
@@ -171,10 +171,8 @@ function AirPlayApp() {
             self._setVisible(false);
         }
     });
+    noteStart('constructed');
 }
-
-AirPlayApp.prototype = Object.create(OnlineApp.prototype);
-AirPlayApp.prototype.constructor = AirPlayApp;
 
 AirPlayApp.prototype._startedForeground = function () {
     var data = this.getVisibilityData && this.getVisibilityData();
@@ -507,7 +505,14 @@ AirPlayApp.prototype._handleShutdown = function () {
     return this._shutdownPromise;
 };
 
-var app = new AirPlayApp();
+var app = new OnlineApp();
+Object.keys(AirPlayApp.prototype).forEach(function (name) {
+    if (name !== 'constructor' && typeof AirPlayApp.prototype[name] === 'function') {
+        app[name] = AirPlayApp.prototype[name];
+    }
+});
+AirPlayApp.call(app);
+noteStart('start-called');
 app.start().catch(function (err) {
     noteStart('start ' + (err && err.message));
     logger.error('g21_airplay failed to start: ' + (err && err.message));
