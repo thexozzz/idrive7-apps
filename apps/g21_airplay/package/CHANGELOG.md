@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.6
+
+- Start wymaga interfejsu AppBookmarks. Bez pliku tego interfejsu OnlineApp przerywa otwieranie.
+
 ## 0.1.5
 
 - Aplikacja jest zwykłym OnlineApp, tak jak aplikacje, które na tej jednostce zostają włączone. Poprzednia wersja dziedziczyła po niej i MainApp gasił proces zaraz po starcie.

@@ -1,5 +1,7 @@
 # G21 AirPlay
 
+Start na tej jednostce woła `AppBookmarks`. Manifest deklaruje `registerBookmark`, inaczej OnlineApp przerywa otwieranie, bo brakuje pliku interfejsu. Potwierdzone 11 listopada 2026 w logu startu: `de_bmw_infotainment_telematic_oap_AppBookmarks.json` nie istniał.
+
 Na postoju aplikacja ma trzy kafelki: AirPlay, RDP i VNC. Działa jedna sesja. Bez odczytanej prędkości żadna się nie uruchamia. Szczegóły są w `docs/pulpit-zdalny.md`.
 
 Aplikacja nie otwiera własnego portu AirPlay. Odbiornikiem jest [UxPlay](https://github.com/FDH2/UxPlay) 1.73.7 (GPL-3.0). Usługa `g21-airplay-open` startuje go poleceniem `uxplay -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720`, gdy MGU Store jest na Wi-Fi, i kończy go, gdy to Wi-Fi znika.

@@ -8,6 +8,10 @@
     "de.bmw.infotainment.hmi.resourcemanagement.ResourceManager": "*",
     "de.bmw.infotainment.hmi.resourcemanagement.ResourceBundle": "*",
     "de.bmw.infotainment.hmi.resourcemanagement.StringBundle": "*",
+    "de.bmw.infotainment.telematic.oap.AppBookmarks": {
+      "instances": ["${userId}"],
+      "methods": ["registerBookmark"]
+    },
     "de.bmw.infotainment.telematic.oap.PrivateEntryPoint": {
       "instances": ["${userId}"],
       "methods": ["registerEntryPoint", "unregisterEntryPoint", "setSelected", "setAvailability"]
