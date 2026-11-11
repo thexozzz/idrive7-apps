@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.14
+
+- Pod menu widać stan UxPlay: start, działa, brak programu, brak Wi-Fi albo brak postoju.
+
 ## 0.1.13
 
 - `menu_draw.js` jest na liście modułów. Bez tego Store nie buduje paczki.

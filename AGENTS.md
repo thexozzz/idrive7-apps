@@ -44,7 +44,9 @@ Nie twórz wydania GitHub z paczką `.tgz` albo `.mgu`. Kanał Releases zaczął
 
 Każda zmiana zachowania przechodzi `node tools/test_all.js` przed uznaniem jej za gotową. Zestaw sprawdza kontrakt pakietu, brak sekretów i bramkę postoju dla HUD.
 
-Test na samochodzie nie zastępuje testu lokalnego i nie jest uruchamiany z tego repozytorium automatycznie. Emulator GPU z `idrive7-apps` jest narzędziem tamtego projektu. Ten szablon rysuje przez RHMI, więc emulator renderera go nie pokrywa.
+Test na samochodzie nie zastępuje testu lokalnego i nie jest uruchamiany z tego repozytorium automatycznie. Emulator GPU z `idrive7-apps` jest narzędziem tamtego projektu.
+
+Na tym G21 tekst RHMI zostaje pusty. Widoczne menu AirPlay 0.1.13 jest ramką prostokątów na rendererze, a kod tego rysunku jest w `apps/g21_airplay/src/menu_draw.js`. Nowy plik aplikacji dopisuje się do `modules` w `mgu-app.json`, inaczej Store nie zbuduje paczki.
 
 ## Dokumentacja
 

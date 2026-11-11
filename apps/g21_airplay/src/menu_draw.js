@@ -48,7 +48,16 @@ var FONT = {
     's': ['00000', '00000', '01111', '10000', '01110', '00001', '11110'],
     't': ['00100', '00100', '11111', '00100', '00100', '00100', '00011'],
     'u': ['00000', '00000', '10001', '10001', '10001', '10011', '01101'],
-    'y': ['00000', '00000', '10001', '10001', '01111', '00001', '01110']
+    'y': ['00000', '00000', '10001', '10001', '01111', '00001', '01110'],
+    'U': ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+    'b': ['10000', '10000', '11110', '10001', '10001', '10001', '11110'],
+    'c': ['00000', '00000', '01110', '10000', '10000', '10000', '01110'],
+    'f': ['00111', '00100', '01110', '00100', '00100', '00100', '00100'],
+    'k': ['10000', '10010', '10100', '11000', '10100', '10010', '10001'],
+    'n': ['00000', '00000', '11001', '10101', '10011', '10001', '10001'],
+    'w': ['00000', '00000', '10001', '10001', '10101', '10101', '01010'],
+    'x': ['00000', '00000', '10001', '01010', '00100', '01010', '10001'],
+    'z': ['00000', '00000', '11111', '00010', '00100', '01000', '11111']
 };
 
 var ITEMS = [
@@ -135,7 +144,7 @@ FrameBuilder.prototype.bytes = function () {
     return Buffer.concat(this.parts);
 };
 
-function buildFrame(items, selected, width, height) {
+function buildFrame(items, selected, width, height, detail) {
     var draw = new FrameBuilder();
     var rowH = 120;
     var top = 48;
@@ -149,6 +158,9 @@ function buildFrame(items, selected, width, height) {
         }
         draw.text(items[i].title, 72, y + 28, 6, INK);
         draw.text(items[i].hint, 72, y + 78, 4, HINT);
+    }
+    if (detail) {
+        draw.text(detail, 72, top + items.length * (rowH + 16) + 12, 5, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -194,6 +206,7 @@ function createMenuSurface(opts) {
     var lastOp = null;
     var lastPush = 0;
     var noted = false;
+    var detail = '';
 
     function isSocket(file) {
         try {
@@ -241,7 +254,7 @@ function createMenuSurface(opts) {
         sendPlace();
         sendShow(true);
         sendGrab(true);
-        var built = buildFrame(items, selected, screen.w, screen.h);
+        var built = buildFrame(items, selected, screen.w, screen.h, detail);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -387,6 +400,14 @@ function createMenuSurface(opts) {
         },
         move: move,
         press: press,
+        setStatus: function (text) {
+            var next = String(text || '');
+            if (next === detail) {
+                return;
+            }
+            detail = next;
+            paint();
+        },
         selected: function () { return selected; }
     };
 }

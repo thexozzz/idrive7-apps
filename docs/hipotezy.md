@@ -22,6 +22,6 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H16 | `g21-present` i `g21-rdp` rysują pulpit na centralnym ekranie przez ten sam Wayland co UxPlay | na postoju VNC albo RDP do komputera w tej samej sieci, obraz 1920×720, kursor reaguje na pokrętło |
 | H17 | `openEntryState` po `mapEntryState` pokazuje stronę AirPlay. Odczyt 2026-11-12: 0.1.10 otworzył stronę, ale `openEntryState` zwrócił `INVALID_UUID`, a widokiem był pusty obraz | po aktualizacji widać listę menu, nie pusty obraz |
 | H18 | Lista `LT_State_Wide` z `LT_Button_2Row_2Text` rysuje menu tak jak ustawienia aplikacji, która na tym aucie pokazuje tekst. Sprawdzenie 2026-11-12: 0.1.11 otworzył tę listę (`state-open`) i wiersze zostały puste | po zmianie opisu wiersze widać bez renderera |
-| H19 | Ramka CLEAR i RECT na gnieździe renderera rysuje cztery wiersze menu na stronie, która jest z przodu | po aktualizacji na ekranie widać AirPlay, RDP, VNC i Adres |
+| H19 | Ramka CLEAR i RECT na gnieździe renderera rysuje cztery wiersze menu na stronie, która jest z przodu. Potwierdzone 2026-11-12 przez właściciela: menu AirPlay jest widoczne | zostaje wzorem dla następnych ekranów; nie wracać do samego tekstu RHMI |
 
 H2 celowo nie jest częścią domyślnej diagnostyki. Wersja firmware bywa powiązana z numerem pojazdu w logach; dopiszemy ją do skryptu dopiero, gdy zakres odczytu zostanie zatwierdzony osobno.

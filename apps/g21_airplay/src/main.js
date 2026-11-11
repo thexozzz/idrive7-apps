@@ -45,6 +45,19 @@ process.on('uncaughtException', function (err) {
 var STATE_NAME = 'ST_OnlineApps_G21AirPlay';
 var RECEIVER_STATUS = '/run/g21-airplay.status';
 var FOREGROUND_REASONS = ['ENTRY_POINT', 'LUM', 'BOOKMARK', 'START_WIDGET', 'TRIGGER_HMI', 'SPEECH_COMMAND'];
+var STATUS_TEXT = {
+    'speed-unknown': 'brak predkosci',
+    'not-parked': 'nie stoi',
+    'uplink-not-wifi': 'brak wifi',
+    'wifi-down': 'brak wifi',
+    'no-lease': 'brak wifi',
+    'starting': 'UxPlay start',
+    'running': 'UxPlay dziala',
+    'missing': 'UxPlay brak',
+    'idle': 'AirPlay idle',
+    'waiting': 'AirPlay idle',
+    'unknown': 'AirPlay idle'
+};
 
 function screenOutputs(app) {
     function layerOutput(name) {
@@ -331,8 +344,16 @@ AirPlayApp.prototype._choose = function (name) {
         self._sessionText = result.ok
             ? (name + ' ' + (result.state || 'ok'))
             : (name + ' ' + (result.reason || 'blad'));
+        self._tellMenu(result.ok ? (result.state || 'starting') : result.reason);
         self._sync();
     });
+};
+
+AirPlayApp.prototype._tellMenu = function (code) {
+    if (!this._menu || typeof this._menu.setStatus !== 'function') {
+        return;
+    }
+    this._menu.setStatus(STATUS_TEXT[code] || '');
 };
 
 AirPlayApp.prototype._bindTile = function (name, protocol) {
@@ -472,6 +493,7 @@ AirPlayApp.prototype._sync = function () {
     var choice = uplink.selectStoreWifi(snap.status, snap.lease);
     if (!choice.ok) {
         this._paint(choice, { state: 'idle', detail: choice.reason });
+        this._tellMenu(choice.reason);
         return;
     }
     var text = '';
@@ -493,6 +515,9 @@ AirPlayApp.prototype._sync = function () {
         ? 'UxPlay G21'
         : (receiver.mode === 'missing' ? 'brak programu uxplay' : receiver.mode);
     this._paint(choice, { state: receiver.mode || 'waiting', detail: detail });
+    if (this._sessions.active() === 'airplay') {
+        this._tellMenu(receiver.mode === 'running' ? 'running' : (receiver.mode === 'missing' ? 'missing' : 'starting'));
+    }
 };
 
 AirPlayApp.prototype._takeFrame = function () {
