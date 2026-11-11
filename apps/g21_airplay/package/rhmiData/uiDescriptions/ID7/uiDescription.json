@@ -11,24 +11,6 @@
           "properties": { "Visible": { "value": 1, "type": "UInt" } },
           "rows": [ { "Text": { "value": "SID_AIRPLAY_TITLE", "type": "StringId" } } ]
         },
-        "21": {
-          "type": "label",
-          "name": "airNet",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 0, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "Wi-Fi", "type": "Text" } } ]
-        },
-        "22": {
-          "type": "label",
-          "name": "airAddr",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 0, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
-        },
         "23": {
           "type": "label",
           "name": "airState",
@@ -73,6 +55,30 @@
             "Focusable": { "value": 3, "type": "UInt" }
           },
           "rows": [ { "Text": { "value": "SID_TILE_HOST", "type": "StringId" } } ]
+        }
+      }
+    },
+    "2": {
+      "type": "state",
+      "name": "ST_OnlineApps_G21AirPlay_Status",
+      "components": {
+        "21": {
+          "type": "label",
+          "name": "airNet",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 0, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "Wi-Fi", "type": "Text" } } ]
+        },
+        "22": {
+          "type": "label",
+          "name": "airAddr",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 0, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
         }
       }
     }

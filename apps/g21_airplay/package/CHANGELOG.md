@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.3
+
+- Pierwsza strona ma jeden obraz i pasek przycisków, tak jak aplikacje, które na tej jednostce się otwierają. Tekst statusu jest na stronie obok.
+
 ## 0.1.2
 
 - Ekran startowy używa szablonu LT_State_Laptimer, tego samego co aplikacje, które na tej jednostce się otwierają. Limit pamięci i CPU jest taki jak u nich.

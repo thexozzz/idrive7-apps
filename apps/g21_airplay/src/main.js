@@ -18,14 +18,24 @@ var vncFactory = require('./vnc_client.js');
 var inputFactory = require('./input_manager.js');
 var frameSinkFactory = require('./frame_sink.js');
 
-var logger = logging.getSDKLogger();
-
 function noteStart(text) {
-    try {
-        fs.appendFileSync('../data/start.log', text + '\n');
-    } catch (err) {
-        return;
-    }
+    var line = String(text) + '\n';
+    ['../data/start.log', 'data/start.log', '/tmp/g21-airplay-start.log'].forEach(function (file) {
+        try {
+            fs.appendFileSync(file, line);
+        } catch (err) {
+            return;
+        }
+    });
+}
+
+noteStart('load');
+var logger;
+try {
+    logger = logging.getSDKLogger();
+} catch (err) {
+    noteStart('logger ' + (err && err.message));
+    logger = { info: noteStart, warn: noteStart, error: noteStart };
 }
 
 process.on('uncaughtException', function (err) {
@@ -181,6 +191,7 @@ AirPlayApp.prototype._appInitialized = function () {
             return self.initialized();
         })
         .then(function () {
+            noteStart('ready');
             self._watchNetwork();
             self._watchCar();
             if (foregroundStart) {
