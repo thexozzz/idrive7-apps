@@ -26,7 +26,7 @@ Sesja startuje tylko po próbce prędkości i tylko gdy bramka postoju mówi, ż
 
 VNC mówi RFB 3.8 z kodowania Raw i CopyRect. Hasło, jeśli jest, czyta z `/var/opt/g21_airplay/vnc.secret` i nie trafia do logu ani do ustawień. Obraz idzie do gniazda `/run/g21-desktop/frame.sock`. `g21-present` kładzie go na Wayland przez ten sam GStreamer co UxPlay.
 
-RDP to `g21-rdp` (FreeRDP, GDI programowe, 1920×720). Certyfikat jest przyjmowany tylko wtedy, gdy jego odcisk jest już w `/run/g21-session/cert`. Inaczej połączenie pada, a odcisk ląduje w `/run/g21-desktop.status` jako `cert|...`. Hasło jest w `/var/opt/g21_airplay/rdp.secret`, a na czas sesji w pliku `0600`. Nie ma go w argumentach procesu.
+RDP to `g21-rdp` (FreeRDP, GDI programowe, 1920×720). Pierwsze połączenie nie ufa certyfikatowi: odcisk pojawia się na ekranie jako `cert|...`. Drugie kliknięcie kafelka RDP zapisuje ten odcisk i łączy się tylko z nim. Hasło jest w `/var/opt/g21_airplay/rdp.secret`, a na czas sesji w pliku `0600`. Nie ma go w argumentach procesu.
 
 Sprzętowy dekoder nie jest włączany. Na tej jednostce nie ma potwierdzonego VA-API dla RDP, a UxPlay i tak zostawia wybór `decodebin`.
 

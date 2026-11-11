@@ -77,6 +77,15 @@ manager.connect('vnc', { host: '10.0.0.8' }).then(function (blocked) {
     assert.strictEqual(refused.reason, 'rdp-client-missing');
     assert.strictEqual(fs.existsSync(files.secret), false);
     assert.strictEqual(fs.existsSync(files.target), false);
+    fs.writeFileSync(files.desktopStatus, 'cert|aa:bb\n');
+    var trusted = desktop.createRdpSession({
+        paths: files,
+        clientExists: function () { return true; },
+        sendInput: function () { return { ok: true }; },
+    });
+    var again = trusted.connect({ host: '10.1.1.1', port: 3389, user: 'driver' });
+    assert.strictEqual(again.ok, true);
+    assert.strictEqual(fs.readFileSync(files.cert, 'utf8').indexOf('aa:bb'), 0);
     var desk = settingsFactory.createDesktopSettings({
         rdp: { octets: [10, 0, 0, 5], port: 3389, user: 'driver' },
         inspect: true,

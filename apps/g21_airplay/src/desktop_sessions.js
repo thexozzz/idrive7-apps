@@ -102,8 +102,19 @@ function createRdpSession(opts) {
                     return { ok: false, reason: 'secret-write-failed' };
                 }
             }
-            if (target.cert) {
-                writeText(files.cert, target.cert + '\n');
+            var cert = target.cert || '';
+            if (!cert) {
+                try {
+                    var seen = fs.readFileSync(files.desktopStatus, 'utf8');
+                    if (seen.indexOf('cert|') === 0) {
+                        cert = seen.split('|')[1].replace(/\s+$/, '');
+                    }
+                } catch (err) {
+                    cert = '';
+                }
+            }
+            if (cert) {
+                writeText(files.cert, cert + '\n');
             }
             var wrote = writeText(files.target, host + ' ' + port + ' ' + user + '\n');
             if (!wrote.ok) {
