@@ -221,30 +221,24 @@ AirPlayApp.prototype._setupRhmi = function () {
     ['airNet', 'airAddr', 'airState', 'tileAir', 'tileRdp', 'tileVnc', 'tileHost'].forEach(function (name) {
         self._rows[name] = rhmi.getByName(name);
     });
+    this._rows.airTitle = rhmi.getByName('airTitle');
     self._bindTile('tileAir', 'airplay');
     self._bindTile('tileRdp', 'rdp');
     self._bindTile('tileVnc', 'vnc');
     self._bindHost();
-    if (!this._state || !this._rows.airNet || !this._rows.airAddr || !this._rows.airState) {
-        return Promise.reject(new Error('uiDescription has no AirPlay rows'));
-    }
     self._write('tileAir', 'AirPlay');
     self._write('tileRdp', 'RDP');
     self._write('tileVnc', 'VNC');
     self._write('tileHost', 'Adres');
+    if (!this._state || !this._rows.tileAir) {
+        noteStart('ui-missing');
+        return Promise.reject(new Error('uiDescription has no AirPlay screen'));
+    }
     return Promise.resolve();
 };
 
 AirPlayApp.prototype._showMenu = function () {
-    var rhmi = this.rhmiApplication;
-    if (!rhmi || typeof rhmi.openState !== 'function') {
-        noteStart('no-openState');
-        return;
-    }
-    noteStart('open-menu');
-    Promise.resolve(rhmi.openState('ST_OnlineApps_G21AirPlay_Menu')).catch(function (err) {
-        noteStart('open-menu ' + (err && err.message));
-    });
+    noteStart('menu-on-bar');
 };
 
 AirPlayApp.prototype._secret = function (kind) {
@@ -425,7 +419,7 @@ AirPlayApp.prototype._paint = function (choice, session) {
     }
     var modes = this._input.modes();
     var pad = modes.touchpad === 'available' ? 'touchpad' : 'touchpad niedostepny';
-    this._write('airState', this._sessionText + '. ' + detail + '. ' + pad);
+    this._write('airTitle', detail);
 };
 
 AirPlayApp.prototype._watchNetwork = function () {

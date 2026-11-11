@@ -5,12 +5,6 @@
       "type": "state",
       "name": "ST_OnlineApps_G21AirPlay",
       "components": {
-        "10": {
-          "type": "title",
-          "name": "airTitle",
-          "properties": { "Visible": { "value": 1, "type": "UInt" } },
-          "rows": [ { "Text": { "value": "SID_AIRPLAY_TITLE", "type": "StringId" } } ]
-        },
         "2": {
           "type": "label",
           "name": "airCanvas",
@@ -18,85 +12,36 @@
             "Visible": { "value": 1, "type": "UInt" },
             "Focusable": { "value": 0, "type": "UInt" }
           },
-          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
-        },
-        "3": {
-          "type": "button",
-          "name": "airOpen",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "Menu", "type": "Text" } } ]
-        }
-      }
-    },
-    "2": {
-      "type": "state",
-      "name": "ST_OnlineApps_G21AirPlay_Menu",
-      "components": {
-        "21": {
-          "type": "label",
-          "name": "airNet",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 0, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "Wi-Fi", "type": "Text" } } ]
-        },
-        "22": {
-          "type": "label",
-          "name": "airAddr",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 0, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
-        },
-        "23": {
-          "type": "label",
-          "name": "airState",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 0, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "waiting", "type": "Text" } } ]
+          "rows": [ { "Graphic": { "value": "", "type": "Text" } } ]
         },
         "31": {
           "type": "button",
           "name": "tileAir",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "AirPlay", "type": "Text" } } ]
+          "properties": { "Focusable": { "value": 3, "type": "UInt" } },
+          "rows": [ { "Text": { "value": "SID_TILE_AIRPLAY", "type": "StringId" } } ]
         },
         "32": {
           "type": "button",
           "name": "tileRdp",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "RDP", "type": "Text" } } ]
+          "properties": { "Focusable": { "value": 3, "type": "UInt" } },
+          "rows": [ { "Text": { "value": "SID_TILE_RDP", "type": "StringId" } } ]
         },
         "33": {
           "type": "button",
           "name": "tileVnc",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "VNC", "type": "Text" } } ]
+          "properties": { "Focusable": { "value": 3, "type": "UInt" } },
+          "rows": [ { "Text": { "value": "SID_TILE_VNC", "type": "StringId" } } ]
         },
         "34": {
           "type": "button",
           "name": "tileHost",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" },
-            "Focusable": { "value": 3, "type": "UInt" }
-          },
-          "rows": [ { "Text": { "value": "Adres", "type": "Text" } } ]
+          "properties": { "Focusable": { "value": 3, "type": "UInt" } },
+          "rows": [ { "Text": { "value": "SID_TILE_HOST", "type": "StringId" } } ]
+        },
+        "10": {
+          "type": "title",
+          "name": "airTitle",
+          "rows": [ { "Text": { "value": "SID_AIRPLAY_TITLE", "type": "StringId" } } ]
         }
       }
     }
