@@ -85,6 +85,7 @@ function screenOutputs(app) {
 function AirPlayApp() {
     noteStart('construct');
     this._state = null;
+    this._entryUuid = null;
     this._rows = {};
     this._visible = false;
     this._shutdownPromise = null;
@@ -205,11 +206,15 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             noteStart('ready');
-            self._showMenu();
             self._watchNetwork();
             self._watchCar();
-            if (foregroundStart) {
+            var lastUuid = self.getLastExecutedEntryPointUuid && self.getLastExecutedEntryPointUuid();
+            if (lastUuid) {
+                self._entryUuid = lastUuid;
+            }
+            if (foregroundStart || lastUuid) {
                 self._setVisible(true);
+                return self._openPage();
             }
         });
 };
@@ -239,6 +244,31 @@ AirPlayApp.prototype._setupRhmi = function () {
 
 AirPlayApp.prototype._showMenu = function () {
     noteStart('menu-on-bar');
+    return this._openPage();
+};
+
+AirPlayApp.prototype._openPage = function () {
+    if (!this.rhmiApplication) {
+        noteStart('open-skip');
+        return Promise.resolve();
+    }
+    var rhmi = this.rhmiApplication;
+    var action = null;
+    try {
+        if (this._entryUuid && typeof rhmi.openEntryState === 'function') {
+            action = rhmi.openEntryState(this._entryUuid);
+        } else if (typeof rhmi.openState === 'function') {
+            action = rhmi.openState(STATE_NAME);
+        }
+    } catch (err) {
+        noteStart('open ' + (err && err.message));
+        return Promise.resolve();
+    }
+    return Promise.resolve(action).then(function () {
+        noteStart('state-open');
+    }).catch(function (err) {
+        noteStart('open ' + (err && err.message));
+    });
 };
 
 AirPlayApp.prototype._secret = function (kind) {
@@ -380,13 +410,16 @@ AirPlayApp.prototype._registerEntryPoints = function () {
 };
 
 AirPlayApp.prototype._onEntryPointExecute = function (uuid) {
+    if (uuid) {
+        this._entryUuid = uuid;
+    }
+    noteStart('entry');
     if (this._shutdownPromise || !this.rhmiApplication || !uuid) {
+        noteStart('entry-skip');
         return Promise.resolve();
     }
     this._setVisible(true);
-    return Promise.resolve(this.rhmiApplication.openEntryState(uuid)).catch(function (err) {
-        logger.warn('openEntryState failed: ' + (err && err.message));
-    });
+    return this._openPage();
 };
 
 AirPlayApp.prototype._write = function (name, text) {

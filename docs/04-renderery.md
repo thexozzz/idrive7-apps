@@ -10,6 +10,8 @@ Aplikacja OAP nie rysuje pikseli HMI. Wysyła opis ekranu i aktualizacje modelu.
 
 Szablon ma jeden stan `ST_OnlineApps_G21Hello`, tytuł i jedną etykietę. Kod woła `getByName`, `mapEntryState`, `setAvailability`, `openEntryState` i `setValue(0, 'Text', ...)`. Te metody są użyte w `idrive-apps` `apps/robertn_waze_cluster/src/robertn_waze_cluster.js`.
 
+AirPlay używa stanu `LT_State_Laptimer` z obrazem i paskiem przycisków. Samo dojście procesu do `ready` nie zmienia ekranu. Strona pojawia się dopiero po `openEntryState` albo `openState`. Odczyt z 2026-11-12: wersja 0.1.9 była włączona i zalogowała `ready`, a punkt wejścia nie został otwarty. Czy otwarcie tego stanu pokaże pasek, pozostaje hipotezą H17.
+
 ## mgu-render
 
 Renderer GPU rysuje komendy albo klatki nad HMI, na gnieździe `/run/mgu-render/render.sock` (albo `/run/mgu-renderd/renderd.sock`). Projekt ekranu aplikacji z `idrive7-apps` to 1920×720. Bez renderera aplikacja koduje PNG i oddaje go HMI, co daje kilka klatek na sekundę. Źródła: `idrive7-apps` `kit/renderd/README.md` i `kit/renderd/PROTOCOL.md`.
