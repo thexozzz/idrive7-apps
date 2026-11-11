@@ -1,0 +1,338 @@
+/*
+ * FreeRDP 2 client for the head unit. It does not open a desktop of its own.
+ * Software GDI only: this head unit's VA-API path is not assumed.
+ * A certificate is accepted only when its fingerprint is already in
+ * /run/g21-session/cert. Otherwise the fingerprint is reported and the
+ * connection stops.
+ */
+#include <fcntl.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#include <freerdp/freerdp.h>
+#include <freerdp/gdi/gdi.h>
+#include <freerdp/input.h>
+
+#define TARGET "/run/g21-session/target"
+#define SECRET "/run/g21-session/secret"
+#define CERT "/run/g21-session/cert"
+#define STATUS "/run/g21-desktop.status"
+#define FRAME_SOCK "/run/g21-desktop/frame.sock"
+#define INPUT_SOCK "/run/g21-desktop/input.sock"
+
+static int frame_fd = -1;
+static int input_listen = -1;
+static int input_fd = -1;
+static unsigned cursor_x = 0;
+static unsigned cursor_y = 0;
+
+static void status(const char *text)
+{
+    FILE *file = fopen(STATUS, "w");
+    if (!file) {
+        return;
+    }
+    fputs(text, file);
+    fputc('\n', file);
+    fclose(file);
+}
+
+static int read_text(const char *path, char *dst, size_t dst_len)
+{
+    FILE *file = fopen(path, "r");
+    size_t n;
+    if (!file) {
+        return 0;
+    }
+    n = fread(dst, 1, dst_len - 1, file);
+    fclose(file);
+    dst[n] = 0;
+    while (n > 0 && (dst[n - 1] == '\n' || dst[n - 1] == '\r')) {
+        dst[--n] = 0;
+    }
+    return n > 0;
+}
+
+static DWORD verify_certificate(freerdp *instance, const char *host, UINT16 port,
+    const char *common_name, const char *subject, const char *issuer,
+    const char *fingerprint, DWORD flags)
+{
+    char trusted[160];
+    char line[200];
+    (void)instance;
+    (void)host;
+    (void)port;
+    (void)common_name;
+    (void)subject;
+    (void)issuer;
+    (void)flags;
+    if (!fingerprint) {
+        status("error|cert|");
+        return 0;
+    }
+    if (read_text(CERT, trusted, sizeof(trusted)) && strcmp(trusted, fingerprint) == 0) {
+        return 1;
+    }
+    snprintf(line, sizeof(line), "cert|%s|", fingerprint);
+    status(line);
+    return 0;
+}
+
+static void send_frame(rdpGdi *gdi)
+{
+    unsigned char header[8];
+    unsigned int len;
+    struct sockaddr_un addr;
+    if (!gdi || !gdi->primary_buffer || gdi->width == 0 || gdi->height == 0) {
+        return;
+    }
+    len = gdi->width * gdi->height * 4;
+    if (frame_fd < 0) {
+        frame_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (frame_fd < 0) {
+            return;
+        }
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, FRAME_SOCK, sizeof(addr.sun_path) - 1);
+        if (connect(frame_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+            close(frame_fd);
+            frame_fd = -1;
+            return;
+        }
+    }
+    header[0] = gdi->width & 255;
+    header[1] = (gdi->width >> 8) & 255;
+    header[2] = gdi->height & 255;
+    header[3] = (gdi->height >> 8) & 255;
+    header[4] = len & 255;
+    header[5] = (len >> 8) & 255;
+    header[6] = (len >> 16) & 255;
+    header[7] = (len >> 24) & 255;
+    if (write(frame_fd, header, 8) != 8 || write(frame_fd, gdi->primary_buffer, len) != (ssize_t)len) {
+        close(frame_fd);
+        frame_fd = -1;
+    }
+}
+
+static BOOL end_paint(rdpContext *context)
+{
+    send_frame(context->gdi);
+    return TRUE;
+}
+
+static void open_input(void)
+{
+    struct sockaddr_un addr;
+    unlink(INPUT_SOCK);
+    input_listen = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (input_listen < 0) {
+        return;
+    }
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, INPUT_SOCK, sizeof(addr.sun_path) - 1);
+    if (bind(input_listen, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(input_listen);
+        input_listen = -1;
+        return;
+    }
+    chmod(INPUT_SOCK, 0666);
+    listen(input_listen, 1);
+}
+
+static void apply_line(freerdp *instance, const char *line)
+{
+    int x = 0;
+    int y = 0;
+    int button = 1;
+    int down = 0;
+    int delta = 0;
+    UINT16 flags;
+    if (sscanf(line, "M %d %d", &x, &y) == 2) {
+        cursor_x = (unsigned)x;
+        cursor_y = (unsigned)y;
+        freerdp_input_send_mouse_event(instance->input, PTR_FLAGS_MOVE, (UINT16)x, (UINT16)y);
+        return;
+    }
+    if (sscanf(line, "C %d %d", &button, &down) == 2) {
+        flags = button == 3 ? PTR_FLAGS_BUTTON3 : PTR_FLAGS_BUTTON1;
+        if (down) {
+            flags |= PTR_FLAGS_DOWN;
+        }
+        freerdp_input_send_mouse_event(instance->input, flags, (UINT16)cursor_x, (UINT16)cursor_y);
+        return;
+    }
+    if (sscanf(line, "W %d", &delta) == 1) {
+        flags = PTR_FLAGS_WHEEL;
+        if (delta < 0) {
+            flags |= PTR_FLAGS_WHEEL_NEGATIVE;
+            delta = -delta;
+        }
+        if (delta > 255) {
+            delta = 255;
+        }
+        freerdp_input_send_mouse_event(instance->input, flags | (UINT16)delta, (UINT16)cursor_x, (UINT16)cursor_y);
+    }
+}
+
+static void drain_input(freerdp *instance)
+{
+    char buffer[256];
+    ssize_t n;
+    if (input_listen >= 0 && input_fd < 0) {
+        fd_set set;
+        struct timeval none;
+        FD_ZERO(&set);
+        FD_SET(input_listen, &set);
+        none.tv_sec = 0;
+        none.tv_usec = 0;
+        if (select(input_listen + 1, &set, NULL, NULL, &none) > 0) {
+            input_fd = accept(input_listen, NULL, NULL);
+            if (input_fd >= 0) {
+                fcntl(input_fd, F_SETFL, O_NONBLOCK);
+            }
+        }
+    }
+    if (input_fd < 0) {
+        return;
+    }
+    n = read(input_fd, buffer, sizeof(buffer) - 1);
+    if (n <= 0) {
+        if (n < 0 && errno == EAGAIN) {
+            return;
+        }
+        close(input_fd);
+        input_fd = -1;
+        return;
+    }
+    buffer[n] = 0;
+    {
+        char *cursor = buffer;
+        char *end;
+        while ((end = strchr(cursor, '\n')) != NULL) {
+            *end = 0;
+            apply_line(instance, cursor);
+            cursor = end + 1;
+        }
+        if (cursor[0]) {
+            apply_line(instance, cursor);
+        }
+    }
+}
+
+static BOOL pre_connect(freerdp *instance)
+{
+    rdpSettings *settings = instance->settings;
+    settings->OsMajorType = OSMAJORTYPE_UNIX;
+    settings->ColorDepth = 32;
+    settings->SoftwareGdi = TRUE;
+    settings->NetworkAutoDetect = TRUE;
+    settings->IgnoreCertificate = FALSE;
+    settings->NlaSecurity = TRUE;
+    settings->TlsSecurity = TRUE;
+    settings->RdpSecurity = FALSE;
+    if (instance->update) {
+        instance->update->EndPaint = end_paint;
+    }
+    return TRUE;
+}
+
+static BOOL post_connect(freerdp *instance)
+{
+    if (!gdi_init(instance, PIXEL_FORMAT_BGRA32)) {
+        status("error|gdi|");
+        return FALSE;
+    }
+    status("connected|rdp|");
+    return TRUE;
+}
+
+static void post_disconnect(freerdp *instance)
+{
+    gdi_free(instance);
+    status("idle|rdp|");
+}
+
+int main(void)
+{
+    char target[300];
+    char secret[200];
+    char host[256];
+    char user[80];
+    int port = 3389;
+    freerdp *instance;
+
+    if (!read_text(TARGET, target, sizeof(target))) {
+        status("error|no-host|");
+        return 1;
+    }
+    user[0] = 0;
+    host[0] = 0;
+    if (sscanf(target, "%255s %d %79s", host, &port, user) < 2) {
+        status("error|bad-target|");
+        return 1;
+    }
+    secret[0] = 0;
+    read_text(SECRET, secret, sizeof(secret));
+    instance = freerdp_new();
+    if (!instance || !freerdp_context_new(instance)) {
+        status("error|freerdp|");
+        return 1;
+    }
+    instance->PreConnect = pre_connect;
+    instance->PostConnect = post_connect;
+    instance->PostDisconnect = post_disconnect;
+    instance->VerifyCertificateEx = verify_certificate;
+    strncpy(instance->settings->ServerHostname, host, sizeof(instance->settings->ServerHostname) - 1);
+    instance->settings->ServerPort = (UINT32)port;
+    strncpy(instance->settings->Username, user, sizeof(instance->settings->Username) - 1);
+    strncpy(instance->settings->Password, secret, sizeof(instance->settings->Password) - 1);
+    instance->settings->DesktopWidth = 1920;
+    instance->settings->DesktopHeight = 720;
+    memset(secret, 0, sizeof(secret));
+    status("connecting|rdp|");
+    open_input();
+    if (!freerdp_connect(instance)) {
+        status("error|connect|");
+        freerdp_free(instance);
+        return 1;
+    }
+    while (!freerdp_shall_disconnect(instance)) {
+        void *rfds[32];
+        int rcount = 0;
+        int index;
+        int max_fd = 0;
+        fd_set set;
+        struct timeval wait;
+        if (!freerdp_get_fds(instance, rfds, &rcount, NULL, NULL)) {
+            break;
+        }
+        FD_ZERO(&set);
+        for (index = 0; index < rcount; index++) {
+            int fd = (int)(intptr_t)rfds[index];
+            FD_SET(fd, &set);
+            if (fd > max_fd) {
+                max_fd = fd;
+            }
+        }
+        wait.tv_sec = 0;
+        wait.tv_usec = 100000;
+        select(max_fd + 1, &set, NULL, NULL, &wait);
+        if (!freerdp_check_fds(instance)) {
+            break;
+        }
+        drain_input(instance);
+    }
+    freerdp_disconnect(instance);
+    freerdp_free(instance);
+    return 0;
+}
