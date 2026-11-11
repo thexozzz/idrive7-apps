@@ -1,5 +1,7 @@
 # G21 AirPlay
 
+Na postoju aplikacja ma trzy kafelki: AirPlay, RDP i VNC. Działa jedna sesja. Bez odczytanej prędkości żadna się nie uruchamia. Szczegóły są w `docs/pulpit-zdalny.md`.
+
 Aplikacja nie otwiera własnego portu AirPlay. Odbiornikiem jest [UxPlay](https://github.com/FDH2/UxPlay) 1.73.7 (GPL-3.0). Usługa `g21-airplay-open` startuje go poleceniem `uxplay -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720`, gdy MGU Store jest na Wi-Fi, i kończy go, gdy to Wi-Fi znika.
 
 Porty wpuszczane z podsieci tej dzierżawy: UDP 5353 oraz zestaw legacy UxPlay (`-p`): TCP 7100, 7000, 7001 i UDP 6000, 6001, 7011. Źródło zestawu: README UxPlay, opcja `-p`.

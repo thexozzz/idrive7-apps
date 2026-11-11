@@ -41,7 +41,9 @@ assert.strictEqual(receiver.ssid, 'iPhone');
 assert.strictEqual(receiver.ip, '172.20.10.2');
 
 var script = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'g21-airplay-open'), 'utf8');
-assert.ok(script.indexOf('-n G21') !== -1);
+assert.ok(script.indexOf('-n "$shown"') !== -1);
+assert.ok(script.indexOf('name=G21') !== -1);
+assert.ok(script.indexOf('session-off') !== -1);
 assert.ok(script.indexOf('-nh') !== -1);
 assert.ok(script.indexOf('-vs waylandsink') !== -1);
 assert.ok(script.indexOf('udp dport 5353 accept') !== -1);

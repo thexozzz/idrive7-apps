@@ -9,6 +9,14 @@ var display = require('./display_output.js');
 var videoDecoder = require('./video_decoder.js');
 var adapterFactory = require('./cluster_render_adapter.js');
 var ClusterRender = require('./cluster_render_client.js').ClusterRender;
+var parked = require('./parked_gate.js');
+var pathFactory = require('./paths.js');
+var desktopSettings = require('./desktop_settings.js');
+var sessionFactory = require('./session_manager.js');
+var desktopSessions = require('./desktop_sessions.js');
+var vncFactory = require('./vnc_client.js');
+var inputFactory = require('./input_manager.js');
+var frameSinkFactory = require('./frame_sink.js');
 
 var logger = logging.getSDKLogger();
 var STATE_NAME = 'ST_OnlineApps_G21AirPlay';
@@ -61,17 +69,62 @@ function AirPlayApp() {
     this._timer = null;
     this._line = { net: '', addr: '', state: '' };
     this._settings = settingsFactory.createSettings({ active: 'central' });
+    this._gate = parked.createParkedGate();
+    this._desk = desktopSettings.createDesktopSettings({});
+    this._paths = pathFactory.sessionPaths();
+    this._chosen = 'airplay';
+    this._sessionText = 'wybierz AirPlay, RDP albo VNC';
     this._decoded = null;
     this._client = new ClusterRender('g21_airplay');
     this._adapter = adapterFactory.createClusterRenderAdapter(this._client);
     this._display = display.createDisplayOutputManager({
         settings: this._settings,
+        gate: this._gate,
         outputs: screenOutputs(this),
         log: function (event, name, reason) {
             logger.info(event + ' ' + name + ' ' + reason);
         },
     });
     var self = this;
+    this._frames = frameSinkFactory.createFrameSink(this._paths.frameSock);
+    this._vnc = vncFactory.createVncClient({
+        onFrame: function (frame) { self._frames.write(frame); },
+    });
+    this._sessions = sessionFactory.createSessionManager({
+        gate: this._gate,
+        sessions: {
+            airplay: desktopSessions.createAirPlaySession({
+                paths: this._paths,
+                readStatus: function () {
+                    var text = '';
+                    try {
+                        text = fs.readFileSync(self._paths.receiverStatus, 'utf8');
+                    } catch (err) {
+                        text = '';
+                    }
+                    var receiver = uplink.readReceiverStatus(text);
+                    return { state: receiver.mode || 'idle', detail: receiver.mode || '' };
+                },
+            }),
+            rdp: desktopSessions.createRdpSession({ paths: this._paths }),
+            vnc: {
+                connect: function (target) {
+                    return self._vnc.connect(target.host, target.port, { password: self._secret('vnc') });
+                },
+                disconnect: function () { return self._vnc.disconnect(); },
+                getStatus: function () { return self._vnc.getStatus(); },
+                sendMouseMove: function (x, y) { return self._vnc.sendMouseMove(x, y); },
+                sendMouseClick: function (button, down) { return self._vnc.sendMouseClick(button, down); },
+                sendMouseScroll: function (delta) { return self._vnc.sendMouseScroll(delta); },
+                sendKey: function (key, down) { return self._vnc.sendKey(key, down); },
+            },
+        },
+    });
+    this._input = inputFactory.createInputManager({
+        settings: this._desk,
+        session: this._sessions,
+        logFile: this._paths.inputLog,
+    });
     this.on('initialized', function () {
         self._appInitialized().catch(function (err) {
             logger.error('g21_airplay init failed: ' + (err && err.message));
@@ -114,6 +167,7 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             self._watchNetwork();
+            self._watchCar();
             if (foregroundStart) {
                 self._setVisible(true);
             }
@@ -124,13 +178,134 @@ AirPlayApp.prototype._setupRhmi = function () {
     var rhmi = this.rhmiApplication;
     var self = this;
     this._state = rhmi.getByName(STATE_NAME);
-    ['airNet', 'airAddr', 'airState'].forEach(function (name) {
+    ['airNet', 'airAddr', 'airState', 'tileAir', 'tileRdp', 'tileVnc', 'tileHost'].forEach(function (name) {
         self._rows[name] = rhmi.getByName(name);
     });
+    self._bindTile('tileAir', 'airplay');
+    self._bindTile('tileRdp', 'rdp');
+    self._bindTile('tileVnc', 'vnc');
+    self._bindHost();
     if (!this._state || !this._rows.airNet || !this._rows.airAddr || !this._rows.airState) {
         return Promise.reject(new Error('uiDescription has no AirPlay rows'));
     }
     return Promise.resolve();
+};
+
+AirPlayApp.prototype._secret = function (kind) {
+    try {
+        return fs.readFileSync('/var/opt/g21_airplay/' + kind + '.secret', 'utf8').replace(/\s+$/, '');
+    } catch (err) {
+        return '';
+    }
+};
+
+AirPlayApp.prototype._endpoint = function (name) {
+    if (name === 'airplay') {
+        return { name: this._desk.airplayName() };
+    }
+    var host = this._desk.host(name);
+    return {
+        host: host.octets.join('.'),
+        port: host.port,
+        user: host.user,
+        cert: host.cert,
+        password: this._secret(name),
+    };
+};
+
+AirPlayApp.prototype._action = function (component, handler) {
+    if (!component) {
+        return;
+    }
+    var call = function (event) {
+        var kind = 'Click';
+        if (typeof event === 'string') {
+            kind = event;
+        } else if (event && event.subType) {
+            kind = event.subType;
+        } else if (event && event.action) {
+            kind = event.action;
+        }
+        handler(kind);
+    };
+    if (typeof component.onAction === 'function') {
+        component.onAction(call);
+    } else if (typeof component.on === 'function') {
+        component.on('action', call);
+    }
+};
+
+AirPlayApp.prototype._choose = function (name) {
+    var self = this;
+    this._chosen = name;
+    this._sessions.connect(name, this._endpoint(name)).then(function (result) {
+        self._sessionText = result.ok
+            ? (name + ' ' + (result.state || 'ok'))
+            : (name + ' ' + (result.reason || 'blad'));
+        self._sync();
+    });
+};
+
+AirPlayApp.prototype._bindTile = function (name, protocol) {
+    var self = this;
+    this._action(this._rows[name], function (kind) {
+        if (kind === 'Increase' || kind === 'Decrease') {
+            self._input.knobScroll(kind === 'Increase' ? 1 : -1);
+            return;
+        }
+        if (kind === 'Abort') {
+            self._sessions.disconnect();
+            self._sessionText = 'powrot';
+            self._sync();
+            return;
+        }
+        self._choose(protocol);
+    });
+};
+
+AirPlayApp.prototype._bindHost = function () {
+    var self = this;
+    this._action(this._rows.tileHost, function (kind) {
+        var protocol = self._chosen === 'airplay' ? 'vnc' : self._chosen;
+        if (kind === 'Increase') {
+            self._desk.stepOctet(protocol, 1);
+        } else if (kind === 'Decrease') {
+            self._desk.stepOctet(protocol, -1);
+        } else {
+            self._desk.nextOctet();
+        }
+        self._sync();
+    });
+};
+
+AirPlayApp.prototype._watchSignal = function (interfaceName, attribute, handler) {
+    if (!this.signals || typeof this.signals.watch !== 'function') {
+        return;
+    }
+    var watched = {};
+    watched[attribute] = handler;
+    try {
+        this.signals.watch(interfaceName, '1', watched);
+    } catch (err) {
+        logger.info('signal ' + attribute + ' unavailable');
+    }
+};
+
+AirPlayApp.prototype._watchCar = function () {
+    var self = this;
+    this._watchSignal('de.bmw.infotainment.vehicle.Vehicle2', 'statusCarSpeed2', function (value) {
+        var raw = value && value.speedVehicleCentreOfGravity;
+        if (typeof raw === 'number') {
+            self._display.vehicle(raw);
+            self._sessions.onVehicle();
+        }
+    });
+    this._watchSignal('de.bmw.infotainment.controlelements.FrontCCU', 'statusRotaryEncoderState', function (value) {
+        self._input.feedEncoder(value || {});
+    });
+    this._watchSignal('de.bmw.infotainment.ControllerElements', 'ZBETouchFrontSide', function (value) {
+        self._input.feedPad(value || {});
+    });
 };
 
 AirPlayApp.prototype._registerEntryPoints = function () {
@@ -176,12 +351,19 @@ AirPlayApp.prototype._paint = function (choice, session) {
         return;
     }
     this._write('airNet', choice.ssid ? ('Wi-Fi: ' + choice.ssid) : ('Interfejs: ' + choice.iface));
-    this._write('airAddr', 'iPhone: Lustro ekranu, G21  ' + choice.ip);
+    if (this._chosen === 'airplay') {
+        this._write('airAddr', 'iPhone: Lustro ekranu, ' + this._desk.airplayName() + '  ' + choice.ip);
+    } else {
+        var host = this._desk.host(this._chosen);
+        this._write('airAddr', this._chosen.toUpperCase() + ' ' + host.octets.join('.') + ':' + host.port + ' oktet ' + (this._desk.octet() + 1));
+    }
     var detail = session && session.detail ? session.detail : 'czeka na iPhone';
     if (detail.length > 80) {
         detail = detail.slice(0, 80);
     }
-    this._write('airState', 'Central Display. ' + detail + '. Zegary i HUD biora klatke z dekodera UxPlay');
+    var modes = this._input.modes();
+    var pad = modes.touchpad === 'available' ? 'touchpad' : 'touchpad niedostepny';
+    this._write('airState', this._sessionText + '. ' + detail + '. ' + pad);
 };
 
 AirPlayApp.prototype._watchNetwork = function () {
@@ -207,6 +389,11 @@ AirPlayApp.prototype._sync = function () {
     } catch (err) {
         text = '';
     }
+    if (this._sessions.active()) {
+        var live = this._sessions.getStatus();
+        this._sessionText = live.protocol + ' ' + (live.state || '') + (live.detail ? (' ' + live.detail) : '');
+    }
+    this._sessions.onVehicle();
     var receiver = uplink.readReceiverStatus(text);
     if (receiver.mode === 'running') {
         this._takeFrame();
@@ -261,6 +448,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._timer) {
         clearInterval(this._timer);
+    }
+    if (this._sessions) {
+        this._sessions.dispose();
     }
     var self = this;
     this._shutdownPromise = Promise.resolve()

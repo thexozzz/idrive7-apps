@@ -37,6 +37,42 @@
             "Focusable": { "value": 0, "type": "UInt" }
           },
           "rows": [ { "Text": { "value": "waiting", "type": "Text" } } ]
+        },
+        "31": {
+          "type": "button",
+          "name": "tileAir",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "SID_TILE_AIRPLAY", "type": "StringId" } } ]
+        },
+        "32": {
+          "type": "button",
+          "name": "tileRdp",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "SID_TILE_RDP", "type": "StringId" } } ]
+        },
+        "33": {
+          "type": "button",
+          "name": "tileVnc",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "SID_TILE_VNC", "type": "StringId" } } ]
+        },
+        "34": {
+          "type": "button",
+          "name": "tileHost",
+          "properties": {
+            "Visible": { "value": 1, "type": "UInt" },
+            "Focusable": { "value": 3, "type": "UInt" }
+          },
+          "rows": [ { "Text": { "value": "SID_TILE_HOST", "type": "StringId" } } ]
         }
       }
     }

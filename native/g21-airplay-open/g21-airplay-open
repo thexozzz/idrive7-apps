@@ -14,7 +14,12 @@ STATUS=/run/mgu-uplink/status.json
 LEASE=/run/mgu-uplink/lease.json
 STAMP=/run/g21-airplay.stamp
 REPORT=/run/g21-airplay.status
+SESSION_DIR=/run/g21-session
+ALLOW=$SESSION_DIR/allow
+DESKTOP=/run/g21-desktop.status
 UXPID=
+PREPID=
+RDPID=
 
 field() {
     sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "$2" | head -n 1
@@ -57,6 +62,10 @@ report() {
     printf '%s\n' "$1" > "$REPORT"
 }
 
+desk() {
+    printf '%s\n' "$1" > "$DESKTOP"
+}
+
 clear_table() {
     nft delete table inet "$TABLE" 2>/dev/null || true
 }
@@ -70,6 +79,8 @@ stop_ux() {
 
 idle() {
     stop_ux
+    stop_present
+    stop_rdp
     if [ -f "$STAMP" ]; then
         clear_table
         rm -f "$STAMP"
@@ -97,9 +108,88 @@ table inet $TABLE {
 EOF
 }
 
+ensure_dirs() {
+    mkdir -p "$SESSION_DIR" /run/g21-desktop
+    chmod 1777 "$SESSION_DIR" /run/g21-desktop 2>/dev/null || true
+}
+
+mode_of() {
+    if [ -f "$ALLOW" ]; then
+        tr -d '\r\n' < "$ALLOW"
+    fi
+}
+
+name_of() {
+    name=G21
+    if [ -f "$SESSION_DIR/name" ]; then
+        name=$(tr -d '\r\n' < "$SESSION_DIR/name")
+    fi
+    case $name in
+        ""|*[!A-Za-z0-9_-]*) name=G21 ;;
+    esac
+    printf '%s\n' "$name"
+}
+
+stop_pid() {
+    pid=$1
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+}
+
+start_present() {
+    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    bin=$dir/g21-present
+    if [ ! -x "$bin" ]; then
+        return 0
+    fi
+    if [ -n "$PREPID" ] && kill -0 "$PREPID" 2>/dev/null; then
+        return 0
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
+    "$bin" >>/var/log/g21-present.log 2>&1 &
+    PREPID=$!
+}
+
+start_rdp() {
+    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    bin=$dir/g21-rdp
+    if [ ! -x "$bin" ]; then
+        desk "missing|rdp|"
+        return 0
+    fi
+    if [ -n "$RDPID" ] && kill -0 "$RDPID" 2>/dev/null; then
+        desk "running|rdp|"
+        return 0
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    RDPID=$!
+    desk "starting|rdp|"
+}
+
+stop_present() {
+    stop_pid "$PREPID"
+    PREPID=
+}
+
+stop_rdp() {
+    stop_pid "$RDPID"
+    RDPID=
+}
+
 start_ux() {
     ssid=$1
     ip=$2
+    shown=$3
     bin=$(find_ux) || true
     if [ -z "$bin" ]; then
         stop_ux
@@ -113,7 +203,7 @@ start_ux() {
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
     export G21_YUV=/run/g21-airplay/latest.yuv
     mkdir -p /run/g21-airplay
-    "$bin" -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
+    "$bin" -n "$shown" -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
     UXPID=$!
     report "running|$ssid|$ip"
 }
@@ -142,11 +232,38 @@ apply() {
         open_ports "$iface" "$net"
         printf '%s\n' "$stamp" > "$STAMP"
     fi
-    start_ux "$ssid" "$ip"
+    ensure_dirs
+    mode=$(mode_of)
+    case $mode in
+        airplay)
+            stop_present
+            stop_rdp
+            start_ux "$ssid" "$ip" "$(name_of)"
+            ;;
+        vnc)
+            stop_ux
+            stop_rdp
+            start_present
+            desk "running|vnc|"
+            report "idle|session-vnc|"
+            ;;
+        rdp)
+            stop_ux
+            start_present
+            start_rdp
+            report "idle|session-rdp|"
+            ;;
+        *)
+            idle
+            report "idle|session-off|"
+            ;;
+    esac
 }
 
 stop() {
     stop_ux
+    stop_present
+    stop_rdp
     clear_table
     rm -f "$STAMP"
     report "idle|stopped|"

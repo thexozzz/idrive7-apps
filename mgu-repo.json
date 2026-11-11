@@ -17,7 +17,7 @@
       "path": "apps/g21_airplay",
       "build": "unit",
       "title": "G21 AirPlay",
-      "description": "Lustro ekranu iPhone przez AirPlay w sieci Wi-Fi MGU Store.",
+      "description": "AirPlay oraz pulpit RDP i VNC na postoju, w sieci Wi-Fi MGU Store.",
       "uninstallable": true,
       "mguHmi": ["ID7"],
       "requires": { "g21-airplay-open": "0.1.0", "cluster-render": "0.5.4" }

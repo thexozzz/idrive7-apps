@@ -17,5 +17,8 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H11 | Reguła nft o priorytecie -10 wpuszcza AirPlay zanim `mgu-uplink` odrzuci nowe połączenia na tym interfejsie | po instalacji `g21_airplay` iPhone w tej samej sieci widzi „G21” w lustrze ekranu |
 | H12 | Odpowiedź `/info` i ogłoszenie mDNS wystarczą, żeby iOS zaczął sesję | H11; pierwsza linia żądania pojawia się na ekranie aplikacji |
 | H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po instalacji `g21_airplay` z gałęzi `test`: na iPhonie w tym samym Wi-Fi widać G21, a obraz pojawia się na ekranie |
+| H14 | Manifest OAP dostarcza `Vehicle2.statusCarSpeed2` do tej aplikacji | na postoju ekran nie pokazuje `speed-unknown` i AirPlay wstaje po wyborze kafelka |
+| H15 | `ZBETouchFrontSide` daje współrzędne palca tylko przy `statusSystemModeFrontSide` 3, a bez zapisu trybu pisania ten tryb się nie włącza | log inspektora po jeździe palcem po pokrętle; dopóki nie ma takiej próbki, touchpad zostaje niedostępny |
+| H16 | `g21-present` i `g21-rdp` rysują pulpit na centralnym ekranie przez ten sam Wayland co UxPlay | na postoju VNC albo RDP do komputera w tej samej sieci, obraz 1920×720, kursor reaguje na pokrętło |
 
 H2 celowo nie jest częścią domyślnej diagnostyki. Wersja firmware bywa powiązana z numerem pojazdu w logach; dopiszemy ją do skryptu dopiero, gdy zakres odczytu zostanie zatwierdzony osobno.
