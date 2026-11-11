@@ -17,6 +17,7 @@ var desktopSessions = require('./desktop_sessions.js');
 var vncFactory = require('./vnc_client.js');
 var inputFactory = require('./input_manager.js');
 var frameSinkFactory = require('./frame_sink.js');
+var menuDraw = require('./menu_draw.js');
 
 function noteStart(text) {
     var line = String(text) + '\n';
@@ -148,6 +149,17 @@ function AirPlayApp() {
         session: this._sessions,
         logFile: this._paths.inputLog,
     });
+    this._menu = menuDraw.createMenuSurface({
+        note: noteStart,
+        choose: function (name) {
+            if (name === 'host') {
+                self._desk.nextOctet();
+                self._sync();
+                return;
+            }
+            self._choose(name);
+        },
+    });
     this.on('appStatusProxyReady', function () {
         noteStart('status-ready');
         Promise.resolve(self.registerActive()).catch(function (err) {
@@ -240,6 +252,9 @@ AirPlayApp.prototype._setupRhmi = function () {
 
 AirPlayApp.prototype._showMenu = function () {
     noteStart('menu-on-bar');
+    if (this._menu) {
+        this._menu.open();
+    }
     return this._openPage();
 };
 
@@ -507,6 +522,8 @@ AirPlayApp.prototype._setVisible = function (visible) {
     this._visible = visible;
     if (visible) {
         this._showMenu();
+    } else if (this._menu) {
+        this._menu.close();
     }
     if (!this._initialized || !this._appStatusService) {
         return;
@@ -530,6 +547,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._sessions) {
         this._sessions.dispose();
+    }
+    if (this._menu) {
+        this._menu.close();
     }
     var self = this;
     this._shutdownPromise = Promise.resolve()

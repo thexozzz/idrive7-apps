@@ -20,7 +20,7 @@ UxPlay zostaje na GPL-3.0. Klient RDP jest własnym programem `g21-rdp` zlinkowa
 
 ## Ekran
 
-Wejście otwiera listę, nie pusty obraz. Cztery wiersze `LT_Button_2Row_2Text`: AirPlay, RDP, VNC i Adres. Tekst jest w paczce napisów. Kliknięcie wiersza prosi o sesję. Pokrętło na adresie zmienia oktet, kliknięcie przechodzi do następnego oktetu. Zdarzenie `Abort` rozłącza. To, że ta lista rysuje się na tym G21 tak jak menu ustawień działającej aplikacji, jest hipotezą H18. Odczyt 2026-11-12: wersja 0.1.10 otworzyła stronę obrazu i była pusta, a `openEntryState` zwrócił `INVALID_UUID`.
+Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12: AirPlay 0.1.11 doszedł do `state-open` z czterema `LT_Button_2Row_2Text`, a wiersze nie były widoczne. Menu jest rysowane na powierzchni renderera (`/run/mgu-renderd/renderd.sock`, potem `/run/mgu-render/render.sock`): tło, cztery wiersze i napisy z prostych prostokątów. Pokrętło, jeśli renderer odda zdarzenie, przesuwa zaznaczenie, a wciśnięcie wybiera wiersz. Czy ta powierzchnia pojawi się na pustej stronie, jest hipotezą H19.
 
 ## Postój
 

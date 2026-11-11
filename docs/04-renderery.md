@@ -10,7 +10,7 @@ Aplikacja OAP nie rysuje pikseli HMI. Wysyła opis ekranu i aktualizacje modelu.
 
 Szablon ma jeden stan `ST_OnlineApps_G21Hello`, tytuł i jedną etykietę. Kod woła `getByName`, `mapEntryState`, `setAvailability`, `openEntryState` i `setValue(0, 'Text', ...)`. Te metody są użyte w `idrive-apps` `apps/robertn_waze_cluster/src/robertn_waze_cluster.js`.
 
-AirPlay 0.1.10 na tym G21 otworzył stronę i została pusta: był to sam obraz `LT_State_Laptimer`, bez rysowania pikseli. `openEntryState` zwrócił `INVALID_UUID`. Menu jest osobną listą `LT_State_Wide` z przyciskami `LT_Button_2Row_2Text`. Czy te wiersze będą widoczne, pozostaje hipotezą H18.
+AirPlay 0.1.10 otworzył sam obraz i został pusty. AirPlay 0.1.11 otworzył listę `LT_State_Wide` i ta też została pusta, więc hipoteza H18 nie utrzymała się na tym aucie. Napisy menu idą ramką renderera: `CLEAR` i `RECT` na gnieździe, które jest w grupie aplikacji. Czy widać je na stronie z przodu, jest hipotezą H19.
 
 ## mgu-render
 

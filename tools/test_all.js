@@ -13,6 +13,7 @@ var tools = [
     path.join(__dirname, 'test_decoder.js'),
     path.join(__dirname, 'test_vnc.js'),
     path.join(__dirname, 'test_session.js'),
+    path.join(__dirname, 'test_menu.js'),
 ];
 
 tools.forEach(function (tool) {

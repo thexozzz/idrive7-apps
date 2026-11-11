@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.12
+
+- Menu jest rysowane pikselami na rendererze. Lista RHMI na tej jednostce otwiera się pusta.
+
 ## 0.1.11
 
 - Ekran startowy to lista menu: AirPlay, RDP, VNC i Adres. Pusty obraz nie jest już stroną wejścia.
