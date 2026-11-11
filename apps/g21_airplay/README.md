@@ -1,6 +1,6 @@
 # G21 AirPlay
 
-Start na tej jednostce woła `AppBookmarks`. Manifest deklaruje `registerBookmark`, inaczej OnlineApp przerywa otwieranie, bo brakuje pliku interfejsu. Potwierdzone 11 listopada 2026 w logu startu: `de_bmw_infotainment_telematic_oap_AppBookmarks.json` nie istniał.
+Start na tej jednostce idzie tą samą ścieżką co MGU Store: `AppBookmarks`, potem `WakeUpOnDemand`, potem `Provisioning`. Każdy brakujący plik interfejsu przerywa `OnlineApp.start`. Potwierdzone 12 listopada 2026 w logu startu: po dodaniu zakładek start padł na `de_bmw_infotainment_telematic_oap_WakeUpOnDemand.json`.
 
 Na postoju aplikacja ma trzy kafelki: AirPlay, RDP i VNC. Działa jedna sesja. Bez odczytanej prędkości żadna się nie uruchamia. Szczegóły są w `docs/pulpit-zdalny.md`.
 

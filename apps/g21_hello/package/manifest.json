@@ -12,6 +12,19 @@
       "instances": ["${userId}"],
       "methods": ["registerBookmark"]
     },
+    "de.bmw.infotainment.telematic.oap.WakeUpOnDemand": {
+      "instances": ["${userId}"],
+      "methods": ["registerParticipant", "unregisterParticipant"]
+    },
+    "de.bmw.infotainment.telematic.oap.WodControl": {
+      "instances": ["${userId}"],
+      "methods": ["offerService", "stopOfferingService"]
+    },
+    "de.bmw.infotainment.telematic.provisioning.Provisioning": {
+      "instances": ["1"],
+      "broadcasts": ["provisioningDataJSON"],
+      "methods": ["getValueJSON", "setFilterForProvisioningData"]
+    },
     "de.bmw.infotainment.telematic.oap.PrivateEntryPoint": {
       "instances": ["${userId}"],
       "methods": ["registerEntryPoint", "unregisterEntryPoint", "setSelected", "setAvailability"]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.7
+
+- Start dostaje też WakeUpOnDemand, WodControl i Provisioning, tak jak MGU Store. Bez nich OnlineApp przerywa otwieranie na następnym brakującym interfejsie.
+
 ## 0.1.6
 
 - Start wymaga interfejsu AppBookmarks. Bez pliku tego interfejsu OnlineApp przerywa otwieranie.
