@@ -231,10 +231,6 @@ AirPlayApp.prototype._setupRhmi = function () {
     self._bindTile('tileRdp', 'rdp');
     self._bindTile('tileVnc', 'vnc');
     self._bindHost();
-    self._write('tileAir', 'AirPlay');
-    self._write('tileRdp', 'RDP');
-    self._write('tileVnc', 'VNC');
-    self._write('tileHost', 'Adres');
     if (!this._state || !this._rows.tileAir) {
         noteStart('ui-missing');
         return Promise.reject(new Error('uiDescription has no AirPlay screen'));
@@ -255,9 +251,7 @@ AirPlayApp.prototype._openPage = function () {
     var rhmi = this.rhmiApplication;
     var action = null;
     try {
-        if (this._entryUuid && typeof rhmi.openEntryState === 'function') {
-            action = rhmi.openEntryState(this._entryUuid);
-        } else if (typeof rhmi.openState === 'function') {
+        if (typeof rhmi.openState === 'function') {
             action = rhmi.openState(STATE_NAME);
         }
     } catch (err) {
@@ -446,13 +440,6 @@ AirPlayApp.prototype._paint = function (choice, session) {
         var host = this._desk.host(this._chosen);
         this._write('airAddr', this._chosen.toUpperCase() + ' ' + host.octets.join('.') + ':' + host.port + ' oktet ' + (this._desk.octet() + 1));
     }
-    var detail = session && session.detail ? session.detail : 'czeka na iPhone';
-    if (detail.length > 80) {
-        detail = detail.slice(0, 80);
-    }
-    var modes = this._input.modes();
-    var pad = modes.touchpad === 'available' ? 'touchpad' : 'touchpad niedostepny';
-    this._write('airTitle', detail);
 };
 
 AirPlayApp.prototype._watchNetwork = function () {

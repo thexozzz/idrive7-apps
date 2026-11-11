@@ -20,6 +20,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H14 | Manifest OAP dostarcza `Vehicle2.statusCarSpeed2` do tej aplikacji | na postoju ekran nie pokazuje `speed-unknown` i AirPlay wstaje po wyborze kafelka |
 | H15 | `ZBETouchFrontSide` daje współrzędne palca tylko przy `statusSystemModeFrontSide` 3, a bez zapisu trybu pisania ten tryb się nie włącza | log inspektora po jeździe palcem po pokrętle; dopóki nie ma takiej próbki, touchpad zostaje niedostępny |
 | H16 | `g21-present` i `g21-rdp` rysują pulpit na centralnym ekranie przez ten sam Wayland co UxPlay | na postoju VNC albo RDP do komputera w tej samej sieci, obraz 1920×720, kursor reaguje na pokrętło |
-| H17 | `openEntryState` po `mapEntryState` pokazuje stronę AirPlay. Odczyt 2026-11-12: proces 0.1.9 doszedł do `ready` i został włączony, ale kod nie otwierał punktu wejścia, więc ekran się nie zmieniał | po aktualizacji log startu ma `state-open`, a na ekranie widać tytuł i pasek |
+| H17 | `openEntryState` po `mapEntryState` pokazuje stronę AirPlay. Odczyt 2026-11-12: 0.1.10 otworzył stronę, ale `openEntryState` zwrócił `INVALID_UUID`, a widokiem był pusty obraz | po aktualizacji widać listę menu, nie pusty obraz |
+| H18 | Lista `LT_State_Wide` z `LT_Button_2Row_2Text` rysuje menu tak jak ustawienia aplikacji, która na tym aucie pokazuje tekst | po aktualizacji na ekranie są wiersze AirPlay, RDP, VNC i Adres |
 
 H2 celowo nie jest częścią domyślnej diagnostyki. Wersja firmware bywa powiązana z numerem pojazdu w logach; dopiszemy ją do skryptu dopiero, gdy zakres odczytu zostanie zatwierdzony osobno.

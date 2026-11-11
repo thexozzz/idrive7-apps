@@ -10,7 +10,7 @@ Aplikacja OAP nie rysuje pikseli HMI. Wysyła opis ekranu i aktualizacje modelu.
 
 Szablon ma jeden stan `ST_OnlineApps_G21Hello`, tytuł i jedną etykietę. Kod woła `getByName`, `mapEntryState`, `setAvailability`, `openEntryState` i `setValue(0, 'Text', ...)`. Te metody są użyte w `idrive-apps` `apps/robertn_waze_cluster/src/robertn_waze_cluster.js`.
 
-AirPlay używa stanu `LT_State_Laptimer` z obrazem i paskiem przycisków. Samo dojście procesu do `ready` nie zmienia ekranu. Strona pojawia się dopiero po `openEntryState` albo `openState`. Odczyt z 2026-11-12: wersja 0.1.9 była włączona i zalogowała `ready`, a punkt wejścia nie został otwarty. Czy otwarcie tego stanu pokaże pasek, pozostaje hipotezą H17.
+AirPlay 0.1.10 na tym G21 otworzył stronę i została pusta: był to sam obraz `LT_State_Laptimer`, bez rysowania pikseli. `openEntryState` zwrócił `INVALID_UUID`. Menu jest osobną listą `LT_State_Wide` z przyciskami `LT_Button_2Row_2Text`. Czy te wiersze będą widoczne, pozostaje hipotezą H18.
 
 ## mgu-render
 

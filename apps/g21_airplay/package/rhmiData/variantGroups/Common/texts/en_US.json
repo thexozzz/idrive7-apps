@@ -3,5 +3,9 @@
   "SID_TILE_AIRPLAY": "AirPlay",
   "SID_TILE_RDP": "RDP",
   "SID_TILE_VNC": "VNC",
-  "SID_TILE_HOST": "Address"
+  "SID_TILE_HOST": "Address",
+  "SID_MENU_AIR": "Screen mirror",
+  "SID_MENU_RDP": "Desktop",
+  "SID_MENU_VNC": "Desktop",
+  "SID_MENU_HOST": "Computer address"
 }

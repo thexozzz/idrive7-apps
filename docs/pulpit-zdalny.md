@@ -20,7 +20,7 @@ UxPlay zostaje na GPL-3.0. Klient RDP jest własnym programem `g21-rdp` zlinkowa
 
 ## Ekran
 
-Ten sam stan RHMI co dotychczas. Doszły cztery przyciski z `Focusable` 3: AirPlay, RDP, VNC i Adres. Pokrętło na adresie zmienia oktet, kliknięcie przechodzi do następnego oktetu. Kliknięcie kafelka prosi o sesję. Zdarzenie `Abort` rozłącza. Nazwy szablonów `LT_Button_1Row` nie były sprawdzone na tym aucie.
+Wejście otwiera listę, nie pusty obraz. Cztery wiersze `LT_Button_2Row_2Text`: AirPlay, RDP, VNC i Adres. Tekst jest w paczce napisów. Kliknięcie wiersza prosi o sesję. Pokrętło na adresie zmienia oktet, kliknięcie przechodzi do następnego oktetu. Zdarzenie `Abort` rozłącza. To, że ta lista rysuje się na tym G21 tak jak menu ustawień działającej aplikacji, jest hipotezą H18. Odczyt 2026-11-12: wersja 0.1.10 otworzyła stronę obrazu i była pusta, a `openEntryState` zwrócił `INVALID_UUID`.
 
 ## Postój
 

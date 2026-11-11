@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.11
+
+- Ekran startowy to lista menu: AirPlay, RDP, VNC i Adres. Pusty obraz nie jest już stroną wejścia.
+
 ## 0.1.10
 
 - Po starcie otwiera zmapowany punkt wejścia. W 0.1.9 proces dochodził do ready, ale strona zostawała w tle i ekran się nie zmieniał.
