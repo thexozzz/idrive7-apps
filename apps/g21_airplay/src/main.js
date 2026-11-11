@@ -158,6 +158,9 @@ AirPlayApp.prototype._appInitialized = function () {
     }
     var foregroundStart = this._startedForeground();
     return this._setupRhmi()
+        .catch(function (err) {
+            logger.error('rhmi setup: ' + (err && err.message));
+        })
         .then(function () { return self._registerEntryPoints(); })
         .then(function () {
             if (foregroundStart) {
@@ -319,8 +322,14 @@ AirPlayApp.prototype._registerEntryPoints = function () {
     }
     var description = ours.getDescription();
     return ours.init()
-        .then(function () { return self.rhmiApplication.mapEntryState(description.uuid, self._state); })
-        .then(function () { return ours.setAvailability('ENABLED'); });
+        .then(function () { return ours.setAvailability('ENABLED'); })
+        .then(function () {
+            logger.info('entry point ' + description.name + ' ENABLED');
+            if (!self._state || !self.rhmiApplication) {
+                return null;
+            }
+            return self.rhmiApplication.mapEntryState(description.uuid, self._state);
+        });
 };
 
 AirPlayApp.prototype._onEntryPointExecute = function (uuid) {

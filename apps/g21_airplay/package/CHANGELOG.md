@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- Kafelek wchodzi na listę aplikacji iDrive pod stanem 20974, tak jak Waze. Poprzedni numer 24108 nie jest tą listą, więc Store pokazywał Installed, a menu było puste.
+## 0.1.1
+
+- Włączone ładowanie ekranu i punktu wejścia. Bez tego nowszy SDK zostawia aplikację jako Installed i nie wstawia kafelka na listę aplikacji.
+- Kafelek jest publiczny i wchodzi pod stan 20974, tak jak Store i Waze.
 - Ekran wyboru AirPlay, RDP i VNC w tej samej aplikacji.
 - Sesja pulpitu startuje tylko na postoju. Brak prędkości blokuje start, jazda rozłącza.
 - VNC to klient RFB w aplikacji. RDP to `g21-rdp` (FreeRDP 2.2, GDI programowe) i obraz przez `g21-present`.

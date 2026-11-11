@@ -37,7 +37,7 @@
         "insertionPriority": 0,
         "previewType": "NONE",
         "bookmarkable": true,
-        "private": null,
+        "private": false,
         "appearance": "DEFAULT",
         "isGroupHeader": false,
         "insertionGroup": 0

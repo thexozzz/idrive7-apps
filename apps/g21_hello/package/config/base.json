@@ -1,1 +1,4 @@
-{}
+{
+  "rhmiLoadingEnabled": true,
+  "entryPointLoadingEnabled": true
+}

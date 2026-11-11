@@ -14,6 +14,10 @@ Moonride włącza touchpad zapisem `ccsControlTouchCCU = TOUCH_AKTIV` i sam opis
 
 UxPlay zostaje na GPL-3.0. Klient RDP jest własnym programem `g21-rdp` zlinkowanym z FreeRDP 2.2.0 (Apache-2.0, pakiet Ubuntu 18.04 `freerdp2`). Klient VNC jest własną implementacją RFB 3.8 w `vnc_client.js` i nie łączy LibVNC.
 
+## Kafelek
+
+`package/config/base.json` ma `rhmiLoadingEnabled` i `entryPointLoadingEnabled`. Nowsze SDK buduje ekran i wpis na liście aplikacji tylko z tymi flagami. Bez nich Store pokazuje Installed, a listy aplikacji nie ma. Wpis jest publiczny (`private: false`) i wchodzi pod stan `20974`, ten sam co MGU Store i Waze.
+
 ## Ekran
 
 Ten sam stan RHMI co dotychczas. Doszły cztery przyciski z `Focusable` 3: AirPlay, RDP, VNC i Adres. Pokrętło na adresie zmienia oktet, kliknięcie przechodzi do następnego oktetu. Kliknięcie kafelka prosi o sesję. Zdarzenie `Abort` rozłącza. Nazwy szablonów `LT_Button_1Row` nie były sprawdzone na tym aucie.

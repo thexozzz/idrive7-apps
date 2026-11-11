@@ -5,13 +5,15 @@
     "type": "OnlineApp",
     "name": "g21_airplay",
     "vendor": "owner",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "defaultLanguage": "en_GB",
     "uiDescriptions": [
       {
         "applicationFilePath": "./uiDescriptions/ID7/application.xml",
         "uiDescriptionFilePath": "./uiDescriptions/ID7/uiDescription.json",
-        "hmi": ["ID7"]
+        "hmi": [
+          "ID7"
+        ]
       }
     ],
     "stringBundleUuid": "5d3f0b21-2c3d-4e4f-9012-b2c3d4e5f607",
@@ -20,8 +22,12 @@
       {
         "stringsPath": "./variantGroups/Common/texts",
         "resourcesPath": "./variantGroups/Common/images",
-        "hmi": ["ID7"],
-        "brands": ["BMW"]
+        "hmi": [
+          "ID7"
+        ],
+        "brands": [
+          "BMW"
+        ]
       }
     ],
     "entryPoints": [
@@ -37,7 +43,7 @@
         "insertionPriority": 0,
         "previewType": "NONE",
         "bookmarkable": true,
-        "private": null,
+        "private": false,
         "appearance": "DEFAULT",
         "isGroupHeader": false,
         "insertionGroup": 0
