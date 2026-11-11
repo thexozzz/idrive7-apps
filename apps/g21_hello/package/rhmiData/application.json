@@ -5,13 +5,15 @@
     "type": "OnlineApp",
     "name": "g21_hello",
     "vendor": "owner",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "defaultLanguage": "en_GB",
     "uiDescriptions": [
       {
         "applicationFilePath": "./uiDescriptions/ID7/application.xml",
         "uiDescriptionFilePath": "./uiDescriptions/ID7/uiDescription.json",
-        "hmi": ["ID7"]
+        "hmi": [
+          "ID7"
+        ]
       }
     ],
     "stringBundleUuid": "a1b2c3d4-e5f6-4789-8012-3456789abcde",
@@ -20,8 +22,12 @@
       {
         "stringsPath": "./variantGroups/Common/texts",
         "resourcesPath": "./variantGroups/Common/images",
-        "hmi": ["ID7"],
-        "brands": ["BMW"]
+        "hmi": [
+          "ID7"
+        ],
+        "brands": [
+          "BMW"
+        ]
       }
     ],
     "entryPoints": [

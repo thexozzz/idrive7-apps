@@ -19,12 +19,16 @@ var STATUS_NAME = 'helloStatus';
 var FOREGROUND_REASONS = ['ENTRY_POINT', 'LUM', 'BOOKMARK', 'START_WIDGET', 'TRIGGER_HMI', 'SPEECH_COMMAND'];
 
 function HelloApp() {
-    OnlineApp.call(this);
     this._state = null;
     this._status = null;
     this._visible = false;
     this._shutdownPromise = null;
     var self = this;
+    this.on('appStatusProxyReady', function () {
+        Promise.resolve(self.registerActive()).catch(function (err) {
+            logger.warn('registerActive: ' + (err && err.message));
+        });
+    });
     this.on('initialized', function () {
         self._appInitialized().catch(function (err) {
             logger.error('g21_hello init failed: ' + (err && err.message));
@@ -40,9 +44,6 @@ function HelloApp() {
     });
 }
 
-HelloApp.prototype = Object.create(OnlineApp.prototype);
-HelloApp.prototype.constructor = HelloApp;
-
 HelloApp.prototype._startedForeground = function () {
     var data = this.getVisibilityData && this.getVisibilityData();
     var reason = (data && data.reason) || this.startReason;
@@ -52,6 +53,9 @@ HelloApp.prototype._startedForeground = function () {
 HelloApp.prototype._appInitialized = function () {
     var self = this;
     logger.info('g21_hello ' + this.getAppId() + ' v' + this._packageJson.version + ' starting');
+    Promise.resolve(this.registerActive()).catch(function (err) {
+        logger.warn('registerActive: ' + (err && err.message));
+    });
     if (!this.rhmiApplication) {
         logger.info('no RhmiApplication for this start reason');
         return this.initialized();
@@ -147,7 +151,13 @@ HelloApp.prototype._handleShutdown = function (reason) {
     return this._shutdownPromise;
 };
 
-var app = new HelloApp();
+var app = new OnlineApp();
+Object.keys(HelloApp.prototype).forEach(function (name) {
+    if (name !== 'constructor' && typeof HelloApp.prototype[name] === 'function') {
+        app[name] = HelloApp.prototype[name];
+    }
+});
+HelloApp.call(app);
 app.start().catch(function (err) {
     logger.error('g21_hello failed to start: ' + (err && err.message));
 });

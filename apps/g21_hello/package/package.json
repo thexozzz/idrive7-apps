@@ -1,6 +1,6 @@
 {
   "name": "g21_hello",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Szablon aplikacji iDrive 7. Ekran statusu na centralnym wyświetlaczu. Nie zapisuje do sterowników.",
   "private": false,
   "main": "javascript/runner.js",
@@ -34,5 +34,7 @@
   },
   "license": "MIT",
   "mguLocalOnly": true,
-  "mguHmi": ["ID7"]
+  "mguHmi": [
+    "ID7"
+  ]
 }

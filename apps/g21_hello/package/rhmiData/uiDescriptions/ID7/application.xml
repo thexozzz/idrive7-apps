@@ -7,6 +7,7 @@
             </component>
         </layoutGroup>
         <layoutGroup id="200" name="List">
+            <property id="3" value="1"/>
             <component id="21" type="label" widget="LT_Label_1Row">
                 <property id="2" value="1"/>
                 <property id="3" value="0"/>
