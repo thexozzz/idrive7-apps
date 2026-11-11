@@ -20,7 +20,7 @@ UxPlay zostaje na GPL-3.0. Klient RDP jest własnym programem `g21-rdp` zlinkowa
 
 ## Ekran
 
-Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12: AirPlay 0.1.11 doszedł do `state-open` z czterema `LT_Button_2Row_2Text`, a wiersze nie były widoczne. Menu jest rysowane na powierzchni renderera (`/run/mgu-renderd/renderd.sock`, potem `/run/mgu-render/render.sock`): tło, cztery wiersze i napisy z prostych prostokątów. Właściciel potwierdził tego dnia, że te wiersze widać. Pokrętło, jeśli renderer odda zdarzenie, przesuwa zaznaczenie, a wciśnięcie wybiera wiersz. Pod listą jest stan UxPlay, tym samym rysunkiem.
+Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12: AirPlay 0.1.11 doszedł do `state-open` z czterema `LT_Button_2Row_2Text`, a wiersze nie były widoczne. Menu jest rysowane na powierzchni renderera (`/run/mgu-renderd/renderd.sock`, potem `/run/mgu-render/render.sock`): tło, cztery wiersze i napisy z prostych prostokątów. Właściciel potwierdził tego dnia, że te wiersze widać. Ta sama wersja zakryła cały ekran i co pół sekundy wysyłała przejęcie pokrętła, więc powrót do iDrive był zablokowany. Następna zostawia kolumnę wstecz i pasek tytułu dla HMI i nie wysyła przejęcia.
 
 ## Postój
 

@@ -25,6 +25,9 @@ var INK = 0xF2F4F8FF;
 var HINT = 0x9AA3B2FF;
 var BAR = 0x243044FF;
 var PAGE = 0x10141CFF;
+// iDrive 7 content box from idrive7-apps kit/renderd README: info.embedBox.
+// The back-arrow column and the title strip stay the HMI's.
+var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
 
 var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
@@ -146,13 +149,21 @@ FrameBuilder.prototype.bytes = function () {
 
 function buildFrame(items, selected, width, height, detail) {
     var draw = new FrameBuilder();
-    var rowH = 120;
-    var top = 48;
+    var gap = 12;
+    var top = 24;
+    var statusH = detail ? 48 : 0;
+    var rowH = Math.floor((height - top - statusH - gap * items.length) / items.length);
     var i;
     var y;
+    if (rowH > 120) {
+        rowH = 120;
+    }
+    if (rowH < 72) {
+        rowH = 72;
+    }
     draw.clear(PAGE);
     for (i = 0; i < items.length; i += 1) {
-        y = top + i * (rowH + 16);
+        y = top + i * (rowH + gap);
         if (i === selected) {
             draw.rect(40, y, width - 80, rowH, BAR);
         }
@@ -160,7 +171,7 @@ function buildFrame(items, selected, width, height, detail) {
         draw.text(items[i].hint, 72, y + 78, 4, HINT);
     }
     if (detail) {
-        draw.text(detail, 72, top + items.length * (rowH + 16) + 12, 5, INK);
+        draw.text(detail, 72, top + items.length * (rowH + gap) + 8, 5, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -201,7 +212,6 @@ function createMenuSurface(opts) {
     var incoming = Buffer.alloc(0);
     var screen = { w: 1920, h: 720 };
     var retry = null;
-    var grabTimer = null;
     var which = 0;
     var lastOp = null;
     var lastPush = 0;
@@ -229,10 +239,10 @@ function createMenuSurface(opts) {
 
     function sendPlace() {
         var b = Buffer.alloc(28);
-        b.writeInt32LE(0, 0);
-        b.writeInt32LE(0, 4);
-        b.writeInt32LE(screen.w, 8);
-        b.writeInt32LE(screen.h, 12);
+        b.writeInt32LE(CONTENT.x, 0);
+        b.writeInt32LE(CONTENT.y, 4);
+        b.writeInt32LE(CONTENT.w, 8);
+        b.writeInt32LE(CONTENT.h, 12);
         b.writeFloatLE(1, 16);
         b.writeFloatLE(0, 20);
         b.writeFloatLE(0, 24);
@@ -253,8 +263,8 @@ function createMenuSurface(opts) {
         }
         sendPlace();
         sendShow(true);
-        sendGrab(true);
-        var built = buildFrame(items, selected, screen.w, screen.h, detail);
+        sendGrab(false);
+        var built = buildFrame(items, selected, CONTENT.w, CONTENT.h, detail);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -356,25 +366,10 @@ function createMenuSurface(opts) {
         });
     }
 
-    function armGrab() {
-        if (grabTimer) {
-            return;
-        }
-        grabTimer = setInterval(function () {
-            if (ready && shown) {
-                sendGrab(true);
-            }
-        }, 500);
-        if (grabTimer.unref) {
-            grabTimer.unref();
-        }
-    }
-
     return {
         items: items,
         open: function () {
             shown = true;
-            armGrab();
             if (sock) {
                 paint();
                 return;
@@ -383,10 +378,6 @@ function createMenuSurface(opts) {
         },
         close: function () {
             shown = false;
-            if (grabTimer) {
-                clearInterval(grabTimer);
-                grabTimer = null;
-            }
             if (retry) {
                 clearTimeout(retry);
                 retry = null;

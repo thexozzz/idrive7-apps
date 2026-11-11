@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.15
+
+- Rysunek nie zakrywa kolumny wstecz i nie przejmuje pokrętła. Po wejściu da się wrócić do iDrive.
+
 ## 0.1.14
 
 - Pod menu widać stan UxPlay: start, działa, brak programu, brak Wi-Fi albo brak postoju.
