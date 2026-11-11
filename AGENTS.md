@@ -14,6 +14,8 @@ Manifest aplikacji nie deklaruje tych interfejsów. Walidator odrzuca ich nazwy 
 
 Połączenie SSH, instalacja, aktualizacja i usunięcie wymagają osobnej, wyraźnej zgody w bieżącej wiadomości użytkownika. Zgoda na diagnostykę nie jest zgodą na instalację. Zgoda na jedną aplikację nie obejmuje następnej.
 
+Jednostka właściciela ma adres `100.125.63.29`. Na tym hoście dozwolony jest wyłącznie odczyt plików, katalogów i logów. Zakazany jest każdy zapis, usunięcie, zmiana uprawnień, restart usługi, instalacja i aktualizacja. Naprawa idzie do repozytorium, a na samochód wraca tylko przez MGU Store, z ekranu, po osobnej zgodzie.
+
 Na samochodzie instaluje i usuwa właściciel, z ekranu MGU Store. Aktualizacje nie instalują się same. Każda aplikacja w `mgu-repo.json` ma `uninstallable: true`.
 
 ## Sekrety i SDK

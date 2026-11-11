@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.2
+
+- Ekran startowy używa szablonu LT_State_Laptimer, tego samego co aplikacje, które na tej jednostce się otwierają. Limit pamięci i CPU jest taki jak u nich.
+- Błąd startu dopisuje się do data/start.log.
+
 ## 0.1.1
 
 - Włączone ładowanie ekranu i punktu wejścia. Bez tego nowszy SDK zostawia aplikację jako Installed i nie wstawia kafelka na listę aplikacji.

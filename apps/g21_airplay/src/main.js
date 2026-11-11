@@ -19,6 +19,18 @@ var inputFactory = require('./input_manager.js');
 var frameSinkFactory = require('./frame_sink.js');
 
 var logger = logging.getSDKLogger();
+
+function noteStart(text) {
+    try {
+        fs.appendFileSync('../data/start.log', text + '\n');
+    } catch (err) {
+        return;
+    }
+}
+
+process.on('uncaughtException', function (err) {
+    noteStart('uncaught ' + (err && err.message));
+});
 var STATE_NAME = 'ST_OnlineApps_G21AirPlay';
 var RECEIVER_STATUS = '/run/g21-airplay.status';
 var FOREGROUND_REASONS = ['ENTRY_POINT', 'LUM', 'BOOKMARK', 'START_WIDGET', 'TRIGGER_HMI', 'SPEECH_COMMAND'];

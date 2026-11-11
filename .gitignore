@@ -9,6 +9,8 @@ dist/
 native/g21-airplay-open/build/
 
 # Vehicle and credential material. Never commit these.
+*.7z
+data.7z
 .env
 .env.*
 *.pem

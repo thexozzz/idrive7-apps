@@ -1,0 +1,13 @@
+---
+description: Head unit 100.125.63.29 is read-only. Never change files or services on it.
+alwaysApply: true
+---
+
+# MGU 100.125.63.29 is read-only
+
+The owner's head unit is `100.125.63.29`. On that host, and on any SSH session to it:
+
+- Allowed: read files, list directories, and read service status or logs.
+- Forbidden: write, delete, move, chmod, install, update, restart, stop, or start anything. No `>`, `tee`, `sed -i`, `systemctl restart`, `mount`, or package commands.
+- A request to look at a crash is not permission to repair it on the unit. Fix the repository, then the owner installs from MGU Store.
+- Do not print SSH private keys, the archive that holds them, or VIN data.
