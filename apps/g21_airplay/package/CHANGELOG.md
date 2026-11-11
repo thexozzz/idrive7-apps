@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.4
+
+- Aplikacja zgłasza się jako aktywna od razu po starcie. Bez tego MainApp na tej jednostce kończy proces, zanim otworzy się ekran.
+
 ## 0.1.3
 
 - Pierwsza strona ma jeden obraz i pasek przycisków, tak jak aplikacje, które na tej jednostce się otwierają. Tekst statusu jest na stronie obok.

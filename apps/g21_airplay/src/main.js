@@ -147,12 +147,23 @@ function AirPlayApp() {
         session: this._sessions,
         logFile: this._paths.inputLog,
     });
+    this.on('appStatusProxyReady', function () {
+        noteStart('status-ready');
+        Promise.resolve(self.registerActive()).catch(function (err) {
+            noteStart('active ' + (err && err.message));
+        });
+    });
     this.on('initialized', function () {
+        noteStart('initialized');
         self._appInitialized().catch(function (err) {
+            noteStart('init ' + (err && err.message));
             logger.error('g21_airplay init failed: ' + (err && err.message));
         });
     });
-    this.on('shutdown', function (reason) { self._handleShutdown(reason); });
+    this.on('shutdown', function (reason) {
+        noteStart('shutdown ' + JSON.stringify(reason));
+        self._handleShutdown(reason);
+    });
     this.on('error', function (err) { logger.warn('OnlineApp error: ' + (err && err.message)); });
     this.on('entryPointExecute', function (uuid) { self._onEntryPointExecute(uuid); });
     this.on('changeVisibility', function (data) {
@@ -173,7 +184,11 @@ AirPlayApp.prototype._startedForeground = function () {
 
 AirPlayApp.prototype._appInitialized = function () {
     var self = this;
+    noteStart('app-init');
     logger.info('g21_airplay ' + this.getAppId() + ' v' + this._packageJson.version + ' starting');
+    Promise.resolve(this.registerActive()).catch(function (err) {
+        noteStart('active ' + (err && err.message));
+    });
     this._client.connect();
     if (!this.rhmiApplication) {
         return this.initialized();
@@ -494,5 +509,6 @@ AirPlayApp.prototype._handleShutdown = function () {
 
 var app = new AirPlayApp();
 app.start().catch(function (err) {
+    noteStart('start ' + (err && err.message));
     logger.error('g21_airplay failed to start: ' + (err && err.message));
 });
