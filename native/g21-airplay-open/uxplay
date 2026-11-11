@@ -1,0 +1,12 @@
+#!/bin/sh
+# Starts the bundled UxPlay binary with the libraries next to this script.
+dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+if [ -x "$dir/gst-plugin-scanner" ]; then
+    export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+fi
+export GST_REGISTRY="${GST_REGISTRY:-/run/g21-airplay/registry.bin}"
+exec "$dir/uxplay.bin" "$@"

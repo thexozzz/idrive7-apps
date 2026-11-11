@@ -6,7 +6,6 @@ oap-sdk/
 dist/
 *.mgu
 *.tgz
-native/g21-airplay-open/uxplay
 native/g21-airplay-open/build/
 
 # Vehicle and credential material. Never commit these.

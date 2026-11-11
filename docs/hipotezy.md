@@ -16,6 +16,6 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H10 | Cisza sygnału po jeździe ma być traktowana jak jazda, tak jak w `parked.js` | H9, zostawiając HUD wyłączony przy wątpliwości |
 | H11 | Reguła nft o priorytecie -10 wpuszcza AirPlay zanim `mgu-uplink` odrzuci nowe połączenia na tym interfejsie | po instalacji `g21_airplay` iPhone w tej samej sieci widzi „G21” w lustrze ekranu |
 | H12 | Odpowiedź `/info` i ogłoszenie mDNS wystarczą, żeby iOS zaczął sesję | H11; pierwsza linia żądania pojawia się na ekranie aplikacji |
-| H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po wgraniu binarki `uxplay` zbudowanej na glibc 2.27 i instalacji `g21_airplay`: na iPhonie w tym samym Wi-Fi widać G21, a obraz pojawia się na ekranie |
+| H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po instalacji `g21_airplay` z gałęzi `test`: na iPhonie w tym samym Wi-Fi widać G21, a obraz pojawia się na ekranie |
 
 H2 celowo nie jest częścią domyślnej diagnostyki. Wersja firmware bywa powiązana z numerem pojazdu w logach; dopiszemy ją do skryptu dopiero, gdy zakres odczytu zostanie zatwierdzony osobno.

@@ -6,5 +6,17 @@ Commit: df67c212a433cf6dda3676dd40c097900d24e645
 License: GPL-3.0-only (third_party/UxPlay/LICENSE). Those files stay under that license.
 The rest of this repository is MIT.
 
-build-uxplay.sh compiles them for the head unit. The service starts the
-resulting uxplay binary only while MGU Store's uplink is Wi-Fi.
+The head-unit runtime is already in this directory:
+
+  uxplay                  wrapper (sets LD_LIBRARY_PATH and GST_PLUGIN_PATH)
+  uxplay.bin              UxPlay built on Ubuntu 18.04, glibc 2.27, x86-64
+  gst-plugin-scanner      GStreamer 1.14 plugin scanner from the same system
+  lib/                    shared libraries the binary needs, except glibc
+  lib/gstreamer-1.0/      plugins: decodebin, h264parse, avdec_h264, videoconvert,
+                          waylandsink, alsasink, level, appsink and their helpers
+
+glibc, libm, libpthread, libdl, librt and the dynamic linker stay on the
+head unit. Do not replace them. Library names and the Ubuntu 18.04 packages
+they came from are in LIBS.txt.
+
+The service starts uxplay only while MGU Store's uplink is Wi-Fi.

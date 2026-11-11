@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) on the Wi-Fi network
-# MGU Store is using. The binary is uxplay next to this script, or $UXPLAY,
-# or uxplay on PATH. It is not built into this source tree.
+# MGU Store is using. The program next to this script is a wrapper: it runs
+# uxplay.bin with lib/ and the GStreamer plugins in lib/gstreamer-1.0.
 #
 # Inbound accept, only from that lease subnet and only on that interface:
 # UDP 5353 (mDNS) and UxPlay -p legacy ports
@@ -113,7 +113,7 @@ start_ux() {
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
     export G21_YUV=/run/g21-airplay/latest.yuv
     mkdir -p /run/g21-airplay
-    "$bin" -n G21 -nh -p -vsync no -fs -vs waylandsink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
+    "$bin" -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
     UXPID=$!
     report "running|$ssid|$ip"
 }

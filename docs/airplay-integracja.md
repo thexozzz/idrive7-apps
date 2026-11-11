@@ -12,7 +12,7 @@ UxPlay dekoduje H.264 raz, elementem `decodebin` (na MGU może to być dekoder V
 
 ## Przepływ, który da się dziś uruchomić lokalnie
 
-iPhone, AirPlay i UxPlay zostają na ścieżce środkowego ekranu, gdy binarka `uxplay` jest zbudowana. `DisplayOutputManager` trzyma jedno aktywne wyjście. Domyślnie jest nim Central Display. Cluster i HUD odrzuca, dopóki nie ma postoju albo gdy renderer zgłasza `no-yuv-source`. Przełączenie, które się nie uda, wraca do poprzedniego wyjścia. Utrata prędkości albo jazda powyżej 3 km/h gasi warstwę na zegarach i HUD i oddaje obraz na środek, jeśli środek jest dostępny.
+iPhone, AirPlay i UxPlay zostają na ścieżce środkowego ekranu. Program jest w `native/g21-airplay-open` (`uxplay` + `uxplay.bin` + `lib/`). `DisplayOutputManager` trzyma jedno aktywne wyjście. Domyślnie jest nim Central Display. Cluster i HUD odrzuca, dopóki nie ma postoju albo gdy renderer zgłasza `no-yuv-source`. Przełączenie, które się nie uda, wraca do poprzedniego wyjścia. Utrata prędkości albo jazda powyżej 3 km/h gasi warstwę na zegarach i HUD i oddaje obraz na środek, jeśli środek jest dostępny.
 
 Symulator `node tools/sim_display.js` otwiera `http://127.0.0.1:8091`. Napis na stronie mówi, że to nie jest samochód i nie ma strumienia AirPlay.
 
