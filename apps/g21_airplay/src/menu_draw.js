@@ -394,10 +394,13 @@ var AIRPLAY_ITEMS = [
 ];
 
 var AIR_OUT_ITEMS = [
-    { name: 'air-out-central', title: 'Środek', hint: 'wyłączony', icon: 'desktop' },
-    { name: 'air-out-cluster', title: 'Zegary', hint: 'wyłączony', icon: 'grid' },
-    { name: 'air-out-hud', title: 'HUD', hint: 'wyłączony', icon: 'tag' },
-    { name: 'air-out-box', title: 'Okno', hint: 'pozycja i rozmiar', icon: 'gear' },
+    { name: 'air-mode-central', title: 'Środek', hint: 'domyślnie', icon: 'desktop' },
+    { name: 'air-mode-cluster', title: 'Zegary', hint: 'mapa, postój', icon: 'grid' },
+    { name: 'air-mode-both', title: 'Oba', hint: 'środek i mapa', icon: 'play' },
+    { name: 'air-mode-off', title: 'Wyłączone', hint: 'bez obrazu', icon: 'stop' },
+    { name: 'air-area', title: 'Mapa', hint: 'środek zegarów', icon: 'grid' },
+    { name: 'air-fit', title: 'Contain', hint: 'bez rozciągania', icon: 'desktop' },
+    { name: 'air-fps', title: '4 FPS', hint: 'limit zegarów', icon: 'play' },
     { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 

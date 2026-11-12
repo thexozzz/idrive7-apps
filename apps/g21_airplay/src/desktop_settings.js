@@ -178,6 +178,15 @@ function createDesktopSettings(stored) {
     // false = jak na kkds (bez kodu); true = -pin na iPhonie.
     var airplayPin = data.airplayPin === true;
     var airQuality = data.airQuality === '1080' ? '1080' : '720';
+    var airDisplay = data.airDisplay === 'cluster' || data.airDisplay === 'both' || data.airDisplay === 'off'
+        ? data.airDisplay
+        : 'central';
+    var airClusterTarget = data.airClusterTarget === 'panel' ? 'panel' : 'map';
+    var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
+    var airClusterFps = data.airClusterFps | 0;
+    if (airClusterFps < 2 || airClusterFps > 6) {
+        airClusterFps = 4;
+    }
     var airOutputs = Array.isArray(data.airOutputs) && data.airOutputs.length
         ? data.airOutputs.filter(function (name) {
             return name === 'central' || name === 'cluster' || name === 'hud';
@@ -274,6 +283,37 @@ function createDesktopSettings(stored) {
         setAirQuality: function (next) {
             airQuality = next === '1080' ? '1080' : '720';
             return { ok: true, quality: airQuality };
+        },
+        airDisplay: function () { return airDisplay; },
+        setAirDisplay: function (next) {
+            if (next === 'cluster' || next === 'both' || next === 'off') {
+                airDisplay = next;
+            } else {
+                airDisplay = 'central';
+            }
+            return { ok: true, mode: airDisplay };
+        },
+        airClusterTarget: function () { return airClusterTarget; },
+        setAirClusterTarget: function (next) {
+            airClusterTarget = next === 'panel' ? 'panel' : 'map';
+            return { ok: true, target: airClusterTarget };
+        },
+        airFit: function () { return airFit; },
+        setAirFit: function (next) {
+            airFit = next === 'cover' ? 'cover' : 'contain';
+            return { ok: true, fit: airFit };
+        },
+        airClusterFps: function () { return airClusterFps; },
+        setAirClusterFps: function (next) {
+            var n = next | 0;
+            if (n < 2) {
+                n = 2;
+            }
+            if (n > 6) {
+                n = 6;
+            }
+            airClusterFps = n;
+            return { ok: true, fps: airClusterFps };
         },
         airOutputs: function () { return airOutputs.slice(); },
         setAirOutputs: function (list) {
@@ -485,6 +525,10 @@ function createDesktopSettings(stored) {
                 airplayName: airplayName,
                 airplayPin: airplayPin,
                 airQuality: airQuality,
+                airDisplay: airDisplay,
+                airClusterTarget: airClusterTarget,
+                airFit: airFit,
+                airClusterFps: airClusterFps,
                 airOutputs: airOutputs.slice(),
                 airWindows: airWindows,
                 clusterLabel: clusterLabel,

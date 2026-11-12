@@ -111,6 +111,8 @@ var mods = [
     'display_output.js',
     'parked_gate.js',
     'video_decoder.js',
+    'frame_fit.js',
+    'video_router.js',
     'mirror_video.js',
     'cluster_render_adapter.js',
     'cluster_render_client.js',

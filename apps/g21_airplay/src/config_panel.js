@@ -68,7 +68,7 @@ function pageHtml(view) {
         + (view.passwordSet ? '********' : '') + '">'
         + '<button type="submit">Zapisz RDP</button>'
         + (view.message ? ('<p class="' + (view.ok ? 'ok' : 'err') + '">' + escapeHtml(view.message) + '</p>') : '')
-        + '<p class="hint">AirPlay ustawia sie osobno w menu Wlacz / Nazwa.</p>'
+        + '<p class="hint">AirPlay: menu Ekrany. Srodek, zegary (mapa, tylko postoj), oba albo wylaczone. Panel zegarow zaslania BC i jest wylaczony, dopoki nie jest wybrany.</p>'
         + '</form></main></body></html>';
 }
 

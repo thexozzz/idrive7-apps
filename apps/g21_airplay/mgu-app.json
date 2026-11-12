@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.82",
+  "version": "0.1.83",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -11,6 +11,8 @@
     "src/display_output.js",
     "src/parked_gate.js",
     "src/video_decoder.js",
+    "src/frame_fit.js",
+    "src/video_router.js",
     "src/mirror_video.js",
     "src/cluster_render_adapter.js",
     "src/cluster_render_client.js",

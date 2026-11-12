@@ -5,11 +5,13 @@
  * Target names and frame layout are protocol version 1, idrive-apps
  * native/cluster-render/PROTOCOL.md at a559f69ebc8c.
  * On iDrive 7 the hello targets are map 1088x480, panel 1920x720, hud 800x480.
- * Zegary / whole cluster over gauges = target "panel" (0x203, 1920x720).
- * HUD is the target "hud" (0x323, 800x480). map is only the nav pocket.
+ * AirPlay on the cluster uses "map" (0x103, 1088x480), the nav pocket.
+ * "panel" (0x203, 1920x720) covers the gauges and hides factory BC.
+ * HUD is the target "hud" (0x323, 800x480).
  */
 
 var TARGETS = {
+    map: { protocol: 'map', w: 1088, h: 480 },
     cluster: { protocol: 'panel', w: 1920, h: 720 },
     hud: { protocol: 'hud', w: 800, h: 480 },
 };

@@ -37,7 +37,10 @@ var pixels = Buffer.alloc(adapterFactory.yuvBytes(made.w, made.h), 16);
 assert.strictEqual(adapter.updateFrame(Buffer.alloc(10)).reason, 'bad-frame');
 assert.strictEqual(adapter.updateFrame(pixels).ok, true);
 assert.strictEqual(clientOk.calls[clientOk.calls.length - 1][0], 'frame');
-assert.strictEqual(adapter.knownTarget('map').reason, 'unknown-target');
+assert.strictEqual(adapter.knownTarget('map').protocol, 'map');
+assert.strictEqual(adapter.knownTarget('map').w, 1088);
+assert.strictEqual(adapter.knownTarget('map').h, 480);
+assert.strictEqual(adapter.knownTarget('nope').reason, 'unknown-target');
 
 var closed = fakeClient('hud:800x480');
 var denied = adapterFactory.createClusterRenderAdapter(closed);
