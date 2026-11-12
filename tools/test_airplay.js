@@ -74,8 +74,10 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.8');
-assert.ok(script.indexOf('group=avahi') === -1);
+assert.strictEqual(component.version, '0.1.9');
+assert.ok(script.indexOf('\ngroup=avahi\n') === -1);
+assert.ok(script.indexOf('\nuser=avahi\n') === -1);
+assert.ok(script.indexOf('--no-drop-root') !== -1);
 assert.ok(component.files.some(function (item) { return item.path === 'avahi-daemon'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'run-elf'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'gst-plugin-scanner.bin'; }));

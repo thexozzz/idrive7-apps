@@ -335,7 +335,6 @@ deny-interfaces=lo
 enable-dbus=yes
 check-response-ttl=no
 use-iff-running=yes
-user=avahi
 [wide-area]
 enable-wide-area=no
 [publish]
@@ -351,6 +350,7 @@ enable-reflector=no
 [rlimits]
 EOF
     stop_avahi_local
+    # This avahi build rejects user=/group= config keys; stay root via --no-drop-root.
     printf '\n# start iface=%s\n' "$iface" >>/var/log/g21-avahi.log
     if start_avahi_bin "$dir" "$conf"; then
         return 0
@@ -366,7 +366,6 @@ deny-interfaces=lo
 enable-dbus=no
 check-response-ttl=no
 use-iff-running=yes
-user=avahi
 [wide-area]
 enable-wide-area=no
 [publish]
