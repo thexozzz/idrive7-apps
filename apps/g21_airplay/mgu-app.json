@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -20,6 +20,7 @@
     "src/desktop_settings.js",
     "src/session_manager.js",
     "src/desktop_sessions.js",
+    "src/socks5.js",
     "src/vnc_client.js",
     "src/input_manager.js",
     "src/frame_sink.js",

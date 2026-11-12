@@ -189,6 +189,40 @@ table inet $TABLE {
 EOF
 }
 
+# Tailscale on MGU is userspace-only: no kernel route to 100.64/10.
+# Opt-in SOCKS5 on 127.0.0.2 lets RDP/VNC reach the tailnet.
+ensure_tailscale_socks5() {
+    tsroot=/var/opt/iteriodev-tailscale
+    portfile=$tsroot/socks5-port
+    port=1055
+    porthex=
+    if [ ! -d "$tsroot" ]; then
+        return 0
+    fi
+    if [ ! -f "$portfile" ]; then
+        printf '%s\n' "$port" > "$portfile"
+        chmod 644 "$portfile" 2>/dev/null || true
+    fi
+    port=$(tr -d ' \t\r\n' < "$portfile" 2>/dev/null || true)
+    case $port in
+        ''|*[!0-9]*) port=1055; printf '%s\n' "$port" > "$portfile" ;;
+    esac
+    export G21_SOCKS5_HOST=127.0.0.2
+    export G21_SOCKS5_PORT=$port
+    printf '%s\n' "$port" > "$SESSION_DIR/socks5-port"
+    chmod 666 "$SESSION_DIR/socks5-port" 2>/dev/null || true
+    # 127.0.0.2 = 0200007F in /proc/net/tcp; listen state 0A.
+    porthex=$(printf '%04X' "$port")
+    if grep -qiE " 0200007F:${porthex} .* 0A " /proc/net/tcp 2>/dev/null; then
+        return 0
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart iteriodev-tailscale.service >/dev/null 2>&1 || true
+        sleep 2
+    fi
+    return 0
+}
+
 ensure_dirs() {
     mkdir -p "$SESSION_DIR" /run/g21-desktop /run/g21-airplay
     chmod 1777 "$SESSION_DIR" /run/g21-desktop 2>/dev/null || true
@@ -196,6 +230,7 @@ ensure_dirs() {
     : >> "$DESKTOP"
     : >> "$REPORT"
     chmod 666 "$DESKTOP" "$REPORT" 2>/dev/null || true
+    ensure_tailscale_socks5
 }
 
 mode_of() {

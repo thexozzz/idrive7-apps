@@ -20,7 +20,31 @@
 #include <freerdp/freerdp.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
-#include <winpr/crt.h>
+#ifndef PROXY_TYPE_SOCKS
+#define PROXY_TYPE_SOCKS 2
+#endif
+#ifndef FreeRDP_ProxyType
+#define FreeRDP_ProxyType 2015
+#endif
+#ifndef FreeRDP_ProxyHostname
+#define FreeRDP_ProxyHostname 2016
+#endif
+#ifndef FreeRDP_ProxyPort
+#define FreeRDP_ProxyPort 2017
+#endif
+#ifndef FreeRDP_ServerHostname
+#define FreeRDP_ServerHostname 20
+#endif
+#ifndef FreeRDP_Username
+#define FreeRDP_Username 21
+#endif
+#ifndef FreeRDP_Password
+#define FreeRDP_Password 22
+#endif
+
+#define SOCKS5_PORT_FILE "/var/opt/iteriodev-tailscale/socks5-port"
+#define SOCKS5_PORT_RUN "/run/g21-session/socks5-port"
+#define SOCKS5_HOST "127.0.0.2"
 
 #define TARGET "/run/g21-session/target"
 #define SECRET "/run/g21-session/secret"
@@ -60,6 +84,63 @@ static int read_text(const char *path, char *dst, size_t dst_len)
         dst[--n] = 0;
     }
     return n > 0;
+}
+
+static int is_tailscale_ip(const char *host)
+{
+    unsigned a = 0;
+    unsigned b = 0;
+    unsigned c = 0;
+    unsigned d = 0;
+    if (sscanf(host, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
+        return 0;
+    }
+    if (a > 255 || b > 255 || c > 255 || d > 255) {
+        return 0;
+    }
+    /* Tailscale CGNAT 100.64.0.0/10 — userspace tailscaled has no kernel route. */
+    return a == 100 && b >= 64 && b <= 127;
+}
+
+static int read_socks5_port(void)
+{
+    char text[32];
+    int port;
+    const char *env = getenv("G21_SOCKS5_PORT");
+    if (env && env[0]) {
+        port = atoi(env);
+        if (port > 0 && port <= 65535) {
+            return port;
+        }
+    }
+    if (read_text(SOCKS5_PORT_RUN, text, sizeof(text)) ||
+        read_text(SOCKS5_PORT_FILE, text, sizeof(text))) {
+        port = atoi(text);
+        if (port > 0 && port <= 65535) {
+            return port;
+        }
+    }
+    return 0;
+}
+
+static void apply_tailscale_socks5(rdpSettings *settings, const char *host)
+{
+    int port;
+    const char *socks_host;
+    if (!settings || !host || !is_tailscale_ip(host)) {
+        return;
+    }
+    port = read_socks5_port();
+    if (port <= 0) {
+        return;
+    }
+    socks_host = getenv("G21_SOCKS5_HOST");
+    if (!socks_host || !socks_host[0]) {
+        socks_host = SOCKS5_HOST;
+    }
+    freerdp_settings_set_uint32(settings, FreeRDP_ProxyType, PROXY_TYPE_SOCKS);
+    freerdp_settings_set_string(settings, FreeRDP_ProxyHostname, socks_host);
+    freerdp_settings_set_uint16(settings, FreeRDP_ProxyPort, (UINT16)port);
 }
 
 static DWORD verify_certificate(freerdp *instance, const char *host, UINT16 port,
@@ -299,15 +380,13 @@ int main(void)
     instance->PostDisconnect = post_disconnect;
     instance->VerifyCertificateEx = verify_certificate;
     /* FreeRDP 2: ServerHostname/Username/Password are char* — strncpy(sizeof ptr) segfaults. */
-    free(instance->settings->ServerHostname);
-    instance->settings->ServerHostname = _strdup(host);
+    freerdp_settings_set_string(instance->settings, FreeRDP_ServerHostname, host);
+    freerdp_settings_set_string(instance->settings, FreeRDP_Username, user);
+    freerdp_settings_set_string(instance->settings, FreeRDP_Password, secret);
     instance->settings->ServerPort = (UINT32)port;
-    free(instance->settings->Username);
-    instance->settings->Username = _strdup(user);
-    free(instance->settings->Password);
-    instance->settings->Password = _strdup(secret);
     instance->settings->DesktopWidth = 1920;
     instance->settings->DesktopHeight = 720;
+    apply_tailscale_socks5(instance->settings, host);
     if (!instance->settings->ServerHostname) {
         status("error|freerdp|");
         freerdp_free(instance);

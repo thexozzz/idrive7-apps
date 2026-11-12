@@ -2,6 +2,7 @@
 
 var crypto = require('crypto');
 var net = require('net');
+var socks5 = require('./socks5.js');
 
 function concat(left, right) {
     return Buffer.concat([left, right]);
@@ -369,26 +370,40 @@ function createVncClient(opts) {
                     settled = true;
                     resolve(result);
                 }
+                function wireSocket(sock) {
+                    socket = sock;
+                    socket.on('data', function (chunk) {
+                        buffer = concat(buffer, chunk);
+                        try {
+                            parse();
+                        } catch (err) {
+                            fail('parse-error');
+                        }
+                    });
+                    socket.on('error', function () {
+                        fail('network');
+                        done({ ok: false, reason: 'network', target: target });
+                    });
+                    socket.on('close', function () {
+                        if (status.state === 'connected') {
+                            setStatus('closed', 'network');
+                        }
+                    });
+                }
+                if (socks5.shouldProxy(host)) {
+                    socks5.connect(host, port).then(function (sock) {
+                        wireSocket(sock);
+                        done({ ok: true, state: 'banner', target: target });
+                    }, function () {
+                        fail('network');
+                        done({ ok: false, reason: 'network', target: target });
+                    });
+                    return;
+                }
                 socket = net.connect({ host: host, port: port }, function () {
                     done({ ok: true, state: 'banner', target: target });
                 });
-                socket.on('data', function (chunk) {
-                    buffer = concat(buffer, chunk);
-                    try {
-                        parse();
-                    } catch (err) {
-                        fail('parse-error');
-                    }
-                });
-                socket.on('error', function () {
-                    fail('network');
-                    done({ ok: false, reason: 'network', target: target });
-                });
-                socket.on('close', function () {
-                    if (status.state === 'connected') {
-                        setStatus('closed', 'network');
-                    }
-                });
+                wireSocket(socket);
             });
         },
         disconnect: function () {
