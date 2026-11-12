@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.48
+
+- Dotyk ID7: stale pozycje kafelkow + wieksze hitboxy + aktywacja na uniesieniu palca (wczesniej tapy mijaly przesuwany carousel).
+
 ## 0.1.47
 
 - Font bitmap: brakujace glify `h/j/q/v` i `F/J/Q/X/Y/Z` (hint „iPhone” i kafelek `WYL`).

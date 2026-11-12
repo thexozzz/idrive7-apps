@@ -547,31 +547,31 @@ function menuLayout(items, selected, width, height, detail, heading) {
     var titleScale = 4;
     var bubbles = [];
     var i;
-    var before = 0;
     var startX;
     var y;
-    var w;
-    var h;
+    var slot;
+    var grow = 14;
+    // Fixed slots: selection only grows in place. The old "center on selected"
+    // carousel moved hitboxes under the finger and made taps miss on the car.
+    var rowW = count * cardW + (count - 1) * gap;
+    startX = page.ox + Math.floor((page.boxW - rowW) / 2);
+    y = page.oy + Math.floor((page.boxH - cardH) / 2) - 8;
     for (i = 0; i < items.length; i += 1) {
-        w = i === selected ? cardW + 28 : cardW;
-        h = i === selected ? cardH + 20 : cardH;
+        slot = startX + i * (cardW + gap);
         bubbles.push({
-            w: w,
-            h: h,
+            x: i === selected ? slot - grow : slot,
+            y: i === selected ? y - 10 : y,
+            w: i === selected ? cardW + grow * 2 : cardW,
+            h: i === selected ? cardH + 20 : cardH,
+            // Stable rect for hit-testing (ignores selection grow).
+            hitX: slot - Math.floor(gap / 2),
+            hitY: y - 24,
+            hitW: cardW + gap,
+            hitH: cardH + 48,
             scale: titleScale,
             iconPx: i === selected ? iconPx + 1 : iconPx,
             selected: i === selected
         });
-        if (i < selected) {
-            before += w + gap;
-        }
-    }
-    startX = page.ox + Math.floor(page.boxW / 2) - Math.floor(bubbles[selected].w / 2) - before;
-    y = page.oy + Math.floor((page.boxH - cardH) / 2) - 8;
-    for (i = 0; i < bubbles.length; i += 1) {
-        bubbles[i].x = startX;
-        bubbles[i].y = y - (i === selected ? 10 : 0);
-        startX += bubbles[i].w + gap;
     }
     return {
         ox: page.ox,
@@ -665,6 +665,10 @@ function streamLayout(items, selected, width, height, detail, heading) {
             y: y,
             w: btnW,
             h: btnH,
+            hitX: x - 40,
+            hitY: y - 40,
+            hitW: btnW + 80,
+            hitH: btnH + 80,
             scale: 4,
             iconPx: 3,
             selected: true
@@ -835,8 +839,10 @@ function createMenuSurface(opts) {
     var lastOp = null;
     var lastPush = 0;
     var noted = false;
+    var claimNoted = false;
     var detail = '';
     var edit = null;
+    var touchDown = null;
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -960,7 +966,10 @@ function createMenuSurface(opts) {
         b.writeFloatLE(CONTENT.w, 28);
         b.writeFloatLE(CONTENT.h, 32);
         write(message(CLAIM, b));
-        note('menu-claim ' + w + 'x' + h);
+        if (!claimNoted) {
+            claimNoted = true;
+            note('menu-claim ' + w + 'x' + h);
+        }
     }
 
     function hitRow(x, y) {
@@ -974,16 +983,51 @@ function createMenuSurface(opts) {
         ];
         var p;
         var pi;
+        var best = -1;
+        var bestDist = 1e9;
+        var cx;
+        var cy;
+        var dx;
+        var dy;
+        var dist;
         for (pi = 0; pi < pts.length; pi += 1) {
             p = pts[pi];
             for (i = 0; i < lay.bubbles.length; i += 1) {
                 bubble = lay.bubbles[i];
-                if (p.x >= bubble.x && p.x < bubble.x + bubble.w && p.y >= bubble.y && p.y < bubble.y + bubble.h) {
+                var hx = bubble.hitX != null ? bubble.hitX : bubble.x;
+                var hy = bubble.hitY != null ? bubble.hitY : bubble.y;
+                var hw = bubble.hitW != null ? bubble.hitW : bubble.w;
+                var hh = bubble.hitH != null ? bubble.hitH : bubble.h;
+                if (p.x >= hx && p.x < hx + hw && p.y >= hy && p.y < hy + hh) {
                     return i;
+                }
+                cx = hx + hw / 2;
+                cy = hy + hh / 2;
+                dx = p.x - cx;
+                dy = p.y - cy;
+                dist = dx * dx + dy * dy;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = i;
                 }
             }
         }
+        // Finger often lands in the gap; accept the nearest tile within ~120 px.
+        if (best >= 0 && bestDist <= 120 * 120) {
+            return best;
+        }
         return -1;
+    }
+
+    function activateHit(hit, why) {
+        if (hit < 0 || hit >= items.length) {
+            return false;
+        }
+        selected = hit;
+        note('menu-hit ' + why + ' ' + items[hit].name);
+        paint();
+        press();
+        return true;
     }
 
     function cloneScreen(name) {
@@ -1177,14 +1221,40 @@ function createMenuSurface(opts) {
                 var phase = body.readUInt32LE(0);
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
+                var hit;
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
-                if (!edit && phase === 1) {
-                    var hit = hitRow(tx, ty);
-                    if (hit >= 0) {
-                        selected = hit;
+                if (edit) {
+                    touchDown = null;
+                } else if (phase === 1) {
+                    touchDown = { x: tx, y: ty, hit: hitRow(tx, ty), t: Date.now() };
+                    // Select on down so the tile lights up; activate on up unless it was a drag.
+                    if (touchDown.hit >= 0) {
+                        selected = touchDown.hit;
                         paint();
-                        press();
                     }
+                } else if (phase === 2 && touchDown) {
+                    hit = hitRow(tx, ty);
+                    if (hit >= 0 && hit !== selected) {
+                        selected = hit;
+                        touchDown.hit = hit;
+                        paint();
+                    }
+                } else if (phase === 3) {
+                    hit = hitRow(tx, ty);
+                    if (hit < 0 && touchDown) {
+                        hit = touchDown.hit;
+                    }
+                    // Ignore long drags away from the tile (>80 px) as scrolls.
+                    if (touchDown && hit >= 0) {
+                        var ddx = tx - touchDown.x;
+                        var ddy = ty - touchDown.y;
+                        if ((ddx * ddx + ddy * ddy) <= 80 * 80 || hit === touchDown.hit) {
+                            activateHit(hit, 'up');
+                        }
+                    } else if (hit >= 0) {
+                        activateHit(hit, 'up');
+                    }
+                    touchDown = null;
                 }
             } else if (type === CCU && body.length >= 5 && body.length < 12 && shown) {
                 onControl(body.readUInt16BE(1), body[3]);

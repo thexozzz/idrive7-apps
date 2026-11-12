@@ -31,6 +31,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H34 | TXT `container_id` w `_display._tcp` sprawia, że Windows 11 widzi G21 w Win+K w tej samej Wi-Fi Store | po Update narzędzia 0.1.13+: PC pokazuje friendly name sinka |
 | H35 | Kafelek AirPlay `WL`/`WYL` śledzi `sessions.active()===airplay`, nie `receiver.mode`, więc po Włącz kafelek zostaje WL także w waiting | po Update: klik WYL→WL, status `AirPlay start` / czekaj, bez powrotu na WYL zanim nie klikniesz wyłączenia |
 | H36 | Przy Miracast WL i ofercie SOURCE_READY auto-accept łączy PC bez kafelka Urzadzenia | po Update: Win+K → log `win-auto`, status `Miracast dziala`, stream + Zakoncz |
+| H37 | Staly rzad kafelkow + hitbox ze slotem/gap i aktywacja na phase=3 daje dzialajacy tap na tym G21 | po Update: log `menu-hit up airplay` przy tapnieciu; choose bez pokretla |
 | H30 | CLAIM bez bramki front + pelny prostokat ekranu daje TOUCH na kafelkach menu | po Update: tap na Polacz/Dodaj wybiera kafelek; w logu `menu-touch` |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |
