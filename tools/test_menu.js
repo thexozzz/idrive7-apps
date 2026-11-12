@@ -58,9 +58,10 @@ assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
 }));
 assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.SCREENS['air-out']);
-assert.strictEqual(menu.AIR_OUT_ITEMS[0].name, 'air-mode-central');
-assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-mode-cluster');
-assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-mode-both');
+assert.strictEqual(menu.AIR_OUT_ITEMS[0].name, 'air-out-central');
+assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-out-hud');
+assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-out-cluster');
+assert.strictEqual(menu.AIR_OUT_ITEMS[3].name, 'air-area');
 assert.ok(menu.SCREENS.label);
 assert.ok(menu.STREAM_ITEMS);
 assert.strictEqual(menu.STREAM_ITEMS[0].name, 'stream-end');

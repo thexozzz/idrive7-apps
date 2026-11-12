@@ -365,7 +365,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.84',
+        version: (this._packageJson && this._packageJson.version) || '0.1.85',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -455,7 +455,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.84') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.85') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1149,18 +1149,20 @@ AirPlayApp.prototype._saveWindows = function () {
     this._saveDesk();
 };
 
-AirPlayApp.prototype._namesForAirDisplay = function () {
-    var mode = this._desk.airDisplay ? this._desk.airDisplay() : 'central';
-    if (mode === 'off') {
-        return [];
+AirPlayApp.prototype._routerMode = function () {
+    var names = this._settings.outputs();
+    var central = names.indexOf('central') !== -1;
+    var cluster = names.indexOf('cluster') !== -1;
+    if (central && cluster) {
+        return 'both';
     }
-    if (mode === 'cluster') {
-        return ['cluster'];
+    if (cluster) {
+        return 'cluster';
     }
-    if (mode === 'both') {
-        return ['central', 'cluster'];
+    if (central) {
+        return 'central';
     }
-    return ['central'];
+    return 'off';
 };
 
 AirPlayApp.prototype._parkFlag = function () {
@@ -1170,36 +1172,27 @@ AirPlayApp.prototype._parkFlag = function () {
     return this._gate.hudAllowed() === true;
 };
 
-AirPlayApp.prototype._applyAirDisplay = function () {
-    var names = this._namesForAirDisplay();
-    if (names.length) {
-        this._settings.setOutputs(names);
-        this._saveWindows();
-    }
-    if (this._router) {
-        this._router.setMode(this._desk.airDisplay ? this._desk.airDisplay() : 'central');
-        if (this._desk.airClusterFps) {
-            this._router.setClusterFps(this._desk.airClusterFps());
-        }
-        this._router.setParked(this._parkFlag());
-    }
-    return names;
-};
-
 AirPlayApp.prototype._startAirplaySelected = function () {
-    var names = this._applyAirDisplay();
+    var names = this._settings.outputs();
     var started;
+    var moving;
     if (!names.length) {
-        this._tellMenu('off');
-        return;
+        this._settings.toggleOutput('central');
+        this._saveWindows();
+        names = this._settings.outputs();
     }
-    if (this._desk.airDisplay && this._desk.airDisplay() === 'cluster' && this._parkFlag() !== true) {
+    moving = names.indexOf('cluster') !== -1 || names.indexOf('hud') !== -1;
+    if (moving && names.indexOf('central') === -1 && this._parkFlag() !== true) {
         this._tellMenu('not-parked');
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('air-out');
         }
         this._sync();
         return;
+    }
+    if (this._router) {
+        this._router.setMode(this._routerMode());
+        this._router.setParked(this._parkFlag());
     }
     this._writeAirplayAuth();
     this._writeAirplaySize();
@@ -1437,34 +1430,11 @@ AirPlayApp.prototype._onAirAction = function (name) {
         this._sync();
         return;
     }
-    if (name.indexOf('air-mode-') === 0) {
-        this._desk.setAirDisplay(name.slice('air-mode-'.length));
-        this._saveDesk();
-        this._applyAirDisplay();
-        this._paintAirOut();
-        return;
-    }
-    if (name === 'air-fps') {
-        var nextFps = this._desk.airClusterFps() >= 6 ? 2 : (this._desk.airClusterFps() + 2);
-        this._desk.setAirClusterFps(nextFps);
-        this._saveDesk();
-        if (this._router) {
-            this._router.setClusterFps(nextFps);
-        }
-        this._paintAirOut();
-        return;
-    }
     if (name === 'air-area') {
         var nextArea = this._desk.airClusterTarget() === 'panel' ? 'map' : 'panel';
         this._desk.setAirClusterTarget(nextArea);
         this._saveDesk();
         this._clusterLayer = '';
-        this._paintAirOut();
-        return;
-    }
-    if (name === 'air-fit') {
-        this._desk.setAirFit(this._desk.airFit() === 'cover' ? 'contain' : 'cover');
-        this._saveDesk();
         this._paintAirOut();
         return;
     }
@@ -1481,6 +1451,9 @@ AirPlayApp.prototype._onAirAction = function (name) {
     if (name === 'air-out-central' || name === 'air-out-cluster' || name === 'air-out-hud') {
         this._settings.toggleOutput(name.replace('air-out-', ''));
         this._saveWindows();
+        if (this._router) {
+            this._router.setMode(this._routerMode());
+        }
         this._paintAirOut();
         return;
     }
@@ -1943,12 +1916,7 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
-    out = {
-        central: 'Środek',
-        cluster: 'Zegary',
-        both: 'Środek+Zegary',
-        off: 'wyłączone'
-    }[this._desk.airDisplay ? this._desk.airDisplay() : 'central'] || 'Środek';
+    out = this._settings.outputs().map(this._outputLabel.bind(this)).join('+') || 'brak';
     mode = receiver && receiver.mode ? String(receiver.mode) : '';
     client = this._streamProtocol === 'airplay' ? this._readAirplayClient() : { state: '', detail: '' };
     mirrored = !!(this._decoded && this._streamProtocol === 'airplay');
@@ -1981,16 +1949,18 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     if (this._paceLine) {
         lines.push(this._paceLine);
     }
-    var showCentral = !this._desk.airDisplay || this._desk.airDisplay() === 'central' || this._desk.airDisplay() === 'both';
+    var names = this._settings.outputs();
+    var showCentral = names.indexOf('central') !== -1;
+    var linked = client.state === 'mirroring' || client.state === 'pair' || client.state === 'connected';
     this._menu.setStreamInfo({
         pin: mirrored ? '' : pin,
         headline: headline,
         hint: mirrored
             ? 'lustro aktywne'
-            : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay'),
+            : (linked ? 'iPhone podłączony' : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay')),
         mirrored: showCentral && mirrored,
         lines: lines,
-        window: (showCentral && mirrored) ? this._settings.picture('central') : null
+        window: showCentral ? this._settings.picture('central') : null
     });
     if (typeof this._menu.setItemHint === 'function') {
         this._menu.setItemHint(
@@ -2049,25 +2019,20 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
 };
 
 AirPlayApp.prototype._paintAirOut = function () {
-    var mode;
+    var names;
     var area;
-    var fit;
+    var self = this;
     if (!this._menu || this._menuScreen() !== 'air-out') {
         return;
     }
-    mode = this._desk.airDisplay ? this._desk.airDisplay() : 'central';
+    names = this._settings.outputs();
     area = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel' ? 'panel' : 'map';
-    fit = this._desk.airFit && this._desk.airFit() === 'cover' ? 'cover' : 'contain';
-    this._menu.setItemHint('air-mode-central', mode === 'central' ? 'włączone' : 'środek');
-    this._menu.setItemHint('air-mode-cluster', mode === 'cluster' ? 'włączone, postój' : 'mapa, postój');
-    this._menu.setItemHint('air-mode-both', mode === 'both' ? 'włączone' : 'środek i mapa');
-    this._menu.setItemHint('air-mode-off', mode === 'off' ? 'włączone' : 'bez obrazu');
+    ['central', 'hud', 'cluster'].forEach(function (name) {
+        var on = names.indexOf(name) !== -1;
+        self._menu.setItemHint('air-out-' + name, on ? 'włączony' : 'wyłączony');
+    });
     this._menu.setItemTitle('air-area', area === 'panel' ? 'Panel' : 'Mapa');
-    this._menu.setItemHint('air-area', area === 'panel' ? 'zasłania BC' : 'środek zegarów');
-    this._menu.setItemTitle('air-fit', fit === 'cover' ? 'Cover' : 'Contain');
-    this._menu.setItemHint('air-fit', fit === 'cover' ? 'wypełnia, przycina' : 'bez rozciągania');
-    this._menu.setItemTitle('air-fps', (this._desk.airClusterFps ? this._desk.airClusterFps() : 4) + ' FPS');
-    this._menu.setItemHint('air-fps', 'limit zegarów, 2–6');
+    this._menu.setItemHint('air-area', area === 'panel' ? 'całe zegary, zasłania BC' : 'środek zegarów');
 };
 
 AirPlayApp.prototype._paintAirBox = function () {
@@ -2125,12 +2090,7 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     this._paintAirPinSwitch();
     this._menu.setItemHint(
         'air-screen',
-        {
-            central: 'Środek',
-            cluster: 'Zegary',
-            both: 'Środek + Zegary',
-            off: 'wyłączone'
-        }[this._desk.airDisplay ? this._desk.airDisplay() : 'central'] || 'Środek'
+        this._settings.outputs().map(this._outputLabel.bind(this)).join(' + ') || 'żaden'
     );
     this._menu.setItemHint('air-name', name);
     if (typeof this._menu.setItemTitle === 'function') {
@@ -2503,12 +2463,7 @@ AirPlayApp.prototype._sync = function () {
                 this._paceLine = 'fps ' + pace.decodedFps + '/' + pace.centralFps + '/' + pace.clusterFps
                     + ' drop ' + pace.dropped;
             }
-            if (!this._mirrorPainted) {
-                this._paintStreamInfo(air, receiver);
-                if (this._decoded) {
-                    this._mirrorPainted = true;
-                }
-            }
+            this._paintStreamInfo(air, receiver);
             clientLive = this._readAirplayClient();
             if (clientLive.state === 'mirroring' || this._decoded) {
                 this._tellMenu('running');
@@ -2755,7 +2710,6 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     var self = this;
     var outs = this._settings.outputs();
     var faces = {
-        cluster: { target: 'panel', maxW: 1920, maxH: 720, contend: 1 },
         hud: { target: 'hud', maxW: 800, maxH: 480, contend: 0 }
     };
     var now = Date.now();
@@ -2919,7 +2873,7 @@ AirPlayApp.prototype._takeFrame = function () {
     }
     outs = this._settings.outputs();
     if (this._router) {
-        this._router.setMode(this._desk.airDisplay ? this._desk.airDisplay() : 'central');
+        this._router.setMode(this._routerMode());
         this._router.setParked(this._parkFlag());
         if (this._desk.airClusterFps) {
             this._router.setClusterFps(this._desk.airClusterFps());
@@ -2931,6 +2885,11 @@ AirPlayApp.prototype._takeFrame = function () {
             ts: Date.now(),
         });
         this._router.tick(Date.now());
+        if (outs.indexOf('hud') !== -1 && this._parkFlag() === true) {
+            this._placeMirrorFaces(parsed.i420, parsed.w, parsed.h);
+        } else {
+            this._dropMirrorFace('hud');
+        }
         return;
     }
     this._decoded = { w: parsed.w, h: parsed.h };
