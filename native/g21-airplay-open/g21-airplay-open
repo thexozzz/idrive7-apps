@@ -246,6 +246,7 @@ idle() {
 open_ports() {
     iface=$1
     net=$2
+    ipaddr=${3:-}
     mkdir -p /run/g21-airplay
     # BMW routes 224.0.0.0/4 via vlan73; without a /32 on the Store Wi-Fi
     # iface, avahi announces mDNS on the wrong interface and iPhone sees nothing.
@@ -257,6 +258,13 @@ open_ports() {
     fi
     printf '%s\n' "$iface" > /run/g21-airplay/mdns-iface
     ip route replace 224.0.0.251/32 dev "$iface" 2>/dev/null || true
+    # Store Wi-Fi can have an address with NO connected route (policy routing).
+    # Then AirPlay TCP SYN from the phone arrives, but SYN-ACK never leaves —
+    # iPhone never reaches the password prompt. Force the lease subnet on-link.
+    if [ -n "$net" ] && [ -n "$ipaddr" ]; then
+        ip route replace "$net" dev "$iface" src "$ipaddr" 2>/dev/null || \
+            ip route add "$net" dev "$iface" src "$ipaddr" 2>/dev/null || true
+    fi
     # Own table (audit / belt-and-suspenders). Real allow must be in mgu_uplink:
     # that table drops root egress/ingress on Store Wi-Fi, and nft accept in
     # another table does not override it.
@@ -1035,8 +1043,12 @@ apply_airplay() {
         stop_ux
         # Keep bundled avahi if already up for this Wi-Fi; killing it every stamp
         # change raced UxPlay DNS-SD (SIGTERM in g21-avahi.log).
-        open_ports "$iface" "$net"
+        open_ports "$iface" "$net" "$ip"
         printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    # Re-assert on-link route every apply: mgu-uplink may strip it again.
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
     fi
     start_ux "$iface" "$label" "$ip" "$shown"
 }
@@ -1061,8 +1073,11 @@ apply_windows() {
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
         stop_mice
         stop_avahi_local
-        open_ports "$iface" "$net"
+        open_ports "$iface" "$net" "$ip"
         printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
     fi
     if ! ensure_mdns "$iface"; then
         report "mdns-brak|$label|$ip"
@@ -1093,8 +1108,11 @@ apply_uplink_desktop() {
     net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 1; }
     stamp="desk $iface $net"
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
-        open_ports "$iface" "$net"
+        open_ports "$iface" "$net" "$ip"
         printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
     fi
     return 0
 }
@@ -1112,8 +1130,11 @@ keep_config_ports() {
     net=$(subnet "$ip" "$prefix") || return 1
     stamp="cfg $iface $net"
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
-        open_ports "$iface" "$net"
+        open_ports "$iface" "$net" "$ip"
         printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
     fi
     return 0
 }

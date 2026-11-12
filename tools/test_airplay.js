@@ -98,7 +98,8 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.29');
+assert.strictEqual(component.version, '0.1.30');
+assert.ok(script.indexOf('ip route replace "$net"') !== -1);
 assert.ok(script.indexOf('224.0.0.251/32') !== -1);
 assert.ok(script.indexOf('priority -50') !== -1);
 assert.ok(script.indexOf('clear_uplink_airplay_rules') !== -1);
