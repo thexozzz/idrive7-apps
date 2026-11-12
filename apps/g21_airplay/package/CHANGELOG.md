@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.78
+
+- Menu: strona glowna AirPlay/Napis, Start od razu, ekrany po nazwie. Okno znowu reaguje. Lustro zostaje na ekranie czekania i rysuje klatke, gdy iPhone ja przysle.
+
 ## 0.1.77
 
 - AirPlay: klatki I420 ida do menu jako wideo mgu-render, zeby lustro bylo widac na srodku.

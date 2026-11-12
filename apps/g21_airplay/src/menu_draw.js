@@ -380,26 +380,24 @@ var FONT = {
 };
 
 var ROOT_ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'odbiornik iPhone', icon: 'airplay' },
-    { name: 'label-toggle', title: 'Napis', hint: 'tekst i pozycja', icon: 'tag' }
+    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
+    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' }
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-toggle', title: 'Wyłącz', hint: 'wyłączony', icon: 'airplay' },
-    { name: 'air-pin', title: 'Bez', hint: 'połącz bez kodu', icon: 'unlock' },
-    { name: 'air-screen', title: 'Ekran', hint: 'środek / zegary / HUD', icon: 'desktop' },
+    { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
+    { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
-    { name: 'air-info', title: 'Sieć', hint: 'Wi-Fi Store', icon: 'wifi' },
-    { name: 'air-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
+    { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
+    { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
 var AIR_OUT_ITEMS = [
-    { name: 'air-out-central', title: 'Wyłącz', hint: 'środek', icon: 'desktop' },
-    { name: 'air-out-cluster', title: 'Wyłącz', hint: 'zegary', icon: 'grid' },
-    { name: 'air-out-hud', title: 'Wyłącz', hint: 'HUD', icon: 'tag' },
+    { name: 'air-out-central', title: 'Środek', hint: 'wyłączony', icon: 'desktop' },
+    { name: 'air-out-cluster', title: 'Zegary', hint: 'wyłączony', icon: 'grid' },
+    { name: 'air-out-hud', title: 'HUD', hint: 'wyłączony', icon: 'tag' },
     { name: 'air-out-box', title: 'Okno', hint: 'pozycja i rozmiar', icon: 'gear' },
-    { name: 'air-out-start', title: 'Start', hint: 'odpal lustro', icon: 'play' },
-    { name: 'air-out-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
+    { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 
 var AIR_BOX_ITEMS = [
@@ -410,7 +408,7 @@ var AIR_BOX_ITEMS = [
 ];
 
 var LABEL_ITEMS = [
-    { name: 'label-on', title: 'Włącz', hint: 'pokaż napis', icon: 'tag' },
+    { name: 'label-on', title: 'Napis', hint: 'ukryty', icon: 'tag' },
     { name: 'label-text', title: 'Tekst', hint: 'własny napis', icon: 'tag' },
     { name: 'label-where', title: 'Środek', hint: 'OK: następny ekran', icon: 'desktop' },
     { name: 'label-pos', title: 'Pozycja', hint: 'OK: przesuwaj', icon: 'grid' },
@@ -590,43 +588,64 @@ function menuLayout(items, selected, width, height, detail, heading) {
     var count = items.length || 1;
     var headerH = 68;
     var footerH = 58;
-    var gap = 8;
-    var rowH = Math.floor((page.boxH - headerH - footerH - (count - 1) * gap) / count);
+    var home = count <= 2 && page.boxW > 900;
+    var gap = home ? 28 : 12;
     var bubbles = [];
     var i;
     var x;
     var y;
     var rowW;
-    if (rowH > 84) {
-        rowH = 84;
-    }
-    if (rowH < 52) {
-        rowH = 52;
-    }
-    rowW = page.boxW - 72;
-    if (heading === 'Okno') {
-        rowW = page.boxW - 680;
-        if (rowW < 640) {
-            rowW = 640;
+    var rowH;
+    if (home) {
+        rowW = Math.min(560, Math.floor((page.boxW - 180 - gap) / count));
+        rowH = 300;
+        x = page.ox + Math.floor((page.boxW - (count * rowW + (count - 1) * gap)) / 2);
+        y = page.oy + Math.floor((page.boxH - rowH) / 2) + 10;
+        for (i = 0; i < items.length; i += 1) {
+            bubbles.push({
+                x: x,
+                y: y,
+                w: rowW,
+                h: rowH,
+                hitX: x,
+                hitY: y,
+                hitW: rowW,
+                hitH: rowH,
+                scale: 5,
+                iconPx: 4,
+                home: true,
+                selected: i === selected
+            });
+            x += rowW + gap;
         }
-    }
-    x = page.ox + 36;
-    y = page.oy + headerH + 6;
-    for (i = 0; i < items.length; i += 1) {
-        bubbles.push({
-            x: x,
-            y: y,
-            w: rowW,
-            h: rowH,
-            hitX: x,
-            hitY: y - 2,
-            hitW: rowW,
-            hitH: rowH + gap,
-            scale: 4,
-            iconPx: 2,
-            selected: i === selected
-        });
-        y += rowH + gap;
+    } else {
+        rowH = 84;
+        rowW = Math.min(920, page.boxW - 180);
+        if (heading === 'Okno') {
+            rowW = Math.min(rowW, page.boxW - 680);
+            if (rowW < 560) {
+                rowW = 560;
+            }
+        }
+        x = page.ox + 48;
+        y = page.oy + headerH + 12;
+        for (i = 0; i < items.length; i += 1) {
+            bubbles.push({
+                x: x,
+                y: y,
+                w: rowW,
+                h: rowH,
+                hitX: x,
+                hitY: y - 4,
+                hitW: rowW,
+                hitH: rowH + gap,
+                scale: 4,
+                iconPx: 3,
+                home: false,
+                selected: i === selected
+            });
+            y += rowH + gap;
+        }
     }
     return {
         ox: page.ox,
@@ -872,6 +891,16 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
             pinScale = 8;
             pinW = draw.textWidth(pin, pinScale);
             draw.text(pin, win.x + Math.floor((win.w - pinW) / 2), win.y + 80, pinScale, INK);
+        } else if (!mirrored) {
+            label = String((info && info.hint) || detail || 'czekam na iPhone');
+            labelW = draw.textWidth(label, 4);
+            draw.text(label, win.x + Math.floor((win.w - labelW) / 2), win.y + 90, 4, INK);
+            lines = (info && info.lines) || [];
+            lineY = win.y + 150;
+            for (i = 0; i < lines.length && i < 4; i += 1) {
+                draw.text(String(lines[i]).slice(0, 36), win.x + 24, lineY, 3, HINT);
+                lineY += 32;
+            }
         }
     } else if (!mirrored) {
         panelY = page.oy + 48;
@@ -978,20 +1007,43 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
         iconSide = draw.iconSize(iconPx);
         focus = i === selected;
         draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
-        draw.rect(bubble.x, bubble.y, focus ? 8 : 3, bubble.h, focus ? ACCENT : LINE);
-        iconX = bubble.x + 28;
-        iconY = bubble.y + Math.floor((bubble.h - iconSide) / 2);
-        draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
-        draw.text(title, bubble.x + 28 + iconSide + 22, bubble.y + Math.floor((bubble.h - 28) / 2), bubble.scale, focus ? INK : HINT);
-        if (hint) {
-            titleW = draw.textWidth(hint.slice(0, 28), 3);
+        if (focus) {
+            draw.rect(bubble.x, bubble.y, bubble.w, 4, ACCENT);
+            draw.rect(bubble.x, bubble.y + bubble.h - 4, bubble.w, 4, ACCENT);
+            draw.rect(bubble.x, bubble.y, 4, bubble.h, ACCENT);
+            draw.rect(bubble.x + bubble.w - 4, bubble.y, 4, bubble.h, ACCENT);
+        }
+        if (bubble.home) {
+            iconX = bubble.x + Math.floor((bubble.w - iconSide) / 2);
+            iconY = bubble.y + 64;
+            draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
+            titleW = draw.textWidth(title, bubble.scale);
             draw.text(
-                hint.slice(0, 28),
-                bubble.x + bubble.w - titleW - 24,
-                bubble.y + Math.floor((bubble.h - 21) / 2),
-                3,
-                focus ? ACCENT : MUTED
+                title,
+                bubble.x + Math.floor((bubble.w - titleW) / 2),
+                bubble.y + 160,
+                bubble.scale,
+                focus ? INK : HINT
             );
+            if (hint) {
+                titleW = draw.textWidth(hint.slice(0, 22), 3);
+                draw.text(
+                    hint.slice(0, 22),
+                    bubble.x + Math.floor((bubble.w - titleW) / 2),
+                    bubble.y + 210,
+                    3,
+                    focus ? ACCENT : MUTED
+                );
+            }
+        } else {
+            iconX = bubble.x + 28;
+            iconY = bubble.y + Math.floor((bubble.h - iconSide) / 2);
+            draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
+            labelY = hint ? bubble.y + 22 : bubble.y + Math.floor((bubble.h - 28) / 2);
+            draw.text(title, bubble.x + 28 + iconSide + 22, labelY, bubble.scale, focus ? INK : HINT);
+            if (hint) {
+                draw.text(hint.slice(0, 36), bubble.x + 28 + iconSide + 22, labelY + 34, 3, focus ? ACCENT : MUTED);
+            }
         }
     }
     if (detail) {
