@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -27,11 +28,24 @@
 #define DEFAULT_RTSP 7236
 #define RTP_PORT 1028
 #define STATUS_PATH "/run/g21-desktop.status"
+#define OFFERS_PATH "/run/g21-desktop/offers"
+#define ACCEPT_PATH "/run/g21-session/accept"
+#define REJECT_PATH "/run/g21-session/reject"
 #define LOG_PATH "/var/log/g21-mice.log"
+#define MAX_OFFERS 6
 
 static volatile sig_atomic_t g_stop;
+static volatile sig_atomic_t g_session_end;
 static pid_t g_gst_pid;
 static FILE *g_log;
+
+struct offer {
+    char id[16];
+    char name[128];
+    char ip[64];
+    uint16_t rtsp_port;
+    int used;
+};
 
 static void on_signal(int sig)
 {
@@ -323,6 +337,11 @@ static const char *WFD_CAPS =
     "wfd_display_edid: none\r\n"
     "wfd_connector_type: 05\r\n";
 
+static int session_done(void)
+{
+    return g_stop || g_session_end;
+}
+
 static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
 {
     int fd;
@@ -334,6 +353,7 @@ static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
     char line[1024];
     char ipstr[64];
 
+    g_session_end = 0;
     inet_ntop(AF_INET, &peer, ipstr, sizeof(ipstr));
     fd = tcp_connect_ip(peer, src->rtsp_port ? src->rtsp_port : DEFAULT_RTSP);
     if (fd < 0) {
@@ -344,7 +364,7 @@ static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
     note("rtsp-connected");
     desk("starting", src->name);
 
-    while (!g_stop && state < 8) {
+    while (!session_done() && state < 8) {
         int got = read_some(fd, buf, sizeof(buf), &have);
         if (got < 0) {
             break;
@@ -403,12 +423,12 @@ static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
             } else if (is_request(msg, "TEARDOWN")) {
                 snprintf(line, sizeof(line), "RTSP/1.0 200 OK\r\nCSeq: %d\r\n\r\n", cseq);
                 rtsp_send(fd, line);
-                g_stop = 1;
+                g_session_end = 1;
             }
         }
     }
 
-    while (!g_stop && state == 8) {
+    while (!session_done() && state == 8) {
         int got = read_some(fd, buf, sizeof(buf), &have);
         if (got == -2) {
             break;
@@ -424,7 +444,7 @@ static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
             } else if (is_request(msg, "TEARDOWN")) {
                 snprintf(line, sizeof(line), "RTSP/1.0 200 OK\r\nCSeq: %d\r\n\r\n", cseq);
                 rtsp_send(fd, line);
-                g_stop = 1;
+                g_session_end = 1;
             }
         }
         if (g_gst_pid > 0 && waitpid(g_gst_pid, NULL, WNOHANG) > 0) {
@@ -437,16 +457,173 @@ static int run_rtsp_session(struct in_addr peer, struct source_ready *src)
 
     stop_gst();
     close(fd);
-    desk("idle", "windows");
     return 0;
+}
+
+static void sanitize_field(char *dst, size_t cap, const char *src)
+{
+    size_t o = 0;
+    while (*src && o + 1 < cap) {
+        char c = *src++;
+        if (c == '|' || c == '\n' || c == '\r') {
+            c = ' ';
+        }
+        dst[o++] = c;
+    }
+    dst[o] = 0;
+}
+
+static void write_offers_file(struct offer *offers, int n)
+{
+    FILE *f;
+    int i;
+    int count = 0;
+    mkdir("/run/g21-desktop", 0777);
+    f = fopen(OFFERS_PATH, "w");
+    if (!f) {
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        if (!offers[i].used) {
+            continue;
+        }
+        fprintf(f, "%s|%s|%s|%u\n",
+                offers[i].id, offers[i].ip, offers[i].name,
+                (unsigned)offers[i].rtsp_port);
+        count++;
+    }
+    fclose(f);
+    if (count > 0) {
+        char detail[16];
+        snprintf(detail, sizeof(detail), "%d", count);
+        desk("offer", detail);
+    } else {
+        desk("waiting", "windows");
+    }
+}
+
+static int offer_count(struct offer *offers, int n)
+{
+    int i;
+    int c = 0;
+    for (i = 0; i < n; i++) {
+        if (offers[i].used) {
+            c++;
+        }
+    }
+    return c;
+}
+
+static int find_offer_slot(struct offer *offers, int n, const char *ip)
+{
+    int i;
+    int free_i = -1;
+    for (i = 0; i < n; i++) {
+        if (offers[i].used && strcmp(offers[i].ip, ip) == 0) {
+            return i;
+        }
+        if (!offers[i].used && free_i < 0) {
+            free_i = i;
+        }
+    }
+    return free_i;
+}
+
+static void add_offer(struct offer *offers, int n, const char *ip,
+                      struct source_ready *src)
+{
+    int slot = find_offer_slot(offers, n, ip);
+    static unsigned seq;
+    if (slot < 0) {
+        note("offers-full");
+        return;
+    }
+    seq++;
+    snprintf(offers[slot].id, sizeof(offers[slot].id), "d%u", seq);
+    sanitize_field(offers[slot].ip, sizeof(offers[slot].ip), ip);
+    sanitize_field(offers[slot].name, sizeof(offers[slot].name),
+                   src->name[0] ? src->name : "Windows");
+    offers[slot].rtsp_port = src->rtsp_port ? src->rtsp_port : DEFAULT_RTSP;
+    offers[slot].used = 1;
+    note("offer");
+    note(offers[slot].name);
+    write_offers_file(offers, n);
+}
+
+static int take_accept(char *id_out, size_t cap)
+{
+    FILE *f;
+    char line[64];
+    size_t n;
+    f = fopen(ACCEPT_PATH, "r");
+    if (!f) {
+        return 0;
+    }
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        unlink(ACCEPT_PATH);
+        return 0;
+    }
+    fclose(f);
+    unlink(ACCEPT_PATH);
+    n = strcspn(line, "\r\n");
+    line[n] = 0;
+    if (!line[0]) {
+        return 0;
+    }
+    snprintf(id_out, cap, "%s", line);
+    return 1;
+}
+
+static int take_reject(char *id_out, size_t cap)
+{
+    FILE *f;
+    char line[64];
+    size_t n;
+    f = fopen(REJECT_PATH, "r");
+    if (!f) {
+        return 0;
+    }
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        unlink(REJECT_PATH);
+        return 0;
+    }
+    fclose(f);
+    unlink(REJECT_PATH);
+    n = strcspn(line, "\r\n");
+    line[n] = 0;
+    if (!line[0]) {
+        return 0;
+    }
+    snprintf(id_out, cap, "%s", line);
+    return 1;
+}
+
+static int find_offer_by_id(struct offer *offers, int n, const char *id)
+{
+    int i;
+    for (i = 0; i < n; i++) {
+        if (offers[i].used && strcmp(offers[i].id, id) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 int main(void)
 {
     int listen_fd;
+    struct offer offers[MAX_OFFERS];
+    memset(offers, 0, sizeof(offers));
     signal(SIGTERM, on_signal);
     signal(SIGINT, on_signal);
     signal(SIGCHLD, SIG_IGN);
+    mkdir("/run/g21-desktop", 0777);
+    mkdir("/run/g21-session", 0777);
+    unlink(OFFERS_PATH);
+    unlink(ACCEPT_PATH);
+    unlink(REJECT_PATH);
     note("g21-mice start");
     desk("waiting", "windows");
     listen_fd = tcp_listen(MICE_PORT);
@@ -464,10 +641,52 @@ int main(void)
         struct source_ready src;
         fd_set rfds;
         struct timeval tv;
+        char want[32];
+        int idx;
+        char ipstr[64];
+
+        if (take_reject(want, sizeof(want))) {
+            idx = find_offer_by_id(offers, MAX_OFFERS, want);
+            if (idx >= 0) {
+                offers[idx].used = 0;
+                write_offers_file(offers, MAX_OFFERS);
+                note("reject");
+            }
+        }
+        if (take_accept(want, sizeof(want))) {
+            idx = find_offer_by_id(offers, MAX_OFFERS, want);
+            if (idx >= 0) {
+                struct in_addr addr;
+                struct source_ready go;
+                memset(&go, 0, sizeof(go));
+                snprintf(go.name, sizeof(go.name), "%s", offers[idx].name);
+                go.rtsp_port = offers[idx].rtsp_port;
+                if (inet_pton(AF_INET, offers[idx].ip, &addr) == 1) {
+                    offers[idx].used = 0;
+                    write_offers_file(offers, MAX_OFFERS);
+                    note("accept");
+                    note(go.name);
+                    run_rtsp_session(addr, &go);
+                    if (!g_stop) {
+                        write_offers_file(offers, MAX_OFFERS);
+                        if (offer_count(offers, MAX_OFFERS) == 0) {
+                            desk("waiting", "windows");
+                        }
+                    }
+                } else {
+                    note("bad-offer-ip");
+                    offers[idx].used = 0;
+                    write_offers_file(offers, MAX_OFFERS);
+                }
+            } else {
+                note("accept-miss");
+            }
+        }
+
         FD_ZERO(&rfds);
         FD_SET(listen_fd, &rfds);
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;
+        tv.tv_usec = 250000;
         if (select(listen_fd + 1, &rfds, NULL, NULL, &tv) <= 0) {
             continue;
         }
@@ -482,15 +701,12 @@ int main(void)
             continue;
         }
         close(cfd);
-        note(src.name);
-        g_stop = 0;
-        run_rtsp_session(peer.sin_addr, &src);
-        if (!g_stop) {
-            desk("waiting", "windows");
-        }
+        inet_ntop(AF_INET, &peer.sin_addr, ipstr, sizeof(ipstr));
+        add_offer(offers, MAX_OFFERS, ipstr, &src);
     }
     stop_gst();
     close(listen_fd);
+    unlink(OFFERS_PATH);
     desk("idle", "stopped");
     note("g21-mice stop");
     return 0;

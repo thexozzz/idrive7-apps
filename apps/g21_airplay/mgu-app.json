@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -24,7 +24,8 @@
     "src/menu_draw.js",
     "src/knob_keyboard.js",
     "src/config_store.js",
-    "src/config_panel.js"
+    "src/config_panel.js",
+    "src/windows_offers.js"
   ],
   "sdk": [
     "oap-sdk/src/core/OnlineApp.js",

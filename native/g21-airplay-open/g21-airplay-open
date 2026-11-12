@@ -99,12 +99,17 @@ stop_avahi_local() {
     fi
 }
 
+clear_mice_offers() {
+    rm -f /run/g21-desktop/offers /run/g21-session/accept /run/g21-session/reject 2>/dev/null || true
+}
+
 idle() {
     stop_ux
     stop_present
     stop_rdp
     stop_mice
     clear_mice_service
+    clear_mice_offers
     if [ -f "$STAMP" ]; then
         clear_table
         rm -f "$STAMP"
@@ -471,12 +476,43 @@ ensure_avahi_services_dir() {
     return 0
 }
 
+# MS-MICE requires TXT container_id=<GUID> or Win+K on Windows 11 skips the sink.
+mice_container_id() {
+    idfile=/run/g21-airplay/mice-container.id
+    if [ -f "$idfile" ]; then
+        tr -d '\r\n' < "$idfile"
+        return 0
+    fi
+    mkdir -p /run/g21-airplay
+    if [ -r /proc/sys/kernel/random/uuid ]; then
+        tr -d '\r\n' < /proc/sys/kernel/random/uuid > "$idfile"
+    else
+        printf '00000000-0000-4000-8000-%012d\n' "$$$(date +%s)" > "$idfile"
+    fi
+    tr -d '\r\n' < "$idfile"
+}
+
+reload_avahi_services() {
+    # Avahi picks up new .service files after HUP / short restart of our daemon.
+    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+        kill -HUP "$AVAHIPID" 2>/dev/null || true
+        return 0
+    fi
+    if pidof avahi-daemon >/dev/null 2>&1; then
+        kill -HUP "$(pidof avahi-daemon | awk '{print $1}')" 2>/dev/null || true
+    fi
+}
+
 publish_mice_service() {
     shown=$(name_of)
+    guid=$(mice_container_id)
     ensure_avahi_services_dir || true
     services=/run/g21-airplay/avahi-etc-services
     mkdir -p "$services"
-    cat > "$services/g21-windows.service" <<EOF
+    # Also write into the live /etc/avahi/services if bind-mounted.
+    for svcdir in /run/g21-airplay/avahi-etc-services /etc/avahi/services; do
+        [ -d "$svcdir" ] || continue
+        cat > "$svcdir/g21-windows.service" <<EOF
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
 <service-group>
@@ -484,16 +520,19 @@ publish_mice_service() {
   <service>
     <type>_display._tcp</type>
     <port>7250</port>
-    <txt-record>VerMgmt=0x0202</txt-record>
-    <txt-record>VerMin=0x0100</txt-record>
+    <txt-record>container_id=$guid</txt-record>
   </service>
 </service-group>
 EOF
+    done
+    reload_avahi_services
 }
 
 clear_mice_service() {
     rm -f /run/g21-airplay/avahi-etc-services/g21-windows.service 2>/dev/null || true
     rm -f /run/g21-airplay/avahi-services/g21-windows.service 2>/dev/null || true
+    rm -f /etc/avahi/services/g21-windows.service 2>/dev/null || true
+    reload_avahi_services
 }
 
 start_mice() {
@@ -518,7 +557,9 @@ start_mice() {
     if [ -x "$dir/gst-plugin-scanner" ]; then
         export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
     fi
+    clear_mice_offers
     publish_mice_service
+    : >>/var/log/g21-mice.log
     if [ -x "$dir/run-elf" ]; then
         "$dir/run-elf" "$bin" >>/var/log/g21-mice.log 2>&1 &
     else

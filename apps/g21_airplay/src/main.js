@@ -22,6 +22,7 @@ var menuDraw = require('./menu_draw.js');
 var knobKeyboard = require('./knob_keyboard.js');
 var configStoreFactory = require('./config_store.js');
 var configPanelFactory = require('./config_panel.js');
+var windowsOffers = require('./windows_offers.js');
 
 function noteStart(text) {
     var line = String(text) + '\n';
@@ -128,11 +129,13 @@ var WINDOWS_STATUS_TEXT = {
     'brak-wifi': 'brak wifi',
     'starting': 'Windows start',
     'waiting': 'czekam Win+K',
+    'offer': 'wybierz Urzadzenia',
     'running': 'Windows dziala',
     'missing': 'brak g21-mice',
     'mdns-brak': 'brak dns',
     'error': 'Windows blad',
     'idle': 'Windows off',
+    'no-offers': 'brak ofert',
     'unknown': 'Windows'
 };
 
@@ -147,6 +150,7 @@ var STATUS_BY_SCREEN = {
     root: ROOT_STATUS_TEXT,
     airplay: AIR_STATUS_TEXT,
     windows: WINDOWS_STATUS_TEXT,
+    'win-devices': WINDOWS_STATUS_TEXT,
     stream: STREAM_STATUS_TEXT,
     rdp: RDP_STATUS_TEXT,
     'rdp-edit': RDP_STATUS_TEXT,
@@ -743,6 +747,31 @@ AirPlayApp.prototype._enterStream = function (protocol) {
     this._tellMenu('running');
 };
 
+AirPlayApp.prototype._readWinOffers = function () {
+    return windowsOffers.readOffers(this._paths.offers);
+};
+
+AirPlayApp.prototype._rebuildWinDevicesMenu = function () {
+    var offers = this._readWinOffers();
+    var items = windowsOffers.menuItems(offers);
+    if (this._menu && typeof this._menu.setItems === 'function') {
+        this._menu.setItems(items, 'Urzadzenia');
+    }
+    return offers;
+};
+
+AirPlayApp.prototype._acceptWinOffer = function (id) {
+    var wrote = windowsOffers.writeAccept(this._paths.accept, id);
+    noteStart(wrote.ok ? ('win-accept ' + id) : ('win-accept-fail ' + (wrote.reason || '')));
+    if (!wrote.ok) {
+        this._tellMenu(wrote.reason || 'error');
+        return;
+    }
+    this._sessionText = 'windows accept ' + id;
+    this._tellMenu('starting');
+    this._sync();
+};
+
 AirPlayApp.prototype._onWinAction = function (name) {
     if (name === 'win-back') {
         this._goRoot();
@@ -752,8 +781,30 @@ AirPlayApp.prototype._onWinAction = function (name) {
         this._toggleProtocol('windows');
         return;
     }
+    if (name === 'win-devices') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('win-devices');
+        }
+        this._rebuildWinDevicesMenu();
+        this._tellMenu(this._readWinOffers().length ? 'offer' : 'no-offers');
+        return;
+    }
     if (name === 'win-info') {
         this._sync();
+    }
+};
+
+AirPlayApp.prototype._onWinDevicesAction = function (name) {
+    if (name === 'win-d-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('windows');
+        }
+        this._tellMenu('waiting');
+        this._sync();
+        return;
+    }
+    if (name.indexOf('win-d-') === 0) {
+        this._acceptWinOffer(name.slice('win-d-'.length));
     }
 };
 
@@ -967,6 +1018,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._onAirAction(name);
         return;
     }
+    if (screen === 'win-devices' && name.indexOf('win-') === 0) {
+        this._onWinDevicesAction(name);
+        return;
+    }
     if (screen === 'windows' && name.indexOf('win-') === 0) {
         this._onWinAction(name);
         return;
@@ -1020,6 +1075,7 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
     }
     var live = this._sessionLive('windows');
     var on = live.active && live.state !== 'idle' && live.state !== 'error';
+    var offers;
     var net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
@@ -1031,6 +1087,11 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
         on
             ? (live.state === 'running' ? 'Emisja PC' : 'Czekaj na Win+K')
             : 'Wylaczony'
+    );
+    offers = this._readWinOffers();
+    this._menu.setItemHint(
+        'win-devices',
+        offers.length ? (String(offers.length) + ' czekajacych') : 'brak ofert'
     );
     this._menu.setItemHint('win-info', net.slice(0, 28));
 };
@@ -1143,6 +1204,10 @@ AirPlayApp.prototype._bindTile = function (name, protocol) {
             }
             if (screen === 'windows') {
                 self._onWinAction('win-back');
+                return;
+            }
+            if (screen === 'win-devices') {
+                self._onWinDevicesAction('win-d-back');
                 return;
             }
             if (screen === 'rdp-edit') {
@@ -1291,6 +1356,7 @@ AirPlayApp.prototype._sync = function () {
     var air;
     var rdpLive;
     var vncLive;
+    var winLive;
     var hostCheck;
 
     if (this._sessions.active()) {
@@ -1365,6 +1431,20 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
+    if (screen === 'win-devices') {
+        air = choice.ok
+            ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
+            : choice;
+        this._paint(air);
+        this._rebuildWinDevicesMenu();
+        if (this._sessions.active() === 'windows' && (this._sessions.getStatus().state) === 'running') {
+            this._enterStream('windows');
+            return;
+        }
+        this._tellMenu(this._readWinOffers().length ? 'offer' : 'no-offers');
+        return;
+    }
+
     if (screen === 'windows') {
         air = choice.ok
             ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
@@ -1380,10 +1460,15 @@ AirPlayApp.prototype._sync = function () {
             return;
         }
         if (this._sessions.active() === 'windows') {
-            this._tellMenu((this._sessions.getStatus().state) || 'starting');
+            winLive = this._sessions.getStatus();
+            if (winLive.state === 'offer' || this._readWinOffers().length) {
+                this._tellMenu('offer');
+                return;
+            }
+            this._tellMenu(winLive.state || 'starting');
             return;
         }
-        this._tellMenu('waiting');
+        this._tellMenu(this._readWinOffers().length ? 'offer' : 'waiting');
         return;
     }
 

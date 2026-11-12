@@ -16,6 +16,8 @@ function sessionPaths() {
         secret: pick('G21_SESSION_SECRET', '/run/g21-session/secret'),
         cert: pick('G21_SESSION_CERT', '/run/g21-session/cert'),
         desktopStatus: pick('G21_DESKTOP_STATUS', '/run/g21-desktop.status'),
+        offers: pick('G21_DESKTOP_OFFERS', '/run/g21-desktop/offers'),
+        accept: pick('G21_SESSION_ACCEPT', '/run/g21-session/accept'),
         frameSock: pick('G21_FRAME_SOCK', '/run/g21-desktop/frame.sock'),
         inputSock: pick('G21_INPUT_SOCK', '/run/g21-desktop/input.sock'),
         inputLog: pick('G21_INPUT_LOG', '/run/g21-session/input.log'),

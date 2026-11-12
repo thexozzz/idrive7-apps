@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.45
+
+- Windows: DNS-SD `container_id` pod Win11; menu Urzadzenia z ofertami SOURCE_READY; klik startuje stream (narzedzie 0.1.13).
+
 ## 0.1.44
 
 - Windows/Miracast: Wlacz bez czekania na predkosc (jak AirPlay); brak Vehicle2 nie blokuje juz Win+K.

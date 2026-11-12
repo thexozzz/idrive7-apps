@@ -53,13 +53,15 @@ assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
 }));
 assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.WINDOWS_ITEMS);
-assert.strictEqual(menu.WINDOWS_ITEMS.length, 3);
+assert.strictEqual(menu.WINDOWS_ITEMS.length, 4);
 assert.strictEqual(menu.WINDOWS_ITEMS[0].name, 'win-toggle');
 assert.strictEqual(menu.WINDOWS_ITEMS[0].title, 'Wlacz');
+assert.strictEqual(menu.WINDOWS_ITEMS[1].name, 'win-devices');
 assert.ok(menu.WINDOWS_ITEMS.every(function (item) {
     return item.name !== 'win-start' && item.name !== 'win-stop';
 }));
 assert.ok(menu.SCREENS.windows);
+assert.ok(menu.SCREENS['win-devices']);
 assert.ok(menu.STREAM_ITEMS);
 assert.strictEqual(menu.STREAM_ITEMS[0].name, 'stream-end');
 assert.strictEqual(menu.STREAM_ITEMS[0].title, 'Zakoncz');

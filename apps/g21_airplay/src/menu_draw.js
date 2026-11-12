@@ -360,8 +360,13 @@ var VNC_EDIT_ITEMS = [
 
 var WINDOWS_ITEMS = [
     { name: 'win-toggle', title: 'Wlacz', hint: 'Wylaczony', icon: 'desktop' },
+    { name: 'win-devices', title: 'Urzadzenia', hint: 'Win+K oferty', icon: 'grid' },
     { name: 'win-info', title: 'Siec', hint: 'ta sama Wi-Fi', icon: 'wifi' },
     { name: 'win-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
+var WIN_DEVICES_ITEMS = [
+    { name: 'win-d-back', title: 'Wstecz', hint: 'Windows', icon: 'back' }
 ];
 
 var STREAM_ITEMS = [
@@ -373,6 +378,7 @@ var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
     windows: WINDOWS_ITEMS,
+    'win-devices': WIN_DEVICES_ITEMS,
     stream: STREAM_ITEMS,
     rdp: RDP_ITEMS,
     'rdp-edit': RDP_EDIT_ITEMS,
@@ -991,6 +997,8 @@ function createMenuSurface(opts) {
             heading = 'AirPlay';
         } else if (next === 'windows') {
             heading = 'Windows';
+        } else if (next === 'win-devices') {
+            heading = 'Urzadzenia';
         } else if (next === 'stream') {
             heading = 'Stream';
         } else if (next === 'rdp' || next === 'rdp-edit') {
@@ -1293,6 +1301,7 @@ module.exports = {
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     WINDOWS_ITEMS: WINDOWS_ITEMS,
+    WIN_DEVICES_ITEMS: WIN_DEVICES_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
     RDP_EDIT_ITEMS: RDP_EDIT_ITEMS,
