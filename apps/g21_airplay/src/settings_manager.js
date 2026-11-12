@@ -4,7 +4,7 @@ var OUTPUTS = ['central', 'cluster', 'hud'];
 
 var LIMITS = {
     central: { w: 1920, h: 720, fps: 30 },
-    cluster: { w: 1088, h: 480, fps: 30 },
+    cluster: { w: 1920, h: 720, fps: 30 },
     hud: { w: 800, h: 480, fps: 30 },
 };
 

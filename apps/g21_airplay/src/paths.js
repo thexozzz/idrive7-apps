@@ -13,6 +13,7 @@ function sessionPaths() {
         allow: pick('G21_SESSION_ALLOW', '/run/g21-session/allow'),
         name: pick('G21_SESSION_NAME', '/run/g21-session/name'),
         target: pick('G21_SESSION_TARGET', '/run/g21-session/target'),
+        output: pick('G21_SESSION_OUTPUT', '/run/g21-session/output'),
         secret: pick('G21_SESSION_SECRET', '/run/g21-session/secret'),
         cert: pick('G21_SESSION_CERT', '/run/g21-session/cert'),
         desktopStatus: pick('G21_DESKTOP_STATUS', '/run/g21-desktop.status'),

@@ -321,7 +321,7 @@ var FONT = {
 var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'odbiornik iPhone', icon: 'airplay' },
     { name: 'windows', title: 'Miracast', hint: 'odbiornik Win+K', icon: 'desktop' },
-    { name: 'rdp', title: 'RDP', hint: 'odbiornik pulpitu', icon: 'host' },
+    { name: 'rdp', title: 'RDP', hint: 'klient pulpitu PC', icon: 'host' },
     { name: 'vnc', title: 'VNC', hint: 'odbiornik VNC', icon: 'grid' },
     { name: 'label-toggle', title: 'WL', hint: 'napis AIRPLAY', icon: 'tag' }
 ];
@@ -334,8 +334,7 @@ var AIRPLAY_ITEMS = [
 ];
 
 var RDP_ITEMS = [
-    { name: 'rdp-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' },
-    { name: 'rdp-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'desktop' },
+    { name: 'rdp-connect', title: 'Polacz', hint: 'wybierz ekran', icon: 'desktop' },
     { name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' },
     { name: 'rdp-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
     { name: 'rdp-edit', title: 'Edytuj', hint: 'IP / konto', icon: 'gear' },
@@ -343,6 +342,13 @@ var RDP_ITEMS = [
     { name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' },
     { name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' },
     { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
+var RDP_OUT_ITEMS = [
+    { name: 'rdp-out-central', title: 'Srodek', hint: 'ekran centralny', icon: 'desktop' },
+    { name: 'rdp-out-cluster', title: 'Zegary', hint: 'cluster panel', icon: 'grid' },
+    { name: 'rdp-out-hud', title: 'HUD', hint: 'wypuklanie', icon: 'tag' },
+    { name: 'rdp-out-back', title: 'Wstecz', hint: 'Lista RDP', icon: 'back' }
 ];
 
 var RDP_EDIT_ITEMS = [
@@ -395,6 +401,7 @@ var SCREENS = {
     stream: STREAM_ITEMS,
     rdp: RDP_ITEMS,
     'rdp-edit': RDP_EDIT_ITEMS,
+    'rdp-out': RDP_OUT_ITEMS,
     vnc: VNC_ITEMS,
     'vnc-edit': VNC_EDIT_ITEMS
 };
@@ -1062,6 +1069,8 @@ function createMenuSurface(opts) {
             heading = 'Urzadzenia';
         } else if (next === 'stream') {
             heading = 'Stream';
+        } else if (next === 'rdp-out') {
+            heading = 'Gdzie pokazac';
         } else if (next === 'rdp' || next === 'rdp-edit') {
             heading = next === 'rdp-edit' ? 'Edytuj RDP' : 'RDP';
         } else if (next === 'vnc' || next === 'vnc-edit') {
@@ -1391,6 +1400,7 @@ module.exports = {
     WIN_DEVICES_ITEMS: WIN_DEVICES_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
+    RDP_OUT_ITEMS: RDP_OUT_ITEMS,
     RDP_EDIT_ITEMS: RDP_EDIT_ITEMS,
     VNC_ITEMS: VNC_ITEMS,
     VNC_EDIT_ITEMS: VNC_EDIT_ITEMS,

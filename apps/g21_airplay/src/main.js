@@ -24,6 +24,7 @@ var knobKeyboard = require('./knob_keyboard.js');
 var configStoreFactory = require('./config_store.js');
 var configPanelFactory = require('./config_panel.js');
 var windowsOffers = require('./windows_offers.js');
+var frameBridgeFactory = require('./frame_bridge.js');
 
 function noteStart(text) {
     var line = String(text) + '\n';
@@ -86,13 +87,15 @@ var RDP_STATUS_TEXT = {
     'no-host': 'ustaw IP',
     'rdp-client-missing': 'brak g21-rdp',
     'secret-write-failed': 'blad hasla',
-    'starting': 'odbiornik lacze',
-    'running': 'odbiornik dziala',
+    'starting': 'RDP lacze',
+    'running': 'RDP dziala',
     'missing': 'brak g21-rdp',
     'cert': 'zatwierdz Cert',
     'error': 'RDP blad',
-    'idle': 'odbiornik off',
-    'waiting': 'WL = ekran z PC',
+    'idle': 'RDP off',
+    'waiting': 'profil + Polacz',
+    'pick-out': 'wybierz ekran',
+    'not-parked': 'tylko postoj',
     'panel-www': 'panel WWW :1235',
     'bad-host': 'zly IP',
     'bad-port': 'zly port',
@@ -155,6 +158,7 @@ var STATUS_BY_SCREEN = {
     stream: STREAM_STATUS_TEXT,
     rdp: RDP_STATUS_TEXT,
     'rdp-edit': RDP_STATUS_TEXT,
+    'rdp-out': RDP_STATUS_TEXT,
     vnc: VNC_STATUS_TEXT,
     'vnc-edit': VNC_STATUS_TEXT
 };
@@ -165,9 +169,6 @@ function screenOutputs(app) {
     function layerOutput(name) {
         return {
             status: function () {
-                if (!app._decoded) {
-                    return { available: false, reason: 'no-decoded-frame' };
-                }
                 if (!app._client.ready) {
                     return { available: false, reason: 'cluster-render-down' };
                 }
@@ -218,11 +219,20 @@ function AirPlayApp() {
     this._winAutoAccepting = false;
     this._sessionText = 'wybierz AirPlay, Miracast, RDP albo VNC';
     this._decoded = null;
+    this._rdpOutput = 'central';
     this._client = new ClusterRender('g21_airplay');
     this._label = clusterLabelFactory.createClusterLabel({
         client: this._client,
         enabled: this._desk.clusterLabel(),
         log: noteStart,
+    });
+    var selfBridge = this;
+    this._frameBridge = frameBridgeFactory.createFrameBridge({
+        sockPath: this._paths.frameSock,
+        log: noteStart,
+        onFrame: function (frame) {
+            selfBridge._onDesktopFrame(frame);
+        }
     });
     this._panel = configPanelFactory.createConfigPanel({
         desk: this._desk,
@@ -519,8 +529,7 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
     if (protocol === 'rdp') {
         profiles = this._desk.profiles('rdp');
         active = this._desk.activeProfileId('rdp');
-        items.push({ name: 'rdp-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' });
-        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'desktop' });
+        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'wybierz ekran', icon: 'desktop' });
         items.push({ name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' });
         profiles.forEach(function (p) {
             items.push({
@@ -790,13 +799,72 @@ AirPlayApp.prototype._toggleItem = function (protocol) {
     if (protocol === 'windows') {
         return 'win-toggle';
     }
-    if (protocol === 'rdp') {
-        return 'rdp-toggle';
-    }
     if (protocol === 'vnc') {
         return 'vnc-toggle';
     }
     return 'air-toggle';
+};
+
+AirPlayApp.prototype._writeSessionOutput = function (name) {
+    try {
+        fs.writeFileSync(this._paths.output, String(name || 'central') + '\n');
+    } catch (err) {
+        noteStart('output-write ' + (err && err.message));
+    }
+};
+
+AirPlayApp.prototype._onDesktopFrame = function (frame) {
+    if (!frame || !frame.atlas) {
+        return;
+    }
+    this._decoded = { w: frame.w, h: frame.h };
+    if (this._display.active() === 'cluster' || this._display.active() === 'hud') {
+        this._display.frame(frame.atlas);
+    }
+};
+
+AirPlayApp.prototype._startRdpToOutput = function (outputName) {
+    var out = outputName === 'cluster' || outputName === 'hud' ? outputName : 'central';
+    var selected;
+    var limits;
+    var self = this;
+    this._rdpOutput = out;
+    this._writeSessionOutput(out);
+    if (out === 'central') {
+        if (this._frameBridge) {
+            this._frameBridge.stop();
+        }
+        this._display.select('central');
+        noteStart('rdp-out ' + out);
+        this._choose('rdp');
+        return;
+    }
+    selected = this._display.select(out);
+    if (!selected.ok) {
+        this._tellMenu(selected.reason || 'not-parked');
+        noteStart('rdp-out-refuse ' + out + ' ' + (selected.reason || ''));
+        this._writeSessionOutput('central');
+        this._rdpOutput = 'central';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('rdp-out');
+        }
+        return;
+    }
+    limits = settingsFactory.LIMITS[out];
+    // Drop present's hold on frame.sock, then listen before g21-rdp connects.
+    try {
+        fs.writeFileSync(this._paths.allow, 'stop\n');
+    } catch (errStop) {
+        noteStart('rdp-prestop ' + (errStop && errStop.message));
+    }
+    setTimeout(function () {
+        if (self._frameBridge) {
+            self._frameBridge.setTargetSize(limits.w, limits.h);
+            self._frameBridge.start();
+        }
+        noteStart('rdp-out ' + out);
+        self._choose('rdp');
+    }, 400);
 };
 
 AirPlayApp.prototype._paintSwitch = function (itemName, on, onHint, offHint) {
@@ -829,6 +897,11 @@ AirPlayApp.prototype._toggleProtocol = function (protocol) {
 AirPlayApp.prototype._endStream = function (protocol) {
     var back = protocol || this._streamProtocol || 'airplay';
     this._winAutoAccepting = false;
+    if (this._frameBridge) {
+        this._frameBridge.stop();
+    }
+    this._writeSessionOutput('central');
+    this._rdpOutput = 'central';
     this._sessions.disconnect();
     this._sessionText = back + ' stop';
     this._streamProtocol = '';
@@ -975,15 +1048,36 @@ AirPlayApp.prototype._onRdpAction = function (name) {
         this._openProtocolScreen('rdp');
         return;
     }
-    if (name === 'rdp-toggle') {
-        this._toggleProtocol('rdp');
+    if (name === 'rdp-connect') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('rdp-out');
+        }
+        this._tellMenu('pick-out');
         return;
     }
-    if (name === 'rdp-connect') {
-        this._choose('rdp');
+    if (name === 'rdp-out-back') {
+        this._openProtocolScreen('rdp');
+        return;
+    }
+    if (name === 'rdp-out-central') {
+        this._startRdpToOutput('central');
+        return;
+    }
+    if (name === 'rdp-out-cluster') {
+        this._startRdpToOutput('cluster');
+        return;
+    }
+    if (name === 'rdp-out-hud') {
+        this._startRdpToOutput('hud');
         return;
     }
     if (name === 'rdp-cut') {
+        if (this._frameBridge) {
+            this._frameBridge.stop();
+        }
+        this._writeSessionOutput('central');
+        this._rdpOutput = 'central';
+        this._display.select('central');
         this._sessions.disconnect();
         this._sessionText = 'rdp stop';
         this._tellMenu('idle');
@@ -1181,7 +1275,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._onWinAction(name);
         return;
     }
-    if ((screen === 'rdp' || screen === 'rdp-edit') && name.indexOf('rdp-') === 0) {
+    if ((screen === 'rdp' || screen === 'rdp-edit' || screen === 'rdp-out') && name.indexOf('rdp-') === 0) {
         this._onRdpAction(name);
         return;
     }
@@ -1276,7 +1370,7 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
 
 AirPlayApp.prototype._paintRdpMenu = function () {
     var screen = this._menuScreen();
-    if (!this._menu || (screen !== 'rdp' && screen !== 'rdp-edit')) {
+    if (!this._menu || (screen !== 'rdp' && screen !== 'rdp-edit' && screen !== 'rdp-out')) {
         return;
     }
     if (typeof this._menu.setItemHint !== 'function') {
@@ -1292,7 +1386,7 @@ AirPlayApp.prototype._paintRdpMenu = function () {
         ? 'zapisane'
         : 'wpisz pokretlem';
     var cert = '';
-    var onHint = 'odbiornik WL';
+    var outHint = this._rdpOutput === 'cluster' ? 'zegary' : (this._rdpOutput === 'hud' ? 'HUD' : 'srodek');
     if (live.state === 'cert' && live.detail) {
         cert = String(live.detail).slice(0, 18);
     } else if (host.cert) {
@@ -1300,14 +1394,14 @@ AirPlayApp.prototype._paintRdpMenu = function () {
     } else {
         cert = 'brak odcisku';
     }
-    if (live.state === 'running') {
-        onHint = 'ekran z PC';
-    } else if (session.on) {
-        onHint = 'lacze do PC';
+    if (screen === 'rdp-out') {
+        this._menu.setItemHint('rdp-out-central', 'ekran centralny');
+        this._menu.setItemHint('rdp-out-cluster', 'cluster panel');
+        this._menu.setItemHint('rdp-out-hud', 'HUD');
+        return;
     }
     if (screen === 'rdp') {
-        this._paintSwitch('rdp-toggle', session.on, onHint, 'wylaczony');
-        this._menu.setItemHint('rdp-connect', live.state === 'running' ? 'ekran z PC' : 'Polacz teraz');
+        this._menu.setItemHint('rdp-connect', active ? ('na ' + outHint) : 'wybierz ekran');
         this._menu.setItemHint('rdp-cut', active ? 'Rozlacz teraz' : 'Sesja off');
         this._menu.setItemHint('rdp-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('rdp'));
         this._menu.setItemHint('rdp-cert', cert);
@@ -1375,6 +1469,10 @@ AirPlayApp.prototype._bindTile = function (name, protocol) {
             }
             if (screen === 'win-devices') {
                 self._onWinDevicesAction('win-d-back');
+                return;
+            }
+            if (screen === 'rdp-out') {
+                self._onRdpAction('rdp-out-back');
                 return;
             }
             if (screen === 'rdp-edit') {
@@ -1659,9 +1757,13 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
-    if (screen === 'rdp' || screen === 'rdp-edit') {
+    if (screen === 'rdp' || screen === 'rdp-edit' || screen === 'rdp-out') {
         this._paint(choice);
         this._paintRdpMenu();
+        if (screen === 'rdp-out') {
+            this._tellMenu('pick-out');
+            return;
+        }
         if (screen === 'rdp-edit') {
             this._tellMenu('waiting');
             return;
@@ -1779,6 +1881,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._label) {
         this._label.hide();
+    }
+    if (this._frameBridge) {
+        this._frameBridge.stop();
     }
     if (this._panel) {
         this._panel.stop();

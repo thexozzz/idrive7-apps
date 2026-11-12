@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.54
+
+- RDP: klient bez WL-odbiornika; Polacz → wybor ekranu (Srodek / Zegary / HUD); narzedzie 0.1.14 bez present na cluster/HUD.
+
 ## 0.1.53
 
 - Cluster label: napis AIRPLAY na `panel` (zegary 0x203), nie na `map`; HUD bez zmian.

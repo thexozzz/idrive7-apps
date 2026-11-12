@@ -5,12 +5,12 @@
  * Target names and frame layout are protocol version 1, idrive-apps
  * native/cluster-render/PROTOCOL.md at a559f69ebc8c.
  * On iDrive 7 the hello targets are map 1088x480, panel 1920x720, hud 800x480.
- * The instrument-cluster centre used by the map apps is the target "map".
- * HUD is the target "hud". They are not the same size.
+ * Zegary / whole cluster over gauges = target "panel" (0x203, 1920x720).
+ * HUD is the target "hud" (0x323, 800x480). map is only the nav pocket.
  */
 
 var TARGETS = {
-    cluster: { protocol: 'map', w: 1088, h: 480 },
+    cluster: { protocol: 'panel', w: 1920, h: 720 },
     hud: { protocol: 'hud', w: 800, h: 480 },
 };
 
@@ -67,7 +67,8 @@ function createClusterRenderAdapter(client) {
                 yield: 1,
                 exclusive: 0,
                 guide_hold: 0,
-                contend: 0,
+                contend: known.protocol === 'panel' ? 1 : 0,
+                prewarm: 1,
             });
             if (!ref) {
                 return fail('layer-refused');

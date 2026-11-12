@@ -787,7 +787,13 @@ apply() {
             stop_mice
             clear_mice_service
             if apply_uplink_desktop; then
-                start_present
+                # central = g21-present on Wayland; cluster/hud = app listens on frame.sock
+                out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
+                if [ "$out" = "cluster" ] || [ "$out" = "hud" ]; then
+                    stop_present
+                else
+                    start_present
+                fi
                 start_rdp
                 report "idle|session-rdp|"
             fi
