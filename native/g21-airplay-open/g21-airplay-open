@@ -770,16 +770,18 @@ start_ux() {
         report "running|$label|$ip"
         return 0
     fi
-    # Prefer BMW mdnsd (Bonjour). Bundled avahi on the same 5353 makes discovery flaky
-    # and SIGHUP reloads from Miracast leftovers were killing UxPlay's main loop.
-    if have_system_mdns; then
-        stop_bundled_avahi
-    elif ! ensure_mdns "$iface"; then
+    # UxPlay is linked to libdns_sd.so.1 (Avahi compat) and also dlopen("libdns_sd.so").
+    # BMW mdnsd + /usr/lib/libdns_sd.so accept the call but return kDNSServiceErr_Unknown
+    # for this third-party client → UI "brak dns". Always run bundled avahi and force
+    # the tool's libdns_sd ahead of /usr/lib (symlink .so → .so.1 for dlopen).
+    if ! ensure_mdns "$iface"; then
         report "mdns-brak|$label|$ip"
         return 0
     fi
+    if [ -f "$dir/lib/libdns_sd.so.1" ]; then
+        ln -sfn libdns_sd.so.1 "$dir/lib/libdns_sd.so" 2>/dev/null || true
+    fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    # Tool lib first for GST; keep /usr/lib so dlopen("libdns_sd.so") hits Bonjour.
     export LD_LIBRARY_PATH="$(tool_lib_path)"
     export G21_YUV=/run/g21-airplay/latest.yuv
     export AVAHI_COMPAT_NOWARN=1

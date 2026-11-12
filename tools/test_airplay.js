@@ -90,12 +90,18 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.20');
+assert.strictEqual(component.version, '0.1.21');
 assert.ok(component.files.some(function (item) { return item.path === 'g21-detach'; }));
 assert.ok(script.indexOf('desk "running|rdp|"') === -1);
 assert.ok(script.indexOf('tool_lib_path') !== -1);
 assert.ok(script.indexOf('frame_sock_free') !== -1);
 assert.ok(script.indexOf('sleep 1') !== -1);
+assert.ok(script.indexOf('ln -sfn libdns_sd.so.1') !== -1);
+assert.ok(script.indexOf('Prefer BMW mdnsd') === -1);
+assert.ok(script.indexOf('kDNSServiceErr_Unknown') !== -1);
+var uxWrap = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'uxplay'), 'utf8');
+assert.ok(uxWrap.indexOf('libdns_sd.so.1') !== -1);
+assert.ok(uxWrap.indexOf('$dir/lib:/usr/lib:/lib') !== -1);
 assert.ok(script.indexOf('SESSION_DIR/output') !== -1);
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstnet-1.0.so.0'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstrtp-1.0.so.0'; }));
@@ -118,4 +124,4 @@ assert.ok(script.indexOf('ensure_avahi_dbus') !== -1);
 assert.ok(script.indexOf('mount --bind') !== -1);
 assert.ok(script.indexOf('avahi:x:189:189:') !== -1);
 
-console.log('airplay: system mdnsd preferred; UxPlay via g21-detach (no BusyBox setsid)');
+console.log('airplay: bundled avahi libdns_sd; UxPlay via g21-detach');
