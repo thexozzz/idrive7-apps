@@ -18,8 +18,15 @@ function createSessionManager(opts) {
 
     // Central-display mirrors (AirPlay / Win+K) stay available without a speed
     // sample. On this G21 Vehicle2 often never arrives, which used to leave
-    // Miracast permanently off (speed-unknown). RDP/VNC still need park.
-    function needsParkGate(name) {
+    // Miracast permanently off (speed-unknown). RDP has the same problem: a
+    // missing sample blocked Polacz after the output picker. Cluster/HUD for
+    // RDP are still refused in the UI via display.select. VNC still needs park
+    // to start. Once a real sample exists, moving cuts RDP and VNC.
+    function needsParkToStart(name) {
+        return name === 'vnc';
+    }
+
+    function cutOnMove(name) {
         return name === 'rdp' || name === 'vnc';
     }
 
@@ -38,7 +45,7 @@ function createSessionManager(opts) {
     }
 
     function connect(name, nextTarget) {
-        if (needsParkGate(name)) {
+        if (needsParkToStart(name)) {
             var check = gateCheck();
             if (!check.ok) {
                 return Promise.resolve(check);
@@ -102,9 +109,9 @@ function createSessionManager(opts) {
         sendMouseScroll: function (delta) { return forward('sendMouseScroll', [delta]); },
         sendKey: function (key, down) { return forward('sendKey', [key, down]); },
         onVehicle: function () {
-            if (active && needsParkGate(active) && gate.hudAllowed() !== true) {
+            if (active && cutOnMove(active) && gate.known() && gate.hudAllowed() !== true) {
                 return disconnect().then(function () {
-                    return { ok: false, reason: gate.known() ? 'not-parked' : 'speed-unknown', stopped: true };
+                    return { ok: false, reason: 'not-parked', stopped: true };
                 });
             }
             return Promise.resolve({ ok: true, active: active, parked: gate.hudAllowed() === true });

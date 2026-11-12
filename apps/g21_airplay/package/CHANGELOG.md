@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.56
+
+- RDP: po wyborze ekranu start sesji (bez blokady speed-unknown), wyjscie z pickera i stream po `connected`.
+
 ## 0.1.55
 
 - AirPlay: narzedzie 0.1.15 — BMW mdnsd zamiast konfliktu z avahi, UxPlay odporny na SIGHUP, status tylko przy TCP 7400.

@@ -81,6 +81,16 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     assert.strictEqual(manager.active(), 'airplay');
     return manager.disconnect();
 }).then(function () {
+    // RDP starts without a speed sample (same Vehicle2 gap as Miracast).
+    return manager.connect('rdp', { host: '10.0.0.9' });
+}).then(function (rdpCold) {
+    assert.strictEqual(rdpCold.ok, true);
+    assert.strictEqual(manager.active(), 'rdp');
+    gate.sample(10000);
+    return manager.onVehicle();
+}).then(function (rdpCut) {
+    assert.strictEqual(rdpCut.stopped, true);
+    assert.strictEqual(manager.active(), null);
     gate.sample(10000);
     return manager.connect('vnc', { host: '10.0.0.8' });
 }).then(function (moving) {

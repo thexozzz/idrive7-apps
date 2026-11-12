@@ -88,6 +88,8 @@ var RDP_STATUS_TEXT = {
     'rdp-client-missing': 'brak g21-rdp',
     'secret-write-failed': 'blad hasla',
     'starting': 'RDP lacze',
+    'connecting': 'RDP lacze',
+    'connected': 'RDP dziala',
     'running': 'RDP dziala',
     'missing': 'brak g21-rdp',
     'cert': 'zatwierdz Cert',
@@ -823,6 +825,17 @@ AirPlayApp.prototype._onDesktopFrame = function (frame) {
     }
 };
 
+AirPlayApp.prototype._beginRdpConnect = function () {
+    // Leave the output picker: periodic _sync was resetting status to pick-out
+    // and never entered the stream screen after g21-rdp reported connected.
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('rdp');
+    }
+    this._rebuildProtocolMenu('rdp');
+    this._tellMenu('starting');
+    this._choose('rdp');
+};
+
 AirPlayApp.prototype._startRdpToOutput = function (outputName) {
     var out = outputName === 'cluster' || outputName === 'hud' ? outputName : 'central';
     var selected;
@@ -836,7 +849,7 @@ AirPlayApp.prototype._startRdpToOutput = function (outputName) {
         }
         this._display.select('central');
         noteStart('rdp-out ' + out);
-        this._choose('rdp');
+        this._beginRdpConnect();
         return;
     }
     selected = this._display.select(out);
@@ -848,6 +861,7 @@ AirPlayApp.prototype._startRdpToOutput = function (outputName) {
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('rdp-out');
         }
+        this._sync();
         return;
     }
     limits = settingsFactory.LIMITS[out];
@@ -857,13 +871,14 @@ AirPlayApp.prototype._startRdpToOutput = function (outputName) {
     } catch (errStop) {
         noteStart('rdp-prestop ' + (errStop && errStop.message));
     }
+    this._tellMenu('starting');
     setTimeout(function () {
         if (self._frameBridge) {
             self._frameBridge.setTargetSize(limits.w, limits.h);
             self._frameBridge.start();
         }
         noteStart('rdp-out ' + out);
-        self._choose('rdp');
+        self._beginRdpConnect();
     }, 400);
 };
 
@@ -1053,6 +1068,7 @@ AirPlayApp.prototype._onRdpAction = function (name) {
             this._menu.setScreen('rdp-out');
         }
         this._tellMenu('pick-out');
+        this._sync();
         return;
     }
     if (name === 'rdp-out-back') {
@@ -1760,6 +1776,27 @@ AirPlayApp.prototype._sync = function () {
     if (screen === 'rdp' || screen === 'rdp-edit' || screen === 'rdp-out') {
         this._paint(choice);
         this._paintRdpMenu();
+        if (this._sessions.active() === 'rdp') {
+            rdpLive = this._sessions.getStatus();
+            if (rdpLive.state === 'connected' || rdpLive.state === 'running') {
+                this._enterStream('rdp');
+                return;
+            }
+            if (rdpLive.state === 'cert') {
+                if (screen === 'rdp-out' && typeof this._menu.setScreen === 'function') {
+                    this._menu.setScreen('rdp');
+                    this._rebuildProtocolMenu('rdp');
+                }
+                this._tellMenu('cert');
+                return;
+            }
+            if (rdpLive.state === 'error') {
+                this._tellMenu('error');
+                return;
+            }
+            this._tellMenu(rdpLive.state === 'connecting' ? 'starting' : (rdpLive.state || 'starting'));
+            return;
+        }
         if (screen === 'rdp-out') {
             this._tellMenu('pick-out');
             return;
@@ -1770,11 +1807,6 @@ AirPlayApp.prototype._sync = function () {
         }
         if (!choice.ok) {
             this._tellMenu(choice.reason || 'brak-wifi');
-            return;
-        }
-        if (this._sessions.active() === 'rdp') {
-            rdpLive = this._sessions.getStatus();
-            this._tellMenu(rdpLive.state === 'cert' ? 'cert' : (rdpLive.state || 'starting'));
             return;
         }
         hostCheck = this._desk.host('rdp');
