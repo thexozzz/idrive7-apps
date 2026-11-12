@@ -182,7 +182,7 @@ var STATUS_BY_SCREEN = {
 var PROTOCOLS = { airplay: true };
 
 function screenOutputs(app) {
-    function layerOutput(name) {
+    function gaugeOutput(name) {
         return {
             status: function () {
                 if (!app._client.ready) {
@@ -190,14 +190,12 @@ function screenOutputs(app) {
                 }
                 return { available: true };
             },
-            prepare: function (picture) {
-                return app._adapter.createLayer(name, picture);
-            },
+            prepare: function () { return { ok: true }; },
             start: function () { return { ok: true }; },
             stopFrames: function () {},
-            frame: function (buffer) { return app._adapter.updateFrame(name, buffer); },
+            frame: function () { return { ok: true }; },
             stop: function () {},
-            release: function () { app._adapter.destroyLayer(name); },
+            release: function () { app._dropMirrorFace(name); },
         };
     }
     return {
@@ -210,8 +208,8 @@ function screenOutputs(app) {
             stop: function () {},
             release: function () {},
         },
-        cluster: layerOutput('cluster'),
-        hud: layerOutput('hud')
+        cluster: gaugeOutput('cluster'),
+        hud: gaugeOutput('hud')
     };
 }
 
@@ -333,7 +331,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.80',
+        version: (this._packageJson && this._packageJson.version) || '0.1.81',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -423,7 +421,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.80') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.81') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1860,15 +1858,16 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     if (pin && !mirrored) {
         lines.push('wpisz kod na iPhonie (parowanie)');
     }
+    var showCentral = this._settings.outputs().indexOf('central') !== -1;
     this._menu.setStreamInfo({
         pin: mirrored ? '' : pin,
         headline: headline,
         hint: mirrored
             ? 'lustro aktywne'
             : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay'),
-        mirrored: mirrored,
+        mirrored: showCentral && mirrored,
         lines: lines,
-        window: this._settings.picture('central')
+        window: (showCentral && mirrored) ? this._settings.picture('central') : null
     });
     if (typeof this._menu.setItemHint === 'function') {
         this._menu.setItemHint(
@@ -2570,16 +2569,124 @@ AirPlayApp.prototype._dropMirror = function () {
     } catch (err) {
         /* already gone */
     }
+    this._dropMirrorFaces();
+};
+
+AirPlayApp.prototype._dropMirrorFace = function (name) {
+    var face;
+    if (!this._mirrorFaces) {
+        return;
+    }
+    face = this._mirrorFaces[name];
+    if (!face) {
+        return;
+    }
+    try {
+        this._client.drop(face.ref);
+    } catch (err) {
+        noteStart('mirror-face-drop ' + name);
+    }
+    delete this._mirrorFaces[name];
+};
+
+AirPlayApp.prototype._dropMirrorFaces = function () {
+    var self = this;
+    if (!this._mirrorFaces) {
+        return;
+    }
+    Object.keys(this._mirrorFaces).forEach(function (name) {
+        self._dropMirrorFace(name);
+    });
+};
+
+AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
+    var self = this;
+    var outs = this._settings.outputs();
+    var faces = {
+        cluster: { target: 'panel', maxW: 1920, maxH: 720, contend: 1 },
+        hud: { target: 'hud', maxW: 800, maxH: 480, contend: 0 }
+    };
+    var now = Date.now();
+    if (!this._mirrorFaces) {
+        this._mirrorFaces = {};
+    }
+    if (this._faceAt && (now - this._faceAt) < 100) {
+        return;
+    }
+    this._faceAt = now;
+    Object.keys(faces).forEach(function (name) {
+        var spec = faces[name];
+        var box;
+        var w;
+        var h;
+        var x;
+        var y;
+        var face;
+        var ref;
+        if (outs.indexOf(name) === -1) {
+            self._dropMirrorFace(name);
+            return;
+        }
+        if (!self._client.ready) {
+            return;
+        }
+        box = self._settings.picture(name);
+        w = box.w - (box.w % 2);
+        h = box.h - (box.h % 2);
+        if (w > spec.maxW) {
+            w = spec.maxW - (spec.maxW % 2);
+        }
+        if (h > spec.maxH) {
+            h = spec.maxH - (spec.maxH % 2);
+        }
+        if (w < 16) {
+            w = 16;
+        }
+        if (h < 16) {
+            h = 16;
+        }
+        x = box.x > 0 ? box.x : 0;
+        y = box.y > 0 ? box.y : 0;
+        x -= x % 2;
+        y -= y % 2;
+        face = self._mirrorFaces[name];
+        if (!face || face.w !== w || face.h !== h) {
+            self._dropMirrorFace(name);
+            ref = self._client.image({
+                target: spec.target,
+                klass: 'overlay',
+                z: 40,
+                x: x,
+                y: y,
+                w: w,
+                h: h,
+                iw: w,
+                ih: h,
+                opacity: 1,
+                exclusive: 0,
+                contend: spec.contend,
+                guide_hold: 0,
+                yield: 1,
+                prewarm: 1
+            });
+            if (!ref) {
+                noteStart('mirror-face-refused ' + name);
+                return;
+            }
+            face = { ref: ref, w: w, h: h, rgba: Buffer.alloc(w * h * 4) };
+            self._mirrorFaces[name] = face;
+            noteStart('mirror-face ' + name + ' ' + w + 'x' + h);
+        }
+        videoDecoder.i420IntoRgba(i420, sw, sh, face.rgba, face.w, face.h);
+        self._client.pixels(face.ref, null, face.rgba);
+    });
 };
 
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
-    var live;
-    var payload;
-    var box;
-    var now;
     var st;
     var stamp;
+    var outs;
     try {
         st = fs.statSync('/run/g21-airplay/latest.yuv');
     } catch (err) {
@@ -2598,35 +2705,22 @@ AirPlayApp.prototype._takeFrame = function () {
     if (!parsed) {
         return;
     }
-    // Keep only the size. Holding the I420 buffer, plus a full-screen BGRA
-    // convert for g21-present, is what tripped MEMORY_LIMIT_REACHED.
+    outs = this._settings.outputs();
     this._decoded = { w: parsed.w, h: parsed.h };
-    try {
-        if (!this._mirrorVideo) {
-            this._mirrorVideo = mirrorVideo.createMirrorVideo();
+    if (outs.indexOf('central') !== -1) {
+        try {
+            if (!this._mirrorVideo) {
+                this._mirrorVideo = mirrorVideo.createMirrorVideo();
+            }
+            this._mirrorVideo.push(parsed.i420, parsed.w, parsed.h);
+        } catch (mirrorErr) {
+            noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
         }
-        this._mirrorVideo.push(parsed.i420, parsed.w, parsed.h);
-    } catch (mirrorErr) {
-        noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
+    } else if (this._mirrorVideo) {
+        this._mirrorVideo.close();
+        this._mirrorVideo = null;
     }
-    live = this._display.playing ? this._display.playing() : [];
-    now = Date.now();
-    if (this._atlasAt && (now - this._atlasAt) < 1000) {
-        return;
-    }
-    this._atlasAt = now;
-    payload = {};
-    if (live.indexOf('cluster') !== -1) {
-        box = this._settings.picture('cluster');
-        payload.cluster = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
-    }
-    if (live.indexOf('hud') !== -1) {
-        box = this._settings.picture('hud');
-        payload.hud = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
-    }
-    if (payload.cluster || payload.hud) {
-        this._display.frame(payload);
-    }
+    this._placeMirrorFaces(parsed.i420, parsed.w, parsed.h);
 };
 
 AirPlayApp.prototype._setVisible = function (visible) {

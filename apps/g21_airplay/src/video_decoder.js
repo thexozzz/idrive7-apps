@@ -152,6 +152,68 @@ function placeBgra(src, sw, sh, dw, dh, box) {
     return { w: dw, h: dh, bgra: canvas };
 }
 
+function i420IntoRgba(i420, sw, sh, dst, dw, dh) {
+    var ySize = sw * sh;
+    var uvW = sw >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * (sh >> 1);
+    var row;
+    var col;
+    var sy;
+    var sx;
+    var yy;
+    var u;
+    var v;
+    var c;
+    var d;
+    var e;
+    var r;
+    var g;
+    var b;
+    var o;
+    for (row = 0; row < dh; row += 1) {
+        sy = (row * sh / dh) | 0;
+        if (sy >= sh) {
+            sy = sh - 1;
+        }
+        for (col = 0; col < dw; col += 1) {
+            sx = (col * sw / dw) | 0;
+            if (sx >= sw) {
+                sx = sw - 1;
+            }
+            yy = i420[sy * sw + sx];
+            u = i420[uOff + (sy >> 1) * uvW + (sx >> 1)];
+            v = i420[vOff + (sy >> 1) * uvW + (sx >> 1)];
+            c = yy - 16;
+            d = u - 128;
+            e = v - 128;
+            r = (298 * c + 409 * e + 128) >> 8;
+            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            b = (298 * c + 516 * d + 128) >> 8;
+            if (r < 0) {
+                r = 0;
+            } else if (r > 255) {
+                r = 255;
+            }
+            if (g < 0) {
+                g = 0;
+            } else if (g > 255) {
+                g = 255;
+            }
+            if (b < 0) {
+                b = 0;
+            } else if (b > 255) {
+                b = 255;
+            }
+            o = (row * dw + col) << 2;
+            dst[o] = r;
+            dst[o + 1] = g;
+            dst[o + 2] = b;
+            dst[o + 3] = 255;
+        }
+    }
+}
+
 module.exports = {
     parseI420: parseI420,
     scaleI420: scaleI420,
@@ -160,4 +222,5 @@ module.exports = {
     i420ToBgra: i420ToBgra,
     bgraFromI420: bgraFromI420,
     placeBgra: placeBgra,
+    i420IntoRgba: i420IntoRgba,
 };
