@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.49
+
+- RDP: wbudowany profil `PC` (100.89.166.19 / thexozzz@gmail.com) z haslem seedowanym przy pierwszym starcie.
+
 ## 0.1.48
 
 - Dotyk ID7: stale pozycje kafelkow + wieksze hitboxy + aktywacja na uniesieniu palca (wczesniej tapy mijaly przesuwany carousel).

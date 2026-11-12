@@ -4,6 +4,16 @@ var PROTOCOLS = ['airplay', 'windows', 'rdp', 'vnc'];
 var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
 var MAX_PROFILES = 6;
 
+// Built-in owner RDP profile (password lives in a .secret file, not here).
+var BUILTIN_RDP = {
+    id: 'p1',
+    label: 'PC',
+    octets: [100, 89, 166, 19],
+    port: 3389,
+    user: 'thexozzz@gmail.com',
+    cert: '',
+};
+
 function clamp(value, min, max, fallback) {
     var number = Number(value);
     if (number !== number) {
@@ -73,6 +83,17 @@ function nextId(list, prefix) {
     return prefix + n;
 }
 
+function isBlankHost(host) {
+    return !!(host && host.octets.join('.') === '0.0.0.0' && !host.user);
+}
+
+function sameRdpTarget(host, target) {
+    return !!(host && target
+        && host.octets.join('.') === target.octets.join('.')
+        && host.port === target.port
+        && host.user === target.user);
+}
+
 function loadProfiles(rawList, legacy, port, prefix) {
     var list = [];
     var i;
@@ -98,13 +119,39 @@ function loadProfiles(rawList, legacy, port, prefix) {
     return list;
 }
 
+function ensureBuiltinRdp(list) {
+    var i;
+    var profile;
+    for (i = 0; i < list.length; i += 1) {
+        if (sameRdpTarget(list[i], BUILTIN_RDP)) {
+            return { list: list, changed: false, id: list[i].id };
+        }
+    }
+    // Tylko pusty domyslny profil — nie dokladaj PC obok juz skonfigurowanych.
+    if (list.length === 1 && isBlankHost(list[0])) {
+        profile = hostOf(BUILTIN_RDP, 3389);
+        profile.id = list[0].id || BUILTIN_RDP.id;
+        profile.label = BUILTIN_RDP.label;
+        list[0] = profile;
+        return { list: list, changed: true, id: profile.id };
+    }
+    return { list: list, changed: false, id: list[0] ? list[0].id : BUILTIN_RDP.id };
+}
+
 function createDesktopSettings(stored) {
     var data = stored || {};
     var mode = INPUT_MODES.indexOf(data.inputMode) === -1 ? 'auto' : data.inputMode;
     var rdpProfiles = loadProfiles(data.rdpProfiles, data.rdp, 3389, 'p');
     var vncProfiles = loadProfiles(data.vncProfiles, data.vnc, 5900, 'p');
+    var builtinRdp = ensureBuiltinRdp(rdpProfiles);
+    rdpProfiles = builtinRdp.list;
     var rdpActive = data.rdpActive || rdpProfiles[0].id;
     var vncActive = data.vncActive || vncProfiles[0].id;
+    var seededBuiltinRdp = builtinRdp.changed;
+    // Po podmienieniu pustego profilu wybierz wbudowany; przy dodaniu obok istniejacych nie ruszaj active.
+    if (builtinRdp.changed && rdpProfiles.length === 1) {
+        rdpActive = builtinRdp.id;
+    }
     var airplayName = typeof data.airplayName === 'string' && data.airplayName.length
         ? data.airplayName.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16)
         : 'G21';
@@ -325,6 +372,8 @@ function createDesktopSettings(stored) {
             octet = (octet + 1) % 4;
             return octet;
         },
+        seededBuiltinRdp: function () { return seededBuiltinRdp; },
+        builtinRdpId: function () { return builtinRdp.id; },
         snapshot: function () {
             return {
                 inputMode: mode,
@@ -377,6 +426,7 @@ module.exports = {
     PROTOCOLS: PROTOCOLS,
     INPUT_MODES: INPUT_MODES,
     MAX_PROFILES: MAX_PROFILES,
+    BUILTIN_RDP: BUILTIN_RDP,
     parseIpv4: parseIpv4,
     createDesktopSettings: createDesktopSettings,
 };

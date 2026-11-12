@@ -210,6 +210,7 @@ function AirPlayApp() {
     this._gate = parked.createParkedGate();
     this._store = configStoreFactory.createConfigStore({});
     this._desk = desktopSettings.createDesktopSettings(this._store.readSettings());
+    this._seedBuiltinRdp();
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
     this._streamProtocol = '';
@@ -428,6 +429,42 @@ AirPlayApp.prototype._openPage = function () {
     }).catch(function (err) {
         noteStart('open ' + (err && err.message));
     });
+};
+
+AirPlayApp.prototype._seedBuiltinRdp = function () {
+    var builtin = desktopSettings.BUILTIN_RDP;
+    var host = this._desk.host('rdp');
+    var kind;
+    var pass = 'Karoleslaw1234?';
+    var wrote = false;
+    if (!builtin || !host) {
+        return;
+    }
+    if (typeof this._desk.seededBuiltinRdp === 'function' && this._desk.seededBuiltinRdp()) {
+        try {
+            this._store.writeSettings(this._desk.snapshot());
+            wrote = true;
+        } catch (err) {
+            noteStart('rdp-seed-settings ' + (err && err.message));
+        }
+    }
+    if (host.octets.join('.') !== builtin.octets.join('.') || host.user !== builtin.user) {
+        return;
+    }
+    kind = this._desk.secretKind('rdp');
+    if (this._store.hasSecret(kind) || this._store.hasSecret('rdp')) {
+        if (wrote) {
+            noteStart('rdp-seed profile');
+        }
+        return;
+    }
+    try {
+        this._store.writeSecret(kind, pass);
+        this._store.writeSecret('rdp', pass);
+        noteStart('rdp-seed secret');
+    } catch (err) {
+        noteStart('rdp-seed-secret ' + (err && err.message));
+    }
 };
 
 AirPlayApp.prototype._secret = function (kind) {
