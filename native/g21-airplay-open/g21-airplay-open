@@ -912,8 +912,26 @@ start_ux() {
             report "uxplay-exit|$label|$ip"
             return 0
         fi
-        report "running|$label|$ip"
-        return 0
+        # DNS-SD lives in avahi: if it died/restarted after UxPlay registered,
+        # the phone still sees a stale name and spins with zero TCP to :7401.
+        # Keep avahi up; bounce UxPlay when the daemon instance changed.
+        old_avahi=
+        if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+            old_avahi=$AVAHIPID
+        elif recover_avahi_pid; then
+            old_avahi=$AVAHIPID
+        fi
+        if ! ensure_mdns "$iface"; then
+            report "mdns-brak|$label|$ip"
+            return 0
+        fi
+        if [ -z "$old_avahi" ] || [ "$old_avahi" != "$AVAHIPID" ]; then
+            stop_ux
+            # Fall through and start a fresh UxPlay so register_dnssd runs again.
+        else
+            report "running|$label|$ip"
+            return 0
+        fi
     fi
     # UxPlay is linked to libdns_sd.so.1 (Avahi compat) and also dlopen("libdns_sd.so").
     # BMW mdnsd + /usr/lib/libdns_sd.so accept the call but return kDNSServiceErr_Unknown
