@@ -6,16 +6,8 @@
  * map (0x100) is only the nav pocket under the needles — not the zegary surface.
  */
 
-var LABEL = 'AIRPLAY';
-
-var FONT = {
-    A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
-    I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
-    R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-    P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-    L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
-    Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100']
-};
+var LABEL = 'THEiPlay';
+var FONT = require('./menu_draw.js').FONT;
 
 var TARGETS = {
     panel: { w: 1920, h: 720, contend: 1 },
@@ -23,7 +15,7 @@ var TARGETS = {
 };
 
 function renderTextRgba(text, scale) {
-    var chars = String(text || '').toUpperCase().split('');
+    var chars = String(text || '').split('');
     var cellW = 6;
     var cellH = 7;
     var pad = 12;
@@ -90,8 +82,10 @@ function createClusterLabel(opts) {
     var client = opts.client;
     var log = opts.log || function () {};
     var enabled = opts.enabled !== false;
-    var scale = opts.scale || 8;
-    var bitmap = renderTextRgba(LABEL, scale);
+    var scale = opts.scale || 6;
+    var text = opts.text || LABEL;
+    var places = opts.places || {};
+    var bitmap = renderTextRgba(text, scale);
     var layers = { panel: 0, hud: 0 };
 
     function dropOne(name) {
@@ -118,7 +112,12 @@ function createClusterLabel(opts) {
             return false;
         }
         dropOne(name);
-        box = placeBox(size.w, size.h, bitmap.w, bitmap.h);
+        box = places[name] ? {
+            x: Math.max(0, Math.min(size.w - bitmap.w, places[name].x | 0)),
+            y: Math.max(0, Math.min(size.h - bitmap.h, places[name].y | 0)),
+            w: Math.min(bitmap.w, size.w),
+            h: Math.min(bitmap.h, size.h)
+        } : placeBox(size.w, size.h, bitmap.w, bitmap.h);
         ref = client.image({
             target: name,
             klass: 'overlay',
@@ -173,7 +172,22 @@ function createClusterLabel(opts) {
         },
         show: show,
         hide: hide,
-        text: function () { return LABEL; }
+        text: function () { return text; },
+        setText: function (next) {
+            text = String(next || LABEL);
+            bitmap = renderTextRgba(text, scale);
+            if (enabled) {
+                return show();
+            }
+            return { ok: true, enabled: false };
+        },
+        setPlaces: function (next) {
+            places = next || {};
+            if (enabled) {
+                return show();
+            }
+            return { ok: true, enabled: false };
+        }
     };
 }
 

@@ -28,18 +28,22 @@ var CLAIM = 9;
 var TOUCH = 105;
 var CLOSED = 106;
 
-var INK = 0xF5F7FAFF;
-var HINT = 0x8B95A8FF;
-var MUTED = 0x5C677AFF;
-var BAR = 0x243044FF;
-var CARD = 0x171E2BFF;
-var CARD_HI = 0x1E2A3DFF;
-var PAGE = 0x0B0E14FF;
-var PAGE_TOP = 0x121826FF;
-var ACCENT = 0x2F7BFFFF;
-var ACCENT_DIM = 0x1A4A99FF;
-var ICON_FG = 0xE8EEF8FF;
-var ICON_ACCENT = 0x6AA4FFFF;
+var INK = 0xF7F2EAFF;
+var HINT = 0xC4B5A4FF;
+var MUTED = 0x8C7D6CFF;
+var BAR = 0x2A2118FF;
+var CARD = 0x16120EFF;
+var CARD_HI = 0x2C241CFF;
+var PAGE = 0x090807FF;
+var PAGE_TOP = 0x120E0BFF;
+var PAGE_BAND = 0x1A1410FF;
+var ACCENT = 0xE6A15CFF;
+var ACCENT_DIM = 0x7A4A22FF;
+var ACCENT_GLOW = 0x3A2414FF;
+var LINE = 0x3A3026FF;
+var CHIP = 0x100D0AFF;
+var ICON_FG = 0xE7D7C4FF;
+var ICON_ACCENT = 0xF0C48AFF;
 // Margins left clear inside a full-screen surface. On this car a PLACE of only
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
@@ -244,6 +248,42 @@ var ICONS = {
         '0000000000000000',
         '0000000000000000',
         '0000000000000000'
+    ],
+    lock: [
+        '0000000000000000',
+        '0000011111100000',
+        '0000110000110000',
+        '0000100000010000',
+        '0000100000010000',
+        '0011111111111100',
+        '0011111111111100',
+        '0011110011111100',
+        '0011110011111100',
+        '0011110011111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    unlock: [
+        '0000000000000000',
+        '0000011111100000',
+        '0000110000110000',
+        '0000000000010000',
+        '0000000000010000',
+        '0011111111111100',
+        '0011111111111100',
+        '0011110011111100',
+        '0011110011111100',
+        '0011110011111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
     ]
 };
 
@@ -315,89 +355,67 @@ var FONT = {
     'w': ['00000', '00000', '10001', '10001', '10101', '10101', '01010'],
     'x': ['00000', '00000', '10001', '01010', '00100', '01010', '10001'],
     'y': ['00000', '00000', '10001', '10001', '01111', '00001', '01110'],
-    'z': ['00000', '00000', '11111', '00010', '00100', '01000', '11111']
+    'z': ['00000', '00000', '11111', '00010', '00100', '01000', '11111'],
+    'ą': ['00000', '01110', '00001', '01111', '10001', '01110', '00110'],
+    'ć': ['00010', '00100', '01110', '10000', '10000', '10000', '01110'],
+    'ę': ['00000', '01110', '10001', '11111', '10000', '01110', '00110'],
+    'ł': ['00100', '00100', '11111', '00100', '00100', '00100', '01110'],
+    'ń': ['00010', '00100', '11001', '10101', '10011', '10001', '10001'],
+    'ó': ['00010', '00100', '01110', '10001', '10001', '10001', '01110'],
+    'ś': ['00010', '00100', '01111', '10000', '01110', '00001', '11110'],
+    'ź': ['00010', '00100', '11111', '00010', '00100', '01000', '11111'],
+    'ż': ['00100', '00000', '11111', '00010', '00100', '01000', '11111'],
+    'Ą': ['01110', '10001', '11111', '10001', '10001', '10001', '00110'],
+    'Ć': ['00010', '00100', '01111', '10000', '10000', '10000', '01111'],
+    'Ę': ['11111', '10000', '11110', '10000', '10000', '11111', '00110'],
+    'Ł': ['10000', '10000', '11111', '10000', '10000', '10000', '11111'],
+    'Ń': ['00010', '00100', '11001', '10101', '10011', '10001', '10001'],
+    'Ó': ['00010', '00100', '01110', '10001', '10001', '10001', '01110'],
+    'Ś': ['00010', '00100', '01111', '10000', '01110', '00001', '11110'],
+    'Ź': ['00010', '00100', '11111', '00010', '00100', '01000', '11111'],
+    'Ż': ['00100', '00000', '11111', '00010', '00100', '01000', '11111']
 };
 
 var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'odbiornik iPhone', icon: 'airplay' },
-    { name: 'windows', title: 'Miracast', hint: 'odbiornik Win+K', icon: 'desktop' },
-    { name: 'rdp', title: 'RDP', hint: 'klient pulpitu PC', icon: 'host' },
-    { name: 'vnc', title: 'VNC', hint: 'odbiornik VNC', icon: 'grid' },
-    { name: 'label-toggle', title: 'WL', hint: 'napis AIRPLAY', icon: 'tag' }
+    { name: 'label-toggle', title: 'Napis', hint: 'tekst i pozycja', icon: 'tag' }
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-toggle', title: 'WYL', hint: 'wylaczony', icon: 'airplay' },
-    { name: 'air-screen', title: 'Ekran', hint: 'srodek / zegary / HUD', icon: 'desktop' },
-    { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
-    { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
-    { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+    { name: 'air-toggle', title: 'Wyłącz', hint: 'wyłączony', icon: 'airplay' },
+    { name: 'air-pin', title: 'Bez', hint: 'połącz bez kodu', icon: 'unlock' },
+    { name: 'air-screen', title: 'Ekran', hint: 'środek / zegary / HUD', icon: 'desktop' },
+    { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
+    { name: 'air-info', title: 'Sieć', hint: 'Wi-Fi Store', icon: 'wifi' },
+    { name: 'air-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
 ];
 
 var AIR_OUT_ITEMS = [
-    { name: 'air-out-central', title: 'Srodek', hint: 'ekran centralny', icon: 'desktop' },
-    { name: 'air-out-cluster', title: 'Zegary', hint: 'cluster panel', icon: 'grid' },
-    { name: 'air-out-hud', title: 'HUD', hint: 'wypuklanie', icon: 'tag' },
-    { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
+    { name: 'air-out-central', title: 'Wyłącz', hint: 'środek', icon: 'desktop' },
+    { name: 'air-out-cluster', title: 'Wyłącz', hint: 'zegary', icon: 'grid' },
+    { name: 'air-out-hud', title: 'Wyłącz', hint: 'HUD', icon: 'tag' },
+    { name: 'air-out-box', title: 'Okno', hint: 'pozycja i rozmiar', icon: 'gear' },
+    { name: 'air-out-start', title: 'Start', hint: 'odpal lustro', icon: 'play' },
+    { name: 'air-out-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
 ];
 
-var RDP_ITEMS = [
-    { name: 'rdp-connect', title: 'Polacz', hint: 'wybierz ekran', icon: 'desktop' },
-    { name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' },
-    { name: 'rdp-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
-    { name: 'rdp-edit', title: 'Edytuj', hint: 'IP / konto', icon: 'gear' },
-    { name: 'rdp-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' },
-    { name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' },
-    { name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' },
-    { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+var AIR_BOX_ITEMS = [
+    { name: 'air-box-target', title: 'Środek', hint: 'OK: następny ekran', icon: 'desktop' },
+    { name: 'air-box-size', title: 'Wielkość', hint: 'pokrętło: proporcje', icon: 'desktop' },
+    { name: 'air-box-pos', title: 'Pozycja', hint: 'OK: przesuwaj', icon: 'grid' },
+    { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
 ];
 
-var RDP_OUT_ITEMS = [
-    { name: 'rdp-out-central', title: 'Srodek', hint: 'ekran centralny', icon: 'desktop' },
-    { name: 'rdp-out-cluster', title: 'Zegary', hint: 'cluster panel', icon: 'grid' },
-    { name: 'rdp-out-hud', title: 'HUD', hint: 'wypuklanie', icon: 'tag' },
-    { name: 'rdp-out-back', title: 'Wstecz', hint: 'Lista RDP', icon: 'back' }
-];
-
-var RDP_EDIT_ITEMS = [
-    { name: 'rdp-e-label', title: 'Nazwa', hint: 'Profil', icon: 'tag' },
-    { name: 'rdp-e-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
-    { name: 'rdp-e-port', title: 'Port', hint: '3389', icon: 'gear' },
-    { name: 'rdp-e-user', title: 'Konto', hint: 'user', icon: 'user' },
-    { name: 'rdp-e-pass', title: 'Haslo', hint: 'wpisz pokretlem', icon: 'tag' },
-    { name: 'rdp-e-back', title: 'Wstecz', hint: 'Lista RDP', icon: 'back' }
-];
-
-var VNC_ITEMS = [
-    { name: 'vnc-toggle', title: 'WYL', hint: 'wylaczony', icon: 'grid' },
-    { name: 'vnc-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'grid' },
-    { name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' },
-    { name: 'vnc-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
-    { name: 'vnc-edit', title: 'Edytuj', hint: 'IP / port', icon: 'gear' },
-    { name: 'vnc-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' },
-    { name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
-];
-
-var VNC_EDIT_ITEMS = [
-    { name: 'vnc-e-label', title: 'Nazwa', hint: 'Profil', icon: 'tag' },
-    { name: 'vnc-e-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
-    { name: 'vnc-e-port', title: 'Port', hint: '5900', icon: 'gear' },
-    { name: 'vnc-e-back', title: 'Wstecz', hint: 'Lista VNC', icon: 'back' }
-];
-
-var WINDOWS_ITEMS = [
-    { name: 'win-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' },
-    { name: 'win-devices', title: 'Urzadzenia', hint: 'lista PC', icon: 'grid' },
-    { name: 'win-info', title: 'Siec', hint: 'ta sama Wi-Fi', icon: 'wifi' },
-    { name: 'win-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
-];
-
-var WIN_DEVICES_ITEMS = [
-    { name: 'win-d-back', title: 'Wstecz', hint: 'Miracast', icon: 'back' }
+var LABEL_ITEMS = [
+    { name: 'label-on', title: 'Włącz', hint: 'pokaż napis', icon: 'tag' },
+    { name: 'label-text', title: 'Tekst', hint: 'własny napis', icon: 'tag' },
+    { name: 'label-where', title: 'Środek', hint: 'OK: następny ekran', icon: 'desktop' },
+    { name: 'label-pos', title: 'Pozycja', hint: 'OK: przesuwaj', icon: 'grid' },
+    { name: 'label-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
 ];
 
 var STREAM_ITEMS = [
-    { name: 'stream-end', title: 'Zakoncz', hint: 'Koniec streamu', icon: 'stop' }
+    { name: 'stream-end', title: 'Zakończ', hint: 'Koniec streamu', icon: 'stop' }
 ];
 
 var ITEMS = ROOT_ITEMS;
@@ -405,14 +423,9 @@ var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
     'air-out': AIR_OUT_ITEMS,
-    windows: WINDOWS_ITEMS,
-    'win-devices': WIN_DEVICES_ITEMS,
-    stream: STREAM_ITEMS,
-    rdp: RDP_ITEMS,
-    'rdp-edit': RDP_EDIT_ITEMS,
-    'rdp-out': RDP_OUT_ITEMS,
-    vnc: VNC_ITEMS,
-    'vnc-edit': VNC_EDIT_ITEMS
+    'air-box': AIR_BOX_ITEMS,
+    label: LABEL_ITEMS,
+    stream: STREAM_ITEMS
 };
 
 function message(type, payload) {
@@ -559,38 +572,45 @@ function pageBox(width, height) {
 function menuLayout(items, selected, width, height, detail, heading) {
     var page = pageBox(width, height);
     var count = items.length || 1;
-    var gap = count > 4 ? 24 : 32;
-    var cardW = count <= 3 ? 260 : (count <= 5 ? 210 : 176);
-    var cardH = count <= 3 ? 280 : 248;
-    var iconPx = count <= 3 ? 3 : 2;
-    var titleScale = 4;
+    var headerH = 68;
+    var footerH = 58;
+    var gap = 8;
+    var rowH = Math.floor((page.boxH - headerH - footerH - (count - 1) * gap) / count);
     var bubbles = [];
     var i;
-    var startX;
+    var x;
     var y;
-    var slot;
-    var grow = 14;
-    // Fixed slots: selection only grows in place. The old "center on selected"
-    // carousel moved hitboxes under the finger and made taps miss on the car.
-    var rowW = count * cardW + (count - 1) * gap;
-    startX = page.ox + Math.floor((page.boxW - rowW) / 2);
-    y = page.oy + Math.floor((page.boxH - cardH) / 2) - 8;
+    var rowW;
+    if (rowH > 84) {
+        rowH = 84;
+    }
+    if (rowH < 52) {
+        rowH = 52;
+    }
+    rowW = page.boxW - 72;
+    if (heading === 'Okno') {
+        rowW = page.boxW - 680;
+        if (rowW < 640) {
+            rowW = 640;
+        }
+    }
+    x = page.ox + 36;
+    y = page.oy + headerH + 6;
     for (i = 0; i < items.length; i += 1) {
-        slot = startX + i * (cardW + gap);
         bubbles.push({
-            x: i === selected ? slot - grow : slot,
-            y: i === selected ? y - 10 : y,
-            w: i === selected ? cardW + grow * 2 : cardW,
-            h: i === selected ? cardH + 20 : cardH,
-            // Stable rect for hit-testing (ignores selection grow).
-            hitX: slot - Math.floor(gap / 2),
-            hitY: y - 24,
-            hitW: cardW + gap,
-            hitH: cardH + 48,
-            scale: titleScale,
-            iconPx: i === selected ? iconPx + 1 : iconPx,
+            x: x,
+            y: y,
+            w: rowW,
+            h: rowH,
+            hitX: x,
+            hitY: y - 2,
+            hitW: rowW,
+            hitH: rowH + gap,
+            scale: 4,
+            iconPx: 2,
             selected: i === selected
         });
+        y += rowH + gap;
     }
     return {
         ox: page.ox,
@@ -601,65 +621,126 @@ function menuLayout(items, selected, width, height, detail, heading) {
         bubbles: bubbles,
         heading: heading || '',
         detail: detail || '',
-        hintY: y + cardH + 44,
-        statusY: y + cardH + 88,
-        headerH: 56
+        hintY: page.oy + page.boxH - 46,
+        statusY: page.oy + page.boxH - 22,
+        headerH: headerH
     };
+}
+
+function keyLabel(key) {
+    if (key === 'SPC') {
+        return 'spacja';
+    }
+    if (key === 'ANU') {
+        return 'anuluj';
+    }
+    if (key === 'DEL') {
+        return 'usun';
+    }
+    if (key === 'SH') {
+        return 'Aa';
+    }
+    return key;
 }
 
 function buildKeyboardFrame(edit, width, height) {
     var draw = new FrameBuilder();
     var page = pageBox(width, height);
-    var cols = edit.cols || 10;
-    var keys = edit.keys || [];
-    var gap = 12;
-    var keyH = 56;
-    var keyW = Math.floor((page.boxW - 120 - (cols - 1) * gap) / cols);
-    var startY = page.oy + 160;
-    var startX = page.ox + 60;
-    var i;
+    var rows = edit.rows || [];
+    var gap = 10;
+    var keyH = 52;
+    var maxCols = 10;
+    var unit = Math.floor((page.boxW - 80 - (maxCols - 1) * gap) / maxCols);
+    var startY = page.oy + 156;
+    var hits = [];
+    var popupHits = [];
+    var index = 0;
+    var r;
+    var c;
     var row;
-    var col;
+    var rowW;
+    var keyW;
     var x;
     var y;
     var label;
     var labelW;
     var focus;
+    var held;
+    var alts;
+    var altW;
+    var altX;
+    var altY;
     var shown = knobKeyboard.displayValue(edit) + '_';
     draw.clear(0);
     draw.rect(page.ox, page.oy, page.boxW, page.boxH, PAGE);
     draw.rect(page.ox, page.oy, page.boxW, 56, PAGE_TOP);
     draw.text(edit.title || 'Wpisz', page.ox + 72, page.oy + 16, 5, ACCENT);
-    draw.text('pokretlo: litera   OK: wybierz', page.ox + 72, page.oy + 72, 3, MUTED);
-    draw.pill(page.ox + 60, page.oy + 100, page.boxW - 120, 44, CARD_HI);
-    draw.text(shown.slice(0, 40), page.ox + 80, page.oy + 112, 4, INK);
-    for (i = 0; i < keys.length; i += 1) {
-        row = Math.floor(i / cols);
-        col = i % cols;
-        x = startX + col * (keyW + gap);
-        y = startY + row * (keyH + gap);
-        focus = i === edit.keyIndex;
-        label = keys[i];
-        if (label === 'SPC') {
-            label = 'spacja';
+    draw.text('tap: litera   przytrzymaj: polskie', page.ox + 72, page.oy + 72, 3, MUTED);
+    draw.pill(page.ox + 48, page.oy + 100, page.boxW - 96, 44, CARD_HI);
+    draw.text(shown.slice(0, 40), page.ox + 68, page.oy + 112, 4, INK);
+    for (r = 0; r < rows.length; r += 1) {
+        row = rows[r];
+        keyW = unit;
+        if (row.length <= 5) {
+            keyW = Math.floor(unit * 1.7);
         }
-        if (label === 'ANU') {
-            label = 'anuluj';
+        rowW = row.length * keyW + (row.length - 1) * gap;
+        x = page.ox + Math.floor((page.boxW - rowW) / 2);
+        y = startY + r * (keyH + gap);
+        for (c = 0; c < row.length; c += 1) {
+            focus = index === edit.keyIndex;
+            held = edit.popup && edit.popup.keyIndex === index;
+            label = keyLabel(row[c]);
+            draw.pill(x, y, keyW, keyH, (focus || held) ? ACCENT : CARD);
+            labelW = draw.textWidth(label, 3);
+            draw.text(
+                label,
+                x + Math.floor((keyW - labelW) / 2),
+                y + Math.floor((keyH - 21) / 2),
+                3,
+                (focus || held) ? INK : HINT
+            );
+            hits.push({ x: x, y: y, w: keyW, h: keyH, index: index });
+            index += 1;
+            x += keyW + gap;
         }
-        draw.pill(x, y, keyW, keyH, focus ? ACCENT : CARD);
-        labelW = draw.textWidth(label, 3);
-        draw.text(
-            label,
-            x + Math.floor((keyW - labelW) / 2),
-            y + Math.floor((keyH - 21) / 2),
-            3,
-            focus ? INK : HINT
-        );
+    }
+    if (edit.popup && edit.popup.alts && edit.popup.alts.length) {
+        held = hits[edit.popup.keyIndex];
+        alts = edit.popup.alts;
+        altW = 72;
+        altY = held ? Math.max(page.oy + 8, held.y - keyH - 16) : page.oy + 8;
+        altX = held
+            ? held.x + Math.floor(held.w / 2) - Math.floor((alts.length * altW + (alts.length - 1) * 8) / 2)
+            : page.ox + 80;
+        for (c = 0; c < alts.length; c += 1) {
+            focus = c === edit.popup.pick;
+            draw.pill(altX - 4, altY - 4, altW + 8, keyH + 8, ACCENT_GLOW);
+            draw.pill(altX, altY, altW, keyH, focus ? ACCENT : CARD_HI);
+            labelW = draw.textWidth(alts[c], 4);
+            draw.text(
+                alts[c],
+                altX + Math.floor((altW - labelW) / 2),
+                altY + 12,
+                4,
+                INK
+            );
+            popupHits.push({ x: altX - 8, y: altY - 8, w: altW + 16, h: keyH + 16, pick: c });
+            altX += altW + 8;
+        }
     }
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
-        layout: { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH, bubbles: [] }
+        layout: {
+            ox: page.ox,
+            oy: page.oy,
+            boxW: page.boxW,
+            boxH: page.boxH,
+            bubbles: [],
+            keys: hits,
+            popup: popupHits
+        }
     };
 }
 
@@ -726,11 +807,11 @@ function parsePinDetail(detail) {
     return match ? match[1] : '';
 }
 
-function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo) {
+function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
-    var title = String((items[0] && items[0].title) || 'Zakoncz');
+    var title = String((items[0] && items[0].title) || 'Zakończ');
     var titleW;
     var hint;
     var page = pageBox(width, height);
@@ -756,12 +837,28 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
 
     panelX = page.ox + 80;
     panelW = page.boxW - 160;
-    if (!mirrored) {
+    if (info && info.window && info.window.w > 80 && info.window.h > 80) {
+        var win = info.window;
+        draw.rect(win.x, win.y, win.w, 44, ACCENT);
+        draw.rect(win.x, win.y + 44, win.w, 3, ACCENT_DIM);
+        draw.rect(win.x, win.y, 3, win.h, ACCENT);
+        draw.rect(win.x + win.w - 3, win.y, 3, win.h, ACCENT);
+        draw.rect(win.x, win.y + win.h - 3, win.w, 3, ACCENT);
+        draw.text('THEiPlay', win.x + 16, win.y + 12, 3, PAGE);
+        label = 'przesun';
+        labelW = draw.textWidth(label, 3);
+        draw.text(label, win.x + win.w - labelW - 16, win.y + 12, 3, PAGE);
+        if (!mirrored && pin) {
+            pinScale = 8;
+            pinW = draw.textWidth(pin, pinScale);
+            draw.text(pin, win.x + Math.floor((win.w - pinW) / 2), win.y + 80, pinScale, INK);
+        }
+    } else if (!mirrored) {
         panelY = page.oy + 48;
         panelH = page.boxH - 200;
         draw.pill(panelX - 8, panelY - 8, panelW + 16, panelH + 16, ACCENT_DIM);
         draw.pill(panelX, panelY, panelW, panelH, CARD);
-        label = String((info && info.headline) || heading || 'AirPlay');
+        label = String((info && info.headline) || heading || 'THEiPlay');
         labelW = draw.textWidth(label, 4);
         draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 36, 4, INK);
         if (pin) {
@@ -811,6 +908,9 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     if (hint) {
         draw.text(hint, lay.ox + 72, lay.hintY, 3, HINT);
     }
+    if (caption && caption.on && caption.text) {
+        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
+    }
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
@@ -818,7 +918,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading, version, streamInfo) {
+function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption) {
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -835,67 +935,104 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     var labelY;
     var focus;
     if (isStreamItems(items) || heading === 'Stream') {
-        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo);
+        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption);
     }
     lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
+    draw.rect(lay.ox, lay.oy, 8, lay.boxH, ACCENT);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.headerH, PAGE_TOP);
-    draw.rect(lay.ox, lay.oy + lay.headerH - 2, lay.boxW, 2, BAR);
+    draw.rect(lay.ox + 28, lay.oy + lay.headerH - 3, 96, 3, ACCENT);
     if (lay.heading) {
-        draw.text(lay.heading, lay.ox + 72, lay.oy + 16, 5, INK);
+        draw.text(lay.heading, lay.ox + 36, lay.oy + 22, 5, INK);
     } else {
-        draw.text('G21', lay.ox + 72, lay.oy + 16, 5, ACCENT);
+        draw.text('THEiPlay', lay.ox + 36, lay.oy + 22, 5, ACCENT);
     }
     drawVersionMark(draw, lay, version);
     for (i = 0; i < items.length; i += 1) {
         bubble = lay.bubbles[i];
         title = String(items[i].title || '');
+        hint = items[i].hint ? String(items[i].hint) : '';
         iconName = items[i].icon || 'play';
         iconPx = bubble.iconPx;
         iconSide = draw.iconSize(iconPx);
         focus = i === selected;
-        if (focus) {
-            draw.pill(bubble.x - 6, bubble.y - 6, bubble.w + 12, bubble.h + 12, ACCENT_DIM);
-        }
-        draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
-        if (focus) {
-            draw.rect(bubble.x + 24, bubble.y + bubble.h - 14, bubble.w - 48, 4, ACCENT);
-        }
-        iconX = bubble.x + Math.floor((bubble.w - iconSide) / 2);
-        iconY = bubble.y + Math.floor(bubble.h * 0.22) - Math.floor(iconSide / 4);
-        draw.pill(
-            iconX - 18,
-            iconY - 18,
-            iconSide + 36,
-            iconSide + 36,
-            focus ? ACCENT_DIM : BAR
-        );
+        draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
+        draw.rect(bubble.x, bubble.y, focus ? 8 : 3, bubble.h, focus ? ACCENT : LINE);
+        iconX = bubble.x + 28;
+        iconY = bubble.y + Math.floor((bubble.h - iconSide) / 2);
         draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
-        titleW = draw.textWidth(title, bubble.scale);
-        labelY = bubble.y + bubble.h - 52;
-        draw.text(
-            title,
-            bubble.x + Math.floor((bubble.w - titleW) / 2),
-            labelY,
-            bubble.scale,
-            focus ? INK : HINT
-        );
-    }
-    hint = items[selected] && items[selected].hint ? String(items[selected].hint) : '';
-    if (hint) {
-        draw.text(hint, lay.ox + 72, lay.hintY, 4, HINT);
+        draw.text(title, bubble.x + 28 + iconSide + 22, bubble.y + Math.floor((bubble.h - 28) / 2), bubble.scale, focus ? INK : HINT);
+        if (hint) {
+            titleW = draw.textWidth(hint.slice(0, 28), 3);
+            draw.text(
+                hint.slice(0, 28),
+                bubble.x + bubble.w - titleW - 24,
+                bubble.y + Math.floor((bubble.h - 21) / 2),
+                3,
+                focus ? ACCENT : MUTED
+            );
+        }
     }
     if (detail) {
-        draw.text(detail, lay.ox + 72, lay.statusY, 4, INK);
+        draw.text(detail, lay.ox + 36, lay.statusY, 3, INK);
     } else {
-        draw.text('pokretlo: wybor   OK: start', lay.ox + 72, lay.statusY, 3, MUTED);
+        draw.text('pokrętło: wybór   OK: wybierz', lay.ox + 36, lay.statusY, 3, MUTED);
+    }
+    if (boxPreview && heading === 'Okno') {
+        drawBoxPreview(draw, lay, boxPreview, items[selected]);
+    }
+    if (caption && caption.on && caption.text) {
+        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
     }
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
         layout: lay
     };
+}
+
+function drawBoxPreview(draw, lay, preview, selectedItem) {
+    var limitW = preview.limitW || 1920;
+    var limitH = preview.limitH || 720;
+    var maxW = 600;
+    var maxH = 420;
+    var scale = Math.min(maxW / limitW, maxH / limitH);
+    var stageW = Math.max(80, Math.round(limitW * scale));
+    var stageH = Math.max(48, Math.round(limitH * scale));
+    var x = lay.ox + lay.boxW - stageW - 36;
+    var y = lay.oy + lay.headerH + 24;
+    var wx = x + Math.round((preview.x || 0) * scale);
+    var wy = y + Math.round((preview.y || 0) * scale);
+    var ww = Math.max(12, Math.round((preview.w || limitW) * scale));
+    var wh = Math.max(12, Math.round((preview.h || limitH) * scale));
+    var mode = preview.mode || '';
+    var caption;
+    if (mode !== 'move' && selectedItem && selectedItem.name === 'air-box-size') {
+        mode = 'size';
+    }
+    if (ww > stageW) {
+        ww = stageW;
+    }
+    if (wh > stageH) {
+        wh = stageH;
+    }
+    if (wx + ww > x + stageW) {
+        wx = x + stageW - ww;
+    }
+    if (wy + wh > y + stageH) {
+        wy = y + stageH - wh;
+    }
+    draw.rect(x - 4, y - 4, stageW + 8, stageH + 8, LINE);
+    draw.rect(x, y, stageW, stageH, PAGE_TOP);
+    draw.rect(wx, wy, ww, wh, ACCENT_DIM);
+    draw.rect(wx, wy, ww, Math.min(14, wh), ACCENT);
+    caption = mode === 'move' ? 'pozycja' : (mode === 'size' ? 'wielkosc' : 'podglad');
+    if (preview.label) {
+        caption = String(preview.label) + '  ' + caption;
+    }
+    draw.text(caption, x, y + stageH + 18, 3, HINT);
+    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0), x, y + stageH + 48, 3, MUTED);
 }
 
 function encoderStep(previous, next) {
@@ -947,12 +1084,19 @@ function createMenuSurface(opts) {
     var which = 0;
     var lastOp = null;
     var lastPush = 0;
+    var lastTilt = '';
+    var boxPreview = null;
+    var caption = null;
     var noted = false;
     var claimNoted = false;
     var detail = '';
     var streamInfo = null;
     var edit = null;
     var touchDown = null;
+    var keyHits = [];
+    var popupHits = [];
+    var holdTimer = null;
+    var dragWin = null;
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -1009,7 +1153,9 @@ function createMenuSurface(opts) {
         sendClaim();
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo);
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption);
+        keyHits = (built.layout && built.layout.keys) || [];
+        popupHits = (built.layout && built.layout.popup) || [];
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -1160,26 +1306,21 @@ function createMenuSurface(opts) {
         screenName = next;
         items = cloneScreen(next);
         selected = 0;
+        clearHold();
         edit = null;
         if (next === 'airplay') {
-            heading = 'AirPlay';
+            heading = 'THEiPlay';
         } else if (next === 'air-out') {
-            heading = 'Gdzie pokazac';
-        } else if (next === 'windows') {
-            heading = 'Miracast';
-        } else if (next === 'win-devices') {
-            heading = 'Urzadzenia';
+            heading = 'Gdzie pokazać';
+        } else if (next === 'air-box') {
+            heading = 'Okno';
+        } else if (next === 'label') {
+            heading = 'Napis';
         } else if (next === 'stream') {
             heading = 'Stream';
             streamInfo = null;
-        } else if (next === 'rdp-out') {
-            heading = 'Gdzie pokazac';
-        } else if (next === 'rdp' || next === 'rdp-edit') {
-            heading = next === 'rdp-edit' ? 'Edytuj RDP' : 'RDP';
-        } else if (next === 'vnc' || next === 'vnc-edit') {
-            heading = next === 'vnc-edit' ? 'Edytuj VNC' : 'VNC';
         } else {
-            heading = 'G21';
+            heading = 'THEiPlay';
         }
         detail = '';
         noted = false;
@@ -1215,6 +1356,20 @@ function createMenuSurface(opts) {
         return false;
     }
 
+    function setItemIcon(name, icon) {
+        var i;
+        for (i = 0; i < items.length; i += 1) {
+            if (items[i].name === name) {
+                items[i].icon = String(icon || 'play');
+                if (!edit) {
+                    paint();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     function move(delta) {
         if (!delta) {
             return;
@@ -1236,6 +1391,7 @@ function createMenuSurface(opts) {
         var cancel = edit && edit.onCancel;
         var field = edit && edit.field;
         var value = result && result.value;
+        clearHold();
         edit = null;
         paint();
         if (result && result.action === 'done' && typeof done === 'function') {
@@ -1265,11 +1421,36 @@ function createMenuSurface(opts) {
         }
     }
 
-    function onControl(operation, push) {
+    function tiltName(df) {
+        if (df === 1) {
+            return 'n';
+        }
+        if (df === 4) {
+            return 'e';
+        }
+        if (df === 7) {
+            return 's';
+        }
+        if (df === 10) {
+            return 'w';
+        }
+        return '';
+    }
+
+    function onControl(operation, push, df) {
         var step = encoderStep(lastOp, operation);
         var item = items[selected];
         var adjusted = false;
+        var tilt = tiltName(df | 0);
+        var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
+        lastTilt = tilt;
+        if (tilted && !edit) {
+            adjusted = typeof opts.onTilt === 'function' && !!opts.onTilt(tilt);
+            if (!adjusted && (tilt === 'n' || tilt === 's')) {
+                move(tilt === 's' ? 1 : -1);
+            }
+        }
         if (step && !edit && item && typeof opts.adjust === 'function') {
             adjusted = !!opts.adjust(item.name, step > 0 ? 1 : -1);
         }
@@ -1294,6 +1475,187 @@ function createMenuSurface(opts) {
             return false;
         }
         finishEdit({ action: 'cancel' });
+        return true;
+    }
+
+    function clearHold() {
+        if (holdTimer) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+        }
+    }
+
+    function hitList(x, y, boxes) {
+        var pts = [
+            { x: x, y: y },
+            { x: x + CONTENT.x, y: y + CONTENT.y },
+            { x: x - CONTENT.x, y: y - CONTENT.y }
+        ];
+        var pi;
+        var i;
+        var box;
+        var p;
+        if (!boxes) {
+            return null;
+        }
+        for (pi = 0; pi < pts.length; pi += 1) {
+            p = pts[pi];
+            for (i = 0; i < boxes.length; i += 1) {
+                box = boxes[i];
+                if (p.x >= box.x && p.x < box.x + box.w && p.y >= box.y && p.y < box.y + box.h) {
+                    return box;
+                }
+            }
+        }
+        return null;
+    }
+
+    function applyEditResult(result) {
+        if (!result) {
+            return;
+        }
+        if (result.action === 'done' || result.action === 'cancel') {
+            finishEdit(result);
+            return;
+        }
+        paint();
+    }
+
+    function onEditTouch(phase, tx, ty) {
+        var box;
+        var pop;
+        var pick;
+        var ch;
+        var idx;
+        if (!edit) {
+            return;
+        }
+        if (phase === 1) {
+            box = hitList(tx, ty, keyHits);
+            clearHold();
+            edit.popup = null;
+            if (!box) {
+                touchDown = null;
+                paint();
+                return;
+            }
+            edit.keyIndex = box.index;
+            touchDown = { x: tx, y: ty, key: box.index, t: Date.now(), held: false };
+            paint();
+            holdTimer = setTimeout(function () {
+                var alts;
+                holdTimer = null;
+                if (!edit || !touchDown || touchDown.key !== box.index) {
+                    return;
+                }
+                alts = knobKeyboard.altsFor(edit.keys[box.index]);
+                if (!alts.length) {
+                    return;
+                }
+                touchDown.held = true;
+                touchDown.alt = alts[0];
+                edit.popup = { keyIndex: box.index, alts: alts, pick: 0 };
+                paint();
+            }, 260);
+            return;
+        }
+        if (phase === 2 && edit.popup && touchDown) {
+            pop = hitList(tx, ty, popupHits);
+            if (pop && pop.pick !== edit.popup.pick) {
+                edit.popup.pick = pop.pick;
+                touchDown.alt = edit.popup.alts[pop.pick];
+                paint();
+            }
+            return;
+        }
+        if (phase === 3) {
+            var held = !!(touchDown && (touchDown.held || (Date.now() - touchDown.t) >= 260));
+            clearHold();
+            if (held && touchDown) {
+                pop = edit.popup ? hitList(tx, ty, popupHits) : null;
+                if (pop && edit.popup) {
+                    ch = edit.popup.alts[pop.pick];
+                } else if (touchDown.alt) {
+                    ch = touchDown.alt;
+                } else if (edit.popup && edit.popup.alts && edit.popup.alts.length) {
+                    ch = edit.popup.alts[edit.popup.pick] || edit.popup.alts[0];
+                }
+                idx = touchDown.key;
+                edit.popup = null;
+                touchDown = null;
+                if (ch) {
+                    edit.keyIndex = idx;
+                    applyEditResult(knobKeyboard.applyKey(edit, ch));
+                    return;
+                }
+            }
+            if (touchDown && touchDown.key >= 0) {
+                idx = touchDown.key;
+                box = hitList(tx, ty, keyHits);
+                if (box) {
+                    idx = box.index;
+                }
+                touchDown = null;
+                edit.keyIndex = idx;
+                applyEditResult(knobKeyboard.applyKey(edit));
+                return;
+            }
+            touchDown = null;
+        }
+    }
+
+    function onWindowDrag(phase, tx, ty) {
+        var win;
+        var moved;
+        var maxX;
+        var maxY;
+        if (screenName !== 'stream' || !streamInfo || !streamInfo.window) {
+            return false;
+        }
+        win = streamInfo.window;
+        if (phase === 1) {
+            if (tx >= win.x && tx < win.x + win.w && ty >= win.y && ty < win.y + 48) {
+                dragWin = { x: tx, y: ty, ox: win.x, oy: win.y };
+                return true;
+            }
+            return false;
+        }
+        if (!dragWin) {
+            return false;
+        }
+        moved = {
+            x: dragWin.ox + (tx - dragWin.x),
+            y: dragWin.oy + (ty - dragWin.y)
+        };
+        maxX = (screen.w || 1920) - win.w;
+        maxY = (screen.h || 720) - win.h;
+        if (moved.x < 0) {
+            moved.x = 0;
+        }
+        if (moved.y < 0) {
+            moved.y = 0;
+        }
+        if (maxX < 0) {
+            maxX = 0;
+        }
+        if (maxY < 0) {
+            maxY = 0;
+        }
+        if (moved.x > maxX) {
+            moved.x = maxX;
+        }
+        if (moved.y > maxY) {
+            moved.y = maxY;
+        }
+        win.x = moved.x | 0;
+        win.y = moved.y | 0;
+        if (typeof opts.onWindowMove === 'function') {
+            opts.onWindowMove(win.x, win.y, phase === 3);
+        }
+        if (phase === 3) {
+            dragWin = null;
+        }
+        paint();
         return true;
     }
 
@@ -1338,8 +1700,11 @@ function createMenuSurface(opts) {
                 var ty = body.readFloatLE(8);
                 var hit;
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
+                if (!edit && onWindowDrag(phase, tx, ty)) {
+                    return;
+                }
                 if (edit) {
-                    touchDown = null;
+                    onEditTouch(phase, tx, ty);
                 } else if (phase === 1) {
                     touchDown = { x: tx, y: ty, hit: hitRow(tx, ty), t: Date.now() };
                     // Select on down so the tile lights up; activate on up unless it was a drag.
@@ -1372,9 +1737,9 @@ function createMenuSurface(opts) {
                     touchDown = null;
                 }
             } else if (type === CCU && body.length >= 5 && body.length < 12 && shown) {
-                onControl(body.readUInt16BE(1), body[3]);
+                onControl(body.readUInt16BE(1), body[3], body[4]);
             } else if (type === X_CCU && body.length >= 5 && shown) {
-                onControl(body.readUInt16BE(1), body[3]);
+                onControl(body.readUInt16BE(1), body[3], body[4]);
             }
         }
     }
@@ -1474,6 +1839,7 @@ function createMenuSurface(opts) {
         },
         setItemHint: setItemHint,
         setItemTitle: setItemTitle,
+        setItemIcon: setItemIcon,
         screen: function () { return screenName; },
         setStatus: function (text) {
             var next = String(text || '');
@@ -1481,6 +1847,32 @@ function createMenuSurface(opts) {
                 return;
             }
             detail = next;
+            if (!edit) {
+                paint();
+            }
+        },
+        setCaption: function (info) {
+            caption = info && info.on ? {
+                on: true,
+                text: String(info.text || ''),
+                x: info.x | 0,
+                y: info.y | 0
+            } : null;
+            if (!edit) {
+                paint();
+            }
+        },
+        setBoxPreview: function (info) {
+            boxPreview = info && typeof info === 'object' ? {
+                x: info.x | 0,
+                y: info.y | 0,
+                w: info.w | 0,
+                h: info.h | 0,
+                limitW: info.limitW | 0,
+                limitH: info.limitH | 0,
+                mode: info.mode ? String(info.mode) : '',
+                label: info.label ? String(info.label) : ''
+            } : null;
             if (!edit) {
                 paint();
             }
@@ -1493,7 +1885,13 @@ function createMenuSurface(opts) {
                 mirrored: !!info.mirrored,
                 lines: Array.isArray(info.lines) ? info.lines.map(function (line) {
                     return String(line || '');
-                }) : []
+                }) : [],
+                window: info.window && typeof info.window === 'object' ? {
+                    x: info.window.x | 0,
+                    y: info.window.y | 0,
+                    w: info.window.w | 0,
+                    h: info.window.h | 0
+                } : null
             } : null;
             streamInfo = next;
             if (!edit) {
@@ -1515,14 +1913,7 @@ module.exports = {
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     AIR_OUT_ITEMS: AIR_OUT_ITEMS,
-    WINDOWS_ITEMS: WINDOWS_ITEMS,
-    WIN_DEVICES_ITEMS: WIN_DEVICES_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,
-    RDP_ITEMS: RDP_ITEMS,
-    RDP_OUT_ITEMS: RDP_OUT_ITEMS,
-    RDP_EDIT_ITEMS: RDP_EDIT_ITEMS,
-    VNC_ITEMS: VNC_ITEMS,
-    VNC_EDIT_ITEMS: VNC_EDIT_ITEMS,
     SCREENS: SCREENS,
     ICONS: ICONS,
     message: message,
@@ -1530,5 +1921,6 @@ module.exports = {
     buildStreamFrame: buildStreamFrame,
     buildKeyboardFrame: buildKeyboardFrame,
     encoderStep: encoderStep,
-    createMenuSurface: createMenuSurface
+    createMenuSurface: createMenuSurface,
+    FONT: FONT
 };

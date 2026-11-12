@@ -1,6 +1,33 @@
-# G21 AirPlay
+# THEiPlay
 
 ## Unreleased
+
+## 0.1.76
+
+- Okno: Wielkosc (pokretlo, proporcje, podglad) i Pozycja (strzalki, OK wychodzi).
+
+## 0.1.75
+
+- Menu: lista w cieplym graficie zamiast niebieskich kafelkow.
+- Klawiatura: przytrzymanie wstawia polski znak, nie litere bazowa.
+- Srodek: okno AirPlay plywajace, pasek tytulu przeciagany palcem.
+
+## 0.1.74
+
+- AirPlay: lustro na Srodek, Zegary i HUD naraz; okno z pozycja i rozmiarem na kazdym (tool 0.1.36 trzyma present, gdy lista zawiera central).
+
+## 0.1.73
+
+- AirPlay: w menu przełącznik Kod / Bez (tool 0.1.35 czyta `/run/g21-session/airplay-auth`); domyślnie bez kodu jak na kkds.
+- Menu: świeższy layout (siatka 2 rzędy, pasek statusu, nowe kolory/ikony lock).
+
+## 0.1.72
+
+- AirPlay + tool 0.1.34: status klienta (`/run/g21-airplay/client`); nft 7400–7499; restart UxPlay po sticky mirror-port i po rozłączeniu (lekcja z kkds).
+
+## 0.1.71
+
+- Rebrand na THEiPlay; tylko AirPlay (bez Miracast/RDP/VNC); HUD wyłączony (brak przycisku, domyślnie central).
 
 ## 0.1.70
 

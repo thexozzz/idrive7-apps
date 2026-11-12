@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.32",
-  "title": "AirPlay i Windows Miracast",
-  "description": "Backend AirPlay (UxPlay+mdnsd/avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).",
+  "version": "0.1.36",
+  "title": "THEiPlay",
+  "description": "Backend AirPlay (UxPlay+avahi) dla THEiPlay — lustro iPhone na MGU.",
   "uninstallable": true,
   "mguHmi": [
     "ID7"

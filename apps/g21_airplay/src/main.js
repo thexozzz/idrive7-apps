@@ -52,6 +52,7 @@ process.on('uncaughtException', function (err) {
 var STATE_NAME = 'ST_OnlineApps_G21AirPlay';
 var RECEIVER_STATUS = '/run/g21-airplay.status';
 var AIRPLAY_PIN_FILE = '/run/g21-airplay/pin';
+var AIRPLAY_CLIENT_FILE = '/run/g21-airplay/client';
 var FOREGROUND_REASONS = ['ENTRY_POINT', 'LUM', 'BOOKMARK', 'START_WIDGET', 'TRIGGER_HMI', 'SPEECH_COMMAND'];
 var ROOT_STATUS_TEXT = {
     'uplink-not-wifi': 'brak wifi',
@@ -177,7 +178,7 @@ var STATUS_BY_SCREEN = {
     'vnc-edit': VNC_STATUS_TEXT
 };
 
-var PROTOCOLS = { airplay: true, windows: true, rdp: true, vnc: true };
+var PROTOCOLS = { airplay: true };
 
 function screenOutputs(app) {
     function layerOutput(name) {
@@ -193,9 +194,9 @@ function screenOutputs(app) {
             },
             start: function () { return { ok: true }; },
             stopFrames: function () {},
-            frame: function (buffer) { return app._adapter.updateFrame(buffer); },
+            frame: function (buffer) { return app._adapter.updateFrame(name, buffer); },
             stop: function () {},
-            release: function () { app._adapter.destroyLayer(); },
+            release: function () { app._adapter.destroyLayer(name); },
         };
     }
     return {
@@ -209,7 +210,7 @@ function screenOutputs(app) {
             release: function () {},
         },
         cluster: layerOutput('cluster'),
-        hud: layerOutput('hud'),
+        hud: layerOutput('hud')
     };
 }
 
@@ -222,24 +223,36 @@ function AirPlayApp() {
     this._shutdownPromise = null;
     this._timer = null;
     this._line = { net: '', addr: '', state: '' };
-    this._settings = settingsFactory.createSettings({ active: 'central' });
     this._gate = parked.createParkedGate();
     this._store = configStoreFactory.createConfigStore({});
     this._desk = desktopSettings.createDesktopSettings(this._store.readSettings());
-    this._seedBuiltinRdp();
+    this._settings = settingsFactory.createSettings({
+        outputs: this._desk.airOutputs(),
+        picture: this._desk.airWindows(),
+        active: (this._desk.airOutputs()[0]) || 'central'
+    });
+    this._boxFocus = this._settings.outputs()[0] || 'central';
+    this._boxMove = false;
+    this._labelFocus = 'central';
+    this._labelMove = false;
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
     this._airOutput = 'central';
     this._videoTimer = null;
     this._streamProtocol = '';
     this._winAutoAccepting = false;
-    this._sessionText = 'wybierz AirPlay, Miracast, RDP albo VNC';
+    this._sessionText = 'THEiPlay — AirPlay na iPhone';
     this._decoded = null;
     this._rdpOutput = 'central';
     this._client = new ClusterRender('g21_airplay');
     this._label = clusterLabelFactory.createClusterLabel({
         client: this._client,
         enabled: this._desk.clusterLabel(),
+        text: this._desk.labelText(),
+        places: {
+            panel: this._desk.labelAt('cluster'),
+            hud: this._desk.labelAt('hud')
+        },
         log: noteStart,
     });
     var selfBridge = this;
@@ -319,9 +332,27 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.70',
+        version: (this._packageJson && this._packageJson.version) || '0.1.76',
         choose: function (name) {
             self._onMenuChoice(name);
+        },
+        onTilt: function (dir) {
+            return self._tiltBox(dir);
+        },
+        onWindowMove: function (x, y, done) {
+            var box = self._settings.picture('central');
+            self._settings.setPicture('central', {
+                x: x,
+                y: y,
+                w: box.w,
+                h: box.h,
+                fps: box.fps,
+                scale: box.scale,
+                rotate: box.rotate
+            });
+            if (done) {
+                self._saveWindows();
+            }
         },
         adjust: function (name, delta) {
             return self._adjustMenu(name, delta);
@@ -391,9 +422,10 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.70') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.76') +
         ' starting'
     );
+    this._writeAirplayAuth();
     Promise.resolve(this.registerActive()).catch(function (err) {
         noteStart('active ' + (err && err.message));
     });
@@ -415,9 +447,7 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             noteStart('ready');
-            if (self._panel) {
-                self._panel.start();
-            }
+            // Panel WWW :1235 był pod RDP — w THEiPlay wyłączony.
             self._watchNetwork();
             self._watchCar();
             var lastUuid = self.getLastExecutedEntryPointUuid && self.getLastExecutedEntryPointUuid();
@@ -453,6 +483,10 @@ AirPlayApp.prototype._showMenu = function () {
     noteStart('menu-on-bar');
     if (this._menu) {
         this._menu.open();
+        if (typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('airplay');
+        }
+        this._rebuildProtocolMenu('airplay');
     }
     return this._openPage();
 };
@@ -591,8 +625,24 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
     }
 };
 
+AirPlayApp.prototype._writeAirplayAuth = function () {
+    var auth = this._desk && this._desk.airplayPin && this._desk.airplayPin() ? 'pin' : 'open';
+    try {
+        fs.writeFileSync(this._paths.airplayAuth, auth + '\n');
+    } catch (err) {
+        noteStart('airplay-auth-write ' + (err && err.message));
+    }
+    return auth;
+};
+
 AirPlayApp.prototype._endpoint = function (name) {
-    if (name === 'airplay' || name === 'windows') {
+    if (name === 'airplay') {
+        return {
+            name: this._desk.airplayName(),
+            auth: this._desk.airplayPin() ? 'pin' : 'open'
+        };
+    }
+    if (name === 'windows') {
         return { name: this._desk.airplayName() };
     }
     var host = this._desk.host(name);
@@ -644,12 +694,14 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
         waiting: true,
         offer: true
     };
+    if (!PROTOCOLS[protocol]) {
+        protocol = 'airplay';
+    }
     if (active && active !== protocol) {
         this._winAutoAccepting = false;
         this._sessions.disconnect();
     }
-    // Keep a live session of the same protocol (incl. Miracast offer).
-    // Failed/error/idle attempts must not stick on the submenu.
+    // Keep a live AirPlay session; failed/error/idle must not stick on the submenu.
     if (active === protocol) {
         live = this._sessions.getStatus() || {};
         if (!keep[live.state]) {
@@ -669,13 +721,8 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
 };
 
 AirPlayApp.prototype._goRoot = function () {
-    if (this._menu && typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('root');
-    }
-    this._chosen = '';
-    this._streamProtocol = '';
-    this._tellMenu('waiting');
-    this._sync();
+    // Jedyny protokół to AirPlay — wracamy do ekranu THEiPlay, nie do starego multi-menu.
+    this._openProtocolScreen('airplay');
 };
 
 AirPlayApp.prototype._saveDesk = function () {
@@ -696,8 +743,61 @@ AirPlayApp.prototype._panelUrl = function () {
 };
 
 AirPlayApp.prototype._adjustMenu = function (name, delta) {
-    // Editable fields use the knob keyboard on press; rotate stays for browse only.
-    return false;
+    if (name !== 'air-box-size' || !delta || this._boxMove) {
+        if (this._boxMove && (name === 'air-box-size' || name === 'air-box-pos')) {
+            return true;
+        }
+        if (this._labelMove && name === 'label-pos') {
+            return true;
+        }
+        return false;
+    }
+    this._settings.scale(this._boxFocus || 'central', delta > 0 ? 1 : -1);
+    this._saveWindows();
+    this._paintAirBox();
+    return true;
+};
+
+AirPlayApp.prototype._tiltBox = function (dir) {
+    var key;
+    var delta;
+    if (this._menuScreen() === 'label' && this._labelMove) {
+        var at = this._desk.labelAt(this._labelFocus || 'central');
+        var nx = at.x;
+        var ny = at.y;
+        if (dir === 'n') ny -= 16;
+        else if (dir === 's') ny += 16;
+        else if (dir === 'w') nx -= 16;
+        else if (dir === 'e') nx += 16;
+        else return false;
+        this._desk.setLabelAt(this._labelFocus || 'central', nx, ny);
+        this._saveDesk();
+        this._refreshLabel();
+        this._paintLabel();
+        return true;
+    }
+    if (this._menuScreen() !== 'air-box' || !this._boxMove) {
+        return false;
+    }
+    if (dir === 'n') {
+        key = 'y';
+        delta = -2;
+    } else if (dir === 's') {
+        key = 'y';
+        delta = 2;
+    } else if (dir === 'w') {
+        key = 'x';
+        delta = -2;
+    } else if (dir === 'e') {
+        key = 'x';
+        delta = 2;
+    } else {
+        return false;
+    }
+    this._settings.nudge(this._boxFocus || 'central', key, delta);
+    this._saveWindows();
+    this._paintAirBox();
+    return true;
 };
 
 AirPlayApp.prototype._startFieldEdit = function (field, mode, value, title) {
@@ -731,6 +831,11 @@ AirPlayApp.prototype._applyFieldEdit = function (field, mode, text) {
     }
     if (field === 'air-name') {
         set = this._desk.setAirplayName(checked.value);
+    } else if (field === 'label-text') {
+        set = this._desk.setLabelText(checked.value);
+        if (set && set.ok) {
+            this._refreshLabel();
+        }
     } else if (field === 'rdp-ip') {
         set = this._desk.setRdpHost(checked.value);
     } else if (field === 'rdp-port') {
@@ -934,10 +1039,10 @@ AirPlayApp.prototype._paintSwitch = function (itemName, on, onHint, offHint) {
         return;
     }
     if (typeof this._menu.setItemTitle === 'function') {
-        this._menu.setItemTitle(itemName, on ? 'WL' : 'WYL');
+        this._menu.setItemTitle(itemName, on ? 'Włącz' : 'Wyłącz');
     }
     if (typeof this._menu.setItemHint === 'function') {
-        this._menu.setItemHint(itemName, on ? (onHint || 'wlaczony') : (offHint || 'wylaczony'));
+        this._menu.setItemHint(itemName, on ? (onHint || 'włączony') : (offHint || 'wyłączony'));
     }
 };
 
@@ -984,42 +1089,43 @@ AirPlayApp.prototype._startVideoTimer = function () {
     }, 50);
 };
 
-AirPlayApp.prototype._startAirplayToOutput = function (outputName) {
-    var out = outputName === 'cluster' || outputName === 'hud' ? outputName : 'central';
-    var selected;
-    this._airOutput = out;
-    this._writeSessionOutput(out);
-    if (out === 'central') {
-        if (this._frameBridge) {
-            this._frameBridge.stop();
-        }
-        this._display.select('central');
-        noteStart('air-out ' + out);
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('airplay');
-        }
-        this._rebuildProtocolMenu('airplay');
-        this._paintSwitch('air-toggle', true, 'start...');
-        this._choose('airplay');
-        this._sync();
+AirPlayApp.prototype._outputLabel = function (name) {
+    if (name === 'cluster') {
+        return 'Zegary';
+    }
+    if (name === 'hud') {
+        return 'HUD';
+    }
+        return 'Środek';
+};
+
+AirPlayApp.prototype._saveWindows = function () {
+    var snap = this._settings.snapshot();
+    this._desk.setAirOutputs(snap.outputs);
+    this._desk.setAirWindows(snap.picture);
+    this._saveDesk();
+};
+
+AirPlayApp.prototype._startAirplaySelected = function () {
+    var names = this._settings.outputs();
+    var started;
+    if (!names.length) {
+        this._tellMenu('pick-out');
         return;
     }
-    selected = this._display.select(out);
-    if (!selected.ok) {
-        noteStart('air-out-refuse ' + out + ' ' + (selected.reason || ''));
-        this._tellMenu(selected.reason || 'not-parked');
-        this._writeSessionOutput('central');
-        this._airOutput = 'central';
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('air-out');
-        }
-        this._sync();
-        return;
-    }
+    this._airOutput = names[0];
+    this._writeAirplayAuth();
+    this._writeSessionOutput(names.join(','));
     if (this._frameBridge) {
         this._frameBridge.stop();
     }
-    noteStart('air-out ' + out);
+    started = this._display.selectMany(names);
+    noteStart('air-out ' + names.join(',') + (started.failed && started.failed.length ? (' fail ' + started.failed.join(',')) : ''));
+    if (!started.ok) {
+        this._tellMenu((started.failed && started.failed[0]) || 'not-parked');
+        this._sync();
+        return;
+    }
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('airplay');
     }
@@ -1158,6 +1264,36 @@ AirPlayApp.prototype._onWinDevicesAction = function (name) {
     }
 };
 
+AirPlayApp.prototype._paintAirPinSwitch = function () {
+    var on = !!(this._desk && this._desk.airplayPin && this._desk.airplayPin());
+    if (!this._menu) {
+        return;
+    }
+    if (typeof this._menu.setItemTitle === 'function') {
+        this._menu.setItemTitle('air-pin', on ? 'Kod' : 'Bez');
+    }
+    if (typeof this._menu.setItemHint === 'function') {
+        this._menu.setItemHint(
+            'air-pin',
+            on ? 'wpisz kod na iPhonie' : 'połącz bez kodu'
+        );
+    }
+    if (typeof this._menu.setItemIcon === 'function') {
+        this._menu.setItemIcon('air-pin', on ? 'lock' : 'unlock');
+    }
+};
+
+AirPlayApp.prototype._toggleAirplayPin = function () {
+    var on = !(this._desk && this._desk.airplayPin && this._desk.airplayPin());
+    this._desk.setAirplayPin(on);
+    this._saveDesk();
+    this._writeAirplayAuth();
+    this._paintAirPinSwitch();
+    this._tellMenu(on ? 'pin-wait' : 'waiting');
+    noteStart(on ? 'air-auth-pin' : 'air-auth-open');
+    this._sync();
+};
+
 AirPlayApp.prototype._onAirAction = function (name) {
     if (name === 'air-back') {
         this._goRoot();
@@ -1165,6 +1301,10 @@ AirPlayApp.prototype._onAirAction = function (name) {
     }
     if (name === 'air-toggle') {
         this._toggleProtocol('airplay');
+        return;
+    }
+    if (name === 'air-pin') {
+        this._toggleAirplayPin();
         return;
     }
     if (name === 'air-screen') {
@@ -1175,24 +1315,65 @@ AirPlayApp.prototype._onAirAction = function (name) {
         this._sync();
         return;
     }
-    if (name === 'air-out-back') {
+    if (name === 'air-out-back' || name === 'air-box-back') {
+        this._boxMove = false;
+        if (name === 'air-box-back' && this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('air-out');
+            this._sync();
+            return;
+        }
         this._openProtocolScreen('airplay');
         return;
     }
-    if (name === 'air-out-central') {
-        this._startAirplayToOutput('central');
+    if (name === 'air-out-central' || name === 'air-out-cluster' || name === 'air-out-hud') {
+        this._settings.toggleOutput(name.replace('air-out-', ''));
+        this._saveWindows();
+        this._paintAirOut();
         return;
     }
-    if (name === 'air-out-cluster') {
-        this._startAirplayToOutput('cluster');
+    if (name === 'air-out-box') {
+        if (!this._settings.outputs().length) {
+            this._boxFocus = 'central';
+        } else if (this._settings.outputs().indexOf(this._boxFocus) === -1) {
+            this._boxFocus = this._settings.outputs()[0];
+        }
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('air-box');
+        }
+        this._paintAirBox();
         return;
     }
-    if (name === 'air-out-hud') {
-        this._startAirplayToOutput('hud');
+    if (name === 'air-out-start') {
+        this._startAirplaySelected();
+        return;
+    }
+    if (name === 'air-box-target') {
+        var order = ['central', 'cluster', 'hud'];
+        var at = order.indexOf(this._boxFocus);
+        this._boxMove = false;
+        this._boxFocus = order[(at + 1) % order.length];
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-size') {
+        this._boxMove = false;
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-pos') {
+        this._boxMove = !this._boxMove;
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-full') {
+        this._boxMove = false;
+        this._settings.fill(this._boxFocus || 'central');
+        this._saveWindows();
+        this._paintAirBox();
         return;
     }
     if (name === 'air-name') {
-        this._startFieldEdit('air-name', 'name', this._desk.airplayName(), 'Nazwa AirPlay');
+        this._startFieldEdit('air-name', 'name', this._desk.airplayName(), 'Nazwa THEiPlay');
         return;
     }
     if (name === 'air-info') {
@@ -1408,26 +1589,99 @@ AirPlayApp.prototype._onVncAction = function (name) {
     }
 };
 
+AirPlayApp.prototype._refreshLabel = function () {
+    var at = this._desk.labelAt('central');
+    if (this._label) {
+        this._label.setText(this._desk.labelText());
+        this._label.setPlaces({
+            panel: this._desk.labelAt('cluster'),
+            hud: this._desk.labelAt('hud')
+        });
+        this._label.setEnabled(this._desk.clusterLabel());
+    }
+    if (this._menu && typeof this._menu.setCaption === 'function') {
+        this._menu.setCaption({
+            on: this._desk.clusterLabel(),
+            text: this._desk.labelText(),
+            x: at.x,
+            y: at.y
+        });
+    }
+};
+
+AirPlayApp.prototype._paintLabel = function () {
+    var name = this._labelFocus || 'central';
+    var at;
+    if (!this._menu || this._menuScreen() !== 'label') {
+        return;
+    }
+    at = this._desk.labelAt(name);
+    this._paintSwitch('label-on', this._desk.clusterLabel(), 'widoczny', 'ukryty');
+    this._menu.setItemHint('label-text', this._desk.labelText());
+    this._menu.setItemTitle('label-where', this._outputLabel(name));
+    this._menu.setItemTitle('label-pos', this._labelMove ? 'Ruszaj' : 'Pozycja');
+    this._menu.setItemHint('label-pos', this._labelMove ? ('X ' + at.x + '  Y ' + at.y + '  OK: koniec') : 'OK: przesuwaj');
+    if (typeof this._menu.setCaption === 'function') {
+        this._menu.setCaption({
+            on: this._desk.clusterLabel(),
+            text: this._desk.labelText(),
+            x: at.x,
+            y: at.y
+        });
+    }
+};
+
 AirPlayApp.prototype._toggleClusterLabel = function () {
     var on = !this._desk.clusterLabel();
     this._desk.setClusterLabel(on);
     this._saveDesk();
-    this._paintSwitch('label-toggle', on, 'napis cluster/HUD', 'napis wylaczony');
-    if (this._label) {
-        this._label.setEnabled(on);
-    }
-    this._tellMenu(on ? 'waiting' : 'waiting');
+    this._paintLabel();
+    this._refreshLabel();
     noteStart(on ? 'label-wl' : 'label-wyl');
 };
 
 AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
     if (name === 'label-toggle') {
+        this._labelMove = false;
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('label');
+        }
+        this._paintLabel();
+        return;
+    }
+    if (name === 'label-on') {
         this._toggleClusterLabel();
         return;
     }
-    if (name === 'airplay' || name === 'windows' || name === 'rdp' || name === 'vnc') {
-        this._openProtocolScreen(name);
+    if (name === 'label-text') {
+        this._labelMove = false;
+        this._startFieldEdit('label-text', 'caption', this._desk.labelText(), 'Napis');
+        return;
+    }
+    if (name === 'label-where') {
+        var screens = ['central', 'cluster', 'hud'];
+        var atScreen = screens.indexOf(this._labelFocus);
+        this._labelMove = false;
+        this._labelFocus = screens[(atScreen + 1) % screens.length];
+        this._paintLabel();
+        return;
+    }
+    if (name === 'label-pos') {
+        this._labelMove = !this._labelMove;
+        this._paintLabel();
+        return;
+    }
+    if (name === 'label-back') {
+        this._labelMove = false;
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'airplay') {
+        this._openProtocolScreen('airplay');
         return;
     }
     if (screen === 'stream' && name.indexOf('stream-') === 0) {
@@ -1490,12 +1744,28 @@ AirPlayApp.prototype._readAirplayPin = function () {
     return '';
 };
 
+AirPlayApp.prototype._readAirplayClient = function () {
+    var text;
+    var parts;
+    try {
+        text = String(fs.readFileSync(AIRPLAY_CLIENT_FILE, 'utf8') || '').trim();
+    } catch (err) {
+        return { state: '', detail: '' };
+    }
+    parts = text.split('|');
+    return {
+        state: String(parts[0] || ''),
+        detail: String(parts[1] || '')
+    };
+};
+
 AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     var pin;
     var name;
     var net;
     var out;
     var mode;
+    var client;
     var mirrored;
     var headline;
     var lines;
@@ -1505,43 +1775,53 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     if (typeof this._menu.setStreamInfo !== 'function') {
         return;
     }
-    pin = this._streamProtocol === 'airplay' ? this._readAirplayPin() : '';
-    name = this._desk.airplayName ? this._desk.airplayName() : 'G21';
+    pin = this._streamProtocol === 'airplay' && this._desk.airplayPin && this._desk.airplayPin()
+        ? this._readAirplayPin()
+        : '';
+    name = this._desk.airplayName ? this._desk.airplayName() : 'THEiPlay';
     net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
-    out = this._airOutput === 'cluster' ? 'zegary' : (this._airOutput === 'hud' ? 'HUD' : 'srodek');
+    out = this._settings.outputs().map(this._outputLabel.bind(this)).join('+') || 'brak';
     mode = receiver && receiver.mode ? String(receiver.mode) : '';
-    mirrored = !!(this._decoded && this._streamProtocol === 'airplay');
-    if (this._streamProtocol === 'windows') {
-        mirrored = (this._sessions.getStatus().state) === 'running';
-        headline = mirrored ? 'Miracast' : 'Miracast — czekam';
-        pin = '';
-        out = 'srodek';
-    } else if (mirrored) {
-        headline = 'AirPlay — lustro';
+    client = this._streamProtocol === 'airplay' ? this._readAirplayClient() : { state: '', detail: '' };
+    mirrored = !!(this._decoded && this._streamProtocol === 'airplay')
+        || (client.state === 'mirroring');
+    if (mirrored) {
+        headline = 'THEiPlay — lustro';
+    } else if (client.state === 'pair') {
+        headline = 'THEiPlay — iPhone laczy';
+    } else if (client.state === 'error') {
+        headline = 'THEiPlay — blad lustra';
     } else if (pin) {
-        headline = 'AirPlay — kod';
+        headline = 'THEiPlay — kod';
     } else {
-        headline = 'AirPlay — czekam';
+        headline = 'THEiPlay — czekam';
     }
     lines = [
         'nazwa ' + String(name).slice(0, 28),
         'siec ' + String(net).slice(0, 28),
-        'ekran ' + out
+        'ekran ' + out,
+        'ochrona ' + (this._desk.airplayPin && this._desk.airplayPin() ? 'z kodem' : 'bez kodu')
     ];
     if (mode && this._streamProtocol === 'airplay') {
         lines.push('odbiornik ' + mode);
+    }
+    if (client.state && client.state !== 'idle') {
+        lines.push('klient ' + client.state + (client.detail ? (' ' + client.detail) : ''));
     }
     if (pin && !mirrored) {
         lines.push('wpisz kod na iPhonie (parowanie)');
     }
     this._menu.setStreamInfo({
-        pin: pin,
+        pin: mirrored ? '' : pin,
         headline: headline,
-        hint: pin ? 'wpisz kod na iPhonie' : 'polacz iPhone z G21',
+        hint: mirrored
+            ? 'lustro aktywne'
+            : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay'),
         mirrored: mirrored,
-        lines: lines
+        lines: lines,
+        window: this._settings.picture('central')
     });
     if (typeof this._menu.setItemHint === 'function') {
         this._menu.setItemHint(
@@ -1559,7 +1839,8 @@ AirPlayApp.prototype._tellMenu = function (code) {
     var map = STATUS_BY_SCREEN[screen] || ROOT_STATUS_TEXT;
     var pin;
     // Big PIN on car while iPhone asks for the code; hide once mirror frames arrive.
-    if ((screen === 'airplay' || screen === 'stream') && code !== 'idle') {
+    if ((screen === 'airplay' || screen === 'stream') && code !== 'idle'
+            && this._desk.airplayPin && this._desk.airplayPin()) {
         pin = this._readAirplayPin();
         if (pin && !(screen === 'stream' && this._decoded)) {
             this._menu.setStatus('PIN ' + pin);
@@ -1581,7 +1862,7 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
     var net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
-    var onHint = 'wlaczony';
+    var onHint = 'włączony';
     if (live.state === 'running') {
         onHint = 'emisja PC';
     } else if (live.state === 'offer' || this._readWinOffers().length) {
@@ -1589,13 +1870,59 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
     } else if (live.on) {
         onHint = 'czekaj Win+K';
     }
-    this._paintSwitch('win-toggle', live.on, onHint, 'wylaczony');
+    this._paintSwitch('win-toggle', live.on, onHint, 'wyłączony');
     offers = this._readWinOffers();
     this._menu.setItemHint(
         'win-devices',
         offers.length ? (String(offers.length) + ' czekajacych') : 'lista po Win+K'
     );
     this._menu.setItemHint('win-info', net.slice(0, 28));
+};
+
+AirPlayApp.prototype._paintAirOut = function () {
+    var names;
+    var self = this;
+    if (!this._menu || this._menuScreen() !== 'air-out') {
+        return;
+    }
+    names = this._settings.outputs();
+    ['central', 'cluster', 'hud'].forEach(function (name) {
+        var on = names.indexOf(name) !== -1;
+        self._menu.setItemTitle('air-out-' + name, on ? 'Włącz' : 'Wyłącz');
+        self._menu.setItemHint(
+            'air-out-' + name,
+            (on ? 'włączone' : 'wyłączone') + ' · ' + self._outputLabel(name)
+        );
+    });
+    this._menu.setItemHint('air-out-box', 'pozycja i rozmiar');
+    this._menu.setItemHint('air-out-start', names.length ? names.map(this._outputLabel.bind(this)).join('+') : 'wybierz ekran');
+};
+
+AirPlayApp.prototype._paintAirBox = function () {
+    var name = this._boxFocus || 'central';
+    var box;
+    var limit = { central: { w: 1920, h: 720 }, cluster: { w: 1920, h: 720 }, hud: { w: 800, h: 480 } }[name];
+    if (!this._menu || this._menuScreen() !== 'air-box') {
+        return;
+    }
+    box = this._settings.picture(name);
+    this._menu.setItemTitle('air-box-target', this._outputLabel(name));
+    this._menu.setItemHint('air-box-target', 'OK: następny ekran');
+    this._menu.setItemHint('air-box-size', box.w + 'x' + box.h);
+    this._menu.setItemTitle('air-box-pos', this._boxMove ? 'Ruszaj' : 'Pozycja');
+    this._menu.setItemHint('air-box-pos', this._boxMove ? 'strzałki, OK: koniec' : 'OK: przesuwaj');
+    if (typeof this._menu.setBoxPreview === 'function') {
+        this._menu.setBoxPreview({
+            x: box.x,
+            y: box.y,
+            w: box.w,
+            h: box.h,
+            limitW: limit.w,
+            limitH: limit.h,
+            mode: this._boxMove ? 'move' : '',
+            label: this._outputLabel(name)
+        });
+    }
 };
 
 AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
@@ -1611,19 +1938,21 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         : (air && air.reason ? String(air.reason) : 'brak wifi');
     var live = this._sessionLive('airplay');
     var mode = live.on && receiver && receiver.mode ? receiver.mode : 'idle';
-    var pin = this._readAirplayPin();
-    var onHint = 'wlaczony';
+    var wantPin = !!(this._desk.airplayPin && this._desk.airplayPin());
+    var pin = wantPin ? this._readAirplayPin() : '';
+    var onHint = 'włączony';
     if (pin) {
         onHint = 'PIN ' + pin;
     } else if (mode === 'running') {
-        onHint = 'lustro / czekaj iPhone';
+        onHint = wantPin ? 'lustro / czekaj iPhone' : 'bez kodu / czekaj iPhone';
     } else if (live.on) {
-        onHint = 'czekaj na iPhone';
+        onHint = wantPin ? 'czekaj na iPhone' : 'bez kodu';
     }
-    this._paintSwitch('air-toggle', live.on, onHint, 'wylaczony');
+    this._paintSwitch('air-toggle', live.on, onHint, 'wyłączony');
+    this._paintAirPinSwitch();
     this._menu.setItemHint(
         'air-screen',
-        this._airOutput === 'cluster' ? 'zegary' : (this._airOutput === 'hud' ? 'HUD' : 'srodek')
+        this._settings.outputs().map(this._outputLabel.bind(this)).join('+') || 'wybierz'
     );
     this._menu.setItemHint('air-name', name);
     this._menu.setItemHint('air-info', net.slice(0, 28));
@@ -1895,7 +2224,7 @@ AirPlayApp.prototype._write = function (name, text) {
 AirPlayApp.prototype._paint = function (choice) {
     var screen = this._menuScreen();
     if (!choice.ok) {
-        this._write('airNet', 'Wi-Fi Store: brak polaczenia');
+        this._write('airNet', 'Wi-Fi Store: brak połączenia');
         this._write('airAddr', 'Wlacz hotspot iPhone i dolacz MGU Store do tej sieci');
         this._write('airState', choice.reason || 'brak-wifi');
         return;
@@ -1941,6 +2270,7 @@ AirPlayApp.prototype._sync = function () {
     var receiver;
     var airLive;
     var air;
+    var clientLive;
     var rdpLive;
     var vncLive;
     var winLive;
@@ -1978,7 +2308,14 @@ AirPlayApp.prototype._sync = function () {
             if (receiver.mode === 'running') {
                 this._takeFrame();
                 this._paintStreamInfo(air, receiver);
-                this._tellMenu(this._readAirplayPin() && !this._decoded ? 'pin-wait' : 'running');
+                clientLive = this._readAirplayClient();
+                if (clientLive.state === 'mirroring' || this._decoded) {
+                    this._tellMenu('running');
+                } else if (this._readAirplayPin()) {
+                    this._tellMenu('pin-wait');
+                } else {
+                    this._tellMenu('running');
+                }
                 return;
             }
             this._endStream('airplay');
@@ -1997,11 +2334,16 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
-    if (screen === 'air-out') {
+    if (screen === 'air-out' || screen === 'air-box') {
         air = choice.ok
             ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
             : choice;
         this._paint(air);
+        if (screen === 'air-box') {
+            this._paintAirBox();
+        } else {
+            this._paintAirOut();
+        }
         this._tellMenu('pick-out');
         return;
     }
@@ -2147,23 +2489,25 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
+    if (screen === 'label') {
+        this._paintLabel();
+        this._tellMenu('napis');
+        return;
+    }
+
     this._paint(choice);
-    this._paintSwitch(
-        'label-toggle',
-        this._desk.clusterLabel(),
-        'napis cluster/HUD',
-        'napis wylaczony'
-    );
+    if (this._menu && typeof this._menu.setItemHint === 'function') {
+        this._menu.setItemHint('label-toggle', this._desk.clusterLabel() ? this._desk.labelText() : 'ukryty');
+    }
     this._tellMenu(choice.ok ? 'waiting' : (choice.reason || 'brak-wifi'));
 };
 
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
-    var active;
-    var w;
-    var h;
-    var atlas;
-    var bgra;
+    var live;
+    var payload;
+    var box;
+    var scaled;
     try {
         parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
     } catch (err) {
@@ -2173,19 +2517,30 @@ AirPlayApp.prototype._takeFrame = function () {
         return;
     }
     this._decoded = parsed;
-    active = this._display.active();
-    if (active === 'cluster' || active === 'hud') {
-        w = active === 'hud' ? 800 : 1088;
-        atlas = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, w, 480);
-        this._display.frame(atlas);
-        return;
+    live = this._display.playing ? this._display.playing() : [this._display.active()];
+    payload = {};
+    if (live.indexOf('central') !== -1 && this._frames) {
+        box = this._settings.picture('central');
+        if (box.x === 0 && box.y === 0 && box.w >= 1920 && box.h >= 720) {
+            scaled = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, 1920, 720);
+        } else {
+            scaled = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
+            scaled = videoDecoder.placeBgra(scaled.bgra, box.w, box.h, 1920, 720, box);
+        }
+        if (scaled && scaled.bgra) {
+            this._frames.write(scaled);
+        }
     }
-    // Central: BGRA into g21-present (same path as RDP), not UxPlay waylandsink.
-    w = 1920;
-    h = 720;
-    bgra = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, w, h);
-    if (this._frames && bgra && bgra.bgra) {
-        this._frames.write(bgra);
+    if (live.indexOf('cluster') !== -1) {
+        box = this._settings.picture('cluster');
+        payload.cluster = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
+    }
+    if (live.indexOf('hud') !== -1) {
+        box = this._settings.picture('hud');
+        payload.hud = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
+    }
+    if (payload.cluster || payload.hud) {
+        this._display.frame(payload);
     }
 };
 
@@ -2208,7 +2563,7 @@ AirPlayApp.prototype._setVisible = function (visible) {
         this._showMenu();
     } else if (this._menu) {
         if (typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('airplay');
         }
         this._menu.setFront(false);
     }

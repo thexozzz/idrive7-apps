@@ -125,6 +125,33 @@ function bgraFromI420(i420, sw, sh, dw, dh) {
     return { w: dw, h: dh, bgra: i420ToBgra(packed, dw, dh) };
 }
 
+function placeBgra(src, sw, sh, dw, dh, box) {
+    var canvas = Buffer.alloc(dw * dh * 4);
+    var x0 = box && box.x ? box.x : 0;
+    var y0 = box && box.y ? box.y : 0;
+    var row;
+    var copyW;
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (y0 < 0) {
+        y0 = 0;
+    }
+    copyW = Math.min(sw, dw - x0) * 4;
+    if (copyW < 4) {
+        return { w: dw, h: dh, bgra: canvas };
+    }
+    for (row = 0; row < sh && (y0 + row) < dh; row += 1) {
+        src.copy(
+            canvas,
+            ((y0 + row) * dw + x0) * 4,
+            row * sw * 4,
+            row * sw * 4 + copyW
+        );
+    }
+    return { w: dw, h: dh, bgra: canvas };
+}
+
 module.exports = {
     parseI420: parseI420,
     scaleI420: scaleI420,
@@ -132,4 +159,5 @@ module.exports = {
     atlasFromI420: atlasFromI420,
     i420ToBgra: i420ToBgra,
     bgraFromI420: bgraFromI420,
+    placeBgra: placeBgra,
 };

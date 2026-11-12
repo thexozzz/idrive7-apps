@@ -13,7 +13,7 @@ function createDisplayOutputManager(opts) {
     var gate = opts.gate || parked.createParkedGate();
     var log = opts.log || function () {};
     var active = settings.active();
-    var playing = false;
+    var playing = {};
 
     function available(name) {
         var output = outputs[name];
@@ -38,48 +38,80 @@ function createDisplayOutputManager(opts) {
         }
     }
 
-    function select(name) {
-        var check = available(name);
-        if (!check.ok) {
-            log('output-refused', name, check.reason);
-            return check;
+    function dropOutput(name, why) {
+        if (!playing[name] || !outputs[name]) {
+            return;
         }
-        if (name === active && playing) {
-            return { ok: true, active: active };
+        outputs[name].stopFrames();
+        outputs[name].release();
+        delete playing[name];
+        log('output-off', name, why || '');
+    }
+
+    function startOne(name) {
+        var prepared;
+        var started;
+        if (playing[name]) {
+            return { ok: true, active: name };
         }
-        var previous = active;
-        var prepared = outputs[name].prepare(settings.picture(name));
+        prepared = outputs[name].prepare(settings.picture(name));
         if (!prepared.ok) {
             log('output-prepare-failed', name, prepared.reason);
             return prepared;
         }
-        if (previous && previous !== name) {
-            outputs[previous].stopFrames();
-        }
-        var started = outputs[name].start();
+        started = outputs[name].start();
         if (!started.ok) {
             outputs[name].release();
-            var restored = false;
-            if (previous && outputs[previous]) {
-                var back = outputs[previous].start();
-                restored = !!back.ok;
-                if (!restored) {
-                    outputs[previous].release();
-                    playing = false;
-                    log('playback-stopped', previous, 'restore-failed');
-                }
-            }
             log('output-start-failed', name, started.reason);
-            return { ok: false, reason: started.reason, restored: restored, stopped: !restored };
+            return started;
         }
-        if (previous && previous !== name) {
-            outputs[previous].release();
-        }
-        active = name;
-        playing = true;
-        settings.setActive(name);
+        playing[name] = true;
         log('output-changed', name, '');
         return { ok: true, active: name };
+    }
+
+    function select(name) {
+        return selectMany([name]);
+    }
+
+    function selectMany(names) {
+        var want = {};
+        var failed = [];
+        var list = [];
+        var i;
+        var name;
+        var check;
+        for (i = 0; i < names.length; i += 1) {
+            name = names[i];
+            check = available(name);
+            if (!check.ok) {
+                failed.push(name);
+                log('output-refused', name, check.reason);
+                continue;
+            }
+            want[name] = true;
+        }
+        Object.keys(playing).forEach(function (live) {
+            if (!want[live]) {
+                dropOutput(live, 'unselected');
+            }
+        });
+        Object.keys(want).forEach(function (live) {
+            var started = startOne(live);
+            if (!started.ok) {
+                failed.push(live);
+            }
+        });
+        list = Object.keys(playing);
+        active = list[0] || 'central';
+        settings.setActive(active);
+        settings.setOutputs(names);
+        return {
+            ok: list.length > 0,
+            active: active,
+            outputs: list,
+            failed: failed
+        };
     }
 
     function vehicle(raw) {
@@ -88,47 +120,45 @@ function createDisplayOutputManager(opts) {
         } else {
             gate.sample(raw);
         }
-        if (movingOutput(active) && gate.known() && gate.hudAllowed() !== true) {
-            var leaving = active;
-            outputs[leaving].stopFrames();
-            outputs[leaving].release();
-            playing = false;
-            active = 'central';
-            settings.setActive('central');
-            log('moving-image-off', leaving, 'driving');
-            if (available('central').ok) {
-                return select('central');
-            }
-            return { ok: false, reason: 'not-parked', stopped: true };
+        var moving = Object.keys(playing).filter(movingOutput);
+        if (moving.length && gate.known() && gate.hudAllowed() !== true) {
+            moving.forEach(function (name) {
+                dropOutput(name, 'driving');
+            });
+            log('moving-image-off', moving.join(','), 'driving');
         }
-        // Lost sample (null): drop cluster/HUD — no proof the car is still parked.
-        if (movingOutput(active) && !gate.known()) {
-            var dropped = active;
-            outputs[dropped].stopFrames();
-            outputs[dropped].release();
-            playing = false;
-            active = 'central';
-            settings.setActive('central');
-            log('moving-image-off', dropped, 'speed-unknown');
-            if (available('central').ok) {
-                return select('central');
-            }
-            return { ok: false, reason: 'speed-unknown', stopped: true };
+        if (moving.length && !gate.known()) {
+            moving.forEach(function (name) {
+                dropOutput(name, 'speed-unknown');
+            });
+            log('moving-image-off', moving.join(','), 'speed-unknown');
         }
+        active = Object.keys(playing)[0] || active;
         return { ok: true, active: active, parked: gate.hudAllowed() === true };
     }
 
-    function frame(buffer) {
-        if (!playing || !outputs[active] || !outputs[active].frame) {
-            return { ok: false, reason: 'not-playing' };
+    function frame(payload) {
+        var out = {};
+        if (Buffer.isBuffer(payload)) {
+            if (!playing[active] || !outputs[active] || !outputs[active].frame) {
+                return { ok: false, reason: 'not-playing' };
+            }
+            return outputs[active].frame(payload, settings.picture(active));
         }
-        return outputs[active].frame(buffer, settings.picture(active));
+        Object.keys(payload || {}).forEach(function (name) {
+            if (playing[name] && outputs[name] && outputs[name].frame) {
+                out[name] = outputs[name].frame(payload[name], settings.picture(name));
+            }
+        });
+        return out;
     }
 
     return {
         active: function () { return active; },
+        playing: function () { return Object.keys(playing); },
         available: available,
         select: select,
+        selectMany: selectMany,
         vehicle: vehicle,
         frame: frame,
         gate: function () { return gate; },

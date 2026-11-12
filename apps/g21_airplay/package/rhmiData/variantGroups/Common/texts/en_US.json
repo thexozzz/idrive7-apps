@@ -1,10 +1,10 @@
 {
-  "SID_AIRPLAY_TITLE": "KK-remoteIN",
-  "SID_TILE_AIRPLAY": "KK-remoteIN",
+  "SID_AIRPLAY_TITLE": "THEiPlay",
+  "SID_TILE_AIRPLAY": "THEiPlay",
   "SID_TILE_RDP": "RDP",
   "SID_TILE_VNC": "VNC",
   "SID_TILE_HOST": "Address",
-  "SID_MENU_AIR": "Screen mirror",
+  "SID_MENU_AIR": "AirPlay mirror",
   "SID_MENU_RDP": "Desktop",
   "SID_MENU_VNC": "Desktop",
   "SID_MENU_HOST": "Computer address"

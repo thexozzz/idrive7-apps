@@ -170,13 +170,41 @@ function createDesktopSettings(stored) {
         rdpActive = 'p1';
     }
     var airplayName = typeof data.airplayName === 'string' && data.airplayName.length
-        ? data.airplayName.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16)
-        : 'G21';
+        ? data.airplayName.replace(/[^A-Za-z0-9_\-ĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, '').slice(0, 16)
+        : 'THEiPlay';
     if (!airplayName.length) {
-        airplayName = 'G21';
+        airplayName = 'THEiPlay';
     }
+    // false = jak na kkds (bez kodu); true = -pin na iPhonie.
+    var airplayPin = data.airplayPin === true;
+    var airOutputs = Array.isArray(data.airOutputs) && data.airOutputs.length
+        ? data.airOutputs.filter(function (name) {
+            return name === 'central' || name === 'cluster' || name === 'hud';
+        })
+        : ['central'];
+    var airWindows = data.airWindows && typeof data.airWindows === 'object' ? data.airWindows : {};
     // Default ON: diagnostic AIRPLAY label on cluster map + HUD until user toggles off.
     var clusterLabel = data.clusterLabel !== false;
+    var labelText = typeof data.labelText === 'string' && data.labelText.length
+        ? data.labelText.replace(/[^A-Za-z0-9 _\-ĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, '').slice(0, 24)
+        : 'THEiPlay';
+    if (!labelText.length) {
+        labelText = 'THEiPlay';
+    }
+    var labelPos = {
+        central: { x: 120, y: 48 },
+        cluster: { x: 80, y: 48 },
+        hud: { x: 24, y: 16 }
+    };
+    ['central', 'cluster', 'hud'].forEach(function (name) {
+        var saved = data.labelPos && data.labelPos[name];
+        if (saved && typeof saved === 'object') {
+            labelPos[name] = {
+                x: Math.max(0, saved.x | 0),
+                y: Math.max(0, saved.y | 0)
+            };
+        }
+    });
     var octet = 0;
 
     function findProfile(list, id) {
@@ -229,17 +257,58 @@ function createDesktopSettings(stored) {
         inspect: function () { return data.inspect === true; },
         airplayName: function () { return airplayName; },
         setAirplayName: function (next) {
-            var cleaned = String(next || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16);
+            var cleaned = String(next || '').replace(/[^A-Za-z0-9_\-ĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, '').slice(0, 16);
             if (!cleaned.length) {
                 return { ok: false, reason: 'bad-name' };
             }
             airplayName = cleaned;
             return { ok: true, name: airplayName };
         },
+        airplayPin: function () { return airplayPin; },
+        setAirplayPin: function (on) {
+            airplayPin = !!on;
+            return { ok: true, on: airplayPin };
+        },
+        airOutputs: function () { return airOutputs.slice(); },
+        setAirOutputs: function (list) {
+            airOutputs = (list || []).slice();
+            return airOutputs.slice();
+        },
+        airWindows: function () { return airWindows; },
+        setAirWindows: function (picture) {
+            airWindows = picture || {};
+            return airWindows;
+        },
         clusterLabel: function () { return clusterLabel; },
         setClusterLabel: function (on) {
             clusterLabel = !!on;
             return { ok: true, on: clusterLabel };
+        },
+        labelText: function () { return labelText; },
+        setLabelText: function (next) {
+            var cleaned = String(next || '').replace(/[^A-Za-z0-9 _\-ĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, '').slice(0, 24);
+            if (!cleaned.length) {
+                return { ok: false, reason: 'bad-name' };
+            }
+            labelText = cleaned;
+            return { ok: true, text: labelText };
+        },
+        labelAt: function (name) {
+            return labelPos[name] || labelPos.central;
+        },
+        setLabelAt: function (name, x, y) {
+            var limit = name === 'hud' ? { w: 800, h: 480 } : { w: 1920, h: 720 };
+            if (!labelPos[name]) {
+                return labelPos.central;
+            }
+            var nx = x | 0;
+            var ny = y | 0;
+            if (nx < 0) nx = 0;
+            if (ny < 0) ny = 0;
+            if (nx > limit.w - 40) nx = limit.w - 40;
+            if (ny > limit.h - 28) ny = limit.h - 28;
+            labelPos[name] = { x: nx, y: ny };
+            return labelPos[name];
         },
         profiles: function (protocol) {
             return (protocol === 'rdp' ? rdpProfiles : vncProfiles).map(function (p) {
@@ -408,7 +477,12 @@ function createDesktopSettings(stored) {
                 swapButtons: data.swapButtons === true,
                 inspect: data.inspect === true,
                 airplayName: airplayName,
+                airplayPin: airplayPin,
+                airOutputs: airOutputs.slice(),
+                airWindows: airWindows,
                 clusterLabel: clusterLabel,
+                labelText: labelText,
+                labelPos: labelPos,
                 rdpActive: rdpActive,
                 vncActive: vncActive,
                 rdpProfiles: rdpProfiles.map(function (p) {

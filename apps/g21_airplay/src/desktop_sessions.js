@@ -30,12 +30,16 @@ function createAirPlaySession(opts) {
     return {
         connect: function (target) {
             var name = target && target.name ? target.name : 'G21';
+            var auth = target && target.auth === 'pin' ? 'pin' : 'open';
             var allow = writeText(files.allow, 'airplay\n');
             if (!allow.ok) {
                 return allow;
             }
             writeText(files.name, name + '\n');
-            return { ok: true, state: 'starting', target: { name: name } };
+            if (files.airplayAuth) {
+                writeText(files.airplayAuth, auth + '\n');
+            }
+            return { ok: true, state: 'starting', target: { name: name, auth: auth } };
         },
         disconnect: function () {
             writeText(files.allow, 'stop\n');

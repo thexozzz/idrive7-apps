@@ -24,6 +24,7 @@ ALLOW=$SESSION_DIR/allow
 DESKTOP=/run/g21-desktop.status
 UXLOG=/var/log/g21-uxplay.log
 PINFILE=/run/g21-airplay/pin
+CLIENTFILE=/run/g21-airplay/client
 UXPID=
 PINWATCH=
 PREPID=
@@ -131,24 +132,83 @@ clear_pin() {
         kill "$PINWATCH" 2>/dev/null || true
         PINWATCH=
     fi
-    rm -f "$PINFILE"
+    rm -f "$PINFILE" "$CLIENTFILE"
+}
+
+client_state() {
+    mkdir -p /run/g21-airplay
+    printf '%s\n' "$1" > "$CLIENTFILE"
+    chmod 666 "$CLIENTFILE" 2>/dev/null || true
 }
 
 # fakesink cannot show UxPlay's GST PIN image. Never truncate PINFILE here —
 # start_ux already wrote the session code; only refresh if the log shows a new one.
+# Also track iPhone connect/mirror and bounce UxPlay when the mirror TCP port
+# sticks after disconnect (UxPlay issue: "initializing socket(s) failed").
 watch_ux_pin() {
     pid=$1
     last=
+    last_log=
+    size=0
+    prev=0
+    saw_mirror=0
     mkdir -p /run/g21-airplay
     if [ -f "$PINFILE" ]; then
         last=$(tr -d '\n' < "$PINFILE" 2>/dev/null || true)
     fi
     chmod 666 "$PINFILE" 2>/dev/null || true
+    client_state "idle|waiting"
     while kill -0 "$pid" 2>/dev/null; do
         pin=$(sed -n 's/.*CLIENT MUST NOW ENTER PIN = "\([0-9][0-9][0-9][0-9]\)".*/\1/p' "$UXLOG" 2>/dev/null | tail -n 1)
         if [ -n "$pin" ] && [ "$pin" != "$last" ]; then
             printf '%s\n' "$pin" > "$PINFILE"
             last=$pin
+            client_state "pair|pin-$pin"
+        fi
+        if [ -f "$UXLOG" ]; then
+            size=$(wc -c < "$UXLOG" 2>/dev/null || echo 0)
+            size=$(echo "$size" | tr -d ' ')
+            if [ -n "$size" ] && [ "$size" -gt "$prev" ] 2>/dev/null; then
+                # Only scan newly appended lines.
+                last_log=$(tail -c $((size - prev + 1)) "$UXLOG" 2>/dev/null || true)
+                prev=$size
+                case $last_log in
+                    *"connection request from"*|*"Client identified as"*)
+                        client_state "pair|iphone"
+                        ;;
+                esac
+                case $last_log in
+                    *"raop_rtp_mirror starting mirroring"*|*"Begin streaming"*)
+                        saw_mirror=1
+                        client_state "mirroring|stream"
+                        ;;
+                esac
+                case $last_log in
+                    *"initializing socket failed"*|*"initializing sockets failed"*)
+                        client_state "error|mirror-port"
+                        # Free stuck TCP mirror port (7400) so the next apply() can start clean.
+                        kill "$pid" 2>/dev/null || true
+                        for p in $(our_uxplay_pids); do
+                            kill "$p" 2>/dev/null || true
+                        done
+                        break
+                        ;;
+                esac
+                case $last_log in
+                    *"Connection closed"*|*"Removing connection"*|*"Stopping RAOP"*|*"tcp socket is closed"*)
+                        client_state "idle|disconnected"
+                        # After a real mirror session, recycle UxPlay: next iPhone
+                        # connect otherwise hits sticky tcp[0]=7400 (kkds proof).
+                        if [ "$saw_mirror" = "1" ]; then
+                            kill "$pid" 2>/dev/null || true
+                            for p in $(our_uxplay_pids); do
+                                kill "$p" 2>/dev/null || true
+                            done
+                            break
+                        fi
+                        ;;
+                esac
+            fi
         fi
         sleep 1
     done
@@ -276,8 +336,9 @@ table inet $TABLE {
         type filter hook input priority -10; policy accept;
         iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
         iifname "$iface" ip saddr $net udp dport 5353 accept
-        iifname "$iface" ip saddr $net tcp dport 7400-7402 accept
-        iifname "$iface" ip saddr $net udp dport 7400-7402 accept
+        # 7400-7499: UxPlay -p 7400 block + headroom (mirror TCP is tcp[0]=7400).
+        iifname "$iface" ip saddr $net tcp dport 7400-7499 accept
+        iifname "$iface" ip saddr $net udp dport 7400-7499 accept
         iifname "$iface" ip saddr $net tcp dport 1235 accept
         iifname "$iface" ip saddr $net tcp dport 7250 accept
         iifname "$iface" ip saddr $net udp dport 1028 accept
@@ -288,8 +349,8 @@ table inet $TABLE {
         oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
         oifname "$iface" ip daddr $net udp dport 5353 accept
         oifname "$iface" udp sport 5353 accept
-        oifname "$iface" tcp sport 7400-7402 accept
-        oifname "$iface" udp sport 7400-7402 accept
+        oifname "$iface" tcp sport 7400-7499 accept
+        oifname "$iface" udp sport 7400-7499 accept
         oifname "$iface" ip daddr $net accept
     }
 }
@@ -299,13 +360,13 @@ EOF
     nft insert rule inet mgu_uplink output oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink output oifname "$iface" udp sport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
-    nft insert rule inet mgu_uplink output oifname "$iface" tcp sport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
-    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" tcp sport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink input iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
-    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
-    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 1235 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7250 accept comment \"g21-airplay\" 2>/dev/null || true
     nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 1028 accept comment \"g21-airplay\" 2>/dev/null || true
@@ -363,14 +424,28 @@ mode_of() {
 }
 
 name_of() {
-    name=G21
+    name=THEiPlay
     if [ -f "$SESSION_DIR/name" ]; then
         name=$(tr -d '\r\n' < "$SESSION_DIR/name")
     fi
+    # DNS-SD name stays ASCII; Polish letters from the keyboard fold here.
+    name=$(printf '%s' "$name" | sed 'y/ąćęłńóśźżĄĆĘŁŃÓŚŹŻ/acelnoszzACELNOSZZ/')
     case $name in
-        ""|*[!A-Za-z0-9_-]*) name=G21 ;;
+        ""|*[!A-Za-z0-9_-]*) name=THEiPlay ;;
     esac
     printf '%s\n' "$name"
+}
+
+# open = bez kodu (jak kkds); pin = -pin NNNN na iPhonie.
+airplay_auth_of() {
+    auth=open
+    if [ -f "$SESSION_DIR/airplay-auth" ]; then
+        auth=$(tr -d '\r\n' < "$SESSION_DIR/airplay-auth" | tr 'A-Z' 'a-z')
+    fi
+    case $auth in
+        pin|1|on|kod|yes|true) printf '%s\n' pin ;;
+        *) printf '%s\n' open ;;
+    esac
 }
 
 stop_pid() {
@@ -899,6 +974,7 @@ start_ux() {
             break
         done
     fi
+    auth=$(airplay_auth_of)
     if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
         if ux_log_has_mdns_error; then
             stop_ux
@@ -912,6 +988,17 @@ start_ux() {
             report "uxplay-exit|$label|$ip"
             return 0
         fi
+        # Menu toggled pin/open: recycle so UxPlay picks the new auth mode.
+        if [ -f /run/g21-airplay/ux.cmd ]; then
+            if [ "$auth" = "pin" ] && ! grep -q -- ' -pin ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                stop_ux
+            elif [ "$auth" = "open" ] && grep -q -- ' -pin ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                stop_ux
+            fi
+        fi
+        if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
+            :
+        else
         # DNS-SD lives in avahi: if it died/restarted after UxPlay registered,
         # the phone still sees a stale name and spins with zero TCP to :7401.
         # Keep avahi up; bounce UxPlay when the daemon instance changed.
@@ -931,6 +1018,7 @@ start_ux() {
         else
             report "running|$label|$ip"
             return 0
+        fi
         fi
     fi
     # UxPlay is linked to libdns_sd.so.1 (Avahi compat) and also dlopen("libdns_sd.so").
@@ -970,23 +1058,29 @@ start_ux() {
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
-    # -pin NNNN: Apple Screen Mirroring pairing (PAIR-PIN-START). -pw digest often
-    # never shows a prompt on modern iOS and the connect fails before any UI.
+    # Auth: menu writes /run/g21-session/airplay-auth (pin|open).
+    # -pin NNNN = PAIR-PIN-START on iPhone. open = jak kkds, bez kodu.
+    # -pw digest often never prompts on modern iOS.
     # -d 1: debug to UXLOG (line-buffered via stdbuf when available).
-    # Write PINFILE before start so the stream window can show the code immediately.
     # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
     # applet, so plain `setsid` aborted start with "not found" and left no listener.
     # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
     # shellcheck disable=SC2086
     clear_pin
-    pin=$(awk 'BEGIN { srand(); printf "%04d", 1000 + int(rand() * 9000) }')
+    auth=$(airplay_auth_of)
+    pin=
+    pin_args=
     mkdir -p /run/g21-airplay
-    printf '%s\n' "$pin" > "$PINFILE"
-    chmod 666 "$PINFILE" 2>/dev/null || true
+    if [ "$auth" = "pin" ]; then
+        pin=$(awk 'BEGIN { srand(); printf "%04d", 1000 + int(rand() * 9000) }')
+        printf '%s\n' "$pin" > "$PINFILE"
+        chmod 666 "$PINFILE" 2>/dev/null || true
+        pin_args="-pin $pin"
+    fi
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin" -d 1
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 $pin_args -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin" -d 1
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 $pin_args -d 1
     fi
     printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
     # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG
@@ -1179,13 +1273,13 @@ apply() {
         airplay)
             stop_rdp
             clear_mice_if_needed
-            # central = g21-present reads BGRA from app; cluster/hud = cluster-render atlas
+            # central = g21-present (BGRA window); cluster/hud = cluster-render.
+            # output may list several: central,cluster,hud
             out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
-            if [ "$out" = "cluster" ] || [ "$out" = "hud" ]; then
-                stop_present
-            else
-                start_present
-            fi
+            case ",$out," in
+                *,central,*) start_present ;;
+                *) stop_present ;;
+            esac
             apply_airplay
             ;;
         windows)
