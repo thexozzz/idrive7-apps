@@ -319,10 +319,10 @@ var FONT = {
 };
 
 var ROOT_ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
-    { name: 'windows', title: 'Miracast', hint: 'Win+K PC', icon: 'desktop' },
-    { name: 'rdp', title: 'RDP', hint: 'pulpit Windows', icon: 'host' },
-    { name: 'vnc', title: 'VNC', hint: 'pulpit zdalny', icon: 'grid' },
+    { name: 'airplay', title: 'AirPlay', hint: 'odbiornik iPhone', icon: 'airplay' },
+    { name: 'windows', title: 'Miracast', hint: 'odbiornik Win+K', icon: 'desktop' },
+    { name: 'rdp', title: 'RDP', hint: 'odbiornik pulpitu', icon: 'host' },
+    { name: 'vnc', title: 'VNC', hint: 'odbiornik VNC', icon: 'grid' },
     { name: 'label-toggle', title: 'WL', hint: 'napis AIRPLAY', icon: 'tag' }
 ];
 
@@ -334,7 +334,8 @@ var AIRPLAY_ITEMS = [
 ];
 
 var RDP_ITEMS = [
-    { name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' },
+    { name: 'rdp-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' },
+    { name: 'rdp-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'desktop' },
     { name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' },
     { name: 'rdp-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
     { name: 'rdp-edit', title: 'Edytuj', hint: 'IP / konto', icon: 'gear' },
@@ -354,7 +355,8 @@ var RDP_EDIT_ITEMS = [
 ];
 
 var VNC_ITEMS = [
-    { name: 'vnc-connect', title: 'Polacz', hint: 'Sesja VNC', icon: 'grid' },
+    { name: 'vnc-toggle', title: 'WYL', hint: 'wylaczony', icon: 'grid' },
+    { name: 'vnc-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'grid' },
     { name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' },
     { name: 'vnc-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
     { name: 'vnc-edit', title: 'Edytuj', hint: 'IP / port', icon: 'gear' },

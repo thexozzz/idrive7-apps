@@ -86,13 +86,13 @@ var RDP_STATUS_TEXT = {
     'no-host': 'ustaw IP',
     'rdp-client-missing': 'brak g21-rdp',
     'secret-write-failed': 'blad hasla',
-    'starting': 'RDP lacze',
-    'running': 'RDP dziala',
+    'starting': 'odbiornik lacze',
+    'running': 'odbiornik dziala',
     'missing': 'brak g21-rdp',
     'cert': 'zatwierdz Cert',
     'error': 'RDP blad',
-    'idle': 'RDP off',
-    'waiting': 'ustaw IP / Konto',
+    'idle': 'odbiornik off',
+    'waiting': 'WL = ekran z PC',
     'panel-www': 'panel WWW :1235',
     'bad-host': 'zly IP',
     'bad-port': 'zly port',
@@ -109,11 +109,11 @@ var VNC_STATUS_TEXT = {
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'no-host': 'ustaw IP',
-    'starting': 'VNC lacze',
-    'running': 'VNC dziala',
-    'connected': 'VNC dziala',
-    'idle': 'VNC off',
-    'waiting': 'ustaw IP VNC',
+    'starting': 'odbiornik lacze',
+    'running': 'odbiornik dziala',
+    'connected': 'odbiornik dziala',
+    'idle': 'odbiornik off',
+    'waiting': 'WL = ekran z PC',
     'bad-host': 'zly IP',
     'bad-port': 'zly port',
     'max-profiles': 'max 6 profili',
@@ -519,7 +519,8 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
     if (protocol === 'rdp') {
         profiles = this._desk.profiles('rdp');
         active = this._desk.activeProfileId('rdp');
-        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' });
+        items.push({ name: 'rdp-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' });
+        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'desktop' });
         items.push({ name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' });
         profiles.forEach(function (p) {
             items.push({
@@ -541,7 +542,8 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
     if (protocol === 'vnc') {
         profiles = this._desk.profiles('vnc');
         active = this._desk.activeProfileId('vnc');
-        items.push({ name: 'vnc-connect', title: 'Polacz', hint: 'Sesja VNC', icon: 'grid' });
+        items.push({ name: 'vnc-toggle', title: 'WYL', hint: 'wylaczony', icon: 'grid' });
+        items.push({ name: 'vnc-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'grid' });
         items.push({ name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' });
         profiles.forEach(function (p) {
             items.push({
@@ -784,6 +786,19 @@ AirPlayApp.prototype._sessionLive = function (protocol) {
     };
 };
 
+AirPlayApp.prototype._toggleItem = function (protocol) {
+    if (protocol === 'windows') {
+        return 'win-toggle';
+    }
+    if (protocol === 'rdp') {
+        return 'rdp-toggle';
+    }
+    if (protocol === 'vnc') {
+        return 'vnc-toggle';
+    }
+    return 'air-toggle';
+};
+
 AirPlayApp.prototype._paintSwitch = function (itemName, on, onHint, offHint) {
     if (!this._menu) {
         return;
@@ -798,15 +813,16 @@ AirPlayApp.prototype._paintSwitch = function (itemName, on, onHint, offHint) {
 
 AirPlayApp.prototype._toggleProtocol = function (protocol) {
     var live = this._sessionLive(protocol);
+    var toggle = this._toggleItem(protocol);
     // Switch follows active session (allow=...), not backend mode. AirPlay used
     // to look "off" while waiting because receiver.status was still idle.
     if (live.on) {
         this._winAutoAccepting = false;
-        this._paintSwitch(protocol === 'windows' ? 'win-toggle' : 'air-toggle', false);
+        this._paintSwitch(toggle, false);
         this._endStream(protocol);
         return;
     }
-    this._paintSwitch(protocol === 'windows' ? 'win-toggle' : 'air-toggle', true, 'start...');
+    this._paintSwitch(toggle, true, 'start...');
     this._choose(protocol);
 };
 
@@ -820,7 +836,7 @@ AirPlayApp.prototype._endStream = function (protocol) {
         this._menu.setScreen(back);
     }
     this._chosen = back;
-    this._paintSwitch(back === 'windows' ? 'win-toggle' : 'air-toggle', false);
+    this._paintSwitch(this._toggleItem(back), false);
     this._tellMenu('idle');
     this._sync();
 };
@@ -959,6 +975,10 @@ AirPlayApp.prototype._onRdpAction = function (name) {
         this._openProtocolScreen('rdp');
         return;
     }
+    if (name === 'rdp-toggle') {
+        this._toggleProtocol('rdp');
+        return;
+    }
     if (name === 'rdp-connect') {
         this._choose('rdp');
         return;
@@ -1051,6 +1071,10 @@ AirPlayApp.prototype._onVncAction = function (name) {
     }
     if (name === 'vnc-e-back') {
         this._openProtocolScreen('vnc');
+        return;
+    }
+    if (name === 'vnc-toggle') {
+        this._toggleProtocol('vnc');
         return;
     }
     if (name === 'vnc-connect') {
@@ -1259,7 +1283,8 @@ AirPlayApp.prototype._paintRdpMenu = function () {
         return;
     }
     var host = this._desk.host('rdp');
-    var active = this._sessions.active() === 'rdp';
+    var session = this._sessionLive('rdp');
+    var active = session.on;
     var live = active ? this._sessions.getStatus() : { state: 'idle' };
     var secretKind = this._desk.secretKind('rdp');
     var user = host.user || 'brak';
@@ -1267,6 +1292,7 @@ AirPlayApp.prototype._paintRdpMenu = function () {
         ? 'zapisane'
         : 'wpisz pokretlem';
     var cert = '';
+    var onHint = 'odbiornik WL';
     if (live.state === 'cert' && live.detail) {
         cert = String(live.detail).slice(0, 18);
     } else if (host.cert) {
@@ -1274,8 +1300,14 @@ AirPlayApp.prototype._paintRdpMenu = function () {
     } else {
         cert = 'brak odcisku';
     }
+    if (live.state === 'running') {
+        onHint = 'ekran z PC';
+    } else if (session.on) {
+        onHint = 'lacze do PC';
+    }
     if (screen === 'rdp') {
-        this._menu.setItemHint('rdp-connect', live.state === 'running' ? 'Sesja RDP' : 'Polacz teraz');
+        this._paintSwitch('rdp-toggle', session.on, onHint, 'wylaczony');
+        this._menu.setItemHint('rdp-connect', live.state === 'running' ? 'ekran z PC' : 'Polacz teraz');
         this._menu.setItemHint('rdp-cut', active ? 'Rozlacz teraz' : 'Sesja off');
         this._menu.setItemHint('rdp-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('rdp'));
         this._menu.setItemHint('rdp-cert', cert);
@@ -1298,10 +1330,18 @@ AirPlayApp.prototype._paintVncMenu = function () {
         return;
     }
     var host = this._desk.host('vnc');
-    var active = this._sessions.active() === 'vnc';
+    var session = this._sessionLive('vnc');
+    var active = session.on;
     var live = active ? this._sessions.getStatus() : { state: 'idle' };
+    var onHint = 'odbiornik WL';
+    if (live.state === 'connected' || live.state === 'running') {
+        onHint = 'ekran z PC';
+    } else if (session.on) {
+        onHint = 'lacze do PC';
+    }
     if (screen === 'vnc') {
-        this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'Sesja VNC' : 'Polacz teraz');
+        this._paintSwitch('vnc-toggle', session.on, onHint, 'wylaczony');
+        this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'ekran z PC' : 'Polacz teraz');
         this._menu.setItemHint('vnc-cut', active ? 'Rozlacz teraz' : 'Sesja off');
         this._menu.setItemHint('vnc-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('vnc'));
         return;

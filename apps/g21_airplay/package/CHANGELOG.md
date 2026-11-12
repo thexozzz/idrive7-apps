@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.52
+
+- Odbiorniki: root hints AirPlay/Miracast/RDP/VNC; RDP i VNC maja `WL`/`WYL` jak AirPlay (start pulpitu z aktywnego profilu).
+
 ## 0.1.51
 
 - RDP: wymuszony `Profil 1` / `p1` z IP 100.89.166.19, kontem i haslem (nadpisuje stare p1).

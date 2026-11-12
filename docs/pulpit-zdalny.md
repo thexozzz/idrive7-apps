@@ -1,6 +1,6 @@
 # Pulpit zdalny w g21_airplay
 
-Rozszerzenie istniejącej aplikacji `g21_airplay`, nie nowa aplikacja. AirPlay to integracja lustra iPhone (silnik odbiornika pod spodem); Windows Win+K (MS-MICE / Miracast over Infrastructure, wzorowane na [AirShow](https://github.com/zitlem/AirShow) i [lazycast](https://github.com/homeworkc/lazycast)), RDP i VNC dochodzą obok. W danej chwili działa jedna sesja — wejście w inny protokół kończy poprzedni.
+Rozszerzenie istniejącej aplikacji `g21_airplay`, nie nowa aplikacja. Cztery protokoły to odbiorniki ekranu z urządzenia: AirPlay (UxPlay, iPhone → auto), Miracast/Win+K (MS-MICE sink, PC → auto; wzorowane na [AirShow](https://github.com/zitlem/AirShow) i [lazycast](https://github.com/homeworkc/lazycast)), RDP i VNC (auto ściąga pulpit z PC przez `g21-rdp` / klienta RFB — WL startuje odbiór z aktywnego profilu, jak Włacz w AirPlay/Miracast). W danej chwili działa jedna sesja — wejście w inny protokół kończy poprzedni.
 
 ## Licencje
 
