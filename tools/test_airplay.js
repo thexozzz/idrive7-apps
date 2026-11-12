@@ -99,7 +99,7 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.38');
+assert.strictEqual(component.version, '0.1.39');
 assert.ok(script.indexOf('G21_BIND_IP') !== -1);
 assert.ok(script.indexOf('g21-bind-wlan.so') !== -1);
 assert.ok(script.indexOf('publish-addresses=yes') !== -1);
@@ -110,6 +110,8 @@ assert.ok(script.indexOf('priority -50') !== -1);
 assert.ok(script.indexOf('clear_uplink_airplay_rules') !== -1);
 assert.ok(script.indexOf('nft insert rule inet mgu_uplink output') !== -1);
 assert.ok(script.indexOf('nft insert rule inet mgu_uplink input') !== -1);
+assert.ok(script.indexOf('nft insert rule ip filter input') !== -1);
+assert.ok(script.indexOf('clear_tagged_rules ip filter input') !== -1);
 assert.ok(script.indexOf('comment \\"g21-airplay\\"') !== -1 || script.indexOf('comment \\\"g21-airplay\\\"') !== -1 || script.indexOf('g21-airplay') !== -1);
 assert.ok(script.indexOf('recover_avahi_pid') !== -1);
 assert.ok(script.indexOf('our_uxplay_pids') !== -1);
