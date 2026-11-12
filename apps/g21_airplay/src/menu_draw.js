@@ -316,8 +316,7 @@ var ROOT_ITEMS = [
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-start', title: 'Lustro', hint: 'Wlacz AirPlay', icon: 'airplay' },
-    { name: 'air-stop', title: 'Stop AP', hint: 'Wylacz lustro', icon: 'stop' },
+    { name: 'air-toggle', title: 'Wlacz', hint: 'Wylaczony', icon: 'airplay' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
@@ -360,10 +359,13 @@ var VNC_EDIT_ITEMS = [
 ];
 
 var WINDOWS_ITEMS = [
-    { name: 'win-start', title: 'Odbiór', hint: 'Win+K na PC', icon: 'desktop' },
-    { name: 'win-stop', title: 'Stop Win', hint: 'Koniec emisji', icon: 'stop' },
+    { name: 'win-toggle', title: 'Wlacz', hint: 'Wylaczony', icon: 'desktop' },
     { name: 'win-info', title: 'Siec', hint: 'ta sama Wi-Fi', icon: 'wifi' },
     { name: 'win-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
+var STREAM_ITEMS = [
+    { name: 'stream-end', title: 'Zakoncz', hint: 'Koniec streamu', icon: 'stop' }
 ];
 
 var ITEMS = ROOT_ITEMS;
@@ -371,6 +373,7 @@ var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
     windows: WINDOWS_ITEMS,
+    stream: STREAM_ITEMS,
     rdp: RDP_ITEMS,
     'rdp-edit': RDP_EDIT_ITEMS,
     vnc: VNC_ITEMS,
@@ -625,9 +628,72 @@ function buildKeyboardFrame(edit, width, height) {
     };
 }
 
+function isStreamItems(items) {
+    return !!(items && items.length === 1 && items[0] && items[0].name === 'stream-end');
+}
+
+function streamLayout(items, selected, width, height, detail, heading) {
+    var page = pageBox(width, height);
+    var btnW = 280;
+    var btnH = 88;
+    var x = page.ox + Math.floor((page.boxW - btnW) / 2);
+    var y = page.oy + page.boxH - btnH - 36;
+    return {
+        ox: page.ox,
+        oy: page.oy,
+        boxW: page.boxW,
+        boxH: page.boxH,
+        gap: 0,
+        bubbles: [{
+            x: x,
+            y: y,
+            w: btnW,
+            h: btnH,
+            scale: 4,
+            iconPx: 3,
+            selected: true
+        }],
+        heading: heading || 'Stream',
+        detail: detail || '',
+        hintY: y - 36,
+        statusY: y - 8,
+        headerH: 0,
+        stream: true
+    };
+}
+
+function buildStreamFrame(items, selected, width, height, detail, heading) {
+    var draw = new FrameBuilder();
+    var lay = streamLayout(items, selected, width, height, detail, heading);
+    var bubble = lay.bubbles[0];
+    var title = String((items[0] && items[0].title) || 'Zakoncz');
+    var titleW;
+    var hint;
+    // Clear only — no full-page fill so Wayland video stays visible (G21 hypothesis).
+    draw.clear(0);
+    draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
+    draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
+    draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
+    draw.icon('stop', bubble.x + 28, bubble.y + 22, 3, ICON_ACCENT);
+    titleW = draw.textWidth(title, 4);
+    draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 30, 4, INK);
+    hint = items[0] && items[0].hint ? String(items[0].hint) : '';
+    if (hint) {
+        draw.text(hint, lay.ox + 72, lay.hintY, 3, HINT);
+    }
+    if (detail) {
+        draw.text(detail, lay.ox + 72, pageBox(width, height).oy + 24, 3, MUTED);
+    }
+    return {
+        frame: message(FRAME, draw.bytes()),
+        rects: draw.rects,
+        layout: lay
+    };
+}
+
 function buildFrame(items, selected, width, height, detail, heading) {
     var draw = new FrameBuilder();
-    var lay = menuLayout(items, selected, width, height, detail, heading);
+    var lay;
     var i;
     var bubble;
     var title;
@@ -641,6 +707,10 @@ function buildFrame(items, selected, width, height, detail, heading) {
     var iconY;
     var labelY;
     var focus;
+    if (isStreamItems(items) || heading === 'Stream') {
+        return buildStreamFrame(items, selected, width, height, detail, heading);
+    }
+    lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.headerH, PAGE_TOP);
@@ -921,6 +991,8 @@ function createMenuSurface(opts) {
             heading = 'AirPlay';
         } else if (next === 'windows') {
             heading = 'Windows';
+        } else if (next === 'stream') {
+            heading = 'Stream';
         } else if (next === 'rdp' || next === 'rdp-edit') {
             heading = next === 'rdp-edit' ? 'Edytuj RDP' : 'RDP';
         } else if (next === 'vnc' || next === 'vnc-edit') {
@@ -939,6 +1011,20 @@ function createMenuSurface(opts) {
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
                 items[i].hint = String(text || '');
+                if (!edit) {
+                    paint();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function setItemTitle(name, text) {
+        var i;
+        for (i = 0; i < items.length; i += 1) {
+            if (items[i].name === name) {
+                items[i].title = String(text || '');
                 if (!edit) {
                     paint();
                 }
@@ -1180,6 +1266,7 @@ function createMenuSurface(opts) {
             paint();
         },
         setItemHint: setItemHint,
+        setItemTitle: setItemTitle,
         screen: function () { return screenName; },
         setStatus: function (text) {
             var next = String(text || '');
@@ -1206,6 +1293,7 @@ module.exports = {
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     WINDOWS_ITEMS: WINDOWS_ITEMS,
+    STREAM_ITEMS: STREAM_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
     RDP_EDIT_ITEMS: RDP_EDIT_ITEMS,
     VNC_ITEMS: VNC_ITEMS,
@@ -1214,6 +1302,7 @@ module.exports = {
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,
+    buildStreamFrame: buildStreamFrame,
     buildKeyboardFrame: buildKeyboardFrame,
     encoderStep: encoderStep,
     createMenuSurface: createMenuSurface

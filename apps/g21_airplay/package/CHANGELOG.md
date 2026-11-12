@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.41
+
+- AirPlay i Windows: jeden przełącznik Włacz/Wylacz zamiast Start/Stop; po zestrojeniu ekran stream z Zakoncz.
+
 ## 0.1.40
 
 - RDP/VNC: profile (Dodaj/Edytuj/Usun), naprawa CLAIM/dotyku menu, czytelniejszy blad zapisu panelu WWW.

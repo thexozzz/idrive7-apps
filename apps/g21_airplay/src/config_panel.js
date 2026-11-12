@@ -68,7 +68,7 @@ function pageHtml(view) {
         + (view.passwordSet ? '********' : '') + '">'
         + '<button type="submit">Zapisz RDP</button>'
         + (view.message ? ('<p class="' + (view.ok ? 'ok' : 'err') + '">' + escapeHtml(view.message) + '</p>') : '')
-        + '<p class="hint">AirPlay ustawia sie osobno w menu Lustro / Nazwa.</p>'
+        + '<p class="hint">AirPlay ustawia sie osobno w menu Wlacz / Nazwa.</p>'
         + '</form></main></body></html>';
 }
 

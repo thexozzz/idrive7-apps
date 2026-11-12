@@ -118,18 +118,6 @@ var VNC_STATUS_TEXT = {
     'unknown': 'VNC'
 };
 
-var STATUS_BY_SCREEN = {
-    root: ROOT_STATUS_TEXT,
-    airplay: AIR_STATUS_TEXT,
-    windows: WINDOWS_STATUS_TEXT,
-    rdp: RDP_STATUS_TEXT,
-    'rdp-edit': RDP_STATUS_TEXT,
-    vnc: VNC_STATUS_TEXT,
-    'vnc-edit': VNC_STATUS_TEXT
-};
-
-var PROTOCOLS = { airplay: true, windows: true, rdp: true, vnc: true };
-
 var WINDOWS_STATUS_TEXT = {
     'speed-unknown': 'brak predkosci',
     'not-parked': 'tylko postoj',
@@ -146,6 +134,26 @@ var WINDOWS_STATUS_TEXT = {
     'idle': 'Windows off',
     'unknown': 'Windows'
 };
+
+var STREAM_STATUS_TEXT = {
+    'running': 'stream',
+    'idle': 'koniec',
+    'waiting': 'stream',
+    'unknown': 'stream'
+};
+
+var STATUS_BY_SCREEN = {
+    root: ROOT_STATUS_TEXT,
+    airplay: AIR_STATUS_TEXT,
+    windows: WINDOWS_STATUS_TEXT,
+    stream: STREAM_STATUS_TEXT,
+    rdp: RDP_STATUS_TEXT,
+    'rdp-edit': RDP_STATUS_TEXT,
+    vnc: VNC_STATUS_TEXT,
+    'vnc-edit': VNC_STATUS_TEXT
+};
+
+var PROTOCOLS = { airplay: true, windows: true, rdp: true, vnc: true };
 
 function screenOutputs(app) {
     function layerOutput(name) {
@@ -199,6 +207,7 @@ function AirPlayApp() {
     this._desk = desktopSettings.createDesktopSettings(this._store.readSettings());
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
+    this._streamProtocol = '';
     this._sessionText = 'wybierz AirPlay, Windows, RDP albo VNC';
     this._decoded = null;
     this._client = new ClusterRender('g21_airplay');
@@ -557,6 +566,7 @@ AirPlayApp.prototype._goRoot = function () {
         this._menu.setScreen('root');
     }
     this._chosen = '';
+    this._streamProtocol = '';
     this._tellMenu('waiting');
     this._sync();
 };
@@ -685,20 +695,60 @@ AirPlayApp.prototype._acceptRdpCert = function () {
     this._choose('rdp');
 };
 
+AirPlayApp.prototype._sessionLive = function (protocol) {
+    var live;
+    if (!this._sessions || this._sessions.active() !== protocol) {
+        return { active: false, state: 'idle' };
+    }
+    live = this._sessions.getStatus() || {};
+    return {
+        active: true,
+        state: live.state || 'idle',
+        detail: live.detail || ''
+    };
+};
+
+AirPlayApp.prototype._toggleProtocol = function (protocol) {
+    var live = this._sessionLive(protocol);
+    if (live.active && (live.state === 'running' || live.state === 'starting' || live.state === 'waiting' || live.state === 'connected')) {
+        this._endStream(protocol);
+        return;
+    }
+    this._choose(protocol);
+};
+
+AirPlayApp.prototype._endStream = function (protocol) {
+    var back = protocol || this._streamProtocol || 'airplay';
+    this._sessions.disconnect();
+    this._sessionText = back + ' stop';
+    this._streamProtocol = '';
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen(back);
+    }
+    this._chosen = back;
+    this._tellMenu('idle');
+    this._sync();
+};
+
+AirPlayApp.prototype._enterStream = function (protocol) {
+    if (this._menuScreen() === 'stream' && this._streamProtocol === protocol) {
+        return;
+    }
+    this._streamProtocol = protocol;
+    this._chosen = protocol;
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('stream');
+    }
+    this._tellMenu('running');
+};
+
 AirPlayApp.prototype._onWinAction = function (name) {
     if (name === 'win-back') {
         this._goRoot();
         return;
     }
-    if (name === 'win-start') {
-        this._choose('windows');
-        return;
-    }
-    if (name === 'win-stop') {
-        this._sessions.disconnect();
-        this._sessionText = 'windows stop';
-        this._tellMenu('idle');
-        this._sync();
+    if (name === 'win-toggle') {
+        this._toggleProtocol('windows');
         return;
     }
     if (name === 'win-info') {
@@ -711,15 +761,8 @@ AirPlayApp.prototype._onAirAction = function (name) {
         this._goRoot();
         return;
     }
-    if (name === 'air-start') {
-        this._choose('airplay');
-        return;
-    }
-    if (name === 'air-stop') {
-        this._sessions.disconnect();
-        this._sessionText = 'airplay stop';
-        this._tellMenu('idle');
-        this._sync();
+    if (name === 'air-toggle') {
+        this._toggleProtocol('airplay');
         return;
     }
     if (name === 'air-name') {
@@ -728,6 +771,12 @@ AirPlayApp.prototype._onAirAction = function (name) {
     }
     if (name === 'air-info') {
         this._sync();
+    }
+};
+
+AirPlayApp.prototype._onStreamAction = function (name) {
+    if (name === 'stream-end') {
+        this._endStream(this._streamProtocol || this._chosen || 'airplay');
     }
 };
 
@@ -909,6 +958,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._openProtocolScreen(name);
         return;
     }
+    if (screen === 'stream' && name.indexOf('stream-') === 0) {
+        this._onStreamAction(name);
+        return;
+    }
     if (screen === 'airplay' && name.indexOf('air-') === 0) {
         this._onAirAction(name);
         return;
@@ -960,13 +1013,20 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
     if (typeof this._menu.setItemHint !== 'function') {
         return;
     }
-    var active = this._sessions.active() === 'windows';
-    var live = active ? this._sessions.getStatus() : { state: 'idle' };
+    var live = this._sessionLive('windows');
+    var on = live.active && live.state !== 'idle' && live.state !== 'error';
     var net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
-    this._menu.setItemHint('win-start', live.state === 'running' ? 'Emisja PC' : 'Czekaj na Win+K');
-    this._menu.setItemHint('win-stop', active ? 'Wylacz teraz' : 'Sesja off');
+    if (typeof this._menu.setItemTitle === 'function') {
+        this._menu.setItemTitle('win-toggle', on ? 'Wylacz' : 'Wlacz');
+    }
+    this._menu.setItemHint(
+        'win-toggle',
+        on
+            ? (live.state === 'running' ? 'Emisja PC' : 'Czekaj na Win+K')
+            : 'Wylaczony'
+    );
     this._menu.setItemHint('win-info', net.slice(0, 28));
 };
 
@@ -981,9 +1041,18 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     var net = air && air.ok
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
-    var live = receiver && receiver.mode === 'running' ? 'dziala' : (receiver && receiver.mode ? receiver.mode : 'idle');
-    this._menu.setItemHint('air-start', live === 'dziala' ? 'Lustro dziala' : 'Wlacz lustro');
-    this._menu.setItemHint('air-stop', live === 'dziala' ? 'Wylacz lustro' : 'Sesja off');
+    var airLive = this._sessions.active() === 'airplay';
+    var mode = airLive && receiver && receiver.mode ? receiver.mode : 'idle';
+    var on = airLive && mode !== 'idle' && mode !== 'uxplay-exit';
+    if (typeof this._menu.setItemTitle === 'function') {
+        this._menu.setItemTitle('air-toggle', on ? 'Wylacz' : 'Wlacz');
+    }
+    this._menu.setItemHint(
+        'air-toggle',
+        mode === 'running'
+            ? 'Lustro dziala'
+            : (on ? 'Czekaj na urzadzenie' : 'Wylaczony')
+    );
     this._menu.setItemHint('air-name', name);
     this._menu.setItemHint('air-info', net.slice(0, 28));
 };
@@ -1225,6 +1294,38 @@ AirPlayApp.prototype._sync = function () {
     }
     this._sessions.onVehicle();
 
+    if (screen === 'stream') {
+        air = choice.ok
+            ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
+            : choice;
+        this._paint(air);
+        if (this._streamProtocol === 'airplay' && this._sessions.active() === 'airplay') {
+            try {
+                text = fs.readFileSync(RECEIVER_STATUS, 'utf8');
+            } catch (errAir) {
+                text = '';
+            }
+            receiver = uplink.readReceiverStatus(text);
+            if (receiver.mode === 'running') {
+                this._takeFrame();
+                this._tellMenu('running');
+                return;
+            }
+            this._endStream('airplay');
+            return;
+        }
+        if (this._streamProtocol === 'windows' && this._sessions.active() === 'windows') {
+            if ((this._sessions.getStatus().state) === 'running') {
+                this._tellMenu('running');
+                return;
+            }
+            this._endStream('windows');
+            return;
+        }
+        this._endStream(this._streamProtocol || 'airplay');
+        return;
+    }
+
     if (screen === 'airplay') {
         try {
             text = fs.readFileSync(RECEIVER_STATUS, 'utf8');
@@ -1233,7 +1334,7 @@ AirPlayApp.prototype._sync = function () {
         }
         receiver = uplink.readReceiverStatus(text);
         airLive = this._sessions.active() === 'airplay';
-        // Stale mdns status is ignored until Lustro starts an AirPlay session.
+        // Stale mdns status is ignored until toggle starts an AirPlay session.
         air = choice.ok
             ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
             : choice;
@@ -1241,14 +1342,14 @@ AirPlayApp.prototype._sync = function () {
             air = uplink.selectAirplayAnnounce(receiver, choice);
             if (receiver.mode === 'running') {
                 this._takeFrame();
+                this._enterStream('airplay');
+                return;
             }
         }
         this._paint(air);
         this._paintAirMenu(air, airLive ? receiver : { mode: 'idle' });
         if (airLive) {
-            if (receiver.mode === 'running') {
-                this._tellMenu('running');
-            } else if (receiver.mode === 'missing' || receiver.mode === 'mdns-brak' || receiver.mode === 'uxplay-exit') {
+            if (receiver.mode === 'missing' || receiver.mode === 'mdns-brak' || receiver.mode === 'uxplay-exit') {
                 this._tellMenu(receiver.mode);
             } else {
                 this._tellMenu(air.ok ? 'starting' : (air.reason || 'starting'));
@@ -1263,6 +1364,10 @@ AirPlayApp.prototype._sync = function () {
         air = choice.ok
             ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
             : choice;
+        if (this._sessions.active() === 'windows' && (this._sessions.getStatus().state) === 'running') {
+            this._enterStream('windows');
+            return;
+        }
         this._paint(air);
         this._paintWindowsMenu(air);
         if (!choice.ok) {
