@@ -51,6 +51,7 @@ process.on('uncaughtException', function (err) {
 });
 var STATE_NAME = 'ST_OnlineApps_G21AirPlay';
 var RECEIVER_STATUS = '/run/g21-airplay.status';
+var AIRPLAY_PIN_FILE = '/run/g21-airplay/pin';
 var FOREGROUND_REASONS = ['ENTRY_POINT', 'LUM', 'BOOKMARK', 'START_WIDGET', 'TRIGGER_HMI', 'SPEECH_COMMAND'];
 var ROOT_STATUS_TEXT = {
     'uplink-not-wifi': 'brak wifi',
@@ -75,6 +76,7 @@ var AIR_STATUS_TEXT = {
     'idle': 'AirPlay off',
     'waiting': 'gotowe do lustra',
     'pick-out': 'wybierz ekran',
+    'pin-wait': 'czekam na kod',
     'not-parked': 'tylko postoj',
     'speed-unknown': 'brak predkosci',
     'bad-name': 'zla nazwa',
@@ -156,7 +158,8 @@ var WINDOWS_STATUS_TEXT = {
 var STREAM_STATUS_TEXT = {
     'running': 'stream',
     'idle': 'koniec',
-    'waiting': 'stream',
+    'waiting': 'czekam na iPhone',
+    'pin-wait': 'czekam na kod',
     'unknown': 'stream'
 };
 
@@ -316,7 +319,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.68',
+        version: (this._packageJson && this._packageJson.version) || '0.1.69',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -388,7 +391,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.68') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.69') +
         ' starting'
     );
     Promise.resolve(this.registerActive()).catch(function (err) {
@@ -1055,13 +1058,14 @@ AirPlayApp.prototype._enterStream = function (protocol) {
     }
     this._streamProtocol = protocol;
     if (protocol === 'airplay') {
+        this._decoded = null;
         this._startVideoTimer();
     }
     this._chosen = protocol;
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('stream');
     }
-    this._tellMenu('running');
+    this._tellMenu(protocol === 'airplay' ? 'waiting' : 'running');
 };
 
 AirPlayApp.prototype._readWinOffers = function () {
@@ -1469,12 +1473,34 @@ AirPlayApp.prototype._choose = function (name) {
     });
 };
 
+AirPlayApp.prototype._readAirplayPin = function () {
+    var text;
+    try {
+        text = String(fs.readFileSync(AIRPLAY_PIN_FILE, 'utf8') || '').trim();
+    } catch (err) {
+        return '';
+    }
+    if (/^\d{4}$/.test(text)) {
+        return text;
+    }
+    return '';
+};
+
 AirPlayApp.prototype._tellMenu = function (code) {
     if (!this._menu || typeof this._menu.setStatus !== 'function') {
         return;
     }
     var screen = this._menuScreen();
     var map = STATUS_BY_SCREEN[screen] || ROOT_STATUS_TEXT;
+    var pin;
+    // Big PIN on car while iPhone asks for the code; hide once mirror frames arrive.
+    if ((screen === 'airplay' || screen === 'stream') && code !== 'idle') {
+        pin = this._readAirplayPin();
+        if (pin && !(screen === 'stream' && this._decoded)) {
+            this._menu.setStatus('PIN ' + pin);
+            return;
+        }
+    }
     this._menu.setStatus(map[code] || String(code || ''));
 };
 
@@ -1520,9 +1546,12 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         : (air && air.reason ? String(air.reason) : 'brak wifi');
     var live = this._sessionLive('airplay');
     var mode = live.on && receiver && receiver.mode ? receiver.mode : 'idle';
+    var pin = this._readAirplayPin();
     var onHint = 'wlaczony';
-    if (mode === 'running') {
-        onHint = 'lustro dziala';
+    if (pin) {
+        onHint = 'PIN ' + pin;
+    } else if (mode === 'running') {
+        onHint = 'lustro / czekaj iPhone';
     } else if (live.on) {
         onHint = 'czekaj na iPhone';
     }
@@ -1697,12 +1726,68 @@ AirPlayApp.prototype._watchCar = function () {
     });
 };
 
+AirPlayApp.prototype._entryPointList = function () {
+    var raw;
+    var list;
+    var keys;
+    var i;
+    try {
+        raw = this.getEntryPoints();
+    } catch (err) {
+        return [];
+    }
+    if (Array.isArray(raw)) {
+        return raw;
+    }
+    if (raw && typeof raw.length === 'number') {
+        try {
+            return Array.prototype.slice.call(raw);
+        } catch (errSlice) {
+            list = [];
+            for (i = 0; i < raw.length; i += 1) {
+                if (raw[i]) {
+                    list.push(raw[i]);
+                }
+            }
+            return list;
+        }
+    }
+    if (raw && typeof raw.forEach === 'function') {
+        list = [];
+        raw.forEach(function (ep) { list.push(ep); });
+        return list;
+    }
+    if (raw && typeof raw === 'object') {
+        keys = Object.keys(raw);
+        list = [];
+        for (i = 0; i < keys.length; i += 1) {
+            if (raw[keys[i]] && typeof raw[keys[i]].getDescription === 'function') {
+                list.push(raw[keys[i]]);
+            }
+        }
+        return list;
+    }
+    return [];
+};
+
 AirPlayApp.prototype._registerEntryPoints = function () {
     var self = this;
     var descriptions = (this.appDescription && this.appDescription.application.entryPoints) || [];
-    var ours = this.getEntryPoints().find(function (ep) {
-        return descriptions.some(function (item) { return item.uuid === ep.getDescription().uuid; });
-    });
+    var points = this._entryPointList();
+    var ours = null;
+    var i;
+    for (i = 0; i < points.length; i += 1) {
+        if (points[i] && typeof points[i].getDescription === 'function' &&
+                descriptions.some(function (item) {
+                    return item.uuid === points[i].getDescription().uuid;
+                })) {
+            ours = points[i];
+            break;
+        }
+    }
+    if (!ours && points.length === 1 && points[0] && typeof points[0].getDescription === 'function') {
+        ours = points[0];
+    }
     if (!ours) {
         return Promise.reject(new Error('no entry point handed over by the manager'));
     }
@@ -1827,7 +1912,7 @@ AirPlayApp.prototype._sync = function () {
             receiver = uplink.readReceiverStatus(text);
             if (receiver.mode === 'running') {
                 this._takeFrame();
-                this._tellMenu('running');
+                this._tellMenu(this._readAirplayPin() && !this._decoded ? 'pin-wait' : 'running');
                 return;
             }
             this._endStream('airplay');

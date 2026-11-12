@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.69
+
+- AirPlay: PIN przy kazdym polaczeniu iPhone (tool 0.1.27 `-pw` + `/run/g21-airplay/pin`); duzy kod na ekranie stream; twardsze `getEntryPoints` (bez `.find`).
+
 ## 0.1.68
 
 - Menu: wersja builda (`v0.1.68`) w prawym górnym rogu ekranu.

@@ -721,6 +721,11 @@ function drawVersionMark(draw, box, version) {
     );
 }
 
+function parsePinDetail(detail) {
+    var match = String(detail || '').match(/\bPIN\s+(\d{4})\b/i);
+    return match ? match[1] : '';
+}
+
 function buildStreamFrame(items, selected, width, height, detail, heading, version) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
@@ -729,9 +734,31 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var titleW;
     var hint;
     var page = pageBox(width, height);
+    var pin = parsePinDetail(detail);
+    var pinScale;
+    var pinW;
+    var pinX;
+    var pinY;
+    var label;
+    var labelW;
     // Clear only — no full-page fill so Wayland video stays visible (G21 hypothesis).
     draw.clear(0);
     drawVersionMark(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW }, version);
+    if (pin) {
+        pinScale = 12;
+        pinW = draw.textWidth(pin, pinScale);
+        pinX = page.ox + Math.floor((page.boxW - pinW) / 2);
+        pinY = page.oy + Math.floor(page.boxH / 2) - 90;
+        label = 'kod AirPlay';
+        labelW = draw.textWidth(label, 4);
+        draw.text(label, page.ox + Math.floor((page.boxW - labelW) / 2), pinY - 48, 4, MUTED);
+        draw.text(pin, pinX, pinY, pinScale, INK);
+        label = 'wpisz na iPhonie';
+        labelW = draw.textWidth(label, 3);
+        draw.text(label, page.ox + Math.floor((page.boxW - labelW) / 2), pinY + 12 * 8 + 24, 3, HINT);
+    } else if (detail) {
+        draw.text(detail, lay.ox + 72, page.oy + 24, 3, MUTED);
+    }
     draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
     draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
     draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
@@ -741,9 +768,6 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     hint = items[0] && items[0].hint ? String(items[0].hint) : '';
     if (hint) {
         draw.text(hint, lay.ox + 72, lay.hintY, 3, HINT);
-    }
-    if (detail) {
-        draw.text(detail, lay.ox + 72, page.oy + 24, 3, MUTED);
     }
     return {
         frame: message(FRAME, draw.bytes()),
