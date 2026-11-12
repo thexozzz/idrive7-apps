@@ -60,6 +60,7 @@ function createMirrorVideo() {
         push: function (i420, nw, nh) {
             var next;
             var word;
+            var fresh = false;
             if (!i420 || nw < 16 || nh < 16 || nw > 2048 || nh > 2048) {
                 return false;
             }
@@ -71,6 +72,7 @@ function createMirrorVideo() {
             }
             if (fd < 0 || nw !== w || nh !== h) {
                 open(nw, nh);
+                fresh = true;
             }
             next = (slot + 1) % NSLOT;
             fs.writeSync(fd, i420, 0, frameBytes, 64 + next * frameBytes);
@@ -81,7 +83,7 @@ function createMirrorVideo() {
             word.writeUInt32LE(seq, 0);
             fs.writeSync(fd, word, 0, 4, 16);
             slot = next;
-            return true;
+            return fresh ? 'new' : true;
         },
         close: close
     };

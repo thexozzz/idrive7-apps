@@ -846,6 +846,33 @@ function parsePinDetail(detail) {
     return match ? match[1] : '';
 }
 
+function streamWindow(win, page) {
+    var x = win.x | 0;
+    var y = win.y | 0;
+    var w = win.w | 0;
+    var h = win.h | 0;
+    var bottom = page.oy + page.boxH - 160;
+    if (y < page.oy) {
+        y = page.oy;
+    }
+    if (x < 0) {
+        x = 0;
+    }
+    if (y >= bottom - 80) {
+        y = bottom - 80;
+    }
+    if (y + h > bottom) {
+        h = bottom - y;
+    }
+    if (h < 80) {
+        h = 80;
+    }
+    if (w < 80) {
+        w = 80;
+    }
+    return { x: x, y: y, w: w, h: h };
+}
+
 function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
@@ -876,9 +903,9 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
 
     panelX = page.ox + 80;
     panelW = page.boxW - 160;
-    if (info && info.window && info.window.w > 80 && info.window.h > 80) {
-        var win = info.window;
-        draw.rect(win.x, win.y, win.w, win.h, PAGE);
+        if (info && info.window && info.window.w > 80 && info.window.h > 80) {
+            var win = streamWindow(info.window, page);
+            draw.rect(win.x, win.y, win.w, win.h, PAGE);
         if (info.video) {
             draw.video(win.x, win.y, win.w, win.h, 1);
         }
@@ -905,6 +932,10 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
                 draw.text(String(lines[i]).slice(0, 36), win.x + 24, lineY, 3, HINT);
                 lineY += 32;
             }
+        }
+        if (mirrored) {
+            label = String((info && (info.hint || info.headline)) || detail || 'lustro');
+            draw.text(String(label).slice(0, 42), win.x, win.y + win.h + 10, 3, HINT);
         }
     } else if (!mirrored) {
         panelY = page.oy + 48;
@@ -1176,6 +1207,7 @@ function createMenuSurface(opts) {
     var holdTimer = null;
     var dragWin = null;
     var mirrorSent = false;
+    var pulseBeat = 0;
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -1242,6 +1274,14 @@ function createMenuSurface(opts) {
             write(message(DROP_VIDEO, u32(1)));
             mirrorSent = false;
         }
+    }
+
+    function rebindVideo() {
+        if (mirrorSent) {
+            write(message(DROP_VIDEO, u32(1)));
+            mirrorSent = false;
+        }
+        sendMirror(!!(streamInfo && streamInfo.video));
     }
 
     function paint() {
@@ -1906,12 +1946,16 @@ function createMenuSurface(opts) {
             return;
         }
         pulse = setInterval(function () {
-            // Keepalive only. Rebuilding the bitmap twice a second made the
-            // menu lag even when AirPlay was off.
-            if (shown && ready && lastFrame) {
+            if (!shown || !ready) {
+                return;
+            }
+            // GRAB lasts 1.5 s in mgu-renderd. One grab at open lets the knob die.
+            sendGrab(true);
+            pulseBeat += 1;
+            if (lastFrame && (pulseBeat % 2) === 0) {
                 write(lastFrame);
             }
-        }, 1000);
+        }, 500);
         if (pulse.unref) {
             pulse.unref();
         }
@@ -2014,6 +2058,7 @@ function createMenuSurface(opts) {
                 paint();
             }
         },
+        rebindVideo: rebindVideo,
         selected: function () { return selected; },
         selectedName: function () {
             return items[selected] ? items[selected].name : '';
@@ -2035,6 +2080,7 @@ module.exports = {
     message: message,
     buildFrame: buildFrame,
     buildStreamFrame: buildStreamFrame,
+    streamWindow: streamWindow,
     buildKeyboardFrame: buildKeyboardFrame,
     encoderStep: encoderStep,
     createMenuSurface: createMenuSurface,

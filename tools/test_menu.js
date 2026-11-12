@@ -77,5 +77,8 @@ assert.strictEqual(menu.encoderStep(1, 2), 1);
 assert.strictEqual(menu.encoderStep(65535, 0), 1);
 assert.strictEqual(menu.encoderStep(3, 1), -2);
 assert.strictEqual(typeof menu.buildKeyboardFrame, 'function');
+var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
+assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
+assert.ok(clipped.y + clipped.h < 596);
 
 console.log('test_menu: ok');

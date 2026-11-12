@@ -281,8 +281,11 @@ function AirPlayApp() {
                 if (!selfRouter._mirrorVideo) {
                     selfRouter._mirrorVideo = mirrorVideo.createMirrorVideo();
                 }
-                selfRouter._mirrorVideo.push(frame.i420, frame.w, frame.h);
+                var wrote = selfRouter._mirrorVideo.push(frame.i420, frame.w, frame.h);
                 selfRouter._decoded = { w: frame.w, h: frame.h };
+                if (wrote === 'new' && selfRouter._menu && typeof selfRouter._menu.rebindVideo === 'function') {
+                    selfRouter._menu.rebindVideo();
+                }
             } catch (err) {
                 noteStart('mirror-video ' + (err && err.message));
             }
@@ -362,7 +365,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.83',
+        version: (this._packageJson && this._packageJson.version) || '0.1.84',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -452,7 +455,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.83') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.84') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1264,7 +1267,12 @@ AirPlayApp.prototype._enterStream = function (protocol) {
     if (protocol === 'airplay') {
         this._decoded = null;
         this._mirrorPainted = false;
+        this._yuvStamp = '';
+        this._streamEpoch = Date.now();
         this._dropMirror();
+        if (this._menu && typeof this._menu.rebindVideo === 'function') {
+            this._menu.rebindVideo();
+        }
         this._startVideoTimer();
     }
     this._chosen = protocol;
@@ -2894,6 +2902,9 @@ AirPlayApp.prototype._takeFrame = function () {
         return;
     }
     stamp = String(st.mtime.getTime()) + ':' + String(st.size);
+    if (this._streamEpoch && st.mtime.getTime() < this._streamEpoch) {
+        return;
+    }
     if (stamp === this._yuvStamp) {
         return;
     }
