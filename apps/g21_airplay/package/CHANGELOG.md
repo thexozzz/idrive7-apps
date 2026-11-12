@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.19
+
+- Po wyjściu z aplikacji rysunek znika. Pokrętło i dotyk działają w menu tylko, gdy aplikacja jest z przodu.
+
 ## 0.1.18
 
 - Klatka menu idzie co sekundę. Po ciszy renderer chował powierzchnię i ekran gasł.

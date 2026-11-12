@@ -193,9 +193,10 @@ function AirPlayApp() {
     this.on('error', function (err) { logger.warn('OnlineApp error: ' + (err && err.message)); });
     this.on('entryPointExecute', function (uuid) { self._onEntryPointExecute(uuid); });
     this.on('changeVisibility', function (data) {
-        if (data && data.visible === false) {
-            self._setVisible(false);
+        if (!data || typeof data.visible === 'undefined') {
+            return;
         }
+        self._setVisible(data.visible === true || data.visible === 1);
     });
     noteStart('constructed');
 }
@@ -547,6 +548,8 @@ AirPlayApp.prototype._setVisible = function (visible) {
     this._visible = visible;
     if (visible) {
         this._showMenu();
+    } else if (this._menu && typeof this._menu.setFront === 'function') {
+        this._menu.setFront(false);
     } else if (this._menu) {
         this._menu.close();
     }

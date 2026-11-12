@@ -19,7 +19,11 @@ var READY = 101;
 var CCU = 105;
 var X_GRAB = 0x4d520002;
 var X_READY = 0x4d520101;
+var X_STATE = 0x4d520102;
 var X_CCU = 0x4d520103;
+var CLAIM = 9;
+var TOUCH = 105;
+var CLOSED = 106;
 
 var INK = 0xF2F4F8FF;
 var HINT = 0x9AA3B2FF;
@@ -148,8 +152,7 @@ FrameBuilder.prototype.bytes = function () {
     return Buffer.concat(this.parts);
 };
 
-function buildFrame(items, selected, width, height, detail) {
-    var draw = new FrameBuilder();
+function menuLayout(width, height, count, detail) {
     var boxW = width - CONTENT.x - 20;
     var boxH = height - CONTENT.y;
     var ox = 0;
@@ -164,27 +167,43 @@ function buildFrame(items, selected, width, height, detail) {
     var gap = 12;
     var top = 24;
     var statusH = detail ? 48 : 0;
-    var rowH = Math.floor((boxH - top - statusH - gap * items.length) / items.length);
+    var rowH = Math.floor((boxH - top - statusH - gap * count) / count);
+    var rows = [];
     var i;
-    var y;
     if (rowH > 120) {
         rowH = 120;
     }
     if (rowH < 72) {
         rowH = 72;
     }
+    for (i = 0; i < count; i += 1) {
+        rows.push({
+            x: ox + 40,
+            y: oy + top + i * (rowH + gap),
+            w: boxW - 80,
+            h: rowH
+        });
+    }
+    return { ox: ox, oy: oy, boxW: boxW, boxH: boxH, rowH: rowH, gap: gap, top: top, rows: rows };
+}
+
+function buildFrame(items, selected, width, height, detail) {
+    var draw = new FrameBuilder();
+    var lay = menuLayout(width, height, items.length, detail);
+    var i;
+    var row;
     draw.clear(0);
-    draw.rect(ox, oy, boxW, boxH, PAGE);
+    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
     for (i = 0; i < items.length; i += 1) {
-        y = oy + top + i * (rowH + gap);
+        row = lay.rows[i];
         if (i === selected) {
-            draw.rect(ox + 40, y, boxW - 80, rowH, BAR);
+            draw.rect(row.x, row.y, row.w, row.h, BAR);
         }
-        draw.text(items[i].title, ox + 72, y + 28, 6, INK);
-        draw.text(items[i].hint, ox + 72, y + 78, 4, HINT);
+        draw.text(items[i].title, lay.ox + 72, row.y + 28, 6, INK);
+        draw.text(items[i].hint, lay.ox + 72, row.y + 78, 4, HINT);
     }
     if (detail) {
-        draw.text(detail, ox + 72, oy + top + items.length * (rowH + gap) + 8, 5, INK);
+        draw.text(detail, lay.ox + 72, lay.oy + lay.top + items.length * (lay.rowH + lay.gap) + 8, 5, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -219,8 +238,10 @@ function createMenuSurface(opts) {
     var paths = opts.sockets || ['/run/mgu-renderd/renderd.sock', '/run/mgu-render/render.sock'];
     var selected = 0;
     var shown = false;
+    var front = false;
     var ready = false;
     var native = false;
+    var touchOn = false;
     var sock = null;
     var incoming = Buffer.alloc(0);
     var screen = { w: 1920, h: 720 };
@@ -274,17 +295,63 @@ function createMenuSurface(opts) {
     }
 
     function paint() {
-        if (!ready || !shown) {
+        if (!ready || !shown || !front) {
             return;
         }
         sendPlace();
         sendShow(true);
+        sendGrab(true);
+        sendClaim();
         var built = buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail);
         write(built.frame);
         if (!noted) {
             noted = true;
             note('menu-frame ' + built.rects);
         }
+    }
+
+    function hideSurface() {
+        sendShow(false);
+        sendGrab(false);
+    }
+
+    function applyFront(on) {
+        if (front === on) {
+            return;
+        }
+        front = on;
+        note(on ? 'menu-front' : 'menu-back');
+        if (!on) {
+            hideSurface();
+            return;
+        }
+        paint();
+    }
+
+    function sendClaim() {
+        if (!native || !touchOn || !front) {
+            return;
+        }
+        var b = Buffer.alloc(20);
+        b.writeUInt32LE(1, 0);
+        b.writeFloatLE(CONTENT.x, 4);
+        b.writeFloatLE(CONTENT.y, 8);
+        b.writeFloatLE(CONTENT.w, 12);
+        b.writeFloatLE(CONTENT.h, 16);
+        write(message(CLAIM, b));
+    }
+
+    function hitRow(x, y) {
+        var lay = menuLayout(screen.w || 1920, screen.h || 720, items.length, !!detail);
+        var i;
+        var row;
+        for (i = 0; i < lay.rows.length; i += 1) {
+            row = lay.rows[i];
+            if (x >= row.x && x < row.x + row.w && y >= row.y && y < row.y + row.h) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     function move(delta) {
@@ -334,12 +401,25 @@ function createMenuSurface(opts) {
                 if (body.length >= 12) {
                     screen = { w: body.readUInt32LE(4), h: body.readUInt32LE(8) };
                 }
+                touchOn = body.length >= 16 && body.readUInt32LE(12) !== 0;
                 note('menu-ready ' + screen.w + 'x' + screen.h);
-                sendGrab(false);
                 paint();
-            } else if (type === CCU && body.length >= 5) {
+            } else if (type === X_STATE && body.length >= 8) {
+                applyFront(body.readUInt32LE(4) !== 0 && shown);
+            } else if (type === CLOSED) {
+                applyFront(false);
+            } else if (type === TOUCH && body.length >= 12 && front) {
+                if (body.readUInt32LE(0) === 1) {
+                    var hit = hitRow(body.readFloatLE(4), body.readFloatLE(8));
+                    if (hit >= 0) {
+                        selected = hit;
+                        paint();
+                        press();
+                    }
+                }
+            } else if (type === CCU && body.length >= 5 && front) {
                 onControl(body.readUInt16BE(1), body[3]);
-            } else if (type === X_CCU && body.length >= 5) {
+            } else if (type === X_CCU && body.length >= 5 && front) {
                 onControl(body.readUInt16BE(1), body[3]);
             }
         }
@@ -387,10 +467,10 @@ function createMenuSurface(opts) {
             return;
         }
         pulse = setInterval(function () {
-            if (shown && ready) {
+            if (shown && ready && front) {
                 paint();
             }
-        }, 1000);
+        }, 500);
         if (pulse.unref) {
             pulse.unref();
         }
@@ -400,6 +480,7 @@ function createMenuSurface(opts) {
         items: items,
         open: function () {
             shown = true;
+            front = true;
             armPulse();
             if (sock) {
                 paint();
@@ -407,8 +488,17 @@ function createMenuSurface(opts) {
             }
             connect();
         },
+        setFront: function (on) {
+            if (!on) {
+                applyFront(false);
+                return;
+            }
+            shown = true;
+            applyFront(true);
+        },
         close: function () {
             shown = false;
+            front = false;
             if (pulse) {
                 clearInterval(pulse);
                 pulse = null;
