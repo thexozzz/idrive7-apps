@@ -312,7 +312,7 @@ var ROOT_ITEMS = [
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-start', title: 'Start', hint: 'Wlacz lustro', icon: 'play' },
+    { name: 'air-start', title: 'Lustro', hint: 'Wlacz AirPlay', icon: 'airplay' },
     { name: 'air-stop', title: 'Stop', hint: 'Wylacz UxPlay', icon: 'stop' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
@@ -320,11 +320,14 @@ var AIRPLAY_ITEMS = [
 ];
 
 var RDP_ITEMS = [
-    { name: 'rdp-start', title: 'Start', hint: 'Polacz RDP', icon: 'play' },
-    { name: 'rdp-stop', title: 'Stop', hint: 'Rozlacz', icon: 'stop' },
-    { name: 'rdp-host', title: 'Host', hint: '0.0.0.0', icon: 'host' },
-    { name: 'rdp-user', title: 'User', hint: 'brak', icon: 'user' },
-    { name: 'rdp-panel', title: 'Panel', hint: ':1235', icon: 'gear' },
+    { name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' },
+    { name: 'rdp-cut', title: 'Rozlacz', hint: 'Koniec sesji', icon: 'stop' },
+    { name: 'rdp-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
+    { name: 'rdp-port', title: 'Port', hint: '3389', icon: 'gear' },
+    { name: 'rdp-user', title: 'Konto', hint: 'user', icon: 'user' },
+    { name: 'rdp-pass', title: 'Haslo', hint: 'panel WWW', icon: 'tag' },
+    { name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' },
+    { name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' },
     { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
@@ -773,7 +776,12 @@ function createMenuSurface(opts) {
     function cloneScreen(name) {
         var source = SCREENS[name] || SCREENS.root;
         return source.map(function (item) {
-            return { name: item.name, title: item.title, hint: item.hint };
+            return {
+                name: item.name,
+                title: item.title,
+                hint: item.hint,
+                icon: item.icon || 'play'
+            };
         });
     }
 
@@ -829,8 +837,13 @@ function createMenuSurface(opts) {
 
     function onControl(operation, push) {
         var step = encoderStep(lastOp, operation);
+        var item = items[selected];
+        var adjusted = false;
         lastOp = operation;
-        if (step) {
+        if (step && item && typeof opts.adjust === 'function') {
+            adjusted = !!opts.adjust(item.name, step > 0 ? 1 : -1);
+        }
+        if (step && !adjusted) {
             move(step > 0 ? 1 : -1);
         }
         if (push === 1 && lastPush !== 1) {
@@ -974,7 +987,10 @@ function createMenuSurface(opts) {
             detail = next;
             paint();
         },
-        selected: function () { return selected; }
+        selected: function () { return selected; },
+        selectedName: function () {
+            return items[selected] ? items[selected].name : '';
+        }
     };
 }
 

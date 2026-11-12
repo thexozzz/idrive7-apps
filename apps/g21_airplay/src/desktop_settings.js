@@ -116,6 +116,23 @@ function createDesktopSettings(stored) {
             hosts.rdp.user = String(value || '').slice(0, 64);
             return { ok: true, user: hosts.rdp.user };
         },
+        setRdpCert: function (value) {
+            hosts.rdp.cert = String(value || '').replace(/\s+/g, '').slice(0, 128);
+            return { ok: true, cert: hosts.rdp.cert };
+        },
+        clearRdpCert: function () {
+            hosts.rdp.cert = '';
+            return { ok: true, cert: '' };
+        },
+        formatRdpIp: function () {
+            var host = hosts.rdp;
+            var parts = [];
+            var i;
+            for (i = 0; i < 4; i += 1) {
+                parts.push(i === octet ? ('[' + host.octets[i] + ']') : String(host.octets[i]));
+            }
+            return parts.join('.');
+        },
         selectOctet: function (index) {
             octet = clamp(index, 0, 3, 0);
             return octet;

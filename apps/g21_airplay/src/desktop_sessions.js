@@ -83,9 +83,35 @@ function lineSender(sockPath) {
 function createRdpSession(opts) {
     var files = opts.paths || pathsFactory.sessionPaths();
     var sendInput = opts.sendInput || lineSender(files.inputSock);
+    var clientPath = opts.clientPath || '/var/opt/g21-airplay-open/current/g21-rdp';
+    function clientExists() {
+        if (typeof opts.clientExists === 'function') {
+            return opts.clientExists();
+        }
+        try {
+            return fs.existsSync(clientPath);
+        } catch (err) {
+            return false;
+        }
+    }
+    function readDesktop() {
+        var text = '';
+        try {
+            text = fs.readFileSync(files.desktopStatus, 'utf8');
+        } catch (err) {
+            text = '';
+        }
+        var parts = String(text || '').replace(/\s+$/, '').split('|');
+        return {
+            state: parts[0] || 'idle',
+            detail: parts[1] || '',
+            extra: parts[2] || '',
+            raw: text,
+        };
+    }
     return {
         connect: function (target) {
-            if (opts.clientExists && !opts.clientExists()) {
+            if (!clientExists()) {
                 writeText(files.desktopStatus, 'missing|rdp|\n');
                 return { ok: false, reason: 'rdp-client-missing' };
             }
@@ -95,22 +121,22 @@ function createRdpSession(opts) {
             if (!host || host === '0.0.0.0') {
                 return { ok: false, reason: 'no-host' };
             }
-            if (target.password) {
+            if (target && Object.prototype.hasOwnProperty.call(target, 'password')) {
                 try {
-                    credentials.writeSecret(files.secret, target.password);
+                    if (target.password) {
+                        credentials.writeSecret(files.secret, target.password);
+                    } else {
+                        credentials.removeSecret(files.secret);
+                    }
                 } catch (err) {
                     return { ok: false, reason: 'secret-write-failed' };
                 }
             }
-            var cert = target.cert || '';
+            var cert = target && target.cert ? target.cert : '';
             if (!cert) {
-                try {
-                    var seen = fs.readFileSync(files.desktopStatus, 'utf8');
-                    if (seen.indexOf('cert|') === 0) {
-                        cert = seen.split('|')[1].replace(/\s+$/, '');
-                    }
-                } catch (err) {
-                    cert = '';
+                var seen = readDesktop();
+                if (seen.state === 'cert' && seen.detail) {
+                    cert = seen.detail;
                 }
             }
             if (cert) {
@@ -120,23 +146,29 @@ function createRdpSession(opts) {
             if (!wrote.ok) {
                 return wrote;
             }
+            writeText(files.desktopStatus, 'starting|rdp|\n');
             writeText(files.allow, 'rdp\n');
             return { ok: true, state: 'starting', target: { host: host, port: port, user: user } };
         },
         disconnect: function () {
             writeText(files.allow, 'stop\n');
             credentials.removeSecret(files.secret);
+            writeText(files.desktopStatus, 'idle|rdp|\n');
             return { ok: true, state: 'idle' };
         },
         getStatus: function () {
-            var text = '';
-            try {
-                text = fs.readFileSync(files.desktopStatus, 'utf8');
-            } catch (err) {
-                text = '';
+            var status = readDesktop();
+            if (status.state === 'cert') {
+                return { state: 'cert', detail: status.detail || 'rdp', fingerprint: status.detail };
             }
-            var parts = text.split('|');
-            return { state: parts[0] || 'starting', detail: parts[1] || 'rdp' };
+            return { state: status.state || 'starting', detail: status.detail || 'rdp' };
+        },
+        pendingCert: function () {
+            var status = readDesktop();
+            if (status.state === 'cert' && status.detail) {
+                return status.detail;
+            }
+            return '';
         },
         sendMouseMove: function (x, y) { return sendInput('M ' + x + ' ' + y); },
         sendMouseClick: function (button, down) { return sendInput('C ' + button + ' ' + (down ? 1 : 0)); },

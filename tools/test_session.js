@@ -107,6 +107,10 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     });
     assert.strictEqual(JSON.stringify(desk.snapshot()).indexOf('password'), -1);
     assert.strictEqual(desk.stepOctet('rdp', 1).octets[0], 11);
+    desk.selectOctet(1);
+    assert.ok(desk.formatRdpIp().indexOf('[') !== -1);
+    desk.setRdpCert('aa:bb:cc');
+    assert.strictEqual(desk.host('rdp').cert, 'aa:bb:cc');
     var seen = [];
     var input = inputFactory.createInputManager({
         settings: desk,

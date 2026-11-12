@@ -41,13 +41,22 @@ var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'UxPlay dziala', 'Ai
 assert.ok(air.rects > 40);
 assert.strictEqual(menu.AIRPLAY_ITEMS.length, 5);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-start');
+assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'Lustro');
+assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'airplay');
 assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
 assert.ok(menu.SCREENS.airplay);
-var rdp = menu.buildFrame(menu.RDP_ITEMS, 0, 1920, 720, 'panel :1235', 'RDP');
-assert.ok(rdp.layout.bubbles.length, menu.RDP_ITEMS.length);
-assert.strictEqual(menu.RDP_ITEMS[0].name, 'rdp-start');
-assert.strictEqual(menu.RDP_ITEMS[4].name, 'rdp-panel');
+var rdp = menu.buildFrame(menu.RDP_ITEMS, 0, 1920, 720, 'RDP lacze', 'RDP');
+assert.strictEqual(rdp.layout.bubbles.length, menu.RDP_ITEMS.length);
+assert.strictEqual(menu.RDP_ITEMS.length, 9);
+assert.strictEqual(menu.RDP_ITEMS[0].name, 'rdp-connect');
+assert.strictEqual(menu.RDP_ITEMS[0].title, 'Polacz');
+assert.strictEqual(menu.RDP_ITEMS[0].icon, 'desktop');
+assert.strictEqual(menu.RDP_ITEMS[2].name, 'rdp-ip');
+assert.strictEqual(menu.RDP_ITEMS[6].name, 'rdp-cert');
+assert.strictEqual(menu.RDP_ITEMS[8].name, 'rdp-back');
+assert.notStrictEqual(menu.RDP_ITEMS[0].title, menu.AIRPLAY_ITEMS[0].title);
 assert.ok(menu.SCREENS.rdp);
+assert.ok(menu.RDP_ITEMS.every(function (item) { return !!item.icon; }));
 
 assert.strictEqual(menu.encoderStep(null, 4), 0);
 assert.strictEqual(menu.encoderStep(1, 2), 1);
