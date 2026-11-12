@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.17
+
+- Rysunek wraca na cały ekran, bo węższe pole nic nie pokazało. Kolumna wstecz zostaje pusta, bez przejęcia pokrętła.
+
 ## 0.1.16
 
 - AirPlay startuje bez prędkości i nie jest gaszony w jeździe.

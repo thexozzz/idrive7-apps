@@ -9,7 +9,7 @@ Potwierdzone przez właściciela 2026-11-12: menu AirPlay 0.1.13 jest widoczne.
 
 - Tekst RHMI się nie rysuje. `LT_State_Laptimer`, `LT_State_Wide`, `LT_Label_*` i `LT_Button_*` otwierają pustą stronę. Nie dodawaj kolejnej strony tekstowej licząc, że ją widać.
 - Strona RHMI ma być otwarta (`mapEntryState` i `openState`), bo renderer maluje tylko aplikację z przodu. `openEntryState` z uuid punktu wejścia zwraca `INVALID_UUID`.
-- Piksele idą ramką na `/run/mgu-renderd/renderd.sock`, a gdy go nie ma na `/run/mgu-render/render.sock`. Kolejność: `HELLO` 1, po `READY` 101 `PLACE` 2, `SHOW` 3, `FRAME` 7. `PLACE` zostaje w polu treści iDrive 7: x 104, y 88, 1796×632. Kolumna wstecz i pasek tytułu zostają przy HMI. Nie wysyłaj `GRAB`: na tym aucie zatrzymał pokrętło i powrót.
+- Piksele idą ramką na `/run/mgu-renderd/renderd.sock`, a gdy go nie ma na `/run/mgu-render/render.sock`. Kolejność: `HELLO` 1, po `READY` 101 `PLACE` 2 na cały ekran `0,0,szerokość,wysokość`, `SHOW` 3, `FRAME` 7. `PLACE` samego pola 104,88 na tym aucie nic nie narysował. Menu maluj wewnątrz tego pola, a kolumnę wstecz zostaw przezroczystą. Nie wysyłaj `GRAB` z wartością 1.
 - Każdy `require('./plik.js')` ma być w `modules` w `mgu-app.json`. Linker nazywa moduł `./` plus sama nazwa pliku. Brak wpisu przerywa budowę Store, zanim powstanie SDK.
 - Store trzyma ostatni odczyt gałęzi. Nieudana wersja instaluje się ponownie, dopóki lista źródeł nie odczyta czubka. Nowy numer daje `scripts/bump.ps1`.
 - Dawca linkowany na tym aucie to `ts_diagnostic_service@4.20.2`. `oap-sdk/` nie wchodzi do gita.

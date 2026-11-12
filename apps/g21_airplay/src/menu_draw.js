@@ -25,8 +25,9 @@ var INK = 0xF2F4F8FF;
 var HINT = 0x9AA3B2FF;
 var BAR = 0x243044FF;
 var PAGE = 0x10141CFF;
-// iDrive 7 content box from idrive7-apps kit/renderd README: info.embedBox.
-// The back-arrow column and the title strip stay the HMI's.
+// Margins left clear inside a full-screen surface. On this car a PLACE of only
+// this box drew nothing. The back column and title strip stay unpainted so iDrive
+// can take them.
 var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
 
 var FONT = {
@@ -149,10 +150,21 @@ FrameBuilder.prototype.bytes = function () {
 
 function buildFrame(items, selected, width, height, detail) {
     var draw = new FrameBuilder();
+    var boxW = width - CONTENT.x - 20;
+    var boxH = height - CONTENT.y;
+    var ox = 0;
+    var oy = 0;
+    if (boxW >= 800 && boxH >= 400) {
+        ox = CONTENT.x;
+        oy = CONTENT.y;
+    } else {
+        boxW = width;
+        boxH = height;
+    }
     var gap = 12;
     var top = 24;
     var statusH = detail ? 48 : 0;
-    var rowH = Math.floor((height - top - statusH - gap * items.length) / items.length);
+    var rowH = Math.floor((boxH - top - statusH - gap * items.length) / items.length);
     var i;
     var y;
     if (rowH > 120) {
@@ -161,17 +173,18 @@ function buildFrame(items, selected, width, height, detail) {
     if (rowH < 72) {
         rowH = 72;
     }
-    draw.clear(PAGE);
+    draw.clear(0);
+    draw.rect(ox, oy, boxW, boxH, PAGE);
     for (i = 0; i < items.length; i += 1) {
-        y = top + i * (rowH + gap);
+        y = oy + top + i * (rowH + gap);
         if (i === selected) {
-            draw.rect(40, y, width - 80, rowH, BAR);
+            draw.rect(ox + 40, y, boxW - 80, rowH, BAR);
         }
-        draw.text(items[i].title, 72, y + 28, 6, INK);
-        draw.text(items[i].hint, 72, y + 78, 4, HINT);
+        draw.text(items[i].title, ox + 72, y + 28, 6, INK);
+        draw.text(items[i].hint, ox + 72, y + 78, 4, HINT);
     }
     if (detail) {
-        draw.text(detail, 72, top + items.length * (rowH + gap) + 8, 5, INK);
+        draw.text(detail, ox + 72, oy + top + items.length * (rowH + gap) + 8, 5, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -238,11 +251,13 @@ function createMenuSurface(opts) {
     }
 
     function sendPlace() {
+        var w = screen.w || 1920;
+        var h = screen.h || 720;
         var b = Buffer.alloc(28);
-        b.writeInt32LE(CONTENT.x, 0);
-        b.writeInt32LE(CONTENT.y, 4);
-        b.writeInt32LE(CONTENT.w, 8);
-        b.writeInt32LE(CONTENT.h, 12);
+        b.writeInt32LE(0, 0);
+        b.writeInt32LE(0, 4);
+        b.writeInt32LE(w, 8);
+        b.writeInt32LE(h, 12);
         b.writeFloatLE(1, 16);
         b.writeFloatLE(0, 20);
         b.writeFloatLE(0, 24);
@@ -263,8 +278,7 @@ function createMenuSurface(opts) {
         }
         sendPlace();
         sendShow(true);
-        sendGrab(false);
-        var built = buildFrame(items, selected, CONTENT.w, CONTENT.h, detail);
+        var built = buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -320,6 +334,7 @@ function createMenuSurface(opts) {
                     screen = { w: body.readUInt32LE(4), h: body.readUInt32LE(8) };
                 }
                 note('menu-ready ' + screen.w + 'x' + screen.h);
+                sendGrab(false);
                 paint();
             } else if (type === CCU && body.length >= 5) {
                 onControl(body.readUInt16BE(1), body[3]);
