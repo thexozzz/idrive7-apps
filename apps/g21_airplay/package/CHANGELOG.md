@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.32
+
+- Narzedzie 0.1.8: usuniete `group=` z conf avahi (log: Invalid configuration key) — naprawa `brak dns`.
+
 ## 0.1.31
 
 - Menu to nowoczesne karty z grafikami opcji (ikony AirPlay, RDP, Start/Stop, siec itd.).

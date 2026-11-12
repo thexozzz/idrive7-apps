@@ -20,16 +20,16 @@
       "description": "AirPlay oraz pulpit RDP i VNC. Lustro iPhone na Wi-Fi Store, takze gdy telefon jest hostem hotspotu.",
       "uninstallable": true,
       "mguHmi": ["ID7"],
-      "requires": { "g21-airplay-open": "0.1.7", "cluster-render": "0.5.4" }
+      "requires": { "g21-airplay-open": "0.1.8", "cluster-render": "0.5.4" }
     }
   ],
   "tools": [
     {
       "id": "g21-airplay-open",
       "path": "native/g21-airplay-open",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "title": "AirPlay na hotspot iPhone",
-      "description": "UxPlay + avahi z kontem i D-Bus przez bind-mount /run (rootfs RO).",
+      "description": "UxPlay + avahi overlay; conf bez niedozwolonego group=.",
       "uninstallable": true,
       "mguHmi": ["ID7"]
     }

@@ -336,7 +336,6 @@ enable-dbus=yes
 check-response-ttl=no
 use-iff-running=yes
 user=avahi
-group=avahi
 [wide-area]
 enable-wide-area=no
 [publish]
@@ -368,7 +367,6 @@ enable-dbus=no
 check-response-ttl=no
 use-iff-running=yes
 user=avahi
-group=avahi
 [wide-area]
 enable-wide-area=no
 [publish]
