@@ -309,14 +309,14 @@ var FONT = {
 };
 
 var ROOT_ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone', icon: 'airplay' },
-    { name: 'windows', title: 'Windows', hint: 'Win+K Miracast', icon: 'desktop' },
-    { name: 'rdp', title: 'RDP', hint: 'Pulpit RDP', icon: 'desktop' },
-    { name: 'vnc', title: 'VNC', hint: 'Pulpit zdalny', icon: 'grid' }
+    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
+    { name: 'windows', title: 'Miracast', hint: 'Win+K PC', icon: 'desktop' },
+    { name: 'rdp', title: 'RDP', hint: 'pulpit Windows', icon: 'host' },
+    { name: 'vnc', title: 'VNC', hint: 'pulpit zdalny', icon: 'grid' }
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-toggle', title: 'Wlacz', hint: 'Wylaczony', icon: 'airplay' },
+    { name: 'air-toggle', title: 'WYL', hint: 'wylaczony', icon: 'airplay' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
@@ -359,14 +359,14 @@ var VNC_EDIT_ITEMS = [
 ];
 
 var WINDOWS_ITEMS = [
-    { name: 'win-toggle', title: 'Wlacz', hint: 'Wylaczony', icon: 'desktop' },
-    { name: 'win-devices', title: 'Urzadzenia', hint: 'Win+K oferty', icon: 'grid' },
+    { name: 'win-toggle', title: 'WYL', hint: 'wylaczony', icon: 'desktop' },
+    { name: 'win-devices', title: 'Urzadzenia', hint: 'lista PC', icon: 'grid' },
     { name: 'win-info', title: 'Siec', hint: 'ta sama Wi-Fi', icon: 'wifi' },
     { name: 'win-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
 var WIN_DEVICES_ITEMS = [
-    { name: 'win-d-back', title: 'Wstecz', hint: 'Windows', icon: 'back' }
+    { name: 'win-d-back', title: 'Wstecz', hint: 'Miracast', icon: 'back' }
 ];
 
 var STREAM_ITEMS = [
@@ -996,7 +996,7 @@ function createMenuSurface(opts) {
         if (next === 'airplay') {
             heading = 'AirPlay';
         } else if (next === 'windows') {
-            heading = 'Windows';
+            heading = 'Miracast';
         } else if (next === 'win-devices') {
             heading = 'Urzadzenia';
         } else if (next === 'stream') {

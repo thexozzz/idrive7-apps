@@ -63,7 +63,7 @@ function menuItems(offers) {
             icon: 'desktop'
         });
     }
-    items.push({ name: 'win-d-back', title: 'Wstecz', hint: 'Windows', icon: 'back' });
+    items.push({ name: 'win-d-back', title: 'Wstecz', hint: 'Miracast', icon: 'back' });
     return items;
 }
 

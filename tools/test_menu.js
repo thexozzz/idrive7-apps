@@ -13,12 +13,15 @@ assert.strictEqual(built.layout.bubbles.length, menu.ROOT_ITEMS.length);
 assert.strictEqual(menu.ROOT_ITEMS.length, 4);
 assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
 assert.strictEqual(menu.ROOT_ITEMS[1].name, 'windows');
+assert.strictEqual(menu.ROOT_ITEMS[1].title, 'Miracast');
 assert.strictEqual(menu.ROOT_ITEMS[2].name, 'rdp');
 assert.strictEqual(menu.ROOT_ITEMS[3].name, 'vnc');
 assert.strictEqual(menu.ROOT_ITEMS[0].icon, 'airplay');
 assert.strictEqual(menu.ROOT_ITEMS[1].icon, 'desktop');
-assert.strictEqual(menu.ROOT_ITEMS[2].icon, 'desktop');
+assert.strictEqual(menu.ROOT_ITEMS[2].icon, 'host');
 assert.strictEqual(menu.ROOT_ITEMS[3].icon, 'grid');
+assert.notStrictEqual(menu.ROOT_ITEMS[0].title, menu.ROOT_ITEMS[1].title);
+assert.notStrictEqual(menu.ROOT_ITEMS[1].title, menu.ROOT_ITEMS[2].title);
 assert.ok(menu.ICONS.airplay);
 assert.ok(menu.ICONS.play);
 assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));
@@ -44,9 +47,9 @@ var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'AirPlay start', 'Ai
 assert.ok(air.rects > 40);
 assert.strictEqual(menu.AIRPLAY_ITEMS.length, 4);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-toggle');
-assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'Wlacz');
+assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'WYL');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'airplay');
-assert.strictEqual(menu.AIRPLAY_ITEMS[0].hint, 'Wylaczony');
+assert.strictEqual(menu.AIRPLAY_ITEMS[0].hint, 'wylaczony');
 assert.strictEqual(menu.AIRPLAY_ITEMS[3].name, 'air-back');
 assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
     return item.name !== 'air-start' && item.name !== 'air-stop';
@@ -55,7 +58,8 @@ assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.WINDOWS_ITEMS);
 assert.strictEqual(menu.WINDOWS_ITEMS.length, 4);
 assert.strictEqual(menu.WINDOWS_ITEMS[0].name, 'win-toggle');
-assert.strictEqual(menu.WINDOWS_ITEMS[0].title, 'Wlacz');
+assert.strictEqual(menu.WINDOWS_ITEMS[0].title, 'WYL');
+assert.strictEqual(menu.WINDOWS_ITEMS[0].hint, 'wylaczony');
 assert.strictEqual(menu.WINDOWS_ITEMS[1].name, 'win-devices');
 assert.ok(menu.WINDOWS_ITEMS.every(function (item) {
     return item.name !== 'win-start' && item.name !== 'win-stop';
