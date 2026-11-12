@@ -24,6 +24,17 @@ function createConfigStore(opts) {
         vnc: path.join(base, 'vnc.secret'),
     };
 
+    function secretFile(kind) {
+        var name = String(kind || '');
+        if (secrets[name]) {
+            return secrets[name];
+        }
+        if (/^(rdp|vnc)-p[0-9]+$/.test(name)) {
+            return path.join(base, name + '.secret');
+        }
+        return '';
+    }
+
     function readSettings() {
         try {
             var data = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
@@ -52,24 +63,26 @@ function createConfigStore(opts) {
     }
 
     function hasSecret(kind) {
-        var text = credentials.readSecret(secrets[kind] || '');
+        var file = secretFile(kind);
+        var text = credentials.readSecret(file);
         return !!(text && String(text).replace(/\s+$/, '').length);
     }
 
     function readSecret(kind) {
-        return String(credentials.readSecret(secrets[kind] || '') || '').replace(/\s+$/, '');
+        return String(credentials.readSecret(secretFile(kind)) || '').replace(/\s+$/, '');
     }
 
     function writeSecret(kind, secret) {
-        if (!secrets[kind]) {
+        var file = secretFile(kind);
+        if (!file) {
             return { ok: false, reason: 'unknown-secret' };
         }
         ensureDir(base);
         if (secret === null || typeof secret === 'undefined' || String(secret) === '') {
-            credentials.removeSecret(secrets[kind]);
+            credentials.removeSecret(file);
             return { ok: true, cleared: true };
         }
-        credentials.writeSecret(secrets[kind], String(secret).replace(/\s+$/, ''));
+        credentials.writeSecret(file, String(secret).replace(/\s+$/, ''));
         return { ok: true };
     }
 
@@ -81,7 +94,7 @@ function createConfigStore(opts) {
         hasSecret: hasSecret,
         readSecret: readSecret,
         writeSecret: writeSecret,
-        secretPath: function (kind) { return secrets[kind] || ''; },
+        secretPath: function (kind) { return secretFile(kind); },
     };
 }
 

@@ -123,6 +123,9 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     assert.strictEqual(desk.formatRdpIp(), '11.0.0.5');
     assert.strictEqual(desk.setVncHost('192.168.1.20').ok, true);
     assert.strictEqual(desk.formatHostIp('vnc'), '192.168.1.20');
+    assert.strictEqual(desk.addProfile('rdp').ok, true);
+    assert.strictEqual(desk.profiles('rdp').length, 2);
+    assert.strictEqual(desk.secretKind('rdp').indexOf('rdp-p'), 0);
     desk.setRdpCert('aa:bb:cc');
     assert.strictEqual(desk.host('rdp').cert, 'aa:bb:cc');
     var seen = [];

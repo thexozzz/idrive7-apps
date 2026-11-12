@@ -94,6 +94,8 @@ var RDP_STATUS_TEXT = {
     'bad-host': 'zly IP',
     'bad-port': 'zly port',
     'bad-name': 'zla nazwa',
+    'max-profiles': 'max 6 profili',
+    'last-profile': 'zostaw 1 profil',
     'unknown': 'RDP'
 };
 
@@ -111,6 +113,8 @@ var VNC_STATUS_TEXT = {
     'waiting': 'ustaw IP VNC',
     'bad-host': 'zly IP',
     'bad-port': 'zly port',
+    'max-profiles': 'max 6 profili',
+    'last-profile': 'zostaw 1 profil',
     'unknown': 'VNC'
 };
 
@@ -119,7 +123,9 @@ var STATUS_BY_SCREEN = {
     airplay: AIR_STATUS_TEXT,
     windows: WINDOWS_STATUS_TEXT,
     rdp: RDP_STATUS_TEXT,
-    vnc: VNC_STATUS_TEXT
+    'rdp-edit': RDP_STATUS_TEXT,
+    vnc: VNC_STATUS_TEXT,
+    'vnc-edit': VNC_STATUS_TEXT
 };
 
 var PROTOCOLS = { airplay: true, windows: true, rdp: true, vnc: true };
@@ -410,13 +416,72 @@ AirPlayApp.prototype._openPage = function () {
 };
 
 AirPlayApp.prototype._secret = function (kind) {
+    var key = kind;
+    if ((kind === 'rdp' || kind === 'vnc') && this._desk && typeof this._desk.secretKind === 'function') {
+        key = this._desk.secretKind(kind);
+    }
     if (this._store && typeof this._store.readSecret === 'function') {
-        return this._store.readSecret(kind);
+        var text = this._store.readSecret(key);
+        if (!text && key !== kind) {
+            text = this._store.readSecret(kind);
+        }
+        return text;
     }
     try {
-        return fs.readFileSync('/var/opt/g21_airplay/' + kind + '.secret', 'utf8').replace(/\s+$/, '');
+        return fs.readFileSync('/var/opt/g21_airplay/' + key + '.secret', 'utf8').replace(/\s+$/, '');
     } catch (err) {
         return '';
+    }
+};
+
+AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
+    var self = this;
+    var items = [];
+    var profiles;
+    var active;
+    if (!this._menu || typeof this._menu.setItems !== 'function') {
+        return;
+    }
+    if (protocol === 'rdp') {
+        profiles = this._desk.profiles('rdp');
+        active = this._desk.activeProfileId('rdp');
+        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' });
+        items.push({ name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' });
+        profiles.forEach(function (p) {
+            items.push({
+                name: 'rdp-prof-' + p.id,
+                title: (p.id === active ? '* ' : '') + (p.label || p.id),
+                hint: p.ip + ':' + p.port,
+                icon: 'host'
+            });
+        });
+        items.push({ name: 'rdp-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' });
+        items.push({ name: 'rdp-edit', title: 'Edytuj', hint: 'IP / konto', icon: 'gear' });
+        items.push({ name: 'rdp-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' });
+        items.push({ name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' });
+        items.push({ name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' });
+        items.push({ name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' });
+        this._menu.setItems(items, 'RDP');
+        return;
+    }
+    if (protocol === 'vnc') {
+        profiles = this._desk.profiles('vnc');
+        active = this._desk.activeProfileId('vnc');
+        items.push({ name: 'vnc-connect', title: 'Polacz', hint: 'Sesja VNC', icon: 'grid' });
+        items.push({ name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' });
+        profiles.forEach(function (p) {
+            items.push({
+                name: 'vnc-prof-' + p.id,
+                title: (p.id === active ? '* ' : '') + (p.label || p.id),
+                hint: p.ip + ':' + p.port,
+                icon: 'host'
+            });
+        });
+        items.push({ name: 'vnc-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' });
+        items.push({ name: 'vnc-edit', title: 'Edytuj', hint: 'IP / port', icon: 'gear' });
+        items.push({ name: 'vnc-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' });
+        items.push({ name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' });
+        this._menu.setItems(items, 'VNC');
     }
 };
 
@@ -479,6 +544,9 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
     this._chosen = protocol;
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen(protocol);
+    }
+    if (protocol === 'rdp' || protocol === 'vnc') {
+        this._rebuildProtocolMenu(protocol);
     }
     this._tellMenu('waiting');
     this._sync();
@@ -552,8 +620,15 @@ AirPlayApp.prototype._applyFieldEdit = function (field, mode, text) {
         set = this._desk.setRdpPort(checked.value);
     } else if (field === 'rdp-user') {
         set = this._desk.setRdpUser(checked.value);
+    } else     if (field === 'rdp-label') {
+        set = this._desk.setProfileLabel('rdp', this._desk.activeProfileId('rdp'), checked.value);
+    } else if (field === 'vnc-label') {
+        set = this._desk.setProfileLabel('vnc', this._desk.activeProfileId('vnc'), checked.value);
     } else if (field === 'rdp-pass') {
-        set = this._store.writeSecret('rdp', checked.value);
+        set = this._store.writeSecret(this._desk.secretKind('rdp'), checked.value);
+        if (set && set.ok) {
+            this._store.writeSecret('rdp', checked.value);
+        }
     } else if (field === 'vnc-ip') {
         set = this._desk.setVncHost(checked.value);
     } else if (field === 'vnc-port') {
@@ -568,6 +643,16 @@ AirPlayApp.prototype._applyFieldEdit = function (field, mode, text) {
     }
     if (field !== 'rdp-pass') {
         this._saveDesk();
+    }
+    if (this._menuScreen() === 'rdp' || this._menuScreen() === 'rdp-edit') {
+        if (this._menuScreen() === 'rdp') {
+            this._rebuildProtocolMenu('rdp');
+        }
+    }
+    if (this._menuScreen() === 'vnc' || this._menuScreen() === 'vnc-edit') {
+        if (this._menuScreen() === 'vnc') {
+            this._rebuildProtocolMenu('vnc');
+        }
     }
     this._sync();
 };
@@ -647,8 +732,15 @@ AirPlayApp.prototype._onAirAction = function (name) {
 };
 
 AirPlayApp.prototype._onRdpAction = function (name) {
+    var added;
+    var removed;
+    var id;
     if (name === 'rdp-back') {
         this._goRoot();
+        return;
+    }
+    if (name === 'rdp-e-back') {
+        this._openProtocolScreen('rdp');
         return;
     }
     if (name === 'rdp-connect') {
@@ -662,19 +754,64 @@ AirPlayApp.prototype._onRdpAction = function (name) {
         this._sync();
         return;
     }
-    if (name === 'rdp-ip') {
+    if (name.indexOf('rdp-prof-') === 0) {
+        id = name.slice('rdp-prof-'.length);
+        this._desk.setActiveProfile('rdp', id);
+        this._saveDesk();
+        this._rebuildProtocolMenu('rdp');
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-add') {
+        added = this._desk.addProfile('rdp');
+        if (!added.ok) {
+            this._tellMenu(added.reason || 'waiting');
+            this._sync();
+            return;
+        }
+        this._saveDesk();
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('rdp-edit');
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-edit') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('rdp-edit');
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-del') {
+        removed = this._desk.removeProfile('rdp', this._desk.activeProfileId('rdp'));
+        if (!removed.ok) {
+            this._tellMenu(removed.reason || 'waiting');
+            this._sync();
+            return;
+        }
+        this._saveDesk();
+        this._rebuildProtocolMenu('rdp');
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-e-label') {
+        this._startFieldEdit('rdp-label', 'user', this._desk.host('rdp').label || '', 'Nazwa profilu');
+        return;
+    }
+    if (name === 'rdp-e-ip' || name === 'rdp-ip') {
         this._startFieldEdit('rdp-ip', 'ip', this._desk.formatHostIp('rdp'), 'IP RDP');
         return;
     }
-    if (name === 'rdp-port') {
+    if (name === 'rdp-e-port' || name === 'rdp-port') {
         this._startFieldEdit('rdp-port', 'port', String(this._desk.host('rdp').port), 'Port RDP');
         return;
     }
-    if (name === 'rdp-user') {
+    if (name === 'rdp-e-user' || name === 'rdp-user') {
         this._startFieldEdit('rdp-user', 'user', this._desk.host('rdp').user || '', 'Konto RDP');
         return;
     }
-    if (name === 'rdp-pass') {
+    if (name === 'rdp-e-pass' || name === 'rdp-pass') {
         this._startFieldEdit('rdp-pass', 'pass', '', 'Haslo RDP');
         return;
     }
@@ -689,8 +826,15 @@ AirPlayApp.prototype._onRdpAction = function (name) {
 };
 
 AirPlayApp.prototype._onVncAction = function (name) {
+    var added;
+    var removed;
+    var id;
     if (name === 'vnc-back') {
         this._goRoot();
+        return;
+    }
+    if (name === 'vnc-e-back') {
+        this._openProtocolScreen('vnc');
         return;
     }
     if (name === 'vnc-connect') {
@@ -704,11 +848,56 @@ AirPlayApp.prototype._onVncAction = function (name) {
         this._sync();
         return;
     }
-    if (name === 'vnc-ip') {
+    if (name.indexOf('vnc-prof-') === 0) {
+        id = name.slice('vnc-prof-'.length);
+        this._desk.setActiveProfile('vnc', id);
+        this._saveDesk();
+        this._rebuildProtocolMenu('vnc');
+        this._sync();
+        return;
+    }
+    if (name === 'vnc-add') {
+        added = this._desk.addProfile('vnc');
+        if (!added.ok) {
+            this._tellMenu(added.reason || 'waiting');
+            this._sync();
+            return;
+        }
+        this._saveDesk();
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('vnc-edit');
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'vnc-edit') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('vnc-edit');
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'vnc-del') {
+        removed = this._desk.removeProfile('vnc', this._desk.activeProfileId('vnc'));
+        if (!removed.ok) {
+            this._tellMenu(removed.reason || 'waiting');
+            this._sync();
+            return;
+        }
+        this._saveDesk();
+        this._rebuildProtocolMenu('vnc');
+        this._sync();
+        return;
+    }
+    if (name === 'vnc-e-label') {
+        this._startFieldEdit('vnc-label', 'user', this._desk.host('vnc').label || '', 'Nazwa profilu');
+        return;
+    }
+    if (name === 'vnc-e-ip' || name === 'vnc-ip') {
         this._startFieldEdit('vnc-ip', 'ip', this._desk.formatHostIp('vnc'), 'IP VNC');
         return;
     }
-    if (name === 'vnc-port') {
+    if (name === 'vnc-e-port' || name === 'vnc-port') {
         this._startFieldEdit('vnc-port', 'port', String(this._desk.host('vnc').port), 'Port VNC');
         return;
     }
@@ -728,11 +917,11 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._onWinAction(name);
         return;
     }
-    if (screen === 'rdp' && name.indexOf('rdp-') === 0) {
+    if ((screen === 'rdp' || screen === 'rdp-edit') && name.indexOf('rdp-') === 0) {
         this._onRdpAction(name);
         return;
     }
-    if (screen === 'vnc' && name.indexOf('vnc-') === 0) {
+    if ((screen === 'vnc' || screen === 'vnc-edit') && name.indexOf('vnc-') === 0) {
         this._onVncAction(name);
         return;
     }
@@ -800,7 +989,8 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
-    if (!this._menu || this._menuScreen() !== 'rdp') {
+    var screen = this._menuScreen();
+    if (!this._menu || (screen !== 'rdp' && screen !== 'rdp-edit')) {
         return;
     }
     if (typeof this._menu.setItemHint !== 'function') {
@@ -809,8 +999,11 @@ AirPlayApp.prototype._paintRdpMenu = function () {
     var host = this._desk.host('rdp');
     var active = this._sessions.active() === 'rdp';
     var live = active ? this._sessions.getStatus() : { state: 'idle' };
+    var secretKind = this._desk.secretKind('rdp');
     var user = host.user || 'brak';
-    var pass = this._store.hasSecret('rdp') ? 'zapisane' : 'wpisz pokretlem';
+    var pass = this._store.hasSecret(secretKind) || this._store.hasSecret('rdp')
+        ? 'zapisane'
+        : 'wpisz pokretlem';
     var cert = '';
     if (live.state === 'cert' && live.detail) {
         cert = String(live.detail).slice(0, 18);
@@ -819,18 +1012,24 @@ AirPlayApp.prototype._paintRdpMenu = function () {
     } else {
         cert = 'brak odcisku';
     }
-    this._menu.setItemHint('rdp-connect', live.state === 'running' ? 'Sesja RDP' : 'Polacz teraz');
-    this._menu.setItemHint('rdp-cut', active ? 'Rozlacz teraz' : 'Sesja off');
-    this._menu.setItemHint('rdp-ip', this._desk.formatHostIp('rdp'));
-    this._menu.setItemHint('rdp-port', String(host.port));
-    this._menu.setItemHint('rdp-user', user.slice(0, 24));
-    this._menu.setItemHint('rdp-pass', pass);
-    this._menu.setItemHint('rdp-cert', cert);
-    this._menu.setItemHint('rdp-panel', this._panelUrl().replace('http://', '').slice(0, 28));
+    if (screen === 'rdp') {
+        this._menu.setItemHint('rdp-connect', live.state === 'running' ? 'Sesja RDP' : 'Polacz teraz');
+        this._menu.setItemHint('rdp-cut', active ? 'Rozlacz teraz' : 'Sesja off');
+        this._menu.setItemHint('rdp-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('rdp'));
+        this._menu.setItemHint('rdp-cert', cert);
+        this._menu.setItemHint('rdp-panel', this._panelUrl().replace('http://', '').slice(0, 28));
+        return;
+    }
+    this._menu.setItemHint('rdp-e-label', host.label || host.id);
+    this._menu.setItemHint('rdp-e-ip', this._desk.formatHostIp('rdp'));
+    this._menu.setItemHint('rdp-e-port', String(host.port));
+    this._menu.setItemHint('rdp-e-user', user.slice(0, 24));
+    this._menu.setItemHint('rdp-e-pass', pass);
 };
 
 AirPlayApp.prototype._paintVncMenu = function () {
-    if (!this._menu || this._menuScreen() !== 'vnc') {
+    var screen = this._menuScreen();
+    if (!this._menu || (screen !== 'vnc' && screen !== 'vnc-edit')) {
         return;
     }
     if (typeof this._menu.setItemHint !== 'function') {
@@ -839,10 +1038,15 @@ AirPlayApp.prototype._paintVncMenu = function () {
     var host = this._desk.host('vnc');
     var active = this._sessions.active() === 'vnc';
     var live = active ? this._sessions.getStatus() : { state: 'idle' };
-    this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'Sesja VNC' : 'Polacz teraz');
-    this._menu.setItemHint('vnc-cut', active ? 'Rozlacz teraz' : 'Sesja off');
-    this._menu.setItemHint('vnc-ip', this._desk.formatHostIp('vnc'));
-    this._menu.setItemHint('vnc-port', String(host.port));
+    if (screen === 'vnc') {
+        this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'Sesja VNC' : 'Polacz teraz');
+        this._menu.setItemHint('vnc-cut', active ? 'Rozlacz teraz' : 'Sesja off');
+        this._menu.setItemHint('vnc-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('vnc'));
+        return;
+    }
+    this._menu.setItemHint('vnc-e-label', host.label || host.id);
+    this._menu.setItemHint('vnc-e-ip', this._desk.formatHostIp('vnc'));
+    this._menu.setItemHint('vnc-e-port', String(host.port));
 };
 
 AirPlayApp.prototype._bindTile = function (name, protocol) {
@@ -867,8 +1071,16 @@ AirPlayApp.prototype._bindTile = function (name, protocol) {
                 self._onWinAction('win-back');
                 return;
             }
+            if (screen === 'rdp-edit') {
+                self._onRdpAction('rdp-e-back');
+                return;
+            }
             if (screen === 'rdp') {
                 self._onRdpAction('rdp-back');
+                return;
+            }
+            if (screen === 'vnc-edit') {
+                self._onVncAction('vnc-e-back');
                 return;
             }
             if (screen === 'vnc') {
@@ -1065,9 +1277,13 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
-    if (screen === 'rdp') {
+    if (screen === 'rdp' || screen === 'rdp-edit') {
         this._paint(choice);
         this._paintRdpMenu();
+        if (screen === 'rdp-edit') {
+            this._tellMenu('waiting');
+            return;
+        }
         if (!choice.ok) {
             this._tellMenu(choice.reason || 'brak-wifi');
             return;
@@ -1082,9 +1298,13 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
-    if (screen === 'vnc') {
+    if (screen === 'vnc' || screen === 'vnc-edit') {
         this._paint(choice);
         this._paintVncMenu();
+        if (screen === 'vnc-edit') {
+            this._tellMenu('waiting');
+            return;
+        }
         if (!choice.ok) {
             this._tellMenu(choice.reason || 'brak-wifi');
             return;

@@ -2,6 +2,7 @@
 
 var PROTOCOLS = ['airplay', 'windows', 'rdp', 'vnc'];
 var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
+var MAX_PROFILES = 6;
 
 function clamp(value, min, max, fallback) {
     var number = Number(value);
@@ -30,6 +31,10 @@ function hostOf(stored, port) {
         port: clamp(data.port, 1, 65535, port),
         user: typeof data.user === 'string' ? data.user.slice(0, 64) : '',
         cert: typeof data.cert === 'string' ? data.cert.slice(0, 128) : '',
+        label: typeof data.label === 'string'
+            ? data.label.replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 16)
+            : '',
+        id: typeof data.id === 'string' ? data.id.slice(0, 16) : '',
     };
 }
 
@@ -58,13 +63,48 @@ function parseIpv4(text) {
     return octets;
 }
 
+function nextId(list, prefix) {
+    var n = 1;
+    var used = {};
+    list.forEach(function (p) { used[p.id] = true; });
+    while (used[prefix + n] && n < 99) {
+        n += 1;
+    }
+    return prefix + n;
+}
+
+function loadProfiles(rawList, legacy, port, prefix) {
+    var list = [];
+    var i;
+    var item;
+    if (Array.isArray(rawList) && rawList.length) {
+        for (i = 0; i < rawList.length && list.length < MAX_PROFILES; i += 1) {
+            item = hostOf(rawList[i], port);
+            if (!item.id) {
+                item.id = nextId(list, prefix);
+            }
+            if (!item.label) {
+                item.label = item.id;
+            }
+            list.push(item);
+        }
+    }
+    if (!list.length) {
+        item = hostOf(legacy, port);
+        item.id = prefix + '1';
+        item.label = item.label || 'Profil 1';
+        list.push(item);
+    }
+    return list;
+}
+
 function createDesktopSettings(stored) {
     var data = stored || {};
     var mode = INPUT_MODES.indexOf(data.inputMode) === -1 ? 'auto' : data.inputMode;
-    var hosts = {
-        rdp: hostOf(data.rdp, 3389),
-        vnc: hostOf(data.vnc, 5900),
-    };
+    var rdpProfiles = loadProfiles(data.rdpProfiles, data.rdp, 3389, 'p');
+    var vncProfiles = loadProfiles(data.vncProfiles, data.vnc, 5900, 'p');
+    var rdpActive = data.rdpActive || rdpProfiles[0].id;
+    var vncActive = data.vncActive || vncProfiles[0].id;
     var airplayName = typeof data.airplayName === 'string' && data.airplayName.length
         ? data.airplayName.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16)
         : 'G21';
@@ -72,6 +112,38 @@ function createDesktopSettings(stored) {
         airplayName = 'G21';
     }
     var octet = 0;
+
+    function findProfile(list, id) {
+        var i;
+        for (i = 0; i < list.length; i += 1) {
+            if (list[i].id === id) {
+                return list[i];
+            }
+        }
+        return list[0];
+    }
+
+    function activeHost(protocol) {
+        if (protocol === 'rdp') {
+            return findProfile(rdpProfiles, rdpActive);
+        }
+        if (protocol === 'vnc') {
+            return findProfile(vncProfiles, vncActive);
+        }
+        return null;
+    }
+
+    function ensureActive(protocol) {
+        var list = protocol === 'rdp' ? rdpProfiles : vncProfiles;
+        var id = protocol === 'rdp' ? rdpActive : vncActive;
+        if (!findProfile(list, id) || (findProfile(list, id).id !== id && list[0])) {
+            if (protocol === 'rdp') {
+                rdpActive = list[0].id;
+            } else {
+                vncActive = list[0].id;
+            }
+        }
+    }
 
     return {
         protocols: PROTOCOLS,
@@ -98,46 +170,136 @@ function createDesktopSettings(stored) {
             airplayName = cleaned;
             return { ok: true, name: airplayName };
         },
-        host: function (protocol) { return hosts[protocol]; },
-        hostText: function (protocol) { return hostText(hosts[protocol]); },
+        profiles: function (protocol) {
+            return (protocol === 'rdp' ? rdpProfiles : vncProfiles).map(function (p) {
+                return {
+                    id: p.id,
+                    label: p.label || p.id,
+                    octets: p.octets.slice(),
+                    port: p.port,
+                    user: p.user,
+                    cert: p.cert,
+                    ip: p.octets.join('.'),
+                };
+            });
+        },
+        activeProfileId: function (protocol) {
+            ensureActive(protocol);
+            return protocol === 'rdp' ? rdpActive : vncActive;
+        },
+        setActiveProfile: function (protocol, id) {
+            var list = protocol === 'rdp' ? rdpProfiles : vncProfiles;
+            var found = findProfile(list, id);
+            if (!found || found.id !== id) {
+                return { ok: false, reason: 'unknown-profile' };
+            }
+            if (protocol === 'rdp') {
+                rdpActive = id;
+            } else {
+                vncActive = id;
+            }
+            return { ok: true, id: id };
+        },
+        addProfile: function (protocol) {
+            var list = protocol === 'rdp' ? rdpProfiles : vncProfiles;
+            var port = protocol === 'rdp' ? 3389 : 5900;
+            var profile;
+            if (list.length >= MAX_PROFILES) {
+                return { ok: false, reason: 'max-profiles' };
+            }
+            profile = hostOf({ port: port }, port);
+            profile.id = nextId(list, 'p');
+            profile.label = 'Profil ' + profile.id.slice(1);
+            list.push(profile);
+            if (protocol === 'rdp') {
+                rdpActive = profile.id;
+            } else {
+                vncActive = profile.id;
+            }
+            return { ok: true, id: profile.id, profile: profile };
+        },
+        removeProfile: function (protocol, id) {
+            var list = protocol === 'rdp' ? rdpProfiles : vncProfiles;
+            var i;
+            if (list.length <= 1) {
+                return { ok: false, reason: 'last-profile' };
+            }
+            for (i = 0; i < list.length; i += 1) {
+                if (list[i].id === id) {
+                    list.splice(i, 1);
+                    if (protocol === 'rdp' && rdpActive === id) {
+                        rdpActive = list[0].id;
+                    }
+                    if (protocol === 'vnc' && vncActive === id) {
+                        vncActive = list[0].id;
+                    }
+                    return { ok: true, id: id };
+                }
+            }
+            return { ok: false, reason: 'unknown-profile' };
+        },
+        setProfileLabel: function (protocol, id, label) {
+            var host = findProfile(protocol === 'rdp' ? rdpProfiles : vncProfiles, id);
+            if (!host || host.id !== id) {
+                return { ok: false, reason: 'unknown-profile' };
+            }
+            host.label = String(label || '').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 16) || host.id;
+            return { ok: true, label: host.label };
+        },
+        host: function (protocol) { return activeHost(protocol); },
+        hostText: function (protocol) { return hostText(activeHost(protocol)); },
+        secretKind: function (protocol) {
+            var host = activeHost(protocol);
+            if (!host) {
+                return protocol;
+            }
+            return protocol + '-' + host.id;
+        },
         setRdpHost: function (value) {
             var octets = Array.isArray(value) ? value : parseIpv4(value);
+            var host = activeHost('rdp');
             if (!octets) {
                 return { ok: false, reason: 'bad-host' };
             }
-            hosts.rdp.octets = octets.slice(0, 4);
-            return { ok: true, octets: hosts.rdp.octets.slice() };
+            host.octets = octets.slice(0, 4);
+            return { ok: true, octets: host.octets.slice() };
         },
         setRdpPort: function (value) {
-            hosts.rdp.port = clamp(value, 1, 65535, hosts.rdp.port || 3389);
-            return { ok: true, port: hosts.rdp.port };
+            var host = activeHost('rdp');
+            host.port = clamp(value, 1, 65535, host.port || 3389);
+            return { ok: true, port: host.port };
         },
         setRdpUser: function (value) {
-            hosts.rdp.user = String(value || '').slice(0, 64);
-            return { ok: true, user: hosts.rdp.user };
+            var host = activeHost('rdp');
+            host.user = String(value || '').slice(0, 64);
+            return { ok: true, user: host.user };
         },
         setRdpCert: function (value) {
-            hosts.rdp.cert = String(value || '').replace(/\s+/g, '').slice(0, 128);
-            return { ok: true, cert: hosts.rdp.cert };
+            var host = activeHost('rdp');
+            host.cert = String(value || '').replace(/\s+/g, '').slice(0, 128);
+            return { ok: true, cert: host.cert };
         },
         clearRdpCert: function () {
-            hosts.rdp.cert = '';
+            var host = activeHost('rdp');
+            host.cert = '';
             return { ok: true, cert: '' };
         },
         setVncHost: function (value) {
             var octets = Array.isArray(value) ? value : parseIpv4(value);
+            var host = activeHost('vnc');
             if (!octets) {
                 return { ok: false, reason: 'bad-host' };
             }
-            hosts.vnc.octets = octets.slice(0, 4);
-            return { ok: true, octets: hosts.vnc.octets.slice() };
+            host.octets = octets.slice(0, 4);
+            return { ok: true, octets: host.octets.slice() };
         },
         setVncPort: function (value) {
-            hosts.vnc.port = clamp(value, 1, 65535, hosts.vnc.port || 5900);
-            return { ok: true, port: hosts.vnc.port };
+            var host = activeHost('vnc');
+            host.port = clamp(value, 1, 65535, host.port || 5900);
+            return { ok: true, port: host.port };
         },
         formatHostIp: function (protocol) {
-            var host = hosts[protocol];
+            var host = activeHost(protocol);
             if (!host) {
                 return '';
             }
@@ -152,7 +314,7 @@ function createDesktopSettings(stored) {
         },
         octet: function () { return octet; },
         stepOctet: function (protocol, delta) {
-            var host = hosts[protocol];
+            var host = activeHost(protocol);
             if (!host) {
                 return { ok: false, reason: 'unknown-protocol' };
             }
@@ -173,8 +335,39 @@ function createDesktopSettings(stored) {
                 swapButtons: data.swapButtons === true,
                 inspect: data.inspect === true,
                 airplayName: airplayName,
-                rdp: { octets: hosts.rdp.octets.slice(), port: hosts.rdp.port, user: hosts.rdp.user, cert: hosts.rdp.cert },
-                vnc: { octets: hosts.vnc.octets.slice(), port: hosts.vnc.port, user: hosts.vnc.user },
+                rdpActive: rdpActive,
+                vncActive: vncActive,
+                rdpProfiles: rdpProfiles.map(function (p) {
+                    return {
+                        id: p.id,
+                        label: p.label,
+                        octets: p.octets.slice(),
+                        port: p.port,
+                        user: p.user,
+                        cert: p.cert,
+                    };
+                }),
+                vncProfiles: vncProfiles.map(function (p) {
+                    return {
+                        id: p.id,
+                        label: p.label,
+                        octets: p.octets.slice(),
+                        port: p.port,
+                        user: p.user,
+                    };
+                }),
+                // Legacy single-host fields keep older tools working.
+                rdp: {
+                    octets: activeHost('rdp').octets.slice(),
+                    port: activeHost('rdp').port,
+                    user: activeHost('rdp').user,
+                    cert: activeHost('rdp').cert,
+                },
+                vnc: {
+                    octets: activeHost('vnc').octets.slice(),
+                    port: activeHost('vnc').port,
+                    user: activeHost('vnc').user,
+                },
             };
         },
     };
@@ -183,6 +376,7 @@ function createDesktopSettings(stored) {
 module.exports = {
     PROTOCOLS: PROTOCOLS,
     INPUT_MODES: INPUT_MODES,
+    MAX_PROFILES: MAX_PROFILES,
     parseIpv4: parseIpv4,
     createDesktopSettings: createDesktopSettings,
 };

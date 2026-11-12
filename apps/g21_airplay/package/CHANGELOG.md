@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.40
+
+- RDP/VNC: profile (Dodaj/Edytuj/Usun), naprawa CLAIM/dotyku menu, czytelniejszy blad zapisu panelu WWW.
+
 ## 0.1.39
 
 - Menu Windows (Win+K / MS-MICE): emisja z PC obok AirPlay/RDP/VNC; jedna sesja naraz; wymaga narzedzia 0.1.11.

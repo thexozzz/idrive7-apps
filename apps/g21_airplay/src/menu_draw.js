@@ -326,21 +326,37 @@ var AIRPLAY_ITEMS = [
 var RDP_ITEMS = [
     { name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' },
     { name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' },
-    { name: 'rdp-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
-    { name: 'rdp-port', title: 'Port', hint: '3389', icon: 'gear' },
-    { name: 'rdp-user', title: 'Konto', hint: 'user', icon: 'user' },
-    { name: 'rdp-pass', title: 'Haslo', hint: 'wpisz pokretlem', icon: 'tag' },
+    { name: 'rdp-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
+    { name: 'rdp-edit', title: 'Edytuj', hint: 'IP / konto', icon: 'gear' },
+    { name: 'rdp-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' },
     { name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' },
     { name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' },
     { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
+var RDP_EDIT_ITEMS = [
+    { name: 'rdp-e-label', title: 'Nazwa', hint: 'Profil', icon: 'tag' },
+    { name: 'rdp-e-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
+    { name: 'rdp-e-port', title: 'Port', hint: '3389', icon: 'gear' },
+    { name: 'rdp-e-user', title: 'Konto', hint: 'user', icon: 'user' },
+    { name: 'rdp-e-pass', title: 'Haslo', hint: 'wpisz pokretlem', icon: 'tag' },
+    { name: 'rdp-e-back', title: 'Wstecz', hint: 'Lista RDP', icon: 'back' }
+];
+
 var VNC_ITEMS = [
     { name: 'vnc-connect', title: 'Polacz', hint: 'Sesja VNC', icon: 'grid' },
     { name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' },
-    { name: 'vnc-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
-    { name: 'vnc-port', title: 'Port', hint: '5900', icon: 'gear' },
+    { name: 'vnc-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' },
+    { name: 'vnc-edit', title: 'Edytuj', hint: 'IP / port', icon: 'gear' },
+    { name: 'vnc-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' },
     { name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
+var VNC_EDIT_ITEMS = [
+    { name: 'vnc-e-label', title: 'Nazwa', hint: 'Profil', icon: 'tag' },
+    { name: 'vnc-e-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
+    { name: 'vnc-e-port', title: 'Port', hint: '5900', icon: 'gear' },
+    { name: 'vnc-e-back', title: 'Wstecz', hint: 'Lista VNC', icon: 'back' }
 ];
 
 var WINDOWS_ITEMS = [
@@ -356,7 +372,9 @@ var SCREENS = {
     airplay: AIRPLAY_ITEMS,
     windows: WINDOWS_ITEMS,
     rdp: RDP_ITEMS,
-    vnc: VNC_ITEMS
+    'rdp-edit': RDP_EDIT_ITEMS,
+    vnc: VNC_ITEMS,
+    'vnc-edit': VNC_EDIT_ITEMS
 };
 
 function message(type, payload) {
@@ -833,26 +851,46 @@ function createMenuSurface(opts) {
     }
 
     function sendClaim() {
-        if (!native || !touchOn || !front) {
+        // mgu-render: CLAIM = u32 n + n*(f32 x,y,w,h). Without a claim, TOUCH
+        // never reaches the app. Do not gate on X_STATE "front" — on this G21
+        // it goes false right after READY and used to block claims forever.
+        if (!ready || !shown) {
             return;
         }
-        var b = Buffer.alloc(20);
-        b.writeUInt32LE(1, 0);
-        b.writeFloatLE(CONTENT.x, 4);
-        b.writeFloatLE(CONTENT.y, 8);
-        b.writeFloatLE(CONTENT.w, 12);
-        b.writeFloatLE(CONTENT.h, 16);
+        var w = screen.w || 1920;
+        var h = screen.h || 720;
+        var b = Buffer.alloc(36);
+        b.writeUInt32LE(2, 0);
+        b.writeFloatLE(0, 4);
+        b.writeFloatLE(0, 8);
+        b.writeFloatLE(w, 12);
+        b.writeFloatLE(h, 16);
+        b.writeFloatLE(CONTENT.x, 20);
+        b.writeFloatLE(CONTENT.y, 24);
+        b.writeFloatLE(CONTENT.w, 28);
+        b.writeFloatLE(CONTENT.h, 32);
         write(message(CLAIM, b));
+        note('menu-claim ' + w + 'x' + h);
     }
 
     function hitRow(x, y) {
         var lay = menuLayout(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
         var i;
         var bubble;
-        for (i = 0; i < lay.bubbles.length; i += 1) {
-            bubble = lay.bubbles[i];
-            if (x >= bubble.x && x < bubble.x + bubble.w && y >= bubble.y && y < bubble.y + bubble.h) {
-                return i;
+        var pts = [
+            { x: x, y: y },
+            { x: x + CONTENT.x, y: y + CONTENT.y },
+            { x: x - CONTENT.x, y: y - CONTENT.y }
+        ];
+        var p;
+        var pi;
+        for (pi = 0; pi < pts.length; pi += 1) {
+            p = pts[pi];
+            for (i = 0; i < lay.bubbles.length; i += 1) {
+                bubble = lay.bubbles[i];
+                if (p.x >= bubble.x && p.x < bubble.x + bubble.w && p.y >= bubble.y && p.y < bubble.y + bubble.h) {
+                    return i;
+                }
             }
         }
         return -1;
@@ -883,10 +921,10 @@ function createMenuSurface(opts) {
             heading = 'AirPlay';
         } else if (next === 'windows') {
             heading = 'Windows';
-        } else if (next === 'rdp') {
-            heading = 'RDP';
-        } else if (next === 'vnc') {
-            heading = 'VNC';
+        } else if (next === 'rdp' || next === 'rdp-edit') {
+            heading = next === 'rdp-edit' ? 'Edytuj RDP' : 'RDP';
+        } else if (next === 'vnc' || next === 'vnc-edit') {
+            heading = next === 'vnc-edit' ? 'Edytuj VNC' : 'VNC';
         } else {
             heading = 'G21';
         }
@@ -1026,15 +1064,21 @@ function createMenuSurface(opts) {
             } else if (type === CLOSED) {
                 note('menu-closed');
             } else if (type === TOUCH && body.length >= 12 && shown) {
-                if (!edit && body.readUInt32LE(0) === 1) {
-                    var hit = hitRow(body.readFloatLE(4), body.readFloatLE(8));
+                // Iterio/native: phase 1=down, 2=move, 3=up. Same type 105 as
+                // upstream CCU, so require 12+ byte touch payload.
+                var phase = body.readUInt32LE(0);
+                var tx = body.readFloatLE(4);
+                var ty = body.readFloatLE(8);
+                note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
+                if (!edit && phase === 1) {
+                    var hit = hitRow(tx, ty);
                     if (hit >= 0) {
                         selected = hit;
                         paint();
                         press();
                     }
                 }
-            } else if (type === CCU && body.length >= 5 && shown) {
+            } else if (type === CCU && body.length >= 5 && body.length < 12 && shown) {
                 onControl(body.readUInt16BE(1), body[3]);
             } else if (type === X_CCU && body.length >= 5 && shown) {
                 onControl(body.readUInt16BE(1), body[3]);
@@ -1117,6 +1161,24 @@ function createMenuSurface(opts) {
         move: move,
         press: press,
         setScreen: setScreen,
+        setItems: function (nextItems, nextHeading) {
+            items = (nextItems || []).map(function (item) {
+                return {
+                    name: item.name,
+                    title: item.title,
+                    hint: item.hint || '',
+                    icon: item.icon || 'play'
+                };
+            });
+            if (typeof nextHeading === 'string') {
+                heading = nextHeading;
+            }
+            if (selected >= items.length) {
+                selected = 0;
+            }
+            noted = false;
+            paint();
+        },
         setItemHint: setItemHint,
         screen: function () { return screenName; },
         setStatus: function (text) {
@@ -1145,7 +1207,9 @@ module.exports = {
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     WINDOWS_ITEMS: WINDOWS_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
+    RDP_EDIT_ITEMS: RDP_EDIT_ITEMS,
     VNC_ITEMS: VNC_ITEMS,
+    VNC_EDIT_ITEMS: VNC_EDIT_ITEMS,
     SCREENS: SCREENS,
     ICONS: ICONS,
     message: message,

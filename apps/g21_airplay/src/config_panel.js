@@ -110,20 +110,46 @@ function createConfigPanel(opts) {
         var host = String(body.host || body.ip || '').trim();
         var user = String(body.user || '').trim().slice(0, 64);
         var portValue = Number(body.port || 3389);
-        var airplayName = String(body.airplayName || desk.airplayName()).trim();
+        var label = String(body.label || '').trim();
         var password = Object.prototype.hasOwnProperty.call(body, 'password')
             ? String(body.password)
             : null;
         var setHost = desk.setRdpHost(host);
+        var secretKind;
         if (!setHost.ok) {
-            return setHost;
+            return {
+                ok: false,
+                reason: setHost.reason || 'bad-host',
+                message: 'Zly adres IP',
+            };
         }
         desk.setRdpPort(portValue);
         desk.setRdpUser(user);
-        desk.setAirplayName(airplayName);
-        store.writeSettings(desk.snapshot());
+        if (label && typeof desk.setProfileLabel === 'function') {
+            desk.setProfileLabel('rdp', desk.activeProfileId('rdp'), label);
+        }
+        try {
+            store.writeSettings(desk.snapshot());
+        } catch (err) {
+            return {
+                ok: false,
+                reason: 'write-failed',
+                message: 'Zapis ustawien nie udal sie',
+            };
+        }
+        secretKind = typeof desk.secretKind === 'function' ? desk.secretKind('rdp') : 'rdp';
         if (password !== null && password.length) {
-            store.writeSecret('rdp', password);
+            try {
+                store.writeSecret(secretKind, password);
+                // Keep legacy rdp.secret in sync for older sessions.
+                store.writeSecret('rdp', password);
+            } catch (secretErr) {
+                return {
+                    ok: false,
+                    reason: 'secret-write-failed',
+                    message: 'Zapis hasla nie udal sie',
+                };
+            }
         }
         return { ok: true, message: 'Zapisano RDP ' + host };
     }
