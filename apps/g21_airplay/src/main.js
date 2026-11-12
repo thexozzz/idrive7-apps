@@ -333,7 +333,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.78',
+        version: (this._packageJson && this._packageJson.version) || '0.1.79',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -423,7 +423,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.78') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.79') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1080,13 +1080,14 @@ AirPlayApp.prototype._stopVideoTimer = function () {
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
+    // 5 fps. A 20 fps BGRA convert of the whole screen hit the OAP memory cap.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
         } else {
             self._stopVideoTimer();
         }
-    }, 50);
+    }, 200);
 };
 
 AirPlayApp.prototype._outputLabel = function (name) {
@@ -1116,7 +1117,15 @@ AirPlayApp.prototype._startAirplaySelected = function () {
     }
     this._airOutput = names[0];
     this._writeAirplayAuth();
-    this._writeSessionOutput(names.join(','));
+    // central pixels are the menu VIDEO op. g21-present's waylandsink is a
+    // black layer on top of that, so the tool must not be asked for central.
+    var toolOut = [];
+    names.forEach(function (item) {
+        if (item !== 'central') {
+            toolOut.push(item);
+        }
+    });
+    this._writeSessionOutput(toolOut.length ? toolOut.join(',') : 'off');
     if (this._frameBridge) {
         this._frameBridge.stop();
     }
@@ -1142,7 +1151,12 @@ AirPlayApp.prototype._endStream = function (protocol) {
     if (this._frameBridge) {
         this._frameBridge.stop();
     }
-    this._writeSessionOutput('central');
+    if (back === 'airplay') {
+        this._writeSessionOutput('off');
+        this._dropMirror();
+    } else {
+        this._writeSessionOutput('central');
+    }
     this._rdpOutput = 'central';
     this._airOutput = 'central';
     this._display.select('central');
@@ -1166,6 +1180,8 @@ AirPlayApp.prototype._enterStream = function (protocol) {
     this._streamProtocol = protocol;
     if (protocol === 'airplay') {
         this._decoded = null;
+        this._mirrorPainted = false;
+        this._dropMirror();
         this._startVideoTimer();
     }
     this._chosen = protocol;
@@ -1794,8 +1810,7 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     out = this._settings.outputs().map(this._outputLabel.bind(this)).join('+') || 'brak';
     mode = receiver && receiver.mode ? String(receiver.mode) : '';
     client = this._streamProtocol === 'airplay' ? this._readAirplayClient() : { state: '', detail: '' };
-    mirrored = !!(this._decoded && this._streamProtocol === 'airplay')
-        || (client.state === 'mirroring');
+    mirrored = !!(this._decoded && this._streamProtocol === 'airplay');
     if (mirrored) {
         headline = 'THEiPlay — lustro';
     } else if (client.state === 'pair') {
@@ -2311,7 +2326,12 @@ AirPlayApp.prototype._sync = function () {
             }
             receiver = uplink.readReceiverStatus(text);
             this._takeFrame();
-            this._paintStreamInfo(air, receiver);
+            if (!this._mirrorPainted) {
+                this._paintStreamInfo(air, receiver);
+                if (this._decoded) {
+                    this._mirrorPainted = true;
+                }
+            }
             clientLive = this._readAirplayClient();
             if (clientLive.state === 'mirroring' || this._decoded) {
                 this._tellMenu('running');
@@ -2507,12 +2527,30 @@ AirPlayApp.prototype._sync = function () {
     this._tellMenu(choice.ok ? 'waiting' : (choice.reason || 'brak-wifi'));
 };
 
+AirPlayApp.prototype._dropMirror = function () {
+    this._decoded = null;
+    this._mirrorPainted = false;
+    if (this._mirrorVideo) {
+        try {
+            this._mirrorVideo.close();
+        } catch (err) {
+            noteStart('mirror-close ' + (err && err.message));
+        }
+        this._mirrorVideo = null;
+    }
+    try {
+        fs.unlinkSync('/dev/shm/mgu-video-g21airplay');
+    } catch (err) {
+        /* already gone */
+    }
+};
+
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
     var live;
     var payload;
     var box;
-    var scaled;
+    var now;
     try {
         parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
     } catch (err) {
@@ -2521,7 +2559,9 @@ AirPlayApp.prototype._takeFrame = function () {
     if (!parsed) {
         return;
     }
-    this._decoded = parsed;
+    // Keep only the size. Holding the I420 buffer, plus a full-screen BGRA
+    // convert for g21-present, is what tripped MEMORY_LIMIT_REACHED.
+    this._decoded = { w: parsed.w, h: parsed.h };
     try {
         if (!this._mirrorVideo) {
             this._mirrorVideo = mirrorVideo.createMirrorVideo();
@@ -2530,20 +2570,13 @@ AirPlayApp.prototype._takeFrame = function () {
     } catch (mirrorErr) {
         noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
     }
-    live = this._display.playing ? this._display.playing() : [this._display.active()];
-    payload = {};
-    if (live.indexOf('central') !== -1 && this._frames) {
-        box = this._settings.picture('central');
-        if (box.x === 0 && box.y === 0 && box.w >= 1920 && box.h >= 720) {
-            scaled = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, 1920, 720);
-        } else {
-            scaled = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
-            scaled = videoDecoder.placeBgra(scaled.bgra, box.w, box.h, 1920, 720, box);
-        }
-        if (scaled && scaled.bgra) {
-            this._frames.write(scaled);
-        }
+    live = this._display.playing ? this._display.playing() : [];
+    now = Date.now();
+    if (this._atlasAt && (now - this._atlasAt) < 1000) {
+        return;
     }
+    this._atlasAt = now;
+    payload = {};
     if (live.indexOf('cluster') !== -1) {
         box = this._settings.picture('cluster');
         payload.cluster = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, box.w, box.h);
