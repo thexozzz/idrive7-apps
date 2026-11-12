@@ -123,10 +123,78 @@ function fitI420(i420, sw, sh, dw, dh, mode) {
     return { w: dw, h: dh, rect: rect, i420: out };
 }
 
+function rotateI420(i420, w, h, quarters) {
+    var q = ((quarters % 4) + 4) % 4;
+    var ySize = w * h;
+    var uvW = w >> 1;
+    var uvH = h >> 1;
+    var srcU = ySize;
+    var srcV = ySize + uvW * uvH;
+    var nw;
+    var nh;
+    var out;
+    var x;
+    var y;
+    var nx;
+    var ny;
+    var duvW;
+    var duvH;
+    var uOff;
+    var vOff;
+    if (!q) {
+        return { i420: i420, w: w, h: h };
+    }
+    if (q === 2) {
+        nw = w;
+        nh = h;
+    } else {
+        nw = h;
+        nh = w;
+    }
+    duvW = nw >> 1;
+    duvH = nh >> 1;
+    out = Buffer.alloc(nw * nh * 3 / 2);
+    uOff = nw * nh;
+    vOff = uOff + duvW * duvH;
+    for (y = 0; y < h; y += 1) {
+        for (x = 0; x < w; x += 1) {
+            if (q === 1) {
+                nx = h - 1 - y;
+                ny = x;
+            } else if (q === 2) {
+                nx = w - 1 - x;
+                ny = h - 1 - y;
+            } else {
+                nx = y;
+                ny = w - 1 - x;
+            }
+            out[ny * nw + nx] = i420[y * w + x];
+        }
+    }
+    for (y = 0; y < uvH; y += 1) {
+        for (x = 0; x < uvW; x += 1) {
+            if (q === 1) {
+                nx = uvH - 1 - y;
+                ny = x;
+            } else if (q === 2) {
+                nx = uvW - 1 - x;
+                ny = uvH - 1 - y;
+            } else {
+                nx = y;
+                ny = uvW - 1 - x;
+            }
+            out[uOff + ny * duvW + nx] = i420[srcU + y * uvW + x];
+            out[vOff + ny * duvW + nx] = i420[srcV + y * uvW + x];
+        }
+    }
+    return { i420: out, w: nw, h: nh };
+}
+
 module.exports = {
     evenDown: evenDown,
     even2: even2,
     even4: even4,
     fitRect: fitRect,
     fitI420: fitI420,
+    rotateI420: rotateI420,
 };

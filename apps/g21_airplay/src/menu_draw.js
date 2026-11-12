@@ -399,13 +399,19 @@ var AIR_OUT_ITEMS = [
     { name: 'air-out-hud', title: 'HUD', hint: 'wyłączony', icon: 'tag' },
     { name: 'air-out-cluster', title: 'Zegary', hint: 'wyłączony', icon: 'grid' },
     { name: 'air-area', title: 'Mapa', hint: 'miejsce na zegarach', icon: 'grid' },
+    { name: 'air-out-box', title: 'Okno', hint: 'rozmiar i pozycja', icon: 'desktop' },
     { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 
 var AIR_BOX_ITEMS = [
-    { name: 'air-box-target', title: 'Środek', hint: 'OK: następny ekran', icon: 'desktop' },
-    { name: 'air-box-size', title: 'Wielkość', hint: 'pokrętło: proporcje', icon: 'desktop' },
-    { name: 'air-box-pos', title: 'Pozycja', hint: 'OK: przesuwaj', icon: 'grid' },
+    { name: 'air-box-target', title: 'Ekran', hint: 'klik: nastepny', icon: 'desktop' },
+    { name: 'air-box-bigger', title: 'Wiekszy', hint: 'klik', icon: 'desktop' },
+    { name: 'air-box-smaller', title: 'Mniejszy', hint: 'klik', icon: 'desktop' },
+    { name: 'air-box-up', title: 'Gora', hint: 'klik', icon: 'grid' },
+    { name: 'air-box-down', title: 'Dol', hint: 'klik', icon: 'grid' },
+    { name: 'air-box-left', title: 'Lewo', hint: 'klik', icon: 'grid' },
+    { name: 'air-box-right', title: 'Prawo', hint: 'klik', icon: 'grid' },
+    { name: 'air-box-rot', title: 'Obrot 0', hint: 'klik: +90', icon: 'play' },
     { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
 ];
 
@@ -1033,14 +1039,12 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     panelX = page.ox + 80;
     panelW = page.boxW - 160;
         if (info && info.window && info.window.w > 80 && info.window.h > 80) {
-            var win = streamWindow(info.window, page);
-            if (crumb && win.y < page.oy + 72) {
-                win.h -= (page.oy + 72 - win.y);
-                win.y = page.oy + 72;
-                if (win.h < 80) {
-                    win.h = 80;
-                }
-            }
+            var win = {
+                x: info.window.x | 0,
+                y: info.window.y | 0,
+                w: info.window.w | 0,
+                h: info.window.h | 0
+            };
             draw.rect(win.x, win.y, win.w, win.h, PAGE);
         if (info.video) {
             draw.video(win.x, win.y, win.w, win.h, 1);
@@ -1263,8 +1267,11 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     var wh = Math.max(12, Math.round((preview.h || limitH) * scale));
     var mode = preview.mode || '';
     var caption;
-    if (mode !== 'move' && selectedItem && selectedItem.name === 'air-box-size') {
+    if (mode !== 'move' && selectedItem && (selectedItem.name === 'air-box-bigger' || selectedItem.name === 'air-box-smaller')) {
         mode = 'size';
+    }
+    if (selectedItem && (selectedItem.name === 'air-box-up' || selectedItem.name === 'air-box-down' || selectedItem.name === 'air-box-left' || selectedItem.name === 'air-box-right')) {
+        mode = 'move';
     }
     if (ww > stageW) {
         ww = stageW;
@@ -1287,7 +1294,7 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
         caption = String(preview.label) + '  ' + caption;
     }
     draw.text(caption, x, y + stageH + 18, 3, HINT);
-    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0), x, y + stageH + 48, 3, MUTED);
+    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0) + '  obrot ' + String(preview.rotate || 0), x, y + stageH + 48, 3, MUTED);
 }
 
 function encoderStep(previous, next) {
@@ -2243,6 +2250,7 @@ function createMenuSurface(opts) {
                 limitW: info.limitW | 0,
                 limitH: info.limitH | 0,
                 mode: info.mode ? String(info.mode) : '',
+                rotate: info.rotate | 0,
                 label: info.label ? String(info.label) : ''
             } : null;
             if (!edit) {

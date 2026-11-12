@@ -281,8 +281,9 @@ function AirPlayApp() {
                 if (!selfRouter._mirrorVideo) {
                     selfRouter._mirrorVideo = mirrorVideo.createMirrorVideo();
                 }
-                var wrote = selfRouter._mirrorVideo.push(frame.i420, frame.w, frame.h);
-                selfRouter._decoded = { w: frame.w, h: frame.h };
+                var shown = selfRouter._turnedFrame(frame, 'central');
+                var wrote = selfRouter._mirrorVideo.push(shown.i420, shown.w, shown.h);
+                selfRouter._decoded = { w: shown.w, h: shown.h };
                 if (wrote === 'new' && selfRouter._menu && typeof selfRouter._menu.rebindVideo === 'function') {
                     selfRouter._menu.rebindVideo();
                 }
@@ -365,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.87',
+        version: (this._packageJson && this._packageJson.version) || '0.1.88',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -455,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.87') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.88') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -779,20 +780,8 @@ AirPlayApp.prototype._panelUrl = function () {
     return 'http://MGU:1235';
 };
 
-AirPlayApp.prototype._adjustMenu = function (name, delta) {
-    if (name !== 'air-box-size' || !delta || this._boxMove) {
-        if (this._boxMove && (name === 'air-box-size' || name === 'air-box-pos')) {
-            return true;
-        }
-        if (this._labelMove && name === 'label-pos') {
-            return true;
-        }
-        return false;
-    }
-    this._settings.scale(this._boxFocus || 'central', delta > 0 ? 1 : -1);
-    this._saveWindows();
-    this._paintAirBox();
-    return true;
+AirPlayApp.prototype._adjustMenu = function () {
+    return false;
 };
 
 AirPlayApp.prototype._tiltBox = function (dir) {
@@ -1130,6 +1119,12 @@ AirPlayApp.prototype._startVideoTimer = function () {
             self._stopVideoTimer();
         }
     }, 33);
+};
+
+AirPlayApp.prototype._turnedFrame = function (frame, name) {
+    var box = this._settings.picture(name);
+    var quarters = ((box && box.rotate) || 0) / 90;
+    return frameFit.rotateI420(frame.i420, frame.w, frame.h, quarters);
 };
 
 AirPlayApp.prototype._outputLabel = function (name) {
@@ -1476,18 +1471,31 @@ AirPlayApp.prototype._onAirAction = function (name) {
     if (name === 'air-box-target') {
         var order = ['central', 'cluster', 'hud'];
         var at = order.indexOf(this._boxFocus);
-        this._boxMove = false;
         this._boxFocus = order[(at + 1) % order.length];
+        this._clusterLayer = '';
         this._paintAirBox();
         return;
     }
-    if (name === 'air-box-size') {
-        this._boxMove = false;
+    if (name === 'air-box-bigger' || name === 'air-box-smaller') {
+        this._settings.scale(this._boxFocus || 'central', name === 'air-box-bigger' ? 1 : -1);
+        this._saveWindows();
+        this._clusterLayer = '';
         this._paintAirBox();
         return;
     }
-    if (name === 'air-box-pos') {
-        this._boxMove = !this._boxMove;
+    if (name === 'air-box-up' || name === 'air-box-down' || name === 'air-box-left' || name === 'air-box-right') {
+        var axis = (name === 'air-box-left' || name === 'air-box-right') ? 'x' : 'y';
+        var step = (name === 'air-box-right' || name === 'air-box-down') ? 1 : -1;
+        this._settings.nudge(this._boxFocus || 'central', axis, step);
+        this._saveWindows();
+        this._clusterLayer = '';
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-rot') {
+        this._settings.turn(this._boxFocus || 'central');
+        this._saveWindows();
+        this._clusterLayer = '';
         this._paintAirBox();
         return;
     }
@@ -2043,21 +2051,35 @@ AirPlayApp.prototype._paintAirBox = function () {
         return;
     }
     box = this._settings.picture(name);
+    var shown = box;
+    var limitW = limit.w;
+    var limitH = limit.h;
+    if (name === 'cluster') {
+        var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
+        limitW = panel ? 1920 : 1088;
+        limitH = panel ? 720 : 480;
+        shown = this._mapBox(box, limitW, limitH);
+    }
     this._menu.setItemTitle('air-box-target', this._outputLabel(name));
-    this._menu.setItemHint('air-box-target', 'OK: następny ekran');
-    this._menu.setItemHint('air-box-size', box.w + 'x' + box.h);
-    this._menu.setItemTitle('air-box-pos', this._boxMove ? 'Ruszaj' : 'Pozycja');
-    this._menu.setItemHint('air-box-pos', this._boxMove ? 'strzałki, OK: koniec' : 'OK: przesuwaj');
+    this._menu.setItemHint('air-box-target', 'klik: nastepny ekran');
+    this._menu.setItemHint('air-box-bigger', shown.w + 'x' + shown.h);
+    this._menu.setItemHint('air-box-smaller', shown.w + 'x' + shown.h);
+    this._menu.setItemHint('air-box-up', 'y ' + shown.y);
+    this._menu.setItemHint('air-box-down', 'y ' + shown.y);
+    this._menu.setItemHint('air-box-left', 'x ' + shown.x);
+    this._menu.setItemHint('air-box-right', 'x ' + shown.x);
+    this._menu.setItemTitle('air-box-rot', 'Obrot ' + (box.rotate || 0));
+    this._menu.setItemHint('air-box-rot', 'klik: +90');
     if (typeof this._menu.setBoxPreview === 'function') {
         this._menu.setBoxPreview({
-            x: box.x,
-            y: box.y,
-            w: box.w,
-            h: box.h,
-            limitW: limit.w,
-            limitH: limit.h,
-            mode: this._boxMove ? 'move' : '',
-            label: this._outputLabel(name)
+            x: shown.x,
+            y: shown.y,
+            w: shown.w,
+            h: shown.h,
+            limitW: limitW,
+            limitH: limitH,
+            rotate: box.rotate || 0,
+            label: this._outputLabel(name) + '  ' + shown.w + 'x' + shown.h
         });
     }
 };
@@ -2792,23 +2814,69 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     });
 };
 
+AirPlayApp.prototype._mapBox = function (box, limitW, limitH) {
+    var x = Math.round((box.x || 0) * limitW / 1920);
+    var y = Math.round((box.y || 0) * limitH / 720);
+    var w = Math.round((box.w || 1920) * limitW / 1920);
+    var h = Math.round((box.h || 720) * limitH / 720);
+    w -= w % 4;
+    h -= h % 2;
+    x -= x % 2;
+    y -= y % 2;
+    if (w < 16) {
+        w = 16;
+    }
+    if (h < 16) {
+        h = 16;
+    }
+    if (w > limitW) {
+        w = limitW - (limitW % 4);
+    }
+    if (h > limitH) {
+        h = limitH - (limitH % 2);
+    }
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    if (x + w > limitW) {
+        x = limitW - w;
+    }
+    if (y + h > limitH) {
+        y = limitH - h;
+    }
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    return { x: x, y: y, w: w, h: h };
+};
+
 AirPlayApp.prototype._presentCluster = function (frame) {
     var experimental = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
     var name = experimental ? 'cluster' : 'map';
-    var dw = experimental ? 1920 : 1088;
-    var dh = experimental ? 720 : 480;
+    var limitW = experimental ? 1920 : 1088;
+    var limitH = experimental ? 720 : 480;
+    var box = this._settings.picture('cluster');
+    var placed = this._mapBox(box, limitW, limitH);
     var fit = this._desk.airFit && this._desk.airFit() === 'cover' ? 'cover' : 'contain';
-    var fitted = frameFit.fitI420(frame.i420, frame.w, frame.h, dw, dh, fit);
+    var turned = this._turnedFrame(frame, 'cluster');
+    var fitted = frameFit.fitI420(turned.i420, turned.w, turned.h, placed.w, placed.h, fit);
+    var key = name + ':' + placed.x + ',' + placed.y + ':' + placed.w + 'x' + placed.h;
     var made;
     var sent;
-    if (this._clusterLayer !== name) {
+    if (this._clusterLayer !== key) {
         this._adapter.destroyLayer('map');
         this._adapter.destroyLayer('cluster');
         made = this._adapter.createLayer(name, {
-            x: 0,
-            y: 0,
-            w: fitted.w,
-            h: fitted.h,
+            x: placed.x,
+            y: placed.y,
+            w: placed.w,
+            h: placed.h,
             fps: this._desk.airClusterFps ? this._desk.airClusterFps() : 4,
         });
         if (!made.ok) {
@@ -2819,8 +2887,11 @@ AirPlayApp.prototype._presentCluster = function (frame) {
             this._clusterLayer = '';
             return;
         }
-        this._clusterLayer = name;
-        noteStart('cluster-mirror ' + name + ' ' + fitted.w + 'x' + fitted.h + ' ' + fit);
+        this._clusterLayer = key;
+        noteStart('cluster-mirror ' + name + ' ' + placed.w + 'x' + placed.h + ' @' + placed.x + ',' + placed.y);
+        if (made.w !== placed.w || made.h !== placed.h) {
+            fitted = frameFit.fitI420(turned.i420, turned.w, turned.h, made.w, made.h, fit);
+        }
     }
     sent = this._adapter.updateFrame(name, fitted.i420);
     if (!sent.ok && sent.reason !== 'bad-frame') {
@@ -2886,7 +2957,8 @@ AirPlayApp.prototype._takeFrame = function () {
         });
         this._router.tick(Date.now());
         if (outs.indexOf('hud') !== -1 && this._parkFlag() === true) {
-            this._placeMirrorFaces(parsed.i420, parsed.w, parsed.h);
+            var hudFrame = this._turnedFrame(parsed, 'hud');
+            this._placeMirrorFaces(hudFrame.i420, hudFrame.w, hudFrame.h);
         } else {
             this._dropMirrorFace('hud');
         }

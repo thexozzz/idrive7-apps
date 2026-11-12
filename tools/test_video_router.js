@@ -25,6 +25,10 @@ assert.strictEqual(fitted.i420.length, 1088 * 480 * 3 / 2);
 assert.strictEqual(fitted.i420[0], 16);
 assert.strictEqual(fitted.i420[(fitted.rect.y + 2) * 1088 + fitted.rect.x + 2], 235);
 
+var turned = fit.rotateI420(white(8, 4), 8, 4, 1);
+assert.strictEqual(turned.w, 4);
+assert.strictEqual(turned.h, 8);
+assert.strictEqual(turned.i420.length, 4 * 8 * 3 / 2);
 var cover = fit.fitRect(1280, 720, 1088, 480, 'cover');
 assert.ok(cover.w >= 1088 || cover.h >= 480);
 assert.strictEqual(cover.w % 4, 0);

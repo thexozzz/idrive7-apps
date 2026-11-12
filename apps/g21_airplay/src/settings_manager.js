@@ -48,7 +48,9 @@ function clampBox(output, box) {
         w: width,
         h: height,
         fps: fps,
-        rotate: box.rotate || 0,
+        rotate: ((box.rotate || 0) % 360) === 90 || ((box.rotate || 0) % 360) === 180 || ((box.rotate || 0) % 360) === 270
+            ? (box.rotate % 360)
+            : 0,
     };
 }
 
@@ -198,6 +200,20 @@ function createSettings(stored) {
         },
         fill: function (name) {
             picture[name] = clampBox(name, {});
+            return picture[name];
+        },
+        turn: function (name) {
+            var box = picture[name];
+            var rot = ((box.rotate || 0) + 90) % 360;
+            picture[name] = clampBox(name, {
+                scale: box.scale,
+                x: box.x,
+                y: box.y,
+                w: box.w,
+                h: box.h,
+                fps: box.fps,
+                rotate: rot
+            });
             return picture[name];
         },
         snapshot: function () {
