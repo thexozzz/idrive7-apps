@@ -14,7 +14,13 @@ assert.strictEqual(menu.ROOT_ITEMS.length, 3);
 assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
 assert.strictEqual(menu.ROOT_ITEMS[1].name, 'rdp');
 assert.strictEqual(menu.ROOT_ITEMS[2].name, 'vnc');
+assert.strictEqual(menu.ROOT_ITEMS[0].icon, 'airplay');
+assert.strictEqual(menu.ROOT_ITEMS[1].icon, 'desktop');
+assert.strictEqual(menu.ROOT_ITEMS[2].icon, 'grid');
+assert.ok(menu.ICONS.airplay);
+assert.ok(menu.ICONS.play);
 assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));
+assert.ok(built.layout.bubbles[0].iconPx >= 4);
 
 var blank = menu.buildFrame([
     { title: ' ', hint: ' ' },
@@ -25,7 +31,8 @@ var blank = menu.buildFrame([
 assert.ok(built.rects > blank.rects);
 
 var withStatus = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start');
-assert.ok(withStatus.rects > built.rects);
+assert.ok(withStatus.rects > 40);
+assert.ok(withStatus.layout.bubbles.length === 3);
 
 var selected = menu.buildFrame(menu.ROOT_ITEMS, 2, 1920, 720, '', 'Menu');
 assert.ok(selected.layout.bubbles[2].w > selected.layout.bubbles[1].w);

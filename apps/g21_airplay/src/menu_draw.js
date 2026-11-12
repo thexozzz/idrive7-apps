@@ -27,16 +27,224 @@ var CLAIM = 9;
 var TOUCH = 105;
 var CLOSED = 106;
 
-var INK = 0xF2F4F8FF;
-var HINT = 0x9AA3B2FF;
-var BAR = 0x2B3B55FF;
-var BUBBLE = 0x1A2436FF;
-var PAGE = 0x10141CFF;
-var ACCENT = 0x3D7EFFFF;
+var INK = 0xF5F7FAFF;
+var HINT = 0x8B95A8FF;
+var MUTED = 0x5C677AFF;
+var BAR = 0x243044FF;
+var CARD = 0x171E2BFF;
+var CARD_HI = 0x1E2A3DFF;
+var PAGE = 0x0B0E14FF;
+var PAGE_TOP = 0x121826FF;
+var ACCENT = 0x2F7BFFFF;
+var ACCENT_DIM = 0x1A4A99FF;
+var ICON_FG = 0xE8EEF8FF;
+var ICON_ACCENT = 0x6AA4FFFF;
 // Margins left clear inside a full-screen surface. On this car a PLACE of only
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
 var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
+
+// 16x16 1-bit icons for option tiles (RECT-only renderer).
+var ICONS = {
+    airplay: [
+        '0000000000000000',
+        '0001111111111000',
+        '0010000000000100',
+        '0100000000000010',
+        '0100000000000010',
+        '0100000000000010',
+        '0100000000000010',
+        '0100001110000010',
+        '0100011111000010',
+        '0010011111000100',
+        '0001001110010000',
+        '0000100100100000',
+        '0000010001000000',
+        '0000001010000000',
+        '0000000100000000',
+        '0000000000000000'
+    ],
+    desktop: [
+        '0000000000000000',
+        '0011111111111100',
+        '0100000000000010',
+        '0100111111110010',
+        '0100100000010010',
+        '0100100000010010',
+        '0100100000010010',
+        '0100100000010010',
+        '0100111111110010',
+        '0100000000000010',
+        '0011111111111100',
+        '0000011111100000',
+        '0000011111100000',
+        '0001111111111000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    grid: [
+        '0000000000000000',
+        '0011101110111000',
+        '0011101110111000',
+        '0011101110111000',
+        '0000000000000000',
+        '0011101110111000',
+        '0011101110111000',
+        '0011101110111000',
+        '0000000000000000',
+        '0011101110111000',
+        '0011101110111000',
+        '0011101110111000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    play: [
+        '0000000000000000',
+        '0000110000000000',
+        '0000111100000000',
+        '0000111111000000',
+        '0000111111110000',
+        '0000111111111000',
+        '0000111111111100',
+        '0000111111111000',
+        '0000111111110000',
+        '0000111111000000',
+        '0000111100000000',
+        '0000110000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    stop: [
+        '0000000000000000',
+        '0000000000000000',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    tag: [
+        '0000000000000000',
+        '0000011111100000',
+        '0000110000110000',
+        '0001100000011000',
+        '0011000000001100',
+        '0110000000000110',
+        '0110000001100110',
+        '0110000001100110',
+        '0110000000000110',
+        '0011000000001100',
+        '0001100000011000',
+        '0000110000110000',
+        '0000011111100000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    wifi: [
+        '0000000000000000',
+        '0000011111100000',
+        '0001111111111000',
+        '0011000000001100',
+        '0110001111000110',
+        '0000111111110000',
+        '0001100000110000',
+        '0000011111100000',
+        '0000110000110000',
+        '0000001111000000',
+        '0000000100000000',
+        '0000001110000000',
+        '0000000100000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    back: [
+        '0000000000000000',
+        '0000001000000000',
+        '0000011000000000',
+        '0000111000000000',
+        '0001111111111000',
+        '0011111111111000',
+        '0111111111111000',
+        '0011111111111000',
+        '0001111111111000',
+        '0000111000000000',
+        '0000011000000000',
+        '0000001000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    host: [
+        '0000000000000000',
+        '0011111111111100',
+        '0100000000000010',
+        '0101110111011100',
+        '0100000000000010',
+        '0011111111111100',
+        '0011111111111100',
+        '0100000000000010',
+        '0101110111011100',
+        '0100000000000010',
+        '0011111111111100',
+        '0000010000100000',
+        '0000011111100000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    user: [
+        '0000000000000000',
+        '0000011111100000',
+        '0000111111110000',
+        '0000111111110000',
+        '0000011111100000',
+        '0000001111000000',
+        '0000011111100000',
+        '0001111111111000',
+        '0011111111111100',
+        '0011111111111100',
+        '0011111111111100',
+        '0001111111111000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ],
+    gear: [
+        '0000000000000000',
+        '0000001111000000',
+        '0010011111100100',
+        '0111111001111110',
+        '0011110000111100',
+        '0111001111001110',
+        '0110011111100110',
+        '0110011111100110',
+        '0111001111001110',
+        '0011110000111100',
+        '0111111001111110',
+        '0010011111100100',
+        '0000001111000000',
+        '0000000000000000',
+        '0000000000000000',
+        '0000000000000000'
+    ]
+};
 
 var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
@@ -98,26 +306,26 @@ var FONT = {
 };
 
 var ROOT_ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone' },
-    { name: 'rdp', title: 'RDP', hint: 'Pulpit' },
-    { name: 'vnc', title: 'VNC', hint: 'Pulpit' }
+    { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone', icon: 'airplay' },
+    { name: 'rdp', title: 'RDP', hint: 'Pulpit Windows', icon: 'desktop' },
+    { name: 'vnc', title: 'VNC', hint: 'Pulpit zdalny', icon: 'grid' }
 ];
 
 var AIRPLAY_ITEMS = [
-    { name: 'air-start', title: 'Start', hint: 'Wlacz lustro' },
-    { name: 'air-stop', title: 'Stop', hint: 'Wylacz UxPlay' },
-    { name: 'air-name', title: 'Nazwa', hint: 'G21' },
-    { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store' },
-    { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne' }
+    { name: 'air-start', title: 'Start', hint: 'Wlacz lustro', icon: 'play' },
+    { name: 'air-stop', title: 'Stop', hint: 'Wylacz UxPlay', icon: 'stop' },
+    { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
+    { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
+    { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
 var RDP_ITEMS = [
-    { name: 'rdp-start', title: 'Start', hint: 'Polacz RDP' },
-    { name: 'rdp-stop', title: 'Stop', hint: 'Rozlacz' },
-    { name: 'rdp-host', title: 'Host', hint: '0.0.0.0' },
-    { name: 'rdp-user', title: 'User', hint: 'brak' },
-    { name: 'rdp-panel', title: 'Panel', hint: ':1235' },
-    { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne' }
+    { name: 'rdp-start', title: 'Start', hint: 'Polacz RDP', icon: 'play' },
+    { name: 'rdp-stop', title: 'Stop', hint: 'Rozlacz', icon: 'stop' },
+    { name: 'rdp-host', title: 'Host', hint: '0.0.0.0', icon: 'host' },
+    { name: 'rdp-user', title: 'User', hint: 'brak', icon: 'user' },
+    { name: 'rdp-panel', title: 'Panel', hint: ':1235', icon: 'gear' },
+    { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
 var ITEMS = ROOT_ITEMS;
@@ -205,11 +413,11 @@ FrameBuilder.prototype.textWidth = function (str, scale) {
 };
 
 FrameBuilder.prototype.pill = function (x, y, w, h, color) {
-    var radius = Math.floor(h / 2);
+    var radius = Math.floor(Math.min(h / 2, w / 2, 28));
     var i;
     var inset;
     var span;
-    if (radius < 8) {
+    if (radius < 6) {
         this.rect(x, y, w, h, color);
         return;
     }
@@ -227,6 +435,26 @@ FrameBuilder.prototype.pill = function (x, y, w, h, color) {
     if (h > radius * 2) {
         this.rect(x, y + radius, w, h - (radius * 2), color);
     }
+};
+
+FrameBuilder.prototype.icon = function (name, x, y, px, color) {
+    var rows = ICONS[name] || ICONS.play;
+    var row;
+    var col;
+    var line;
+    var size = px || 3;
+    for (row = 0; row < rows.length; row += 1) {
+        line = rows[row];
+        for (col = 0; col < line.length; col += 1) {
+            if (line.charAt(col) === '1') {
+                this.rect(x + col * size, y + row * size, size, size, color);
+            }
+        }
+    }
+};
+
+FrameBuilder.prototype.iconSize = function (px) {
+    return 16 * (px || 3);
 };
 
 FrameBuilder.prototype.bytes = function () {
@@ -250,42 +478,38 @@ function pageBox(width, height) {
 
 function menuLayout(items, selected, width, height, detail, heading) {
     var page = pageBox(width, height);
-    var gap = 28;
-    var padX = 40;
-    var scale = 5;
-    var bubbleH = 108;
+    var count = items.length || 1;
+    var gap = count > 4 ? 24 : 32;
+    var cardW = count <= 3 ? 260 : (count <= 5 ? 210 : 176);
+    var cardH = count <= 3 ? 280 : 248;
+    var iconPx = count <= 3 ? 5 : 4;
+    var titleScale = 4;
     var bubbles = [];
     var i;
-    var textW;
-    var bw;
-    var total = 0;
     var before = 0;
     var startX;
     var y;
+    var w;
+    var h;
     for (i = 0; i < items.length; i += 1) {
-        textW = String(items[i].title || '').length * 6 * scale;
-        bw = textW + (padX * 2);
-        if (bw < 160) {
-            bw = 160;
-        }
-        if (i === selected) {
-            bw += 24;
-        }
+        w = i === selected ? cardW + 28 : cardW;
+        h = i === selected ? cardH + 20 : cardH;
         bubbles.push({
-            w: bw,
-            h: i === selected ? bubbleH + 12 : bubbleH,
-            scale: i === selected ? 6 : scale
+            w: w,
+            h: h,
+            scale: titleScale,
+            iconPx: i === selected ? iconPx + 1 : iconPx,
+            selected: i === selected
         });
-        total += bw + (i ? gap : 0);
         if (i < selected) {
-            before += bw + gap;
+            before += w + gap;
         }
     }
     startX = page.ox + Math.floor(page.boxW / 2) - Math.floor(bubbles[selected].w / 2) - before;
-    y = page.oy + Math.floor((page.boxH - bubbleH) / 2) - 20;
+    y = page.oy + Math.floor((page.boxH - cardH) / 2) - 8;
     for (i = 0; i < bubbles.length; i += 1) {
         bubbles[i].x = startX;
-        bubbles[i].y = y - (i === selected ? 6 : 0);
+        bubbles[i].y = y - (i === selected ? 10 : 0);
         startX += bubbles[i].w + gap;
     }
     return {
@@ -297,8 +521,9 @@ function menuLayout(items, selected, width, height, detail, heading) {
         bubbles: bubbles,
         heading: heading || '',
         detail: detail || '',
-        hintY: y + bubbleH + 36,
-        statusY: y + bubbleH + 84
+        hintY: y + cardH + 44,
+        statusY: y + cardH + 88,
+        headerH: 56
     };
 }
 
@@ -309,30 +534,56 @@ function buildFrame(items, selected, width, height, detail, heading) {
     var bubble;
     var title;
     var titleW;
-    var color;
     var ink;
     var hint;
+    var iconName;
+    var iconPx;
+    var iconSide;
+    var iconX;
+    var iconY;
+    var labelY;
+    var focus;
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
+    draw.rect(lay.ox, lay.oy, lay.boxW, lay.headerH, PAGE_TOP);
+    draw.rect(lay.ox, lay.oy + lay.headerH - 2, lay.boxW, 2, BAR);
     if (lay.heading) {
-        draw.text(lay.heading, lay.ox + 72, lay.oy + 20, 5, HINT);
+        draw.text(lay.heading, lay.ox + 72, lay.oy + 16, 5, INK);
+    } else {
+        draw.text('G21', lay.ox + 72, lay.oy + 16, 5, ACCENT);
     }
     for (i = 0; i < items.length; i += 1) {
         bubble = lay.bubbles[i];
         title = String(items[i].title || '');
-        color = i === selected ? ACCENT : BUBBLE;
-        ink = i === selected ? INK : HINT;
-        if (i === selected) {
-            draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, BAR);
+        iconName = items[i].icon || 'play';
+        iconPx = bubble.iconPx;
+        iconSide = draw.iconSize(iconPx);
+        focus = i === selected;
+        if (focus) {
+            draw.pill(bubble.x - 6, bubble.y - 6, bubble.w + 12, bubble.h + 12, ACCENT_DIM);
         }
-        draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, color);
+        draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
+        if (focus) {
+            draw.rect(bubble.x + 24, bubble.y + bubble.h - 14, bubble.w - 48, 4, ACCENT);
+        }
+        iconX = bubble.x + Math.floor((bubble.w - iconSide) / 2);
+        iconY = bubble.y + Math.floor(bubble.h * 0.22) - Math.floor(iconSide / 4);
+        draw.pill(
+            iconX - 18,
+            iconY - 18,
+            iconSide + 36,
+            iconSide + 36,
+            focus ? ACCENT_DIM : BAR
+        );
+        draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
         titleW = draw.textWidth(title, bubble.scale);
+        labelY = bubble.y + bubble.h - 52;
         draw.text(
             title,
             bubble.x + Math.floor((bubble.w - titleW) / 2),
-            bubble.y + Math.floor((bubble.h - (7 * bubble.scale)) / 2),
+            labelY,
             bubble.scale,
-            ink
+            focus ? INK : HINT
         );
     }
     hint = items[selected] && items[selected].hint ? String(items[selected].hint) : '';
@@ -341,6 +592,8 @@ function buildFrame(items, selected, width, height, detail, heading) {
     }
     if (detail) {
         draw.text(detail, lay.ox + 72, lay.statusY, 4, INK);
+    } else {
+        draw.text('pokretlo: wybor   OK: start', lay.ox + 72, lay.statusY, 3, MUTED);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -731,6 +984,7 @@ module.exports = {
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
     SCREENS: SCREENS,
+    ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,
     encoderStep: encoderStep,

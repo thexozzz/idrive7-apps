@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.31
+
+- Menu to nowoczesne karty z grafikami opcji (ikony AirPlay, RDP, Start/Stop, siec itd.).
+
 ## 0.1.30
 
 - Narzedzie 0.1.7: konto avahi i polityka D-Bus przez bind-mount z /run (rootfs tylko do odczytu) — naprawa `brak dns` / brak G21 w hotspocie.
