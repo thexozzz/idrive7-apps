@@ -3,10 +3,11 @@ description: Always push finished app changes to the Store test channel
 alwaysApply: true
 ---
 
-# Publish to test
+# Publish to test (GitHub only)
 
-After a visible app change that passes `node tools/test_all.js` and a version bump, always commit (if needed) and push to the Store channel branch `test` (`origin/test`). Do not wait for a separate push ask.
+After a visible app change that passes `node tools/test_all.js` and a version bump, always commit (if needed) and push to branch `test` (`origin/test`). Do not wait for a separate push ask.
 
 - Working branch may be `store-publish` tracking `origin/test`; push updates that remote.
-- Still never SSH-install, never write the head unit, never force-push, never commit `oap-sdk/`, `*.mgu`, keys, VIN, or HU logs.
-- `scripts/publish.ps1` only describes the Store plan; the Store sees the push.
+- Push to GitHub is **backup / channel sync**, not install on the car.
+- On the head unit use **HotPatch only** — never tell the owner to Store Update / reinstall as the normal deploy path.
+- Never force-push; never commit `oap-sdk/`, `*.mgu`, keys, VIN, or HU logs.

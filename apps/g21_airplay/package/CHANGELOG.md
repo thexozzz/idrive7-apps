@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.68
+
+- Menu: wersja builda (`v0.1.68`) w prawym górnym rogu ekranu.
+
 ## 0.1.67
 
 - AirPlay: obraz przez `G21_YUV` → g21-present (środek) / cluster-render (zegary/HUD); wybór ekranu jak RDP; tool 0.1.26 `-vs fakesink` + present.

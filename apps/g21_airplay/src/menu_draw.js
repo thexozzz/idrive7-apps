@@ -701,15 +701,37 @@ function streamLayout(items, selected, width, height, detail, heading) {
     };
 }
 
-function buildStreamFrame(items, selected, width, height, detail, heading) {
+function drawVersionMark(draw, box, version) {
+    var label;
+    var scale;
+    var tw;
+    var text = String(version || '').replace(/^v/i, '');
+    if (!text || !box) {
+        return;
+    }
+    label = 'v' + text;
+    scale = 3;
+    tw = draw.textWidth(label, scale);
+    draw.text(
+        label,
+        box.ox + box.boxW - tw - 40,
+        box.oy + 26,
+        scale,
+        MUTED
+    );
+}
+
+function buildStreamFrame(items, selected, width, height, detail, heading, version) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
     var title = String((items[0] && items[0].title) || 'Zakoncz');
     var titleW;
     var hint;
+    var page = pageBox(width, height);
     // Clear only — no full-page fill so Wayland video stays visible (G21 hypothesis).
     draw.clear(0);
+    drawVersionMark(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW }, version);
     draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
     draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
     draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
@@ -721,7 +743,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading) {
         draw.text(hint, lay.ox + 72, lay.hintY, 3, HINT);
     }
     if (detail) {
-        draw.text(detail, lay.ox + 72, pageBox(width, height).oy + 24, 3, MUTED);
+        draw.text(detail, lay.ox + 72, page.oy + 24, 3, MUTED);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -730,7 +752,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading) {
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading) {
+function buildFrame(items, selected, width, height, detail, heading, version) {
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -747,7 +769,7 @@ function buildFrame(items, selected, width, height, detail, heading) {
     var labelY;
     var focus;
     if (isStreamItems(items) || heading === 'Stream') {
-        return buildStreamFrame(items, selected, width, height, detail, heading);
+        return buildStreamFrame(items, selected, width, height, detail, heading, version);
     }
     lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
@@ -759,6 +781,7 @@ function buildFrame(items, selected, width, height, detail, heading) {
     } else {
         draw.text('G21', lay.ox + 72, lay.oy + 16, 5, ACCENT);
     }
+    drawVersionMark(draw, lay, version);
     for (i = 0; i < items.length; i += 1) {
         bubble = lay.bubbles[i];
         title = String(items[i].title || '');
@@ -842,6 +865,7 @@ function createMenuSurface(opts) {
         };
     });
     var heading = '';
+    var version = String((opts && opts.version) || '');
     var paths = opts.sockets || ['/run/mgu-renderd/renderd.sock', '/run/mgu-render/render.sock'];
     var selected = 0;
     var shown = false;
@@ -918,7 +942,7 @@ function createMenuSurface(opts) {
         sendClaim();
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version);
         write(built.frame);
         if (!noted) {
             noted = true;

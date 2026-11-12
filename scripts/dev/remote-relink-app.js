@@ -115,7 +115,7 @@ mods.forEach(function (name) {
 var manifest = {
     schema: 1,
     id: 'g21_airplay',
-    version: '0.1.67',
+    version: '0.1.68',
     tree: 'package',
     internet: true,
     modules: mods.map(function (f) { return 'src/' + f; }),

@@ -45,6 +45,8 @@ assert.ok(built.rects > blank.rects);
 var withStatus = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start');
 assert.ok(withStatus.rects > 40);
 assert.ok(withStatus.layout.bubbles.length === 5);
+var withVer = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start', 'G21', '0.1.68');
+assert.ok(withVer.rects > withStatus.rects);
 
 var selected = menu.buildFrame(menu.ROOT_ITEMS, 2, 1920, 720, '', 'Menu');
 assert.ok(selected.layout.bubbles[2].w > selected.layout.bubbles[1].w);
