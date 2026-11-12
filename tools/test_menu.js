@@ -22,7 +22,8 @@ assert.strictEqual(menu.ROOT_ITEMS[3].icon, 'grid');
 assert.ok(menu.ICONS.airplay);
 assert.ok(menu.ICONS.play);
 assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));
-assert.ok(built.layout.bubbles[0].iconPx >= 4);
+assert.ok(built.layout.bubbles[0].iconPx >= 2);
+assert.ok(built.layout.bubbles[0].iconPx <= 4);
 
 var blank = menu.buildFrame([
     { title: ' ', hint: ' ' },

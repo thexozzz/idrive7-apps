@@ -6,4 +6,4 @@ Jednostka buduje pakiet z `mgu-app.json`. W repozytorium nie ma `javascript/app.
 
 Identyfikator stanu RHMI `24107` oraz kompletność krótkiego `uiDescription.json` nie były sprawdzone na samochodzie. Szczegóły: `docs/04-renderery.md` i hipotezy H4, H5.
 
-Ikona kafelka: `package/rhmiData/variantGroups/Common/images/hello_icon.png`, 140×140.
+Ikona kafelka: `package/rhmiData/variantGroups/Common/images/hello_icon.png`, 64×64, przezroczyste tło.

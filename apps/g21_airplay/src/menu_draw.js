@@ -527,7 +527,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
     var gap = count > 4 ? 24 : 32;
     var cardW = count <= 3 ? 260 : (count <= 5 ? 210 : 176);
     var cardH = count <= 3 ? 280 : 248;
-    var iconPx = count <= 3 ? 5 : 4;
+    var iconPx = count <= 3 ? 3 : 2;
     var titleScale = 4;
     var bubbles = [];
     var i;

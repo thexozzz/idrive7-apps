@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.3
+
+- Mniejsza ikona listy (64px, przezroczyste tło).
+
 ## 0.1.2
 
 - Ekran jest taki jak w aplikacjach iDrive 7 na tej jednostce: obraz i przycisk na pasku. Sam tekst na szerokiej stronie się tu nie rysuje.
