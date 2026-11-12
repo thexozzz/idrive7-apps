@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.24
+
+- iPhone moze byc hostem hotspotu. Narzędzie dostarcza avahi, zeby Lustro ekranu widzialo G21.
+
 ## 0.1.23
 
 - AirPlay oglasza sie na Wi-Fi auta. Sam hotspot iPhone nie wystarcza do wykrycia G21 w Lustrze ekranu.

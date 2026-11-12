@@ -14,11 +14,11 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H8 | Hotspot iPhone’a da się dołączyć z poziomu `mgu-uplink`, jeśli ogłasza WPA2 | ustawienia Wi-Fi Store; sieć tylko WPA3 na radiu Broadcom jest z góry opisana jako nieskuteczna |
 | H9 | Prędkość `statusCarSpeed2` na tym aucie używa skali 0,015625 i progu 3 km/h | odczyt sygnału na postoju i przy toczeniu, bez zapisu |
 | H10 | Cisza sygnału po jeździe ma być traktowana jak jazda, tak jak w `parked.js` | H9, zostawiając HUD wyłączony przy wątpliwości |
-| H11 | Reguła nft o priorytecie -10 wpuszcza AirPlay zanim `mgu-uplink` odrzuci nowe połączenia na tym interfejsie | po instalacji `g21_airplay` iPhone w Wi-Fi auta (nie jako host Personal Hotspot) widzi „G21” w lustrze ekranu |
+| H11 | Reguła nft o priorytecie -10 wpuszcza AirPlay zanim `mgu-uplink` odrzuci nowe połączenia na tym interfejsie | po instalacji `g21_airplay` iPhone-host Personal Hotspot widzi „G21” w lustrze ekranu |
 | H12 | Odpowiedź `/info` i ogłoszenie mDNS wystarczą, żeby iOS zaczął sesję | H11; pierwsza linia żądania pojawia się na ekranie aplikacji |
-| H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po instalacji `g21_airplay` z gałęzi `test`: na iPhonie w Wi-Fi auta widać G21, a obraz pojawia się na ekranie |
-| H20 | Hotspot auta ma adres `172.16.222.97` widoczny w `ip -4 addr`, gdy strona telefonu Store działa | odczyt `ip -4 -o addr`; bez tego status AirPlay zostaje `join-car-wifi` |
-| H21 | Na jednostce da się uruchomić `avahi-daemon` (systemowy albo z paczki narzędzia), bez czego UxPlay nie zarejestruje DNS-SD | po starcie AirPlay brak `mdns-brak` w `/run/g21-airplay.status` |
+| H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po instalacji `g21_airplay` z gałęzi `test`: na iPhonie w hotspocie widać G21, a obraz pojawia się na ekranie |
+| H21 | Bundlowany `avahi-daemon` z paczki narzędzia rejestruje DNS-SD na interfejsie uplink Store, gdy systemowy avahi nie działa | po starcie AirPlay brak `mdns-brak` w `/run/g21-airplay.status` |
+| H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H14 | Manifest OAP dostarcza `Vehicle2.statusCarSpeed2` do tej aplikacji | na postoju ekran nie pokazuje `speed-unknown` i AirPlay wstaje po wyborze kafelka |
 | H15 | `ZBETouchFrontSide` daje współrzędne palca tylko przy `statusSystemModeFrontSide` 3, a bez zapisu trybu pisania ten tryb się nie włącza | log inspektora po jeździe palcem po pokrętle; dopóki nie ma takiej próbki, touchpad zostaje niedostępny |
 | H16 | `g21-present` i `g21-rdp` rysują pulpit na centralnym ekranie przez ten sam Wayland co UxPlay | na postoju VNC albo RDP do komputera w tej samej sieci, obraz 1920×720, kursor reaguje na pokrętło |

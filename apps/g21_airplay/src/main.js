@@ -54,10 +54,9 @@ var STATUS_TEXT = {
     'starting': 'UxPlay start',
     'running': 'UxPlay dziala',
     'missing': 'UxPlay brak',
-    'phone-is-ap': 'podlacz do auta',
-    'join-car-wifi': 'podlacz do auta',
     'mdns-brak': 'brak dns',
     'uxplay-exit': 'UxPlay stop',
+    'brak-wifi': 'brak wifi',
     'idle': 'AirPlay idle',
     'waiting': 'AirPlay idle',
     'unknown': 'AirPlay idle'
@@ -495,15 +494,12 @@ AirPlayApp.prototype._write = function (name, text) {
 
 AirPlayApp.prototype._paint = function (choice, session) {
     if (!choice.ok) {
-        if (choice.reason === 'phone-is-ap' || choice.reason === 'join-car-wifi') {
-            this._write('airNet', 'iPhone ma wejsc w Wi-Fi auta');
-            this._write('airAddr', 'Potem Lustro ekranu: ' + this._desk.airplayName());
-        } else if (choice.reason === 'mdns-brak') {
+        if (choice.reason === 'mdns-brak') {
             this._write('airNet', choice.ssid ? ('Wi-Fi: ' + choice.ssid) : 'AirPlay');
             this._write('airAddr', 'Brak avahi / mDNS na jednostce');
         } else {
             this._write('airNet', 'Wi-Fi Store: brak polaczenia');
-            this._write('airAddr', 'AirPlay czeka na Wi-Fi auta albo wspolne Wi-Fi');
+            this._write('airAddr', 'Wlacz hotspot iPhone i dolacz MGU Store do tej sieci');
         }
         this._write('airState', choice.reason);
         return;

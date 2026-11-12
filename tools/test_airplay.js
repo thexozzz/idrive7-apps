@@ -8,17 +8,14 @@ var mdns = require('../apps/g21_airplay/src/mdns');
 var airplay = require('../apps/g21_airplay/src/airplay');
 
 var wifi = {
-    device: { kind: 'wifi', name: 'iPhone' },
-    wifi: { link: 'online', ssid: 'iPhone', ip: '172.20.10.2' },
+    device: { kind: 'wifi', name: 'Karolphone' },
+    wifi: { link: 'online', ssid: 'Karolphone', ip: '172.20.10.2' },
 };
 var lease = { interface: 'wlan1', ip: '172.20.10.2', prefix: 28, router: '172.20.10.1' };
 var choice = uplink.selectStoreWifi(wifi, lease);
 assert.strictEqual(choice.ok, true);
 assert.strictEqual(choice.iface, 'wlan1');
-assert.strictEqual(choice.ssid, 'iPhone');
-assert.strictEqual(choice.phoneHotspot, true);
-assert.strictEqual(uplink.isPhoneHotspotIp('172.20.10.2'), true);
-assert.strictEqual(uplink.isPhoneHotspotIp('172.16.222.97'), false);
+assert.strictEqual(choice.ssid, 'Karolphone');
 
 assert.strictEqual(uplink.selectStoreWifi({ device: { kind: 'usb' }, wifi: { link: 'online' } }, lease).reason, 'uplink-not-wifi');
 assert.strictEqual(uplink.selectStoreWifi({ device: { kind: 'wifi' }, wifi: { link: 'scanning' } }, lease).reason, 'wifi-down');
@@ -38,21 +35,21 @@ var setup = airplay.replyFor('SETUP rtsp://172.20.10.2/stream RTSP/1.0\r\nCSeq: 
 assert.strictEqual(setup.state, 'streaming');
 assert.ok(setup.raw.indexOf('CSeq: 3') !== -1);
 
-var receiver = uplink.readReceiverStatus('running|BMW|172.16.222.97');
+var receiver = uplink.readReceiverStatus('running|Karolphone|172.20.10.2');
 assert.strictEqual(receiver.mode, 'running');
-assert.strictEqual(receiver.ssid, 'BMW');
-assert.strictEqual(receiver.ip, '172.16.222.97');
+assert.strictEqual(receiver.ssid, 'Karolphone');
+assert.strictEqual(receiver.ip, '172.20.10.2');
 
-var phoneBlock = uplink.selectAirplayAnnounce(
-    uplink.readReceiverStatus('phone-is-ap|Karolphone|172.20.10.2'),
+var phoneOk = uplink.selectAirplayAnnounce(receiver, choice);
+assert.strictEqual(phoneOk.ok, true);
+assert.strictEqual(phoneOk.ip, '172.20.10.2');
+
+var mdnsFail = uplink.selectAirplayAnnounce(
+    uplink.readReceiverStatus('mdns-brak|Karolphone|172.20.10.2'),
     choice
 );
-assert.strictEqual(phoneBlock.ok, false);
-assert.strictEqual(phoneBlock.reason, 'phone-is-ap');
-
-var carOk = uplink.selectAirplayAnnounce(receiver, { ok: false, reason: 'uplink-not-wifi' });
-assert.strictEqual(carOk.ok, true);
-assert.strictEqual(carOk.ip, '172.16.222.97');
+assert.strictEqual(mdnsFail.ok, false);
+assert.strictEqual(mdnsFail.reason, 'mdns-brak');
 
 var script = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'g21-airplay-open'), 'utf8');
 assert.ok(script.indexOf('-n "$shown"') !== -1);
@@ -65,12 +62,17 @@ assert.ok(script.indexOf('tcp dport 7100 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7000 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7001 accept') !== -1);
 assert.ok(script.indexOf('udp dport 7011 accept') !== -1);
-assert.ok(script.indexOf('172.16.222.97') !== -1);
-assert.ok(script.indexOf('phone-is-ap') !== -1);
-assert.ok(script.indexOf('is_phone_hotspot_ip') !== -1);
 assert.ok(script.indexOf('ensure_mdns') !== -1);
-assert.ok(script.indexOf('find_car_ap') !== -1);
+assert.ok(script.indexOf('avahi-daemon') !== -1);
+assert.ok(script.indexOf('phone-is-ap') === -1);
+assert.ok(script.indexOf('join-car-wifi') === -1);
 assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
-console.log('airplay: announce on car AP, block iPhone hotspot as only path');
+var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
+assert.strictEqual(component.version, '0.1.3');
+assert.ok(component.files.some(function (item) { return item.path === 'avahi-daemon'; }));
+assert.ok(component.files.some(function (item) { return item.path === 'lib/libavahi-core.so.7'; }));
+assert.ok(component.files.every(function (item) { return item.path.indexOf('\\') === -1; }));
+
+console.log('airplay: iPhone hotspot host path with bundled avahi');

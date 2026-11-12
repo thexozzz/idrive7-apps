@@ -1,6 +1,6 @@
-# AirPlay on the car Wi-Fi AP / shared Wi-Fi (g21-airplay-open)
+# AirPlay on Store Wi-Fi / iPhone hotspot (g21-airplay-open)
 [Unit]
-Description=AirPlay on car Wi-Fi (g21-airplay-open)
+Description=AirPlay on Store Wi-Fi (g21-airplay-open)
 RequiresMountsFor=/var/opt
 After=winston.service
 StartLimitIntervalSec=0

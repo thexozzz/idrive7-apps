@@ -1,14 +1,13 @@
 #!/bin/sh
-# Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) so an iPhone can find
-# "G21" with Screen Mirroring.
+# Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) on the Wi-Fi network
+# MGU Store is using, including an iPhone Personal Hotspot host. The iPhone can
+# be the AP; the head unit is the AirPlay receiver client on that LAN.
 #
-# iPhone Personal Hotspot cannot discover AirPlay receivers that are clients of
-# that same hotspot. Advertise on the car Wi-Fi AP (Store address 172.16.222.97)
-# first. Fall back to Store uplink Wi-Fi only when that uplink is a shared AP,
-# not an iPhone hotspot (172.20.10.0/28).
+# DNS-SD needs a running avahi-daemon (bundled next to this script when the
+# unit has none). Without it UxPlay cannot register and the phone never sees G21.
 #
-# Inbound accept on the announce interface, only from its subnet:
-# UDP 5353 (mDNS) and UxPlay -p legacy ports
+# Inbound accept, only from that lease subnet and only on that interface:
+# UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p legacy ports
 # TCP 7100, 7000, 7001 and UDP 6000, 6001, 7011.
 set -u
 
@@ -50,17 +49,6 @@ subnet() {
     }'
 }
 
-# Apple Personal Hotspot Wi-Fi lease is 172.20.10.0/28.
-is_phone_hotspot_ip() {
-    awk -v ip="$1" 'BEGIN {
-        n = split(ip, o, ".")
-        if (n != 4) exit 1
-        if (o[1] != 172 || o[2] != 20 || o[3] != 10) exit 1
-        if (o[4] < 0 || o[4] > 15) exit 1
-        exit 0
-    }'
-}
-
 find_ux() {
     if [ -n "${UXPLAY:-}" ] && [ -x "$UXPLAY" ]; then
         printf '%s\n' "$UXPLAY"
@@ -72,6 +60,10 @@ find_ux() {
         return 0
     fi
     command -v uxplay 2>/dev/null
+}
+
+tool_dir() {
+    CDPATH= cd -- "$(dirname "$0")" && pwd
 }
 
 report() {
@@ -162,29 +154,6 @@ stop_pid() {
 }
 
 # Prints: iface ip prefix label
-find_car_ap() {
-    line=$(ip -4 -o addr show 2>/dev/null | awk '$4 ~ /^172\.16\.222\.97\// { print; exit }')
-    if [ -z "$line" ]; then
-        line=$(ip -4 -o addr show 2>/dev/null | awk '$4 ~ /^172\.16\.222\./ { print; exit }')
-    fi
-    [ -n "$line" ] || return 1
-    iface=$(printf '%s\n' "$line" | awk '{ print $2 }')
-    cidr=$(printf '%s\n' "$line" | awk '{ print $4 }')
-    ip=${cidr%/*}
-    prefix=${cidr#*/}
-    case $iface in
-        ""|*[!A-Za-z0-9._-]*) return 1 ;;
-    esac
-    case $prefix in
-        ""|*[!0-9]*) return 1 ;;
-    esac
-    if [ "$prefix" -lt 1 ] || [ "$prefix" -gt 32 ]; then
-        return 1
-    fi
-    printf '%s %s %s BMW\n' "$iface" "$ip" "$prefix"
-}
-
-# Prints: iface ip prefix label   from Store uplink Wi-Fi when usable.
 find_uplink_wifi() {
     kind=$(field kind "$STATUS")
     link=$(field link "$STATUS")
@@ -209,10 +178,6 @@ find_uplink_wifi() {
     if [ "$prefix" -lt 1 ] || [ "$prefix" -gt 32 ]; then
         return 1
     fi
-    if is_phone_hotspot_ip "$ip"; then
-        printf 'PHONE %s %s %s\n' "$iface" "$ip" "${ssid:-iPhone}"
-        return 2
-    fi
     case $ssid in
         "") ssid=$iface ;;
     esac
@@ -231,6 +196,11 @@ iface_mac() {
 
 ensure_mdns() {
     iface=$1
+    dir=$(tool_dir)
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
+    fi
     if pidof avahi-daemon >/dev/null 2>&1; then
         return 0
     fi
@@ -240,35 +210,58 @@ ensure_mdns() {
             return 0
         fi
     fi
-    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-    if [ -x "$dir/avahi-daemon" ]; then
-        conf=/run/g21-airplay/avahi-daemon.conf
-        cat > "$conf" <<EOF
+    if [ ! -x "$dir/avahi-daemon" ]; then
+        return 1
+    fi
+    conf=/run/g21-airplay/avahi-daemon.conf
+    hosts=/run/g21-airplay/avahi-hosts
+    services=/run/g21-airplay/avahi-services
+    mkdir -p "$services"
+    : > "$hosts"
+    cat > "$conf" <<EOF
 [server]
+host-name=G21
 allow-interfaces=$iface
+deny-interfaces=lo
 use-ipv4=yes
 use-ipv6=no
 enable-dbus=no
+check-response-ttl=no
+use-iff-running=yes
+[wide-area]
+enable-wide-area=no
 [publish]
 disable-publishing=no
+disable-user-service-publishing=no
 publish-addresses=yes
 publish-hinfo=no
 publish-workstation=no
+publish-domain=yes
+publish-resolv-conf-dns-servers=no
+[reflector]
+enable-reflector=no
+[rlimits]
 EOF
-        stop_avahi_local
-        "$dir/avahi-daemon" --daemonize=no --no-chroot --no-drop-root -f "$conf" >>/var/log/g21-avahi.log 2>&1 &
-        AVAHIPID=$!
-        sleep 1
-        if kill -0 "$AVAHIPID" 2>/dev/null; then
-            return 0
-        fi
-        AVAHIPID=
+    stop_avahi_local
+    "$dir/avahi-daemon" \
+        --daemonize=no \
+        --no-chroot \
+        --no-drop-root \
+        --no-rlimits \
+        --debug \
+        -f "$conf" \
+        >>/var/log/g21-avahi.log 2>&1 &
+    AVAHIPID=$!
+    sleep 1
+    if kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
     fi
+    AVAHIPID=
     return 1
 }
 
 start_present() {
-    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    dir=$(tool_dir)
     bin=$dir/g21-present
     if [ ! -x "$bin" ]; then
         return 0
@@ -289,7 +282,7 @@ start_present() {
 }
 
 start_rdp() {
-    dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+    dir=$(tool_dir)
     bin=$dir/g21-rdp
     if [ ! -x "$bin" ]; then
         desk "missing|rdp|"
@@ -320,7 +313,7 @@ ux_log_has_mdns_error() {
     if [ ! -f "$UXLOG" ]; then
         return 1
     fi
-    tail -n 40 "$UXLOG" 2>/dev/null | grep -E 'DNSServiceRegister|kDNSServiceErr|dnssd_error|No DNS-SD' >/dev/null 2>&1
+    tail -n 80 "$UXLOG" 2>/dev/null | grep -E 'DNSServiceRegister|kDNSServiceErr|dnssd_error|No DNS-SD' >/dev/null 2>&1
 }
 
 start_ux() {
@@ -328,6 +321,7 @@ start_ux() {
     label=$2
     ip=$3
     shown=$4
+    dir=$(tool_dir)
     bin=$(find_ux) || true
     if [ -z "$bin" ]; then
         stop_ux
@@ -348,6 +342,7 @@ start_ux() {
         return 0
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export G21_YUV=/run/g21-airplay/latest.yuv
     export AVAHI_COMPAT_NOWARN=1
     mkdir -p /run/g21-airplay
@@ -380,43 +375,25 @@ start_ux() {
 
 apply_airplay() {
     shown=$(name_of)
-    car=$(find_car_ap) && set -- $car && iface=$1 && ip=$2 && prefix=$3 && label=$4 && {
-        net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
-        stamp="car $iface $net"
-        if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
-            stop_ux
-            open_ports "$iface" "$net"
-            printf '%s\n' "$stamp" > "$STAMP"
-        fi
-        start_ux "$iface" "$label" "$ip" "$shown"
+    uplink=$(find_uplink_wifi) || {
+        idle
+        report "idle|brak-wifi|"
         return 0
     }
-    uplink=$(find_uplink_wifi)
-    rc=$?
-    if [ "$rc" -eq 2 ]; then
-        set -- $uplink
-        idle
-        report "phone-is-ap|$4|$3"
-        return 0
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    label=$4
+    net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
+    stamp="uplink $iface $net"
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        stop_ux
+        stop_avahi_local
+        open_ports "$iface" "$net"
+        printf '%s\n' "$stamp" > "$STAMP"
     fi
-    if [ "$rc" -eq 0 ]; then
-        set -- $uplink
-        iface=$1
-        ip=$2
-        prefix=$3
-        label=$4
-        net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
-        stamp="uplink $iface $net"
-        if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
-            stop_ux
-            open_ports "$iface" "$net"
-            printf '%s\n' "$stamp" > "$STAMP"
-        fi
-        start_ux "$iface" "$label" "$ip" "$shown"
-        return 0
-    fi
-    idle
-    report "join-car-wifi||"
+    start_ux "$iface" "$label" "$ip" "$shown"
 }
 
 apply_uplink_desktop() {
@@ -425,7 +402,6 @@ apply_uplink_desktop() {
     iface=$(field interface "$LEASE")
     ip=$(field ip "$LEASE")
     prefix=$(number prefix "$LEASE")
-    ssid=$(field ssid "$STATUS")
     case $kind in
         wifi) ;;
         *) idle; report "idle|uplink-not-wifi|"; return 1 ;;

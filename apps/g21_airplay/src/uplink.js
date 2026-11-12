@@ -44,22 +44,6 @@ function readReceiverStatus(text) {
     };
 }
 
-// Apple Personal Hotspot Wi-Fi clients get 172.20.10.0/28.
-function isPhoneHotspotIp(ip) {
-    var parts = String(ip || '').split('.');
-    if (parts.length !== 4) {
-        return false;
-    }
-    if (parts[0] !== '172' || parts[1] !== '20' || parts[2] !== '10') {
-        return false;
-    }
-    if (!/^\d+$/.test(parts[3])) {
-        return false;
-    }
-    var host = Number(parts[3]);
-    return host >= 0 && host <= 15;
-}
-
 function selectStoreWifi(status, lease) {
     if (!status || !status.device || status.device.kind !== 'wifi') {
         return { ok: false, reason: 'uplink-not-wifi' };
@@ -93,7 +77,6 @@ function selectStoreWifi(status, lease) {
         ip: lease.ip,
         prefix: prefix,
         ssid: ssid,
-        phoneHotspot: isPhoneHotspotIp(lease.ip),
     };
 }
 
@@ -103,11 +86,11 @@ function selectAirplayAnnounce(receiver, storeWifi) {
         return {
             ok: true,
             ip: receiver.ip,
-            ssid: receiver.ssid || 'BMW',
+            ssid: receiver.ssid || '',
             reason: '',
         };
     }
-    if (mode === 'phone-is-ap' || mode === 'join-car-wifi' || mode === 'mdns-brak' || mode === 'uxplay-exit' || mode === 'missing') {
+    if (mode === 'mdns-brak' || mode === 'uxplay-exit' || mode === 'missing') {
         return {
             ok: false,
             reason: mode,
@@ -115,25 +98,18 @@ function selectAirplayAnnounce(receiver, storeWifi) {
             ssid: receiver.ssid || '',
         };
     }
-    if (storeWifi && storeWifi.ok && storeWifi.phoneHotspot) {
-        return {
-            ok: false,
-            reason: 'phone-is-ap',
-            ip: storeWifi.ip,
-            ssid: storeWifi.ssid || '',
-        };
-    }
     if (storeWifi && storeWifi.ok) {
         return {
             ok: true,
             ip: storeWifi.ip,
             ssid: storeWifi.ssid,
+            iface: storeWifi.iface,
             reason: '',
         };
     }
     return {
         ok: false,
-        reason: (storeWifi && storeWifi.reason) || 'join-car-wifi',
+        reason: (storeWifi && storeWifi.reason) || 'uplink-not-wifi',
         ip: '',
         ssid: '',
     };
@@ -145,6 +121,5 @@ module.exports = {
     readUplink: readUplink,
     selectStoreWifi: selectStoreWifi,
     selectAirplayAnnounce: selectAirplayAnnounce,
-    isPhoneHotspotIp: isPhoneHotspotIp,
     readReceiverStatus: readReceiverStatus,
 };

@@ -33,8 +33,12 @@ lib/libXfixes.so.3  libxfixes3
 lib/libXrender.so.1  libxrender1
 lib/libasound.so.2  libasound2
 lib/libass.so.9  libass9
+avahi-daemon  avahi-daemon
 lib/libavahi-client.so.3  libavahi-client3
 lib/libavahi-common.so.3  libavahi-common3
+lib/libavahi-core.so.7  libavahi-core7
+lib/libcap.so.2  libcap2
+lib/libdaemon.so.0  libdaemon0
 lib/libavcodec.so.57  libavcodec57
 lib/libavfilter.so.6  libavfilter6
 lib/libavformat.so.57  libavformat57

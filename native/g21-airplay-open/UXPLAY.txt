@@ -20,7 +20,6 @@ head unit. Do not replace them. Library names and the Ubuntu 18.04 packages
 they came from are in LIBS.txt.
 
 The service starts uxplay while the app writes airplay into
-/run/g21-session/allow. It prefers the car Wi-Fi AP at 172.16.222.97 so the
-iPhone can join as a client and see G21. An iPhone Personal Hotspot uplink
-alone is rejected for discovery (phone-is-ap): the phone hosting that hotspot
-does not browse AirPlay receivers on its own client subnet.
+/run/g21-session/allow and MGU Store uplink is Wi-Fi. That Wi-Fi may be an
+iPhone Personal Hotspot (the phone is the host; the head unit is a client).
+Bundled avahi-daemon provides DNS-SD so Screen Mirroring can find G21.
