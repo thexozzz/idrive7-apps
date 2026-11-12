@@ -9,6 +9,7 @@
 
 var net = require('net');
 var fs = require('fs');
+var knobKeyboard = require('./knob_keyboard.js');
 
 var HELLO = 1;
 var PLACE = 2;
@@ -249,7 +250,9 @@ var ICONS = {
 var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
     '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+    '_': ['00000', '00000', '00000', '00000', '00000', '00000', '11111'],
     '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
+    '*': ['00000', '10101', '01110', '00100', '01110', '10101', '00000'],
     ':': ['00000', '01100', '01100', '00000', '01100', '01100', '00000'],
     '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
     '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
@@ -325,7 +328,7 @@ var RDP_ITEMS = [
     { name: 'rdp-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
     { name: 'rdp-port', title: 'Port', hint: '3389', icon: 'gear' },
     { name: 'rdp-user', title: 'Konto', hint: 'user', icon: 'user' },
-    { name: 'rdp-pass', title: 'Haslo', hint: 'panel WWW', icon: 'tag' },
+    { name: 'rdp-pass', title: 'Haslo', hint: 'wpisz pokretlem', icon: 'tag' },
     { name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' },
     { name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' },
     { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
@@ -539,6 +542,62 @@ function menuLayout(items, selected, width, height, detail, heading) {
     };
 }
 
+function buildKeyboardFrame(edit, width, height) {
+    var draw = new FrameBuilder();
+    var page = pageBox(width, height);
+    var cols = edit.cols || 10;
+    var keys = edit.keys || [];
+    var gap = 12;
+    var keyH = 56;
+    var keyW = Math.floor((page.boxW - 120 - (cols - 1) * gap) / cols);
+    var startY = page.oy + 160;
+    var startX = page.ox + 60;
+    var i;
+    var row;
+    var col;
+    var x;
+    var y;
+    var label;
+    var labelW;
+    var focus;
+    var shown = knobKeyboard.displayValue(edit) + '_';
+    draw.clear(0);
+    draw.rect(page.ox, page.oy, page.boxW, page.boxH, PAGE);
+    draw.rect(page.ox, page.oy, page.boxW, 56, PAGE_TOP);
+    draw.text(edit.title || 'Wpisz', page.ox + 72, page.oy + 16, 5, ACCENT);
+    draw.text('pokretlo: litera   OK: wybierz', page.ox + 72, page.oy + 72, 3, MUTED);
+    draw.pill(page.ox + 60, page.oy + 100, page.boxW - 120, 44, CARD_HI);
+    draw.text(shown.slice(0, 40), page.ox + 80, page.oy + 112, 4, INK);
+    for (i = 0; i < keys.length; i += 1) {
+        row = Math.floor(i / cols);
+        col = i % cols;
+        x = startX + col * (keyW + gap);
+        y = startY + row * (keyH + gap);
+        focus = i === edit.keyIndex;
+        label = keys[i];
+        if (label === 'SPC') {
+            label = 'spacja';
+        }
+        if (label === 'ANU') {
+            label = 'anuluj';
+        }
+        draw.pill(x, y, keyW, keyH, focus ? ACCENT : CARD);
+        labelW = draw.textWidth(label, 3);
+        draw.text(
+            label,
+            x + Math.floor((keyW - labelW) / 2),
+            y + Math.floor((keyH - 21) / 2),
+            3,
+            focus ? INK : HINT
+        );
+    }
+    return {
+        frame: message(FRAME, draw.bytes()),
+        rects: draw.rects,
+        layout: { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH, bubbles: [] }
+    };
+}
+
 function buildFrame(items, selected, width, height, detail, heading) {
     var draw = new FrameBuilder();
     var lay = menuLayout(items, selected, width, height, detail, heading);
@@ -639,7 +698,12 @@ function createMenuSurface(opts) {
     var choose = opts.choose || function () {};
     var screenName = 'root';
     var items = (opts.items || SCREENS.root).map(function (item) {
-        return { name: item.name, title: item.title, hint: item.hint };
+        return {
+            name: item.name,
+            title: item.title,
+            hint: item.hint,
+            icon: item.icon || 'play'
+        };
     });
     var heading = '';
     var paths = opts.sockets || ['/run/mgu-renderd/renderd.sock', '/run/mgu-render/render.sock'];
@@ -659,6 +723,7 @@ function createMenuSurface(opts) {
     var lastPush = 0;
     var noted = false;
     var detail = '';
+    var edit = null;
 
     function isSocket(file) {
         try {
@@ -709,7 +774,9 @@ function createMenuSurface(opts) {
         sendShow(true);
         sendGrab(true);
         sendClaim();
-        var built = buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
+        var built = edit
+            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -802,6 +869,7 @@ function createMenuSurface(opts) {
         screenName = next;
         items = cloneScreen(next);
         selected = 0;
+        edit = null;
         if (next === 'airplay') {
             heading = 'AirPlay';
         } else if (next === 'rdp') {
@@ -822,7 +890,9 @@ function createMenuSurface(opts) {
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
                 items[i].hint = String(text || '');
-                paint();
+                if (!edit) {
+                    paint();
+                }
                 return true;
             }
         }
@@ -833,6 +903,11 @@ function createMenuSurface(opts) {
         if (!delta) {
             return;
         }
+        if (edit) {
+            knobKeyboard.moveKey(edit, delta > 0 ? 1 : -1);
+            paint();
+            return;
+        }
         selected = (selected + delta) % items.length;
         if (selected < 0) {
             selected += items.length;
@@ -840,8 +915,35 @@ function createMenuSurface(opts) {
         paint();
     }
 
+    function finishEdit(result) {
+        var done = edit && edit.onDone;
+        var cancel = edit && edit.onCancel;
+        var field = edit && edit.field;
+        var value = result && result.value;
+        edit = null;
+        paint();
+        if (result && result.action === 'done' && typeof done === 'function') {
+            done(value, field);
+            return;
+        }
+        if (typeof cancel === 'function') {
+            cancel(field);
+        }
+    }
+
     function press() {
-        var item = items[selected];
+        var item;
+        var result;
+        if (edit) {
+            result = knobKeyboard.applyKey(edit);
+            if (result.action === 'done' || result.action === 'cancel') {
+                finishEdit(result);
+                return;
+            }
+            paint();
+            return;
+        }
+        item = items[selected];
         if (item) {
             choose(item.name);
         }
@@ -852,7 +954,7 @@ function createMenuSurface(opts) {
         var item = items[selected];
         var adjusted = false;
         lastOp = operation;
-        if (step && item && typeof opts.adjust === 'function') {
+        if (step && !edit && item && typeof opts.adjust === 'function') {
             adjusted = !!opts.adjust(item.name, step > 0 ? 1 : -1);
         }
         if (step && !adjusted) {
@@ -862,6 +964,21 @@ function createMenuSurface(opts) {
             press();
         }
         lastPush = push;
+    }
+
+    function startEdit(opts) {
+        edit = knobKeyboard.createEdit(opts || {});
+        noted = false;
+        paint();
+        return true;
+    }
+
+    function cancelEdit() {
+        if (!edit) {
+            return false;
+        }
+        finishEdit({ action: 'cancel' });
+        return true;
     }
 
     function take(buf) {
@@ -898,7 +1015,7 @@ function createMenuSurface(opts) {
             } else if (type === CLOSED) {
                 note('menu-closed');
             } else if (type === TOUCH && body.length >= 12 && shown) {
-                if (body.readUInt32LE(0) === 1) {
+                if (!edit && body.readUInt32LE(0) === 1) {
                     var hit = hitRow(body.readFloatLE(4), body.readFloatLE(8));
                     if (hit >= 0) {
                         selected = hit;
@@ -997,12 +1114,17 @@ function createMenuSurface(opts) {
                 return;
             }
             detail = next;
-            paint();
+            if (!edit) {
+                paint();
+            }
         },
         selected: function () { return selected; },
         selectedName: function () {
             return items[selected] ? items[selected].name : '';
-        }
+        },
+        startEdit: startEdit,
+        cancelEdit: cancelEdit,
+        editing: function () { return !!edit; }
     };
 }
 
@@ -1016,6 +1138,7 @@ module.exports = {
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,
+    buildKeyboardFrame: buildKeyboardFrame,
     encoderStep: encoderStep,
     createMenuSurface: createMenuSurface
 };

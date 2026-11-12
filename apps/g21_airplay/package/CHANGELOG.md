@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.38
+
+- Klawiatura pokretlem jak w iDrive: IP, port, konto, haslo i nazwa AirPlay wpisuje sie na narysowanej klawiaturze (obrot = znak, OK = wybierz).
+
 ## 0.1.37
 
 - AirPlay to integracja lustra, nie osobna aplikacja UxPlay: statusy i menu mowia AirPlay/lustro; silnik zostaje tylko w backendzie.
