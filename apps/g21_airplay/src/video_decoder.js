@@ -76,9 +76,60 @@ function atlasFromI420(i420, sw, sh, dw, dh) {
     return toAtlas(scaleI420(i420, sw, sh, dw, dh));
 }
 
+function i420ToBgra(i420, w, h) {
+    var ySize = w * h;
+    var uvW = w >> 1;
+    var uvH = h >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * uvH;
+    var bgra = Buffer.alloc(w * h * 4);
+    var row;
+    var col;
+    var y;
+    var u;
+    var v;
+    var c;
+    var d;
+    var e;
+    var r;
+    var g;
+    var b;
+    var i;
+    for (row = 0; row < h; row++) {
+        for (col = 0; col < w; col++) {
+            y = i420[row * w + col];
+            u = i420[uOff + (row >> 1) * uvW + (col >> 1)];
+            v = i420[vOff + (row >> 1) * uvW + (col >> 1)];
+            c = y - 16;
+            d = u - 128;
+            e = v - 128;
+            r = (298 * c + 409 * e + 128) >> 8;
+            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            b = (298 * c + 516 * d + 128) >> 8;
+            i = (row * w + col) * 4;
+            bgra[i] = b < 0 ? 0 : (b > 255 ? 255 : b);
+            bgra[i + 1] = g < 0 ? 0 : (g > 255 ? 255 : g);
+            bgra[i + 2] = r < 0 ? 0 : (r > 255 ? 255 : r);
+            bgra[i + 3] = 255;
+        }
+    }
+    return bgra;
+}
+
+function bgraFromI420(i420, sw, sh, dw, dh) {
+    var scaled = scaleI420(i420, sw, sh, dw, dh);
+    var packed = Buffer.alloc(dw * dh + (dw * dh) / 2);
+    scaled.y.copy(packed, 0);
+    scaled.u.copy(packed, dw * dh);
+    scaled.v.copy(packed, dw * dh + (dw * dh) / 4);
+    return { w: dw, h: dh, bgra: i420ToBgra(packed, dw, dh) };
+}
+
 module.exports = {
     parseI420: parseI420,
     scaleI420: scaleI420,
     toAtlas: toAtlas,
     atlasFromI420: atlasFromI420,
+    i420ToBgra: i420ToBgra,
+    bgraFromI420: bgraFromI420,
 };

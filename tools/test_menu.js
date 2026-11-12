@@ -51,16 +51,21 @@ assert.ok(selected.layout.bubbles[2].w > selected.layout.bubbles[1].w);
 
 var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'AirPlay start', 'AirPlay');
 assert.ok(air.rects > 40);
-assert.strictEqual(menu.AIRPLAY_ITEMS.length, 4);
+assert.strictEqual(menu.AIRPLAY_ITEMS.length, 5);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-toggle');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'WYL');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'airplay');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].hint, 'wylaczony');
-assert.strictEqual(menu.AIRPLAY_ITEMS[3].name, 'air-back');
+assert.strictEqual(menu.AIRPLAY_ITEMS[1].name, 'air-screen');
+assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
 assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
     return item.name !== 'air-start' && item.name !== 'air-stop';
 }));
 assert.ok(menu.SCREENS.airplay);
+assert.ok(menu.SCREENS['air-out']);
+assert.strictEqual(menu.AIR_OUT_ITEMS[0].name, 'air-out-central');
+assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-out-cluster');
+assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-out-hud');
 assert.ok(menu.WINDOWS_ITEMS);
 assert.strictEqual(menu.WINDOWS_ITEMS.length, 4);
 assert.strictEqual(menu.WINDOWS_ITEMS[0].name, 'win-toggle');

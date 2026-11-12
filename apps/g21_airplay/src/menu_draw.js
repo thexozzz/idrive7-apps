@@ -328,9 +328,17 @@ var ROOT_ITEMS = [
 
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'WYL', hint: 'wylaczony', icon: 'airplay' },
+    { name: 'air-screen', title: 'Ekran', hint: 'srodek / zegary / HUD', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
+var AIR_OUT_ITEMS = [
+    { name: 'air-out-central', title: 'Srodek', hint: 'ekran centralny', icon: 'desktop' },
+    { name: 'air-out-cluster', title: 'Zegary', hint: 'cluster panel', icon: 'grid' },
+    { name: 'air-out-hud', title: 'HUD', hint: 'wypuklanie', icon: 'tag' },
+    { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 
 var RDP_ITEMS = [
@@ -396,6 +404,7 @@ var ITEMS = ROOT_ITEMS;
 var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
+    'air-out': AIR_OUT_ITEMS,
     windows: WINDOWS_ITEMS,
     'win-devices': WIN_DEVICES_ITEMS,
     stream: STREAM_ITEMS,
@@ -1063,6 +1072,8 @@ function createMenuSurface(opts) {
         edit = null;
         if (next === 'airplay') {
             heading = 'AirPlay';
+        } else if (next === 'air-out') {
+            heading = 'Gdzie pokazac';
         } else if (next === 'windows') {
             heading = 'Miracast';
         } else if (next === 'win-devices') {
@@ -1396,6 +1407,7 @@ module.exports = {
     ITEMS: ITEMS,
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
+    AIR_OUT_ITEMS: AIR_OUT_ITEMS,
     WINDOWS_ITEMS: WINDOWS_ITEMS,
     WIN_DEVICES_ITEMS: WIN_DEVICES_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,

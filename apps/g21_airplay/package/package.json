@@ -1,6 +1,6 @@
 {
   "name": "g21_airplay",
-  "version": "0.1.62",
+  "version": "0.1.67",
   "description": "Lustro ekranu iPhone przez AirPlay w sieci Wi-Fi, do ktorej jest podlaczony MGU Store.",
   "private": false,
   "main": "javascript/runner.js",

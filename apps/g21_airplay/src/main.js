@@ -74,6 +74,9 @@ var AIR_STATUS_TEXT = {
     'uxplay-exit': 'AirPlay stop',
     'idle': 'AirPlay off',
     'waiting': 'gotowe do lustra',
+    'pick-out': 'wybierz ekran',
+    'not-parked': 'tylko postoj',
+    'speed-unknown': 'brak predkosci',
     'bad-name': 'zla nazwa',
     'unknown': 'AirPlay'
 };
@@ -163,6 +166,7 @@ var STATUS_BY_SCREEN = {
     windows: WINDOWS_STATUS_TEXT,
     'win-devices': WINDOWS_STATUS_TEXT,
     stream: STREAM_STATUS_TEXT,
+    'air-out': AIR_STATUS_TEXT,
     rdp: RDP_STATUS_TEXT,
     'rdp-edit': RDP_STATUS_TEXT,
     'rdp-out': RDP_STATUS_TEXT,
@@ -222,6 +226,8 @@ function AirPlayApp() {
     this._seedBuiltinRdp();
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
+    this._airOutput = 'central';
+    this._videoTimer = null;
     this._streamProtocol = '';
     this._winAutoAccepting = false;
     this._sessionText = 'wybierz AirPlay, Miracast, RDP albo VNC';
@@ -938,18 +944,94 @@ AirPlayApp.prototype._toggleProtocol = function (protocol) {
         this._endStream(protocol);
         return;
     }
+    if (protocol === 'airplay') {
+        this._paintSwitch(toggle, true, 'wybierz ekran');
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('air-out');
+        }
+        this._tellMenu('pick-out');
+        this._sync();
+        return;
+    }
     this._paintSwitch(toggle, true, 'start...');
     this._choose(protocol);
+};
+
+AirPlayApp.prototype._stopVideoTimer = function () {
+    if (this._videoTimer) {
+        clearInterval(this._videoTimer);
+        this._videoTimer = null;
+    }
+};
+
+AirPlayApp.prototype._startVideoTimer = function () {
+    var self = this;
+    this._stopVideoTimer();
+    this._videoTimer = setInterval(function () {
+        if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
+            self._takeFrame();
+        } else {
+            self._stopVideoTimer();
+        }
+    }, 50);
+};
+
+AirPlayApp.prototype._startAirplayToOutput = function (outputName) {
+    var out = outputName === 'cluster' || outputName === 'hud' ? outputName : 'central';
+    var selected;
+    this._airOutput = out;
+    this._writeSessionOutput(out);
+    if (out === 'central') {
+        if (this._frameBridge) {
+            this._frameBridge.stop();
+        }
+        this._display.select('central');
+        noteStart('air-out ' + out);
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('airplay');
+        }
+        this._rebuildProtocolMenu('airplay');
+        this._paintSwitch('air-toggle', true, 'start...');
+        this._choose('airplay');
+        this._sync();
+        return;
+    }
+    selected = this._display.select(out);
+    if (!selected.ok) {
+        noteStart('air-out-refuse ' + out + ' ' + (selected.reason || ''));
+        this._tellMenu(selected.reason || 'not-parked');
+        this._writeSessionOutput('central');
+        this._airOutput = 'central';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('air-out');
+        }
+        this._sync();
+        return;
+    }
+    if (this._frameBridge) {
+        this._frameBridge.stop();
+    }
+    noteStart('air-out ' + out);
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('airplay');
+    }
+    this._rebuildProtocolMenu('airplay');
+    this._paintSwitch('air-toggle', true, 'start...');
+    this._choose('airplay');
+    this._sync();
 };
 
 AirPlayApp.prototype._endStream = function (protocol) {
     var back = protocol || this._streamProtocol || 'airplay';
     this._winAutoAccepting = false;
+    this._stopVideoTimer();
     if (this._frameBridge) {
         this._frameBridge.stop();
     }
     this._writeSessionOutput('central');
     this._rdpOutput = 'central';
+    this._airOutput = 'central';
+    this._display.select('central');
     this._sessions.disconnect();
     this._sessionText = back + ' stop';
     this._streamProtocol = '';
@@ -967,6 +1049,9 @@ AirPlayApp.prototype._enterStream = function (protocol) {
         return;
     }
     this._streamProtocol = protocol;
+    if (protocol === 'airplay') {
+        this._startVideoTimer();
+    }
     this._chosen = protocol;
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('stream');
@@ -1067,6 +1152,30 @@ AirPlayApp.prototype._onAirAction = function (name) {
     }
     if (name === 'air-toggle') {
         this._toggleProtocol('airplay');
+        return;
+    }
+    if (name === 'air-screen') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('air-out');
+        }
+        this._tellMenu('pick-out');
+        this._sync();
+        return;
+    }
+    if (name === 'air-out-back') {
+        this._openProtocolScreen('airplay');
+        return;
+    }
+    if (name === 'air-out-central') {
+        this._startAirplayToOutput('central');
+        return;
+    }
+    if (name === 'air-out-cluster') {
+        this._startAirplayToOutput('cluster');
+        return;
+    }
+    if (name === 'air-out-hud') {
+        this._startAirplayToOutput('hud');
         return;
     }
     if (name === 'air-name') {
@@ -1312,7 +1421,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._onStreamAction(name);
         return;
     }
-    if (screen === 'airplay' && name.indexOf('air-') === 0) {
+    if ((screen === 'airplay' || screen === 'air-out') && name.indexOf('air-') === 0) {
         this._onAirAction(name);
         return;
     }
@@ -1413,6 +1522,10 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         onHint = 'czekaj na iPhone';
     }
     this._paintSwitch('air-toggle', live.on, onHint, 'wylaczony');
+    this._menu.setItemHint(
+        'air-screen',
+        this._airOutput === 'cluster' ? 'zegary' : (this._airOutput === 'hud' ? 'HUD' : 'srodek')
+    );
     this._menu.setItemHint('air-name', name);
     this._menu.setItemHint('air-info', net.slice(0, 28));
 };
@@ -1727,6 +1840,15 @@ AirPlayApp.prototype._sync = function () {
         return;
     }
 
+    if (screen === 'air-out') {
+        air = choice.ok
+            ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
+            : choice;
+        this._paint(air);
+        this._tellMenu('pick-out');
+        return;
+    }
+
     if (screen === 'airplay') {
         try {
             text = fs.readFileSync(RECEIVER_STATUS, 'utf8');
@@ -1880,6 +2002,11 @@ AirPlayApp.prototype._sync = function () {
 
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
+    var active;
+    var w;
+    var h;
+    var atlas;
+    var bgra;
     try {
         parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
     } catch (err) {
@@ -1889,13 +2016,20 @@ AirPlayApp.prototype._takeFrame = function () {
         return;
     }
     this._decoded = parsed;
-    var active = this._display.active();
-    if (active !== 'cluster' && active !== 'hud') {
+    active = this._display.active();
+    if (active === 'cluster' || active === 'hud') {
+        w = active === 'hud' ? 800 : 1088;
+        atlas = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, w, 480);
+        this._display.frame(atlas);
         return;
     }
-    var w = active === 'hud' ? 800 : 1088;
-    var atlas = videoDecoder.atlasFromI420(parsed.i420, parsed.w, parsed.h, w, 480);
-    this._display.frame(atlas);
+    // Central: BGRA into g21-present (same path as RDP), not UxPlay waylandsink.
+    w = 1920;
+    h = 720;
+    bgra = videoDecoder.bgraFromI420(parsed.i420, parsed.w, parsed.h, w, h);
+    if (this._frames && bgra && bgra.bgra) {
+        this._frames.write(bgra);
+    }
 };
 
 AirPlayApp.prototype._setVisible = function (visible) {

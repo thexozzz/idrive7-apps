@@ -40,10 +40,16 @@ assert.strictEqual(dec.parseI420(Buffer.from('nope')), null);
 var wide = dec.atlasFromI420(i420, 2, 2, 4, 2);
 assert.strictEqual(wide.length, 4 * 3);
 
+var bgra = dec.bgraFromI420(i420, 2, 2, 2, 2);
+assert.strictEqual(bgra.w, 2);
+assert.strictEqual(bgra.h, 2);
+assert.strictEqual(bgra.bgra.length, 2 * 2 * 4);
+assert.strictEqual(bgra.bgra[3], 255);
+
 var renderer = fs.readFileSync(path.join(__dirname, '..', 'third_party', 'UxPlay', 'renderers', 'video_renderer.c'), 'utf8');
 assert.ok(renderer.indexOf('avdec_h264') === -1 || renderer.indexOf('decoder') !== -1);
 assert.ok(renderer.indexOf('tee name=g21tee') !== -1);
 assert.ok(renderer.indexOf('format=I420') !== -1);
 assert.ok(renderer.indexOf('g21_new_sample') !== -1);
 
-console.log('decoder: one UxPlay decode, I420 packed into the cluster-render atlas');
+console.log('decoder: one UxPlay decode, I420 to atlas/BGRA for present/cluster');

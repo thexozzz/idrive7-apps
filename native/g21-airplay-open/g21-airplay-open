@@ -11,7 +11,7 @@
 # UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p 7400 block.
 # On this MGU CarPlay already owns TCP 7000 and airplay-rx owns 7101;
 # legacy UxPlay ports (7100/7000/7001) fail with errno 98 (EADDRINUSE).
-# -p 7400 uses TCP 7400-7402 and UDP 7403-7404.
+# -p 7400 uses TCP/UDP 7400-7402 (httpd listens on TCP 7401).
 set -u
 
 TABLE=g21_airplay
@@ -81,8 +81,47 @@ desk() {
     chmod 666 "$DESKTOP" 2>/dev/null || true
 }
 
+# nftables accept in our table does NOT stop mgu_uplink drop (separate base
+# chain). Rules must live in inet mgu_uplink itself, tagged by comment.
+clear_uplink_airplay_rules() {
+    for chain in output input; do
+        nft -a list chain inet mgu_uplink "$chain" 2>/dev/null | grep 'g21-airplay' | while read -r line; do
+            h=$(printf '%s\n' "$line" | sed -n 's/.*# handle \([0-9][0-9]*\).*/\1/p')
+            if [ -n "$h" ]; then
+                nft delete rule inet mgu_uplink "$chain" handle "$h" 2>/dev/null || true
+            fi
+        done
+    done
+}
+
 clear_table() {
+    if [ -f /run/g21-airplay/mdns-iface ]; then
+        old_iface=$(tr -d '\r\n' < /run/g21-airplay/mdns-iface 2>/dev/null || true)
+        if [ -n "$old_iface" ]; then
+            ip route del 224.0.0.251/32 dev "$old_iface" 2>/dev/null || true
+        fi
+        rm -f /run/g21-airplay/mdns-iface
+    fi
+    clear_uplink_airplay_rules
     nft delete table inet "$TABLE" 2>/dev/null || true
+}
+
+# Path-qualified stops only — never killall / bare pkill names.
+our_uxplay_pids() {
+    pgrep -f '/var/opt/g21-airplay-open/.*/uxplay.bin' 2>/dev/null || true
+}
+
+our_avahi_pids() {
+    # run-elf keeps the path in argv; after ready, avahi rewrites cmdline to
+    # "avahi-daemon: running […]". Match both, then confirm our private libs.
+    pids=$(pgrep -f '/var/opt/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true)
+    pids="$pids $(pgrep -f 'avahi-daemon: running' 2>/dev/null || true)"
+    for p in $pids; do
+        [ -r "/proc/$p/maps" ] || continue
+        if grep -q '/var/opt/g21-airplay-open/.*/libavahi' "/proc/$p/maps" 2>/dev/null; then
+            printf '%s\n' "$p"
+        fi
+    done
 }
 
 stop_ux() {
@@ -91,8 +130,9 @@ stop_ux() {
         UXPID=
     fi
     # Orphans keep AirPlay TCP/UDP ports (errno 98) and block the next start.
-    pkill -f '/uxplay.bin' 2>/dev/null || true
-    pkill -f '/uxplay ' 2>/dev/null || true
+    for p in $(our_uxplay_pids); do
+        kill "$p" 2>/dev/null || true
+    done
 }
 
 stop_avahi_local() {
@@ -102,11 +142,12 @@ stop_avahi_local() {
     fi
 }
 
-# Bundled avahi fights BMW mdnsd on UDP 5353. AirPlay uses system Bonjour.
 stop_bundled_avahi() {
     stop_avahi_local
-    pkill -f '/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true
-    pkill -f '/var/opt/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true
+    for p in $(our_avahi_pids); do
+        kill "$p" 2>/dev/null || true
+    done
+    AVAHIPID=
 }
 
 # MGU ships Apple mdnsd + /usr/lib/libdns_sd.so; UxPlay dlopens libdns_sd.so.
@@ -121,10 +162,13 @@ have_system_mdns() {
 }
 
 ux_port_listening() {
-    if netstat -lnt 2>/dev/null | grep -E '[:.]7400[[:space:]]' >/dev/null 2>&1; then
+    # UxPlay "-p 7400" maps tcp[0]=7400 (mirror data), tcp[1]=7401 (RAOP/AirPlay
+    # httpd), tcp[2]=7402. The process listens on TCP 7401 while advertising; 7400
+    # may appear only after a client starts mirroring. Health must accept 7401.
+    if netstat -lnt 2>/dev/null | grep -E '[:.]740[01][[:space:]]' >/dev/null 2>&1; then
         return 0
     fi
-    if ss -lnt 2>/dev/null | grep -E '[:.]7400[[:space:]]' >/dev/null 2>&1; then
+    if ss -lnt 2>/dev/null | grep -E '[:.]740[01][[:space:]]' >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -161,6 +205,7 @@ idle() {
     stop_mice
     clear_mice_service
     clear_mice_offers
+    stop_bundled_avahi
     if [ -f "$STAMP" ]; then
         clear_table
         rm -f "$STAMP"
@@ -170,6 +215,20 @@ idle() {
 open_ports() {
     iface=$1
     net=$2
+    mkdir -p /run/g21-airplay
+    # BMW routes 224.0.0.0/4 via vlan73; without a /32 on the Store Wi-Fi
+    # iface, avahi announces mDNS on the wrong interface and iPhone sees nothing.
+    if [ -f /run/g21-airplay/mdns-iface ]; then
+        old_iface=$(tr -d '\r\n' < /run/g21-airplay/mdns-iface 2>/dev/null || true)
+        if [ -n "$old_iface" ] && [ "$old_iface" != "$iface" ]; then
+            ip route del 224.0.0.251/32 dev "$old_iface" 2>/dev/null || true
+        fi
+    fi
+    printf '%s\n' "$iface" > /run/g21-airplay/mdns-iface
+    ip route replace 224.0.0.251/32 dev "$iface" 2>/dev/null || true
+    # Own table (audit / belt-and-suspenders). Real allow must be in mgu_uplink:
+    # that table drops root egress/ingress on Store Wi-Fi, and nft accept in
+    # another table does not override it.
     nft -f - <<EOF
 add table inet $TABLE
 delete table inet $TABLE
@@ -179,14 +238,39 @@ table inet $TABLE {
         iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
         iifname "$iface" ip saddr $net udp dport 5353 accept
         iifname "$iface" ip saddr $net tcp dport 7400-7402 accept
-        iifname "$iface" ip saddr $net udp dport 7403-7404 accept
+        iifname "$iface" ip saddr $net udp dport 7400-7402 accept
         iifname "$iface" ip saddr $net tcp dport 1235 accept
         iifname "$iface" ip saddr $net tcp dport 7250 accept
         iifname "$iface" ip saddr $net udp dport 1028 accept
         iifname "$iface" ip saddr $net udp dport 1029 accept
     }
+    chain output {
+        type filter hook output priority -50; policy accept;
+        oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
+        oifname "$iface" ip daddr $net udp dport 5353 accept
+        oifname "$iface" udp sport 5353 accept
+        oifname "$iface" tcp sport 7400-7402 accept
+        oifname "$iface" udp sport 7400-7402 accept
+        oifname "$iface" ip daddr $net accept
+    }
 }
 EOF
+    clear_uplink_airplay_rules
+    # insert = head of chain, before skuid allow / drop.
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" tcp sport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 7400-7402 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 1235 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7250 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 1028 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 1029 accept comment \"g21-airplay\" 2>/dev/null || true
 }
 
 # Tailscale on MGU is userspace-only: no kernel route to 100.64/10.
@@ -429,6 +513,21 @@ start_avahi_bin() {
     return 1
 }
 
+# Bundled avahi is started via run-elf — BusyBox pidof "avahi-daemon" often misses
+# it (comm=ld-linux). Detect by path and recover AVAHIPID so we never double-start
+# (double-start → SIGTERM storm in g21-avahi.log).
+recover_avahi_pid() {
+    pid=
+    for pid in $(our_avahi_pids); do
+        if kill -0 "$pid" 2>/dev/null; then
+            AVAHIPID=$pid
+            return 0
+        fi
+    done
+    AVAHIPID=
+    return 1
+}
+
 ensure_mdns() {
     iface=$1
     dir=$(tool_dir)
@@ -436,15 +535,10 @@ ensure_mdns() {
     if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
         return 0
     fi
-    if pidof avahi-daemon >/dev/null 2>&1; then
+    if recover_avahi_pid; then
         return 0
     fi
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl start avahi-daemon.service 2>/dev/null || true
-        if pidof avahi-daemon >/dev/null 2>&1; then
-            return 0
-        fi
-    fi
+    # Do NOT systemctl-start factory avahi — stay inside this tool only.
     if [ ! -x "$dir/avahi-daemon" ]; then
         return 1
     fi
@@ -482,7 +576,9 @@ publish-resolv-conf-dns-servers=no
 enable-reflector=no
 [rlimits]
 EOF
-    stop_avahi_local
+    # Clear any orphan from a previous tool incarnation before bind.
+    stop_bundled_avahi
+    sleep 0.3
     # This avahi build rejects user=/group= config keys; stay root via --no-drop-root.
     printf '\n# start iface=%s\n' "$iface" >>/var/log/g21-avahi.log
     if start_avahi_bin "$dir" "$conf"; then
@@ -756,13 +852,23 @@ start_ux() {
         report "missing|$label|$ip"
         return 0
     fi
+    # Recover PID after tool restart (g21-detach/exec chain).
+    if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
+        UXPID=
+        for p in $(our_uxplay_pids); do
+            UXPID=$p
+            break
+        done
+    fi
     if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
         if ux_log_has_mdns_error; then
             stop_ux
             report "mdns-brak|$label|$ip"
             return 0
         fi
-        if ux_log_stopped || ! ux_port_listening; then
+        # Living process: port is the source of truth. "Stopping RAOP" in a prior
+        # generation must not kill a healthy listener (log is truncated on start).
+        if ! ux_port_listening; then
             stop_ux
             report "uxplay-exit|$label|$ip"
             return 0
@@ -782,7 +888,15 @@ start_ux() {
         ln -sfn libdns_sd.so.1 "$dir/lib/libdns_sd.so" 2>/dev/null || true
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
     export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    export GST_REGISTRY="${GST_REGISTRY:-/run/g21-airplay/registry.bin}"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
     export G21_YUV=/run/g21-airplay/latest.yuv
     export AVAHI_COMPAT_NOWARN=1
     mkdir -p /run/g21-airplay
@@ -794,16 +908,19 @@ start_ux() {
     : > "$UXLOG"
     # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
+    # -vs fakesink: decode + G21_YUV tee only; app presents via g21-present / cluster-render.
+    # Direct waylandsink under HMI is blank (H13/H30). Keep G21_YUV export above.
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
+    # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
     # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
-    # applet, so plain `setsid` aborted start with "not found" and left no :7400.
+    # applet, so plain `setsid` aborted start with "not found" and left no listener.
     # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
     # shellcheck disable=SC2086
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as 0 -s 1920x720
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as 0 -s 1920x720
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720
     fi
     if [ -x "$dir/g21-detach" ]; then
         "$dir/g21-detach" "$bin" "$@" >>"$UXLOG" 2>&1 &
@@ -813,8 +930,24 @@ start_ux() {
         "$bin" "$@" >>"$UXLOG" 2>&1 &
     fi
     UXPID=$!
-    sleep 3
-    if ! kill -0 "$UXPID" 2>/dev/null; then
+    # Prefer the real uxplay.bin PID after detach/exec chain; wait for :7401.
+    n=0
+    while [ "$n" -lt 10 ]; do
+        for p in $(our_uxplay_pids); do
+            UXPID=$p
+            break
+        done
+        if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null && ux_port_listening; then
+            break
+        fi
+        sleep 1
+        n=$((n + 1))
+    done
+    for p in $(our_uxplay_pids); do
+        UXPID=$p
+        break
+    done
+    if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
         UXPID=
         if ux_log_has_mdns_error; then
             report "mdns-brak|$label|$ip"
@@ -828,7 +961,7 @@ start_ux() {
         report "mdns-brak|$label|$ip"
         return 0
     fi
-    if ux_log_stopped || grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Error initialising socket' "$UXLOG" >/dev/null 2>&1; then
+    if grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Error initialising socket|Required gstreamer plugin' "$UXLOG" >/dev/null 2>&1; then
         stop_ux
         report "uxplay-exit|$label|$ip"
         return 0
@@ -858,7 +991,8 @@ apply_airplay() {
     clear_mice_if_needed
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
         stop_ux
-        stop_bundled_avahi
+        # Keep bundled avahi if already up for this Wi-Fi; killing it every stamp
+        # change raced UxPlay DNS-SD (SIGTERM in g21-avahi.log).
         open_ports "$iface" "$net"
         printf '%s\n' "$stamp" > "$STAMP"
     fi
@@ -947,9 +1081,15 @@ apply() {
     mode=$(mode_of)
     case $mode in
         airplay)
-            stop_present
             stop_rdp
             clear_mice_if_needed
+            # central = g21-present reads BGRA from app; cluster/hud = cluster-render atlas
+            out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
+            if [ "$out" = "cluster" ] || [ "$out" = "hud" ]; then
+                stop_present
+            else
+                start_present
+            fi
             apply_airplay
             ;;
         windows)
@@ -991,6 +1131,7 @@ apply() {
             stop_present
             stop_rdp
             clear_mice_if_needed
+            stop_bundled_avahi
             if keep_config_ports; then
                 report "idle|session-off|"
             else
