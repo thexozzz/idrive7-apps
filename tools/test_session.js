@@ -127,7 +127,21 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     });
     var again = trusted.connect({ host: '10.1.1.1', port: 3389, user: 'driver' });
     assert.strictEqual(again.ok, true);
+    assert.strictEqual(fs.readFileSync(files.allow, 'utf8').indexOf('rdp'), 0);
     assert.strictEqual(fs.readFileSync(files.cert, 'utf8').indexOf('aa:bb'), 0);
+    // Status unwritable must not block allow=rdp (root-owned file on MGU).
+    fs.writeFileSync(files.desktopStatus, 'old\n', { mode: 0o444 });
+    try {
+        fs.chmodSync(files.desktopStatus, 0o444);
+    } catch (errChmod) { /* windows may ignore */ }
+    var blockedStatus = desktop.createRdpSession({
+        paths: files,
+        clientExists: function () { return true; },
+        sendInput: function () { return { ok: true }; },
+    });
+    var despite = blockedStatus.connect({ host: '10.1.1.1', port: 3389, user: 'driver', password: 'x' });
+    assert.strictEqual(despite.ok, true);
+    assert.strictEqual(fs.readFileSync(files.allow, 'utf8').indexOf('rdp'), 0);
     var desk = settingsFactory.createDesktopSettings({
         rdpProfiles: [{ id: 'p2', label: 'Test', octets: [10, 0, 0, 5], port: 3389, user: 'driver' }],
         rdpActive: 'p2',

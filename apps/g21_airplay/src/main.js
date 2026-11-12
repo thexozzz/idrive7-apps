@@ -87,6 +87,8 @@ var RDP_STATUS_TEXT = {
     'no-host': 'ustaw IP',
     'rdp-client-missing': 'brak g21-rdp',
     'secret-write-failed': 'blad hasla',
+    'status-write': 'blad statusu',
+    'connect-failed': 'RDP blad start',
     'starting': 'RDP lacze',
     'connecting': 'RDP lacze',
     'connected': 'RDP dziala',

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.57
+
+- RDP: zapis `allow` przed statusem; narzedzie 0.1.16 robi `chmod 666` na `g21-desktop.status` (wczesniej EACCES → connect-failed).
+
 ## 0.1.56
 
 - RDP: po wyborze ekranu start sesji (bez blokady speed-unknown), wyjscie z pickera i stream po `connected`.

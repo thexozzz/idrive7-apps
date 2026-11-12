@@ -72,10 +72,13 @@ tool_dir() {
 
 report() {
     printf '%s\n' "$1" > "$REPORT"
+    chmod 666 "$REPORT" 2>/dev/null || true
 }
 
 desk() {
+    # World-writable: OAP app (uid 12249) must update this file; root 644 → EACCES → connect-failed.
     printf '%s\n' "$1" > "$DESKTOP"
+    chmod 666 "$DESKTOP" 2>/dev/null || true
 }
 
 clear_table() {
@@ -189,6 +192,10 @@ EOF
 ensure_dirs() {
     mkdir -p "$SESSION_DIR" /run/g21-desktop /run/g21-airplay
     chmod 1777 "$SESSION_DIR" /run/g21-desktop 2>/dev/null || true
+    # Keep status files writable by the Store app after root/tool updates.
+    : >> "$DESKTOP"
+    : >> "$REPORT"
+    chmod 666 "$DESKTOP" "$REPORT" 2>/dev/null || true
 }
 
 mode_of() {
@@ -484,12 +491,22 @@ start_rdp() {
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
     export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    : >>/var/log/g21-rdp.log
+    chmod 666 /var/log/g21-rdp.log 2>/dev/null || true
+    # g21-rdp needs bundled libfreerdp2; always use run-elf library path.
     if [ -x "$dir/run-elf" ]; then
         "$dir/run-elf" "$bin" >>/var/log/g21-rdp.log 2>&1 &
     else
         "$bin" >>/var/log/g21-rdp.log 2>&1 &
     fi
     RDPID=$!
+    sleep 1
+    if ! kill -0 "$RDPID" 2>/dev/null; then
+        RDPID=
+        desk "error|rdp|"
+        return 0
+    fi
+    chmod 666 "$DESKTOP" 2>/dev/null || true
     desk "starting|rdp|"
 }
 

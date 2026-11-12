@@ -15,8 +15,13 @@ function writeText(file, text) {
             return { ok: false, reason: 'session-dir' };
         }
     }
-    fs.writeFileSync(file, text);
-    return { ok: true };
+    try {
+        fs.writeFileSync(file, text);
+        return { ok: true };
+    } catch (errWrite) {
+        // /run/g21-desktop.status is often root:root 644 after the tool writes it.
+        return { ok: false, reason: 'status-write', code: errWrite && errWrite.code };
+    }
 }
 
 function createAirPlaySession(opts) {
@@ -180,8 +185,12 @@ function createRdpSession(opts) {
             if (!wrote.ok) {
                 return wrote;
             }
+            // allow first: status file may be root-owned; tool still starts g21-rdp from allow.
+            var allow = writeText(files.allow, 'rdp\n');
+            if (!allow.ok) {
+                return allow;
+            }
             writeText(files.desktopStatus, 'starting|rdp|\n');
-            writeText(files.allow, 'rdp\n');
             return { ok: true, state: 'starting', target: { host: host, port: port, user: user } };
         },
         disconnect: function () {
