@@ -81,8 +81,13 @@ function manager(extra) {
     return { box: box, outputs: outputs, log: log, settings: settings };
 }
 
+var cold = manager();
+// No Vehicle2 sample yet: Zegary/HUD must still be selectable (RDP picker).
+assert.strictEqual(cold.box.select('cluster').ok, true);
+assert.strictEqual(cold.outputs.cluster.state.starts, 1);
+cold.box.select('central');
+
 var parked = manager();
-assert.strictEqual(parked.box.select('cluster').reason, 'not-parked');
 parked.box.vehicle(0);
 assert.strictEqual(parked.box.select('cluster').ok, true);
 assert.strictEqual(parked.outputs.cluster.state.starts, 1);
@@ -90,6 +95,9 @@ var moved = parked.box.vehicle(1000);
 assert.strictEqual(moved.active, 'central');
 assert.strictEqual(parked.outputs.cluster.state.releases, 1);
 assert.ok(parked.log.join(' ').indexOf('moving-image-off') !== -1);
+var driving = manager();
+driving.box.vehicle(1000);
+assert.strictEqual(driving.box.select('cluster').reason, 'not-parked');
 
 var lost = manager();
 lost.box.vehicle(0);

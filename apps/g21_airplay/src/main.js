@@ -96,6 +96,9 @@ var RDP_STATUS_TEXT = {
     'missing': 'brak g21-rdp',
     'cert': 'zatwierdz Cert',
     'error': 'RDP blad',
+    'freerdp': 'blad FreeRDP',
+    'connect': 'PC odrzucil',
+    'gdi': 'blad obrazu',
     'idle': 'RDP off',
     'waiting': 'profil + Polacz',
     'pick-out': 'wybierz ekran',
@@ -1793,7 +1796,7 @@ AirPlayApp.prototype._sync = function () {
                 return;
             }
             if (rdpLive.state === 'error') {
-                this._tellMenu('error');
+                this._tellMenu(rdpLive.detail || 'error');
                 return;
             }
             this._tellMenu(rdpLive.state === 'connecting' ? 'starting' : (rdpLive.state || 'starting'));

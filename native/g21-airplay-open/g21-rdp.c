@@ -20,6 +20,7 @@
 #include <freerdp/freerdp.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
+#include <winpr/crt.h>
 
 #define TARGET "/run/g21-session/target"
 #define SECRET "/run/g21-session/secret"
@@ -284,20 +285,34 @@ int main(void)
     secret[0] = 0;
     read_text(SECRET, secret, sizeof(secret));
     instance = freerdp_new();
-    if (!instance || !freerdp_context_new(instance)) {
+    if (!instance) {
         status("error|freerdp|");
+        return 1;
+    }
+    if (!freerdp_context_new(instance)) {
+        status("error|freerdp|");
+        freerdp_free(instance);
         return 1;
     }
     instance->PreConnect = pre_connect;
     instance->PostConnect = post_connect;
     instance->PostDisconnect = post_disconnect;
     instance->VerifyCertificateEx = verify_certificate;
-    strncpy(instance->settings->ServerHostname, host, sizeof(instance->settings->ServerHostname) - 1);
+    /* FreeRDP 2: ServerHostname/Username/Password are char* — strncpy(sizeof ptr) segfaults. */
+    free(instance->settings->ServerHostname);
+    instance->settings->ServerHostname = _strdup(host);
     instance->settings->ServerPort = (UINT32)port;
-    strncpy(instance->settings->Username, user, sizeof(instance->settings->Username) - 1);
-    strncpy(instance->settings->Password, secret, sizeof(instance->settings->Password) - 1);
+    free(instance->settings->Username);
+    instance->settings->Username = _strdup(user);
+    free(instance->settings->Password);
+    instance->settings->Password = _strdup(secret);
     instance->settings->DesktopWidth = 1920;
     instance->settings->DesktopHeight = 720;
+    if (!instance->settings->ServerHostname) {
+        status("error|freerdp|");
+        freerdp_free(instance);
+        return 1;
+    }
     memset(secret, 0, sizeof(secret));
     status("connecting|rdp|");
     open_input();

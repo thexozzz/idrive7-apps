@@ -37,6 +37,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H40 | AirPlay na MGU z BMW `mdnsd`+`libdns_sd` (bez bundlowanego avahi), UxPlay `setsid`/ignore HUP i `-as 0` zostaje na TCP 7400 | po Update narzędzia 0.1.15+: status `running` z procesem i `:7400`, iPhone widzi G21 na Karolphone |
 | H41 | Po wyborze ekranu RDP sesja startuje bez `Vehicle2`, UI schodzi z `rdp-out` i po `connected` wchodzi na `stream` | po Update: Polacz → Srodek → status `RDP lacze` / stream + Zakoncz; log `rdp-out central` + `session-ok` |
 | H42 | `chmod 666` na `/run/g21-desktop.status` + `allow` przed statusem usuwa EACCES OAP → `session-fail connect-failed` | po Update narzędzia 0.1.16+app: log `session-ok rdp`, `allow=rdp`, `/var/log/g21-rdp.log` z connecting |
+| H43 | Zegary/HUD w pickerze RDP bez próbki prędkości; `g21-rdp` ustawia host/user/hasło przez `_strdup` (nie `strncpy` na `char*`) | po Update 0.1.17+/0.1.58: tap Zegary/HUD startuje; status `connecting`/`cert`/`connected`, bez `error|freerdp` z SEGV |
 | H30 | CLAIM bez bramki front + pelny prostokat ekranu daje TOUCH na kafelkach menu | po Update: tap na Polacz/Dodaj wybiera kafelek; w logu `menu-touch` |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |

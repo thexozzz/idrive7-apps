@@ -74,6 +74,9 @@ assert.ok(script.indexOf('-as 0') !== -1);
 assert.ok(script.indexOf('-as alsasink') === -1);
 assert.ok(script.indexOf('chmod 666 "$DESKTOP"') !== -1);
 assert.ok(script.indexOf('chmod 666 "$DESKTOP" "$REPORT"') !== -1);
+var rdpSrc = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'g21-rdp.c'), 'utf8');
+assert.ok(rdpSrc.indexOf('_strdup(host)') !== -1);
+assert.ok(rdpSrc.indexOf('strncpy(instance->settings->ServerHostname') === -1);
 assert.ok(script.indexOf('avahi-daemon') !== -1);
 assert.ok(script.indexOf('--daemonize=no') === -1);
 assert.ok(script.indexOf('enable-dbus=yes') !== -1);
@@ -84,7 +87,7 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.16');
+assert.strictEqual(component.version, '0.1.17');
 assert.ok(script.indexOf('SESSION_DIR/output') !== -1);
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstnet-1.0.so.0'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstrtp-1.0.so.0'; }));
