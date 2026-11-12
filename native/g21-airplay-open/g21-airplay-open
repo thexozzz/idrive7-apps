@@ -244,14 +244,25 @@ enable-reflector=no
 [rlimits]
 EOF
     stop_avahi_local
-    "$dir/avahi-daemon" \
-        --daemonize=no \
-        --no-chroot \
-        --no-drop-root \
-        --no-rlimits \
-        --debug \
-        -f "$conf" \
-        >>/var/log/g21-avahi.log 2>&1 &
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$dir/avahi-daemon" \
+            --daemonize=no \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            --debug \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    else
+        "$dir/avahi-daemon" \
+            --daemonize=no \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            --debug \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    fi
     AVAHIPID=$!
     sleep 1
     if kill -0 "$AVAHIPID" 2>/dev/null; then
@@ -278,7 +289,11 @@ start_present() {
     if [ -x "$dir/gst-plugin-scanner" ]; then
         export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
     fi
-    "$bin" >>/var/log/g21-present.log 2>&1 &
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/var/log/g21-present.log 2>&1 &
+    else
+        "$bin" >>/var/log/g21-present.log 2>&1 &
+    fi
     PREPID=$!
 }
 
@@ -295,7 +310,11 @@ start_rdp() {
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
     export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    else
+        "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    fi
     RDPID=$!
     desk "starting|rdp|"
 }

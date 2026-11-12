@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "title": "AirPlay na hotspot iPhone",
-  "description": "UxPlay, avahi i otwarty port 1235 panelu konfiguracji na Wi-Fi Store.",
+  "description": "UxPlay przez /lib linker (bez /lib64), avahi i panel :1235.",
   "uninstallable": true,
   "mguHmi": [
     "ID7"
@@ -27,6 +27,10 @@
     },
     {
       "path": "gst-plugin-scanner",
+      "mode": "0755"
+    },
+    {
+      "path": "gst-plugin-scanner.bin",
       "mode": "0755"
     },
     {
@@ -708,6 +712,10 @@
     {
       "path": "lib/libzvbi.so.0",
       "mode": "0644"
+    },
+    {
+      "path": "run-elf",
+      "mode": "0755"
     },
     {
       "path": "uxplay",

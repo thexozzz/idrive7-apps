@@ -61,7 +61,7 @@ var STATUS_TEXT = {
     'brak-wifi': 'brak wifi',
     'panel :1235': 'panel :1235',
     'idle': 'AirPlay idle',
-    'waiting': 'AirPlay idle',
+    'waiting': 'UxPlay start',
     'unknown': 'AirPlay idle'
 };
 
@@ -684,9 +684,13 @@ AirPlayApp.prototype._sync = function () {
         this._paint(air, { state: receiver.mode || 'waiting', detail: receiver.mode });
         this._paintAirMenu(air, receiver);
         if (this._sessions.active() === 'airplay') {
-            this._tellMenu(receiver.mode === 'running'
-                ? 'running'
-                : (STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'starting' : air.reason)));
+            if (receiver.mode === 'running') {
+                this._tellMenu('running');
+            } else if (receiver.mode === 'missing' || receiver.mode === 'mdns-brak' || receiver.mode === 'uxplay-exit') {
+                this._tellMenu(receiver.mode);
+            } else {
+                this._tellMenu(air.ok ? 'starting' : air.reason);
+            }
         } else if (this._menu && this._menu.screen() === 'airplay') {
             this._tellMenu(STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'waiting' : air.reason));
         }

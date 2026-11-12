@@ -9,4 +9,4 @@ if [ -x "$dir/gst-plugin-scanner" ]; then
     export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
 fi
 export GST_REGISTRY="${GST_REGISTRY:-/run/g21-airplay/registry.bin}"
-exec "$dir/uxplay.bin" "$@"
+exec "$dir/run-elf" "$dir/uxplay.bin" "$@"

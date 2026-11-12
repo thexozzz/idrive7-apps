@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.27
+
+- Start AirPlay pokazuje UxPlay start zamiast mylacego AirPlay idle. Narzedzie odpala binarki przez linker /lib.
+
 ## 0.1.26
 
 - Wejscie w RDP otwiera menu z Host/User oraz panel konfiguracji na porcie 1235 (IP, user, haslo).

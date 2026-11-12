@@ -1,0 +1,26 @@
+#!/bin/sh
+# Runs a bundled ELF that was linked with /lib64/ld-linux-x86-64.so.2 on a
+# head unit that only has /lib/ld-linux-x86-64.so.2 (no /lib64).
+set -u
+if [ "$#" -lt 1 ]; then
+    echo "run-elf: missing binary" >&2
+    exit 1
+fi
+bin=$1
+shift
+dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+linker=
+if [ -x /lib/ld-linux-x86-64.so.2 ]; then
+    linker=/lib/ld-linux-x86-64.so.2
+elif [ -x /lib64/ld-linux-x86-64.so.2 ]; then
+    linker=/lib64/ld-linux-x86-64.so.2
+fi
+case $bin in
+    /*) abs=$bin ;;
+    *) abs=$dir/$bin ;;
+esac
+if [ -n "$linker" ]; then
+    exec "$linker" --library-path "$LD_LIBRARY_PATH" "$abs" "$@"
+fi
+exec "$abs" "$@"

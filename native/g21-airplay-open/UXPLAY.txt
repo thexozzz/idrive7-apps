@@ -23,3 +23,7 @@ The service starts uxplay while the app writes airplay into
 /run/g21-session/allow and MGU Store uplink is Wi-Fi. That Wi-Fi may be an
 iPhone Personal Hotspot (the phone is the host; the head unit is a client).
 Bundled avahi-daemon provides DNS-SD so Screen Mirroring can find G21.
+
+MGU has no /lib64. Bundled ELF files linked against
+/lib64/ld-linux-x86-64.so.2 are started through run-elf, which uses
+/lib/ld-linux-x86-64.so.2 --library-path lib/.
