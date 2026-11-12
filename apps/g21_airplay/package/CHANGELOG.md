@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.90
+
+- AirPlay startuje takze bez srodkowego ekranu. W okienku, zanim przyjdzie klatka, kreci sie spinner.
+
 ## 0.1.89
 
 - Start zostaje na liscie AirPlay, gdy sie nie uda, zamiast przeskakiwac do Ekranow. Na dole sa strzalki w lewo i w prawo oraz dotykowy przycisk Wybierz.

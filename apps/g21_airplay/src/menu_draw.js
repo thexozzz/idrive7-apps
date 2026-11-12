@@ -787,6 +787,22 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
     draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
 }
 
+function drawSpinner(draw, cx, cy) {
+    var phase = Math.floor(Date.now() / 140) % 8;
+    var i;
+    var ang;
+    var x;
+    var y;
+    var on;
+    for (i = 0; i < 8; i += 1) {
+        ang = i * Math.PI / 4 - Math.PI / 2;
+        x = cx + Math.round(Math.cos(ang) * 42) - 7;
+        y = cy + Math.round(Math.sin(ang) * 42) - 7;
+        on = i === phase;
+        draw.rect(x, y, on ? 18 : 10, on ? 18 : 10, on ? ACCENT : MUTED);
+    }
+}
+
 function drawNav(draw, lay) {
     var y = lay.oy + lay.boxH - 78;
     var h = 56;
@@ -1092,7 +1108,10 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
             pinW = draw.textWidth(pin, pinScale);
             draw.text(pin, win.x + Math.floor((win.w - pinW) / 2), win.y + 80, pinScale, INK);
         } else if (!mirrored) {
-            label = String((info && info.hint) || detail || 'czekam na iPhone');
+            if (info && info.spin) {
+                drawSpinner(draw, win.x + Math.floor(win.w / 2), win.y + Math.floor(win.h / 2));
+            }
+            label = String((info && info.hint) || detail || 'czekam na klatke');
             labelW = draw.textWidth(label, 4);
             draw.text(label, win.x + Math.floor((win.w - labelW) / 2), win.y + 90, 4, INK);
             lines = (info && info.lines) || [];
@@ -2285,6 +2304,9 @@ function createMenuSurface(opts) {
         },
         move: move,
         press: press,
+        repaint: function () {
+            paint();
+        },
         setScreen: setScreen,
         setItems: function (nextItems, nextHeading) {
             items = (nextItems || []).map(function (item) {
@@ -2351,6 +2373,7 @@ function createMenuSurface(opts) {
                 headline: info.headline ? String(info.headline) : '',
                 hint: info.hint ? String(info.hint) : '',
                 mirrored: !!info.mirrored,
+                spin: !!info.spin,
                 lines: Array.isArray(info.lines) ? info.lines.map(function (line) {
                     return String(line || '');
                 }) : [],
