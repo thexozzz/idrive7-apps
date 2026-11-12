@@ -313,7 +313,7 @@ var ROOT_ITEMS = [
 
 var AIRPLAY_ITEMS = [
     { name: 'air-start', title: 'Lustro', hint: 'Wlacz AirPlay', icon: 'airplay' },
-    { name: 'air-stop', title: 'Stop', hint: 'Wylacz UxPlay', icon: 'stop' },
+    { name: 'air-stop', title: 'Stop AP', hint: 'Wylacz UxPlay', icon: 'stop' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
@@ -321,7 +321,7 @@ var AIRPLAY_ITEMS = [
 
 var RDP_ITEMS = [
     { name: 'rdp-connect', title: 'Polacz', hint: 'Sesja Windows', icon: 'desktop' },
-    { name: 'rdp-cut', title: 'Rozlacz', hint: 'Koniec sesji', icon: 'stop' },
+    { name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' },
     { name: 'rdp-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
     { name: 'rdp-port', title: 'Port', hint: '3389', icon: 'gear' },
     { name: 'rdp-user', title: 'Konto', hint: 'user', icon: 'user' },
@@ -331,11 +331,20 @@ var RDP_ITEMS = [
     { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
+var VNC_ITEMS = [
+    { name: 'vnc-connect', title: 'Polacz', hint: 'Sesja VNC', icon: 'grid' },
+    { name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' },
+    { name: 'vnc-ip', title: 'IP', hint: '0.0.0.0', icon: 'host' },
+    { name: 'vnc-port', title: 'Port', hint: '5900', icon: 'gear' },
+    { name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
 var ITEMS = ROOT_ITEMS;
 var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
-    rdp: RDP_ITEMS
+    rdp: RDP_ITEMS,
+    vnc: VNC_ITEMS
 };
 
 function message(type, payload) {
@@ -797,9 +806,12 @@ function createMenuSurface(opts) {
             heading = 'AirPlay';
         } else if (next === 'rdp') {
             heading = 'RDP';
+        } else if (next === 'vnc') {
+            heading = 'VNC';
         } else {
-            heading = '';
+            heading = 'G21';
         }
+        detail = '';
         noted = false;
         paint();
         return screenName;
@@ -999,6 +1011,7 @@ module.exports = {
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
+    VNC_ITEMS: VNC_ITEMS,
     SCREENS: SCREENS,
     ICONS: ICONS,
     message: message,

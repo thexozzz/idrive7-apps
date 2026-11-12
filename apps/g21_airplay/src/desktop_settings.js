@@ -124,14 +124,24 @@ function createDesktopSettings(stored) {
             hosts.rdp.cert = '';
             return { ok: true, cert: '' };
         },
-        formatRdpIp: function () {
-            var host = hosts.rdp;
+        setVncPort: function (value) {
+            hosts.vnc.port = clamp(value, 1, 65535, hosts.vnc.port || 5900);
+            return { ok: true, port: hosts.vnc.port };
+        },
+        formatHostIp: function (protocol) {
+            var host = hosts[protocol];
             var parts = [];
             var i;
+            if (!host) {
+                return '';
+            }
             for (i = 0; i < 4; i += 1) {
                 parts.push(i === octet ? ('[' + host.octets[i] + ']') : String(host.octets[i]));
             }
             return parts.join('.');
+        },
+        formatRdpIp: function () {
+            return this.formatHostIp('rdp');
         },
         selectOctet: function (index) {
             octet = clamp(index, 0, 3, 0);
