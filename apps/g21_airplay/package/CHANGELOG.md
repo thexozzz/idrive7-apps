@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.51
+
+- RDP: wymuszony `Profil 1` / `p1` z IP 100.89.166.19, kontem i haslem (nadpisuje stare p1).
+
 ## 0.1.50
 
 - Cluster/HUD: napis `AIRPLAY` na `map`+`hud` (domyslnie WL); kafelek `WL`/`WYL` w menu glownym.

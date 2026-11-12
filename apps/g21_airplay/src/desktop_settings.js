@@ -4,10 +4,10 @@ var PROTOCOLS = ['airplay', 'windows', 'rdp', 'vnc'];
 var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
 var MAX_PROFILES = 6;
 
-// Built-in owner RDP profile (password lives in a .secret file, not here).
+// Built-in owner RDP profile as Profil 1 / p1 (password in .secret, not here).
 var BUILTIN_RDP = {
     id: 'p1',
-    label: 'PC',
+    label: 'Profil 1',
     octets: [100, 89, 166, 19],
     port: 3389,
     user: 'thexozzz@gmail.com',
@@ -119,23 +119,38 @@ function loadProfiles(rawList, legacy, port, prefix) {
     return list;
 }
 
+function builtinProfile() {
+    var profile = hostOf(BUILTIN_RDP, 3389);
+    profile.id = 'p1';
+    profile.label = BUILTIN_RDP.label;
+    return profile;
+}
+
 function ensureBuiltinRdp(list) {
     var i;
-    var profile;
+    var profile = builtinProfile();
+    var existing;
+    // Wymuś p1 = Profil 1 z kontem właściciela (nadpisz stare p1 / pusty slot).
     for (i = 0; i < list.length; i += 1) {
-        if (sameRdpTarget(list[i], BUILTIN_RDP)) {
-            return { list: list, changed: false, id: list[i].id };
+        if (list[i].id === 'p1') {
+            existing = list[i];
+            if (sameRdpTarget(existing, BUILTIN_RDP) && existing.label === BUILTIN_RDP.label) {
+                return { list: list, changed: false, id: 'p1' };
+            }
+            list[i] = profile;
+            return { list: list, changed: true, id: 'p1' };
         }
     }
-    // Tylko pusty domyslny profil — nie dokladaj PC obok juz skonfigurowanych.
-    if (list.length === 1 && isBlankHost(list[0])) {
-        profile = hostOf(BUILTIN_RDP, 3389);
-        profile.id = list[0].id || BUILTIN_RDP.id;
-        profile.label = BUILTIN_RDP.label;
+    if (list.length === 1 && (isBlankHost(list[0]) || list[0].id === 'p1')) {
         list[0] = profile;
-        return { list: list, changed: true, id: profile.id };
+        return { list: list, changed: true, id: 'p1' };
     }
-    return { list: list, changed: false, id: list[0] ? list[0].id : BUILTIN_RDP.id };
+    if (list.length >= MAX_PROFILES) {
+        list[0] = profile;
+        return { list: list, changed: true, id: 'p1' };
+    }
+    list.unshift(profile);
+    return { list: list, changed: true, id: 'p1' };
 }
 
 function createDesktopSettings(stored) {
@@ -148,9 +163,11 @@ function createDesktopSettings(stored) {
     var rdpActive = data.rdpActive || rdpProfiles[0].id;
     var vncActive = data.vncActive || vncProfiles[0].id;
     var seededBuiltinRdp = builtinRdp.changed;
-    // Po podmienieniu pustego profilu wybierz wbudowany; przy dodaniu obok istniejacych nie ruszaj active.
-    if (builtinRdp.changed && rdpProfiles.length === 1) {
-        rdpActive = builtinRdp.id;
+    // Profil 1 (p1) jest kontem wlasciciela — ustaw jako aktywny po seedzie.
+    if (builtinRdp.changed) {
+        rdpActive = 'p1';
+    } else if (!data.rdpActive) {
+        rdpActive = 'p1';
     }
     var airplayName = typeof data.airplayName === 'string' && data.airplayName.length
         ? data.airplayName.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16)

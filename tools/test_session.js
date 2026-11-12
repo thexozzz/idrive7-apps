@@ -119,16 +119,21 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     assert.strictEqual(again.ok, true);
     assert.strictEqual(fs.readFileSync(files.cert, 'utf8').indexOf('aa:bb'), 0);
     var desk = settingsFactory.createDesktopSettings({
-        rdp: { octets: [10, 0, 0, 5], port: 3389, user: 'driver' },
+        rdpProfiles: [{ id: 'p2', label: 'Test', octets: [10, 0, 0, 5], port: 3389, user: 'driver' }],
+        rdpActive: 'p2',
         inspect: true,
     });
     assert.strictEqual(JSON.stringify(desk.snapshot()).indexOf('password'), -1);
+    assert.strictEqual(desk.setActiveProfile('rdp', 'p2').ok, true);
     assert.strictEqual(desk.stepOctet('rdp', 1).octets[0], 11);
     assert.strictEqual(desk.formatRdpIp(), '11.0.0.5');
     assert.strictEqual(desk.setVncHost('192.168.1.20').ok, true);
     assert.strictEqual(desk.formatHostIp('vnc'), '192.168.1.20');
     assert.strictEqual(desk.addProfile('rdp').ok, true);
-    assert.strictEqual(desk.profiles('rdp').length, 2);
+    // p1 = Profil 1 (owner) + p2 test + newly added
+    assert.strictEqual(desk.profiles('rdp').length, 3);
+    assert.strictEqual(desk.profiles('rdp')[0].id, 'p1');
+    assert.strictEqual(desk.profiles('rdp')[0].label, 'Profil 1');
     assert.strictEqual(desk.secretKind('rdp').indexOf('rdp-p'), 0);
     desk.setRdpCert('aa:bb:cc');
     assert.strictEqual(desk.host('rdp').cert, 'aa:bb:cc');
