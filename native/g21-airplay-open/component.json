@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "title": "AirPlay na hotspot iPhone",
-  "description": "UxPlay + avahi overlay; conf bez user=/group= (avahi 0.7 na MGU je odrzuca).",
+  "description": "UxPlay bez -fs (waylandsink MGU nie ma fullscreen); avahi overlay.",
   "uninstallable": true,
   "mguHmi": [
     "ID7"

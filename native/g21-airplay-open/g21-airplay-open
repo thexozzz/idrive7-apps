@@ -83,6 +83,9 @@ stop_ux() {
         kill "$UXPID" 2>/dev/null || true
         UXPID=
     fi
+    # Orphans keep AirPlay TCP/UDP ports (errno 98) and block the next start.
+    pkill -f '/uxplay.bin' 2>/dev/null || true
+    pkill -f '/uxplay ' 2>/dev/null || true
 }
 
 stop_avahi_local() {
@@ -485,14 +488,22 @@ start_ux() {
         mac_args="-m $mac"
     fi
     : > "$UXLOG"
+    # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
+    # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
     # shellcheck disable=SC2086
-    "$bin" -n "$shown" -nh -p $mac_args -vsync no -fs -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+    if [ -n "$mac_args" ]; then
+        "$bin" -n "$shown" -nh -p $mac_args -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+    else
+        "$bin" -n "$shown" -nh -p -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+    fi
     UXPID=$!
-    sleep 1
+    sleep 2
     if ! kill -0 "$UXPID" 2>/dev/null; then
         UXPID=
         if ux_log_has_mdns_error; then
             report "mdns-brak|$label|$ip"
+        elif grep -E 'gst_parse_launch|no property|Error initialising socket' "$UXLOG" >/dev/null 2>&1; then
+            report "uxplay-exit|$label|$ip"
         else
             report "uxplay-exit|$label|$ip"
         fi
@@ -501,6 +512,11 @@ start_ux() {
     if ux_log_has_mdns_error; then
         stop_ux
         report "mdns-brak|$label|$ip"
+        return 0
+    fi
+    if grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Stopping RAOP Server' "$UXLOG" >/dev/null 2>&1; then
+        stop_ux
+        report "uxplay-exit|$label|$ip"
         return 0
     fi
     report "running|$label|$ip"
