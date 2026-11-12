@@ -387,6 +387,7 @@ var ROOT_ITEMS = [
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
     { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
+    { name: 'air-quality', title: '720p', hint: '4 Mb/s', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
     { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
@@ -1159,6 +1160,7 @@ function createMenuSurface(opts) {
     var lastTilt = '';
     var boxPreview = null;
     var caption = null;
+    var lastFrame = null;
     var noted = false;
     var claimNoted = false;
     var detail = '';
@@ -1256,6 +1258,7 @@ function createMenuSurface(opts) {
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
         write(built.frame);
+        lastFrame = built.frame;
         if (!noted) {
             noted = true;
             note('menu-frame ' + built.rects);
@@ -1892,10 +1895,12 @@ function createMenuSurface(opts) {
             return;
         }
         pulse = setInterval(function () {
-            if (shown && ready) {
-                paint();
+            // Keepalive only. Rebuilding the bitmap twice a second made the
+            // menu lag even when AirPlay was off.
+            if (shown && ready && lastFrame) {
+                write(lastFrame);
             }
-        }, 500);
+        }, 1000);
         if (pulse.unref) {
             pulse.unref();
         }

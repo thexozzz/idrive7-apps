@@ -177,6 +177,7 @@ function createDesktopSettings(stored) {
     }
     // false = jak na kkds (bez kodu); true = -pin na iPhonie.
     var airplayPin = data.airplayPin === true;
+    var airQuality = data.airQuality === '1080' ? '1080' : '720';
     var airOutputs = Array.isArray(data.airOutputs) && data.airOutputs.length
         ? data.airOutputs.filter(function (name) {
             return name === 'central' || name === 'cluster' || name === 'hud';
@@ -268,6 +269,11 @@ function createDesktopSettings(stored) {
         setAirplayPin: function (on) {
             airplayPin = !!on;
             return { ok: true, on: airplayPin };
+        },
+        airQuality: function () { return airQuality; },
+        setAirQuality: function (next) {
+            airQuality = next === '1080' ? '1080' : '720';
+            return { ok: true, quality: airQuality };
         },
         airOutputs: function () { return airOutputs.slice(); },
         setAirOutputs: function (list) {
@@ -478,6 +484,7 @@ function createDesktopSettings(stored) {
                 inspect: data.inspect === true,
                 airplayName: airplayName,
                 airplayPin: airplayPin,
+                airQuality: airQuality,
                 airOutputs: airOutputs.slice(),
                 airWindows: airWindows,
                 clusterLabel: clusterLabel,

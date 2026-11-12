@@ -1101,10 +1101,17 @@ start_ux() {
         chmod 666 "$PINFILE" 2>/dev/null || true
         pin_args="-pin $pin"
     fi
+    # 720p asks the iPhone for 1280x720 (about 4 Mb/s). 1080p asks for 1920x1080 (about 8 Mb/s).
+    vsize=1280x720
+    if [ -f "$SESSION_DIR/airplay-size" ]; then
+        case $(tr -d '\r\n' < "$SESSION_DIR/airplay-size") in
+            1080) vsize=1920x1080 ;;
+        esac
+    fi
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s "$vsize" -fps 30 $pin_args -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s "$vsize" -fps 30 $pin_args -d 1
     fi
     printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
     # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG

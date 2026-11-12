@@ -43,13 +43,14 @@ assert.strictEqual(selected.layout.bubbles[1].selected, false);
 
 var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'AirPlay start', 'AirPlay');
 assert.ok(air.rects > 40);
-assert.strictEqual(menu.AIRPLAY_ITEMS.length, 5);
+assert.strictEqual(menu.AIRPLAY_ITEMS.length, 6);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-toggle');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'Start');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'play');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].hint, 'włącz lustro');
 assert.strictEqual(menu.AIRPLAY_ITEMS[1].name, 'air-screen');
-assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
+assert.strictEqual(menu.AIRPLAY_ITEMS[2].name, 'air-quality');
+assert.strictEqual(menu.AIRPLAY_ITEMS[5].name, 'air-back');
 assert.strictEqual(menu.AIR_OUT_ITEMS[0].title, 'Środek');
 assert.ok(!menu.AIR_OUT_ITEMS.some(function (item) { return item.name === 'air-out-start'; }));
 assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {

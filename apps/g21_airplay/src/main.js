@@ -333,7 +333,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.79',
+        version: (this._packageJson && this._packageJson.version) || '0.1.80',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -423,7 +423,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.79') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.80') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -936,6 +936,16 @@ AirPlayApp.prototype._toggleItem = function (protocol) {
     return 'air-toggle';
 };
 
+AirPlayApp.prototype._writeAirplaySize = function () {
+    var q = this._desk && this._desk.airQuality && this._desk.airQuality() === '1080' ? '1080' : '720';
+    try {
+        fs.writeFileSync(this._paths.airplaySize, q + '\n');
+    } catch (err) {
+        noteStart('airplay-size ' + (err && err.message));
+    }
+    return q;
+};
+
 AirPlayApp.prototype._writeSessionOutput = function (name) {
     try {
         fs.writeFileSync(this._paths.output, String(name || 'central') + '\n');
@@ -1080,14 +1090,14 @@ AirPlayApp.prototype._stopVideoTimer = function () {
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
-    // 5 fps. A 20 fps BGRA convert of the whole screen hit the OAP memory cap.
+    // ~30 fps. Unchanged files are skipped. No full-screen BGRA convert.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
         } else {
             self._stopVideoTimer();
         }
-    }, 200);
+    }, 33);
 };
 
 AirPlayApp.prototype._outputLabel = function (name) {
@@ -1115,8 +1125,8 @@ AirPlayApp.prototype._startAirplaySelected = function () {
         this._saveWindows();
         names = this._settings.outputs();
     }
-    this._airOutput = names[0];
     this._writeAirplayAuth();
+    this._writeAirplaySize();
     // central pixels are the menu VIDEO op. g21-present's waylandsink is a
     // black layer on top of that, so the tool must not be asked for central.
     var toolOut = [];
@@ -1322,6 +1332,19 @@ AirPlayApp.prototype._onAirAction = function (name) {
     }
     if (name === 'air-pin') {
         this._toggleAirplayPin();
+        return;
+    }
+    if (name === 'air-quality') {
+        var nextQuality = this._desk.airQuality() === '1080' ? '720' : '1080';
+        this._desk.setAirQuality(nextQuality);
+        this._saveDesk();
+        this._writeAirplaySize();
+        if (typeof this._menu.setItemTitle === 'function') {
+            this._menu.setItemTitle('air-quality', nextQuality === '1080' ? '1080p' : '720p');
+        }
+        if (typeof this._menu.setItemHint === 'function') {
+            this._menu.setItemHint('air-quality', nextQuality === '1080' ? '8 Mb/s' : '4 Mb/s');
+        }
         return;
     }
     if (name === 'air-screen') {
@@ -1976,6 +1999,10 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         this._settings.outputs().map(this._outputLabel.bind(this)).join(' + ') || 'żaden'
     );
     this._menu.setItemHint('air-name', name);
+    if (typeof this._menu.setItemTitle === 'function') {
+        this._menu.setItemTitle('air-quality', this._desk.airQuality() === '1080' ? '1080p' : '720p');
+    }
+    this._menu.setItemHint('air-quality', this._desk.airQuality() === '1080' ? '8 Mb/s' : '4 Mb/s');
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
@@ -2551,6 +2578,18 @@ AirPlayApp.prototype._takeFrame = function () {
     var payload;
     var box;
     var now;
+    var st;
+    var stamp;
+    try {
+        st = fs.statSync('/run/g21-airplay/latest.yuv');
+    } catch (err) {
+        return;
+    }
+    stamp = String(st.mtime.getTime()) + ':' + String(st.size);
+    if (stamp === this._yuvStamp) {
+        return;
+    }
+    this._yuvStamp = stamp;
     try {
         parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
     } catch (err) {
