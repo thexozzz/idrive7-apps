@@ -297,7 +297,7 @@ function createMenuSurface(opts) {
     }
 
     function paint() {
-        if (!ready || !shown || !front) {
+        if (!ready || !shown) {
             return;
         }
         sendPlace();
@@ -337,18 +337,10 @@ function createMenuSurface(opts) {
         }
     }
 
-    function applyFront(on) {
-        if (!on) {
-            dropSurface('back');
-            return;
-        }
-        if (front === on && ready && sock) {
-            paint();
-            return;
-        }
-        front = true;
+    function showSurface(reason) {
         shown = true;
-        note('menu-front');
+        front = true;
+        note('menu-show ' + (reason || 'open'));
         armPulse();
         if (sock && ready) {
             paint();
@@ -442,10 +434,13 @@ function createMenuSurface(opts) {
                 note('menu-ready ' + screen.w + 'x' + screen.h + (native ? ' native' : ''));
                 paint();
             } else if (type === X_STATE && body.length >= 8) {
-                applyFront(body.readUInt32LE(4) !== 0 && shown);
+                // On this unit X_STATE goes false right after READY and killed the
+                // first frame. Leave detection stays on changeVisibility.
+                front = body.readUInt32LE(4) !== 0;
+                note(front ? 'menu-front' : 'menu-away');
             } else if (type === CLOSED) {
-                applyFront(false);
-            } else if (type === TOUCH && body.length >= 12 && front) {
+                note('menu-closed');
+            } else if (type === TOUCH && body.length >= 12 && shown) {
                 if (body.readUInt32LE(0) === 1) {
                     var hit = hitRow(body.readFloatLE(4), body.readFloatLE(8));
                     if (hit >= 0) {
@@ -454,9 +449,9 @@ function createMenuSurface(opts) {
                         press();
                     }
                 }
-            } else if (type === CCU && body.length >= 5 && front) {
+            } else if (type === CCU && body.length >= 5 && shown) {
                 onControl(body.readUInt16BE(1), body[3]);
-            } else if (type === X_CCU && body.length >= 5 && front) {
+            } else if (type === X_CCU && body.length >= 5 && shown) {
                 onControl(body.readUInt16BE(1), body[3]);
             }
         }
@@ -491,10 +486,10 @@ function createMenuSurface(opts) {
             sock = null;
             // Do not reconnect while the app is away. A quiet reconnect kept the
             // last menu over iDrive after the owner left with the back arrow.
-            if (shown && front && !retry) {
+            if (shown && !retry) {
                 retry = setTimeout(function () {
                     retry = null;
-                    if (shown && front) {
+                    if (shown) {
                         connect();
                     }
                 }, 3000);
@@ -510,7 +505,7 @@ function createMenuSurface(opts) {
             return;
         }
         pulse = setInterval(function () {
-            if (shown && ready && front) {
+            if (shown && ready) {
                 paint();
             }
         }, 500);
@@ -522,17 +517,14 @@ function createMenuSurface(opts) {
     return {
         items: items,
         open: function () {
-            shown = true;
-            front = true;
-            armPulse();
-            if (sock) {
-                paint();
-                return;
-            }
-            connect();
+            showSurface('open');
         },
         setFront: function (on) {
-            applyFront(!!on);
+            if (on) {
+                showSurface('front');
+            } else {
+                dropSurface('leave');
+            }
         },
         close: function () {
             dropSurface('close');

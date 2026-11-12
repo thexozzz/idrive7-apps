@@ -10,7 +10,7 @@ Potwierdzone przez właściciela 2026-11-12: menu AirPlay 0.1.13 jest widoczne.
 - Tekst RHMI się nie rysuje. `LT_State_Laptimer`, `LT_State_Wide`, `LT_Label_*` i `LT_Button_*` otwierają pustą stronę. Nie dodawaj kolejnej strony tekstowej licząc, że ją widać.
 - Strona RHMI ma być otwarta (`mapEntryState` i `openState`), bo renderer maluje tylko aplikację z przodu. `openEntryState` z uuid punktu wejścia zwraca `INVALID_UUID`.
 - Piksele idą ramką na `/run/mgu-renderd/renderd.sock`, potem `/run/mgu-render/render.sock`. Po `READY` daj `PLACE` na cały ekran. Samo pole 104,88 nic tu nie narysowało. Menu maluj w środku, kolumnę wstecz zostaw przezroczystą. `GRAB` 1 tylko gdy aplikacja jest z przodu.
-- Po wyjściu zerwij gniazdo renderera. Samo `SHOW` 0 zostawia ostatnią klatkę. Proś o `proto=mgu-render/1`, żeby dostać `X_STATE` i wiedzieć, że aplikacja nie jest z przodu.
+- Po wyjściu zerwij gniazdo dopiero po `changeVisibility` false. `X_STATE` false zaraz po `READY` na tym aucie zrywał pierwszą klatkę.
 - Każdy `require('./plik.js')` ma być w `modules` w `mgu-app.json`. Linker nazywa moduł `./` plus sama nazwa pliku. Brak wpisu przerywa budowę Store, zanim powstanie SDK.
 - Store trzyma ostatni odczyt gałęzi. Nieudana wersja instaluje się ponownie, dopóki lista źródeł nie odczyta czubka. Nowy numer daje `scripts/bump.ps1`.
 - Dawca linkowany na tym aucie to `ts_diagnostic_service@4.20.2`. `oap-sdk/` nie wchodzi do gita.

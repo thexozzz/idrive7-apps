@@ -474,7 +474,8 @@ AirPlayApp.prototype._onEntryPointExecute = function (uuid) {
         noteStart('entry-skip');
         return Promise.resolve();
     }
-    this._setVisible(true);
+    this._visible = true;
+    this._showMenu();
     return this._openPage();
 };
 
@@ -573,6 +574,9 @@ AirPlayApp.prototype._setVisible = function (visible) {
     if (this._visible === visible) {
         if (!visible && this._menu) {
             this._menu.setFront(false);
+        }
+        if (visible) {
+            this._showMenu();
         }
         return;
     }

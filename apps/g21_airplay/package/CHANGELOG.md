@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.21
+
+- Rysunek nie jest zrywany po fałszywym X_STATE. W 0.1.20 pierwsza klatka padała zaraz po starcie.
+
 ## 0.1.20
 
 - Po wyjściu zrywa powierzchnię renderera. Samo schowanie klatki zostawiało menu na iDrive.
