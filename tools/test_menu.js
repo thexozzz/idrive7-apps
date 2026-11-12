@@ -40,6 +40,16 @@ assert.ok(withVer.rects > withStatus.rects);
 var selected = menu.buildFrame(menu.AIRPLAY_ITEMS, 2, 1920, 720, '', 'Menu');
 assert.strictEqual(selected.layout.bubbles[2].selected, true);
 assert.strictEqual(selected.layout.bubbles[1].selected, false);
+var many = [];
+var n;
+for (n = 0; n < 9; n += 1) {
+    many.push({ name: 'row-' + n, title: 'Pozycja ' + n, hint: 'opis', icon: 'play' });
+}
+var scrolled = menu.buildFrame(many, 8, 1920, 720, '', 'Lista');
+assert.ok(scrolled.layout.bubbles.length < many.length);
+assert.strictEqual(scrolled.layout.bubbles[scrolled.layout.bubbles.length - 1].index, 8);
+assert.ok(scrolled.layout.first > 0);
+assert.ok(scrolled.layout.bubbles[0].y >= scrolled.layout.oy);
 
 var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'AirPlay start', 'AirPlay');
 assert.ok(air.rects > 40);

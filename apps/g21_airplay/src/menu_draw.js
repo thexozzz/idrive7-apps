@@ -597,6 +597,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
     var y;
     var rowW;
     var rowH;
+    var first = 0;
     if (home) {
         rowW = Math.min(560, Math.floor((page.boxW - 180 - gap) / count));
         rowH = 300;
@@ -615,6 +616,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
                 scale: 5,
                 iconPx: 4,
                 home: true,
+                index: i,
                 selected: i === selected
             });
             x += rowW + gap;
@@ -630,7 +632,28 @@ function menuLayout(items, selected, width, height, detail, heading) {
         }
         x = page.ox + 48;
         y = page.oy + headerH + 12;
-        for (i = 0; i < items.length; i += 1) {
+        var listTop = y;
+        var listBottom = page.oy + page.boxH - footerH - 12;
+        var pitch = rowH + gap;
+        var visible = Math.floor((listBottom - listTop) / pitch);
+        var first = 0;
+        var shown;
+        if (visible < 1) {
+            visible = 1;
+        }
+        if (items.length > visible) {
+            first = selected - Math.floor((visible - 1) / 2);
+            if (first < 0) {
+                first = 0;
+            }
+            if (first > items.length - visible) {
+                first = items.length - visible;
+            }
+        } else {
+            visible = items.length;
+        }
+        shown = 0;
+        for (i = first; i < items.length && shown < visible; i += 1) {
             bubbles.push({
                 x: x,
                 y: y,
@@ -643,9 +666,11 @@ function menuLayout(items, selected, width, height, detail, heading) {
                 scale: 4,
                 iconPx: 3,
                 home: false,
+                index: i,
                 selected: i === selected
             });
-            y += rowH + gap;
+            y += pitch;
+            shown += 1;
         }
     }
     return {
@@ -659,7 +684,9 @@ function menuLayout(items, selected, width, height, detail, heading) {
         detail: detail || '',
         hintY: page.oy + page.boxH - 46,
         statusY: page.oy + page.boxH - 22,
-        headerH: headerH
+        headerH: headerH,
+        first: first,
+        count: items.length
     };
 }
 
@@ -1030,14 +1057,16 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
         draw.text('THEiPlay', lay.ox + 36, lay.oy + 22, 5, ACCENT);
     }
     drawVersionMark(draw, lay, version);
-    for (i = 0; i < items.length; i += 1) {
+    for (i = 0; i < lay.bubbles.length; i += 1) {
         bubble = lay.bubbles[i];
-        title = String(items[i].title || '');
-        hint = items[i].hint ? String(items[i].hint) : '';
-        iconName = items[i].icon || 'play';
+        var itemIndex = bubble.index != null ? bubble.index : i;
+        var item = items[itemIndex];
+        title = String(item.title || '');
+        hint = item.hint ? String(item.hint) : '';
+        iconName = item.icon || 'play';
         iconPx = bubble.iconPx;
         iconSide = draw.iconSize(iconPx);
-        focus = i === selected;
+        focus = itemIndex === selected;
         draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
         if (focus) {
             draw.rect(bubble.x, bubble.y, bubble.w, 4, ACCENT);
@@ -1076,6 +1105,14 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
             if (hint) {
                 draw.text(hint.slice(0, 36), bubble.x + 28 + iconSide + 22, labelY + 34, 3, focus ? ACCENT : MUTED);
             }
+        }
+    }
+    if (lay.bubbles.length && !lay.bubbles[0].home) {
+        if (lay.first > 0) {
+            draw.text('w gore', lay.ox + lay.boxW - 280, lay.oy + 28, 3, MUTED);
+        }
+        if (lay.first + lay.bubbles.length < lay.count) {
+            draw.text('dalej', lay.ox + lay.boxW - 160, lay.hintY, 3, MUTED);
         }
     }
     if (detail) {
@@ -1402,7 +1439,7 @@ function createMenuSurface(opts) {
                 var hw = bubble.hitW != null ? bubble.hitW : bubble.w;
                 var hh = bubble.hitH != null ? bubble.hitH : bubble.h;
                 if (p.x >= hx && p.x < hx + hw && p.y >= hy && p.y < hy + hh) {
-                    return i;
+                    return bubble.index != null ? bubble.index : i;
                 }
                 cx = hx + hw / 2;
                 cy = hy + hh / 2;
@@ -1417,7 +1454,7 @@ function createMenuSurface(opts) {
         }
         // Finger often lands in the gap; accept the nearest tile within ~120 px.
         if (best >= 0 && bestDist <= 120 * 120) {
-            return best;
+            return lay.bubbles[best].index != null ? lay.bubbles[best].index : best;
         }
         return -1;
     }
@@ -1856,20 +1893,47 @@ function createMenuSurface(opts) {
                 if (edit) {
                     onEditTouch(phase, tx, ty);
                 } else if (phase === 1) {
-                    touchDown = { x: tx, y: ty, hit: hitRow(tx, ty), t: Date.now() };
-                    // Select on down so the tile lights up; activate on up unless it was a drag.
+                    touchDown = { x: tx, y: ty, hit: hitRow(tx, ty), origin: selected, t: Date.now(), dragged: false };
                     if (touchDown.hit >= 0) {
                         selected = touchDown.hit;
+                        touchDown.origin = touchDown.hit;
                         paint();
                     }
                 } else if (phase === 2 && touchDown) {
-                    hit = hitRow(tx, ty);
-                    if (hit >= 0 && hit !== selected) {
-                        selected = hit;
-                        touchDown.hit = hit;
-                        paint();
+                    var dragY = ty - touchDown.y;
+                    var steps;
+                    var origin;
+                    var next;
+                    if (Math.abs(dragY) >= 48) {
+                        steps = Math.round(dragY / 72);
+                        origin = touchDown.origin;
+                        if (origin < 0) {
+                            origin = selected;
+                        }
+                        next = origin - steps;
+                        if (next < 0) {
+                            next = 0;
+                        }
+                        if (next >= items.length) {
+                            next = items.length - 1;
+                        }
+                        touchDown.dragged = true;
+                        if (next !== selected) {
+                            selected = next;
+                            paint();
+                        }
+                    } else {
+                        hit = hitRow(tx, ty);
+                        if (hit >= 0 && hit !== selected) {
+                            selected = hit;
+                            touchDown.hit = hit;
+                            paint();
+                        }
                     }
                 } else if (phase === 3) {
+                    if (touchDown && touchDown.dragged) {
+                        touchDown = null;
+                    } else {
                     hit = hitRow(tx, ty);
                     if (hit < 0 && touchDown) {
                         hit = touchDown.hit;
@@ -1885,6 +1949,7 @@ function createMenuSurface(opts) {
                         activateHit(hit, 'up');
                     }
                     touchDown = null;
+                    }
                 }
             } else if (type === CCU && body.length >= 5 && body.length < 12 && shown) {
                 onControl(body.readUInt16BE(1), body[3], body[4]);

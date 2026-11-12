@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.86
+
+- Lista w menu przewija się razem z pokrętłem i ze swipe, więc widać opcje, które nie mieszczą się na ekranie.
+
 ## 0.1.85
 
 - Ekrany to znowu trzy pola: Środek, HUD i Zegary. Na zegarach osobno Mapa albo Panel. Okno na środku jest od razu po starcie, nie po pierwszej nowej klatce.
