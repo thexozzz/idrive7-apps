@@ -400,12 +400,13 @@ var AIR_OUT_ITEMS = [
     { name: 'air-out-hud', title: 'HUD', hint: 'wyłączony', icon: 'tag' },
     { name: 'air-out-cluster', title: 'Zegary', hint: 'wyłączony', icon: 'grid' },
     { name: 'air-area', title: 'Mapa', hint: 'miejsce na zegarach', icon: 'grid' },
-    { name: 'air-out-box', title: 'Okno', hint: 'rozmiar i pozycja', icon: 'desktop' },
+    { name: 'air-out-box', title: 'Pozycja', hint: 'srodek ekranu', icon: 'desktop' },
     { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 
 var AIR_BOX_ITEMS = [
     { name: 'air-box-target', title: 'Ekran', hint: 'klik: nastepny', icon: 'desktop' },
+    { name: 'air-box-center', title: 'Srodek', hint: 'klik: wyrodkuj', icon: 'grid' },
     { name: 'air-box-bigger', title: 'Wiekszy', hint: 'klik', icon: 'desktop' },
     { name: 'air-box-smaller', title: 'Mniejszy', hint: 'klik', icon: 'desktop' },
     { name: 'air-box-up', title: 'Gora', hint: 'klik', icon: 'grid' },

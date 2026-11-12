@@ -9,6 +9,11 @@ var client = require('../apps/g21_airplay/src/cluster_render_client');
 assert.strictEqual(typeof client.ClusterRender, 'function');
 assert.strictEqual(adapterFactory.yuvBytes(1088, 480), 1088 * 720);
 assert.strictEqual(adapterFactory.yuvBytes(800, 480), 800 * 720);
+var centered = settingsFactory.createSettings({
+    picture: { central: { x: 180, y: 36, w: 1280, h: 640 } }
+}).picture('central');
+assert.strictEqual(centered.x, 320);
+assert.strictEqual(centered.y, 40);
 
 function fakeClient(targets) {
     var calls = [];

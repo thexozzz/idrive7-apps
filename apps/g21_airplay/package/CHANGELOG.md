@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.91
+
+- Zegary i HUD dostaja obraz ta sama droga co Napis. Domyslne okno jest na srodku ekranu. Pozycja wraca jako osobna lista: Srodek, wiekszy, mniejszy i cztery kierunki.
+
 ## 0.1.90
 
 - AirPlay startuje takze bez srodkowego ekranu. W okienku, zanim przyjdzie klatka, kreci sie spinner.

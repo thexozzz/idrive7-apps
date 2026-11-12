@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.90',
+        version: (this._packageJson && this._packageJson.version) || '0.1.91',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.90') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.91') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1151,17 +1151,16 @@ AirPlayApp.prototype._saveWindows = function () {
     this._saveDesk();
 };
 
+AirPlayApp.prototype._showGauges = function () {
+    if (this._gate && this._gate.known && this._gate.known() && this._gate.hudAllowed() !== true) {
+        return false;
+    }
+    return true;
+};
+
 AirPlayApp.prototype._routerMode = function () {
     var names = this._settings.outputs();
-    var central = names.indexOf('central') !== -1;
-    var cluster = names.indexOf('cluster') !== -1;
-    if (central && cluster) {
-        return 'both';
-    }
-    if (cluster) {
-        return 'cluster';
-    }
-    if (central) {
+    if (names.indexOf('central') !== -1) {
         return 'central';
     }
     return 'off';
@@ -1472,6 +1471,12 @@ AirPlayApp.prototype._onAirAction = function (name) {
         var at = order.indexOf(this._boxFocus);
         this._boxFocus = order[(at + 1) % order.length];
         this._clusterLayer = '';
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-center') {
+        this._settings.center(this._boxFocus || 'central');
+        this._saveWindows();
         this._paintAirBox();
         return;
     }
@@ -2063,6 +2068,7 @@ AirPlayApp.prototype._paintAirBox = function () {
     }
     this._menu.setItemTitle('air-box-target', this._outputLabel(name));
     this._menu.setItemHint('air-box-target', 'klik: nastepny ekran');
+    this._menu.setItemHint('air-box-center', shown.x + ',' + shown.y);
     this._menu.setItemHint('air-box-bigger', shown.w + 'x' + shown.h);
     this._menu.setItemHint('air-box-smaller', shown.w + 'x' + shown.h);
     this._menu.setItemHint('air-box-up', 'y ' + shown.y);
@@ -2732,17 +2738,32 @@ AirPlayApp.prototype._dropMirrorFaces = function () {
 AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     var self = this;
     var outs = this._settings.outputs();
-    var faces = {
-        hud: { target: 'hud', maxW: 800, maxH: 480, contend: 0 }
-    };
+    var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
+    var faces = {};
     var now = Date.now();
+    if (outs.indexOf('hud') !== -1) {
+        faces.hud = { target: 'hud', maxW: 800, maxH: 480, contend: 0 };
+    }
+    if (outs.indexOf('cluster') !== -1) {
+        faces.cluster = {
+            target: panel ? 'panel' : 'map',
+            maxW: panel ? 1920 : 1088,
+            maxH: panel ? 720 : 480,
+            contend: panel ? 1 : 0
+        };
+    }
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
     }
-    if (this._faceAt && (now - this._faceAt) < 100) {
+    if (this._faceAt && (now - this._faceAt) < 120) {
         return;
     }
     this._faceAt = now;
+    if (this._adapter) {
+        this._adapter.destroyLayer('map');
+        this._adapter.destroyLayer('cluster');
+        this._clusterLayer = '';
+    }
     Object.keys(faces).forEach(function (name) {
         var spec = faces[name];
         var box;
@@ -2759,7 +2780,11 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
         if (!self._client.ready) {
             return;
         }
-        box = self._settings.picture(name);
+        if (name === 'cluster') {
+            box = self._mapBox(self._settings.picture('cluster'), spec.maxW, spec.maxH);
+        } else {
+            box = self._settings.picture(name);
+        }
         w = box.w - (box.w % 2);
         h = box.h - (box.h % 2);
         if (w > spec.maxW) {
@@ -2783,7 +2808,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
         x -= x % 2;
         y -= y % 2;
         face = self._mirrorFaces[name];
-        if (!face || face.w !== w || face.h !== h) {
+        if (!face || face.w !== w || face.h !== h || face.x !== x || face.y !== y || face.target !== spec.target) {
             self._dropMirrorFace(name);
             ref = self._client.image({
                 target: spec.target,
@@ -2806,11 +2831,12 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
                 noteStart('mirror-face-refused ' + name);
                 return;
             }
-            face = { ref: ref, w: w, h: h, rgba: Buffer.alloc(w * h * 4) };
+            face = { ref: ref, w: w, h: h, x: x, y: y, target: spec.target, rgba: Buffer.alloc(w * h * 4) };
             self._mirrorFaces[name] = face;
             noteStart('mirror-face ' + name + ' ' + w + 'x' + h);
         }
-        videoDecoder.i420IntoRgba(i420, sw, sh, face.rgba, face.w, face.h);
+        var turned = self._turnedFrame({ i420: i420, w: sw, h: sh }, name);
+        videoDecoder.i420IntoRgba(turned.i420, turned.w, turned.h, face.rgba, face.w, face.h);
         self._client.pixels(face.ref, null, face.rgba);
     });
 };
@@ -2957,11 +2983,16 @@ AirPlayApp.prototype._takeFrame = function () {
             ts: Date.now(),
         });
         this._router.tick(Date.now());
-        if (outs.indexOf('hud') !== -1 && this._parkFlag() === true) {
-            var hudFrame = this._turnedFrame(parsed, 'hud');
-            this._placeMirrorFaces(hudFrame.i420, hudFrame.w, hudFrame.h);
+        if (outs.indexOf('hud') !== -1 || outs.indexOf('cluster') !== -1) {
+            if (this._showGauges()) {
+                this._placeMirrorFaces(parsed.i420, parsed.w, parsed.h);
+            } else {
+                this._dropMirrorFace('hud');
+                this._dropMirrorFace('cluster');
+            }
         } else {
             this._dropMirrorFace('hud');
+            this._dropMirrorFace('cluster');
         }
         return;
     }

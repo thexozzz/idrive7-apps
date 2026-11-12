@@ -2,10 +2,36 @@
 
 var OUTPUTS = ['central', 'cluster', 'hud'];
 
+function centered(limitW, limitH, w, h) {
+    var width = w;
+    var height = h;
+    var x;
+    var y;
+    if (width > limitW) {
+        width = limitW;
+    }
+    if (height > limitH) {
+        height = limitH;
+    }
+    width -= width % 2;
+    height -= height % 2;
+    x = Math.floor((limitW - width) / 2);
+    y = Math.floor((limitH - height) / 2);
+    x -= x % 2;
+    y -= y % 2;
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    return { x: x, y: y, w: width, h: height };
+}
+
 var WINDOW_DEFAULTS = {
-    central: { x: 180, y: 36, w: 1280, h: 640 },
-    cluster: { x: 320, y: 48, w: 1280, h: 640 },
-    hud: { x: 24, y: 16, w: 752, h: 448 }
+    central: centered(1920, 720, 1280, 640),
+    cluster: centered(1920, 720, 1280, 640),
+    hud: centered(800, 480, 640, 360)
 };
 
 var LIMITS = {
@@ -69,6 +95,15 @@ function fit(frameW, frameH, box) {
     };
 }
 
+function isOldDefault(name, saved) {
+    var old = {
+        central: { x: 180, y: 36, w: 1280, h: 640 },
+        cluster: { x: 320, y: 48, w: 1280, h: 640 },
+        hud: { x: 24, y: 16, w: 752, h: 448 }
+    }[name];
+    return !!(saved && old && saved.x === old.x && saved.y === old.y && saved.w === old.w && saved.h === old.h);
+}
+
 function normalizeOutputs(list) {
     var out = [];
     var i;
@@ -90,7 +125,8 @@ function createSettings(stored) {
     var picture = {};
     OUTPUTS.forEach(function (name) {
         var saved = data.picture && data.picture[name];
-        picture[name] = clampBox(name, saved && saved.w ? saved : (WINDOW_DEFAULTS[name] || {}));
+        var fresh = !saved || !saved.w || isOldDefault(name, saved);
+        picture[name] = clampBox(name, fresh ? (WINDOW_DEFAULTS[name] || {}) : saved);
     });
     return {
         active: function () { return active; },
@@ -200,6 +236,22 @@ function createSettings(stored) {
         },
         fill: function (name) {
             picture[name] = clampBox(name, {});
+            return picture[name];
+        },
+        center: function (name) {
+            var box = picture[name];
+            var limit = LIMITS[name];
+            var x = Math.floor((limit.w - box.w) / 2);
+            var y = Math.floor((limit.h - box.h) / 2);
+            picture[name] = clampBox(name, {
+                scale: box.scale,
+                x: x,
+                y: y,
+                w: box.w,
+                h: box.h,
+                fps: box.fps,
+                rotate: box.rotate
+            });
             return picture[name];
         },
         turn: function (name) {
