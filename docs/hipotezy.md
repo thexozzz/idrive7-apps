@@ -22,6 +22,8 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H25 | RDP end-to-end: Polacz z IP/user/haslem z panelu :1235, zatwierdzenie Cert i obraz przez g21-present | na postoju po Update: status `RDP dziala`, pulpit Windows na srodku |
 | H26 | UxPlay bez `-fs` utrzymuje RAOP/DNS-SD na MGU waylandsink i iPhone widzi G21 | po Update narzędzia 0.1.10+: status `running`, iPhone Control Center pokazuje G21 |
 | H27 | Narysowana klawiatura pokretlem (zamiast LT_Speller) pozwala wpisac IP/konto/haslo na tym G21 | po Update 0.1.38+: OK na IP otwiera klawiature, OK na znakach buduje adres, OK zatwierdza |
+| H28 | Odbiornik MS-MICE (`g21-mice` + `_display._tcp`) pokazuje G21 w Win+K na PC w tej samej Wi-Fi Store | po Update narzedzia 0.1.11+ i Odbiór: PC widzi G21, status `Windows dziala`, obraz na srodku |
+| H29 | Pluginy GST RTP/mpegts (dokladane do narzedzia) laduja sie z bundlowanym GStreamer 1.14 na MGU | po Win+K: brak bledu gst w `/var/log/g21-mice.log`, obraz zamiast czarnego ekranu |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |
 | H14 | Manifest OAP dostarcza `Vehicle2.statusCarSpeed2` do tej aplikacji | na postoju ekran nie pokazuje `speed-unknown` i AirPlay wstaje po wyborze kafelka |

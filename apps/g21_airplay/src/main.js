@@ -117,11 +117,29 @@ var VNC_STATUS_TEXT = {
 var STATUS_BY_SCREEN = {
     root: ROOT_STATUS_TEXT,
     airplay: AIR_STATUS_TEXT,
+    windows: WINDOWS_STATUS_TEXT,
     rdp: RDP_STATUS_TEXT,
     vnc: VNC_STATUS_TEXT
 };
 
-var PROTOCOLS = { airplay: true, rdp: true, vnc: true };
+var PROTOCOLS = { airplay: true, windows: true, rdp: true, vnc: true };
+
+var WINDOWS_STATUS_TEXT = {
+    'speed-unknown': 'brak predkosci',
+    'not-parked': 'tylko postoj',
+    'uplink-not-wifi': 'brak wifi',
+    'wifi-down': 'brak wifi',
+    'no-lease': 'brak wifi',
+    'brak-wifi': 'brak wifi',
+    'starting': 'Windows start',
+    'waiting': 'czekam Win+K',
+    'running': 'Windows dziala',
+    'missing': 'brak g21-mice',
+    'mdns-brak': 'brak dns',
+    'error': 'Windows blad',
+    'idle': 'Windows off',
+    'unknown': 'Windows'
+};
 
 function screenOutputs(app) {
     function layerOutput(name) {
@@ -175,7 +193,7 @@ function AirPlayApp() {
     this._desk = desktopSettings.createDesktopSettings(this._store.readSettings());
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
-    this._sessionText = 'wybierz AirPlay, RDP albo VNC';
+    this._sessionText = 'wybierz AirPlay, Windows, RDP albo VNC';
     this._decoded = null;
     this._client = new ClusterRender('g21_airplay');
     this._panel = configPanelFactory.createConfigPanel({
@@ -214,6 +232,7 @@ function AirPlayApp() {
                     return { state: receiver.mode || 'idle', detail: receiver.mode || '' };
                 },
             }),
+            windows: desktopSessions.createWindowsSession({ paths: this._paths }),
             rdp: desktopSessions.createRdpSession({ paths: this._paths }),
             vnc: {
                 connect: function (target) {
@@ -402,7 +421,7 @@ AirPlayApp.prototype._secret = function (kind) {
 };
 
 AirPlayApp.prototype._endpoint = function (name) {
-    if (name === 'airplay') {
+    if (name === 'airplay' || name === 'windows') {
         return { name: this._desk.airplayName() };
     }
     var host = this._desk.host(name);
@@ -453,7 +472,7 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
     // Failed attempt of the same protocol must not stick on the submenu.
     if (active === protocol) {
         live = this._sessions.getStatus() || {};
-        if (live.state !== 'running' && live.state !== 'connected' && live.state !== 'starting') {
+        if (live.state !== 'running' && live.state !== 'connected' && live.state !== 'starting' && live.state !== 'waiting') {
             this._sessions.disconnect();
         }
     }
@@ -581,6 +600,27 @@ AirPlayApp.prototype._acceptRdpCert = function () {
     this._choose('rdp');
 };
 
+AirPlayApp.prototype._onWinAction = function (name) {
+    if (name === 'win-back') {
+        this._goRoot();
+        return;
+    }
+    if (name === 'win-start') {
+        this._choose('windows');
+        return;
+    }
+    if (name === 'win-stop') {
+        this._sessions.disconnect();
+        this._sessionText = 'windows stop';
+        this._tellMenu('idle');
+        this._sync();
+        return;
+    }
+    if (name === 'win-info') {
+        this._sync();
+    }
+};
+
 AirPlayApp.prototype._onAirAction = function (name) {
     if (name === 'air-back') {
         this._goRoot();
@@ -676,12 +716,16 @@ AirPlayApp.prototype._onVncAction = function (name) {
 
 AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
-    if (name === 'airplay' || name === 'rdp' || name === 'vnc') {
+    if (name === 'airplay' || name === 'windows' || name === 'rdp' || name === 'vnc') {
         this._openProtocolScreen(name);
         return;
     }
     if (screen === 'airplay' && name.indexOf('air-') === 0) {
         this._onAirAction(name);
+        return;
+    }
+    if (screen === 'windows' && name.indexOf('win-') === 0) {
+        this._onWinAction(name);
         return;
     }
     if (screen === 'rdp' && name.indexOf('rdp-') === 0) {
@@ -718,6 +762,23 @@ AirPlayApp.prototype._tellMenu = function (code) {
     var screen = this._menuScreen();
     var map = STATUS_BY_SCREEN[screen] || ROOT_STATUS_TEXT;
     this._menu.setStatus(map[code] || String(code || ''));
+};
+
+AirPlayApp.prototype._paintWindowsMenu = function (air) {
+    if (!this._menu || this._menuScreen() !== 'windows') {
+        return;
+    }
+    if (typeof this._menu.setItemHint !== 'function') {
+        return;
+    }
+    var active = this._sessions.active() === 'windows';
+    var live = active ? this._sessions.getStatus() : { state: 'idle' };
+    var net = air && air.ok
+        ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
+        : (air && air.reason ? String(air.reason) : 'brak wifi');
+    this._menu.setItemHint('win-start', live.state === 'running' ? 'Emisja PC' : 'Czekaj na Win+K');
+    this._menu.setItemHint('win-stop', active ? 'Wylacz teraz' : 'Sesja off');
+    this._menu.setItemHint('win-info', net.slice(0, 28));
 };
 
 AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
@@ -800,6 +861,10 @@ AirPlayApp.prototype._bindTile = function (name, protocol) {
             }
             if (screen === 'airplay') {
                 self._onAirAction('air-back');
+                return;
+            }
+            if (screen === 'windows') {
+                self._onWinAction('win-back');
                 return;
             }
             if (screen === 'rdp') {
@@ -979,6 +1044,24 @@ AirPlayApp.prototype._sync = function () {
         } else {
             this._tellMenu(choice.ok ? 'waiting' : (choice.reason || 'brak-wifi'));
         }
+        return;
+    }
+
+    if (screen === 'windows') {
+        air = choice.ok
+            ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
+            : choice;
+        this._paint(air);
+        this._paintWindowsMenu(air);
+        if (!choice.ok) {
+            this._tellMenu(choice.reason || 'brak-wifi');
+            return;
+        }
+        if (this._sessions.active() === 'windows') {
+            this._tellMenu((this._sessions.getStatus().state) || 'starting');
+            return;
+        }
+        this._tellMenu('waiting');
         return;
     }
 

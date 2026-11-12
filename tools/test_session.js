@@ -30,6 +30,11 @@ var manager = sessions.createSessionManager({
             disconnect: function () { return { ok: true }; },
             getStatus: function () { return { state: 'starting' }; },
         },
+        windows: {
+            connect: function () { return { ok: true, state: 'waiting' }; },
+            disconnect: function () { return { ok: true }; },
+            getStatus: function () { return { state: 'waiting' }; },
+        },
         vnc: {
             connect: function () {
                 vncCalls.connect += 1;
@@ -61,14 +66,22 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     assert.strictEqual(manager.active(), 'airplay');
     return manager.disconnect();
 }).then(function () {
-    return manager.connect('vnc', { host: '10.0.0.8' });
-}).then(function (blocked) {
-    assert.strictEqual(blocked.reason, 'speed-unknown');
-    assert.strictEqual(vncCalls.connect, 0);
+    gate.sample(0);
+    return manager.connect('windows', { name: 'G21' });
+}).then(function (win) {
+    assert.strictEqual(win.ok, true);
+    assert.strictEqual(manager.active(), 'windows');
+    return manager.connect('airplay', { name: 'G21' });
+}).then(function (backAir) {
+    assert.strictEqual(backAir.ok, true);
+    assert.strictEqual(manager.active(), 'airplay');
+    return manager.disconnect();
+}).then(function () {
     gate.sample(10000);
     return manager.connect('vnc', { host: '10.0.0.8' });
 }).then(function (moving) {
     assert.strictEqual(moving.reason, 'not-parked');
+    assert.strictEqual(vncCalls.connect, 0);
     gate.sample(0);
     return manager.connect('vnc', { host: '10.0.0.8' });
 }).then(function (started) {

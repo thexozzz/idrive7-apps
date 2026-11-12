@@ -32,6 +32,7 @@ function createSessionManager(opts) {
 
     function connect(name, nextTarget) {
         if (name !== 'airplay') {
+            // windows / rdp / vnc: only while parked (confirmed speed sample).
             var check = gateCheck();
             if (!check.ok) {
                 return Promise.resolve(check);

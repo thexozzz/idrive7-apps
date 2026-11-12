@@ -1,6 +1,6 @@
 'use strict';
 
-var PROTOCOLS = ['airplay', 'rdp', 'vnc'];
+var PROTOCOLS = ['airplay', 'windows', 'rdp', 'vnc'];
 var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
 
 function clamp(value, min, max, fallback) {

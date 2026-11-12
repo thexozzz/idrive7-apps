@@ -25,6 +25,12 @@ lib/gstreamer-1.0/libgstvideoparsersbad.so  gstreamer1.0-plugins-bad
 lib/gstreamer-1.0/libgstvideoscale.so  gstreamer1.0-plugins-base
 lib/gstreamer-1.0/libgstvolume.so  gstreamer1.0-plugins-base
 lib/gstreamer-1.0/libgstwaylandsink.so  gstreamer1.0-plugins-bad
+lib/gstreamer-1.0/libgstrtp.so  gstreamer1.0-plugins-good (Win+K / MS-MICE)
+lib/gstreamer-1.0/libgstrtpmanager.so  gstreamer1.0-plugins-good
+lib/gstreamer-1.0/libgstudp.so  gstreamer1.0-plugins-good
+lib/gstreamer-1.0/libgstmpegtsdemux.so  gstreamer1.0-plugins-bad
+g21-mice  local MS-MICE sink (Win+K)
+gst-launch-1.0  wrapper + gst-launch-1.0.bin for MPEG-TS/RTP play
 lib/libX11.so.6  libx11-6
 lib/libXau.so.6  libxau6
 lib/libXdmcp.so.6  libxdmcp6

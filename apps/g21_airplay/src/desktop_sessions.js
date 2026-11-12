@@ -42,6 +42,40 @@ function createAirPlaySession(opts) {
     };
 }
 
+function createWindowsSession(opts) {
+    var files = opts.paths || pathsFactory.sessionPaths();
+    var readStatus = opts.readStatus || function () {
+        var text = '';
+        try {
+            text = fs.readFileSync(files.desktopStatus, 'utf8');
+        } catch (err) {
+            text = '';
+        }
+        var parts = String(text || '').replace(/\s+$/, '').split('|');
+        return { state: parts[0] || 'idle', detail: parts[1] || 'windows' };
+    };
+    return {
+        connect: function (target) {
+            var name = target && target.name ? target.name : 'G21';
+            var allow = writeText(files.allow, 'windows\n');
+            if (!allow.ok) {
+                return allow;
+            }
+            writeText(files.name, name + '\n');
+            writeText(files.desktopStatus, 'starting|windows|\n');
+            return { ok: true, state: 'starting', target: { name: name } };
+        },
+        disconnect: function () {
+            writeText(files.allow, 'stop\n');
+            writeText(files.desktopStatus, 'idle|windows|\n');
+            return { ok: true, state: 'idle' };
+        },
+        getStatus: function () {
+            return readStatus();
+        },
+    };
+}
+
 function lineSender(sockPath) {
     var socket = null;
     var opening = false;
@@ -179,5 +213,6 @@ function createRdpSession(opts) {
 
 module.exports = {
     createAirPlaySession: createAirPlaySession,
+    createWindowsSession: createWindowsSession,
     createRdpSession: createRdpSession,
 };

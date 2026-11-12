@@ -24,6 +24,7 @@ UXLOG=/var/log/g21-uxplay.log
 UXPID=
 PREPID=
 RDPID=
+MICEPID=
 AVAHIPID=
 
 field() {
@@ -100,6 +101,8 @@ idle() {
     stop_ux
     stop_present
     stop_rdp
+    stop_mice
+    clear_mice_service
     if [ -f "$STAMP" ]; then
         clear_table
         rm -f "$STAMP"
@@ -124,6 +127,9 @@ table inet $TABLE {
         iifname "$iface" ip saddr $net udp dport 6001 accept
         iifname "$iface" ip saddr $net udp dport 7011 accept
         iifname "$iface" ip saddr $net tcp dport 1235 accept
+        iifname "$iface" ip saddr $net tcp dport 7250 accept
+        iifname "$iface" ip saddr $net udp dport 1028 accept
+        iifname "$iface" ip saddr $net udp dport 1029 accept
     }
 }
 EOF
@@ -446,6 +452,92 @@ stop_rdp() {
     RDPID=
 }
 
+stop_mice() {
+    stop_pid "$MICEPID"
+    MICEPID=
+    pkill -f '/g21-mice' 2>/dev/null || true
+}
+
+ensure_avahi_services_dir() {
+    src=/etc/avahi/services
+    dst=/run/g21-airplay/avahi-etc-services
+    mkdir -p "$dst"
+    mkdir -p /etc/avahi 2>/dev/null || true
+    if [ ! -d "$src" ]; then
+        mkdir -p "$src" 2>/dev/null || true
+    fi
+    if [ -d "$src" ] && ! grep -q ' /etc/avahi/services ' /proc/mounts 2>/dev/null; then
+        cp "$src"/* "$dst"/ 2>/dev/null || true
+        mount --bind "$dst" "$src" || return 1
+    fi
+    return 0
+}
+
+publish_mice_service() {
+    shown=$(name_of)
+    ensure_avahi_services_dir || true
+    services=/run/g21-airplay/avahi-etc-services
+    mkdir -p "$services"
+    cat > "$services/g21-windows.service" <<EOF
+<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">$shown</name>
+  <service>
+    <type>_display._tcp</type>
+    <port>7250</port>
+    <txt-record>VerMgmt=0x0202</txt-record>
+    <txt-record>VerMin=0x0100</txt-record>
+  </service>
+</service-group>
+EOF
+}
+
+clear_mice_service() {
+    rm -f /run/g21-airplay/avahi-etc-services/g21-windows.service 2>/dev/null || true
+    rm -f /run/g21-airplay/avahi-services/g21-windows.service 2>/dev/null || true
+}
+
+start_mice() {
+    dir=$(tool_dir)
+    bin=$dir/g21-mice
+    if [ ! -x "$bin" ]; then
+        desk "missing|windows|"
+        report "missing|windows|"
+        return 0
+    fi
+    if [ -n "$MICEPID" ] && kill -0 "$MICEPID" 2>/dev/null; then
+        desk "waiting|windows|"
+        report "running|windows|"
+        return 0
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    export PATH="$dir:$PATH"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
+    publish_mice_service
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/var/log/g21-mice.log 2>&1 &
+    else
+        "$bin" >>/var/log/g21-mice.log 2>&1 &
+    fi
+    MICEPID=$!
+    sleep 1
+    if kill -0 "$MICEPID" 2>/dev/null; then
+        desk "waiting|windows|"
+        report "running|windows|"
+    else
+        MICEPID=
+        desk "error|windows|"
+        report "uxplay-exit|windows|"
+    fi
+}
+
 ux_log_has_mdns_error() {
     if [ ! -f "$UXLOG" ]; then
         return 1
@@ -537,6 +629,8 @@ apply_airplay() {
     label=$4
     net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
     stamp="uplink $iface $net"
+    stop_mice
+    clear_mice_service
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
         stop_ux
         stop_avahi_local
@@ -544,6 +638,38 @@ apply_airplay() {
         printf '%s\n' "$stamp" > "$STAMP"
     fi
     start_ux "$iface" "$label" "$ip" "$shown"
+}
+
+apply_windows() {
+    shown=$(name_of)
+    uplink=$(find_uplink_wifi) || {
+        idle
+        report "idle|brak-wifi|"
+        return 0
+    }
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    label=$4
+    net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
+    stamp="windows $iface $net"
+    stop_ux
+    stop_present
+    stop_rdp
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        stop_mice
+        stop_avahi_local
+        open_ports "$iface" "$net"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if ! ensure_mdns "$iface"; then
+        report "mdns-brak|$label|$ip"
+        desk "error|mdns|"
+        return 0
+    fi
+    publish_mice_service
+    start_mice
 }
 
 apply_uplink_desktop() {
@@ -598,11 +724,18 @@ apply() {
         airplay)
             stop_present
             stop_rdp
+            stop_mice
+            clear_mice_service
             apply_airplay
+            ;;
+        windows)
+            apply_windows
             ;;
         vnc)
             stop_ux
             stop_rdp
+            stop_mice
+            clear_mice_service
             if apply_uplink_desktop; then
                 start_present
                 desk "running|vnc|"
@@ -611,6 +744,8 @@ apply() {
             ;;
         rdp)
             stop_ux
+            stop_mice
+            clear_mice_service
             if apply_uplink_desktop; then
                 start_present
                 start_rdp
@@ -621,6 +756,8 @@ apply() {
             stop_ux
             stop_present
             stop_rdp
+            stop_mice
+            clear_mice_service
             if keep_config_ports; then
                 report "idle|session-off|"
             else
@@ -636,6 +773,8 @@ stop() {
     stop_ux
     stop_present
     stop_rdp
+    stop_mice
+    clear_mice_service
     stop_avahi_local
     clear_table
     rm -f "$STAMP"

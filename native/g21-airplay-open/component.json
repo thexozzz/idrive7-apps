@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.10",
-  "title": "AirPlay na hotspot iPhone",
-  "description": "Backend AirPlay (odbiornik + avahi), nie osobna aplikacja UxPlay.",
+  "version": "0.1.11",
+  "title": "AirPlay i Windows Miracast",
+  "description": "Backend AirPlay (UxPlay+avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).",
   "uninstallable": true,
   "mguHmi": [
     "ID7"
@@ -18,11 +18,23 @@
       "mode": "0755"
     },
     {
+      "path": "g21-mice",
+      "mode": "0755"
+    },
+    {
       "path": "g21-present",
       "mode": "0755"
     },
     {
       "path": "g21-rdp",
+      "mode": "0755"
+    },
+    {
+      "path": "gst-launch-1.0",
+      "mode": "0755"
+    },
+    {
+      "path": "gst-launch-1.0.bin",
       "mode": "0755"
     },
     {
@@ -74,11 +86,27 @@
       "mode": "0644"
     },
     {
+      "path": "lib/gstreamer-1.0/libgstmpegtsdemux.so",
+      "mode": "0644"
+    },
+    {
       "path": "lib/gstreamer-1.0/libgstplayback.so",
       "mode": "0644"
     },
     {
+      "path": "lib/gstreamer-1.0/libgstrtp.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstrtpmanager.so",
+      "mode": "0644"
+    },
+    {
       "path": "lib/gstreamer-1.0/libgsttypefindfunctions.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstudp.so",
       "mode": "0644"
     },
     {

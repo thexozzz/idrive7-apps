@@ -310,7 +310,8 @@ var FONT = {
 
 var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone', icon: 'airplay' },
-    { name: 'rdp', title: 'RDP', hint: 'Pulpit Windows', icon: 'desktop' },
+    { name: 'windows', title: 'Windows', hint: 'Win+K Miracast', icon: 'desktop' },
+    { name: 'rdp', title: 'RDP', hint: 'Pulpit RDP', icon: 'desktop' },
     { name: 'vnc', title: 'VNC', hint: 'Pulpit zdalny', icon: 'grid' }
 ];
 
@@ -342,10 +343,18 @@ var VNC_ITEMS = [
     { name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
 ];
 
+var WINDOWS_ITEMS = [
+    { name: 'win-start', title: 'Odbiór', hint: 'Win+K na PC', icon: 'desktop' },
+    { name: 'win-stop', title: 'Stop Win', hint: 'Koniec emisji', icon: 'stop' },
+    { name: 'win-info', title: 'Siec', hint: 'ta sama Wi-Fi', icon: 'wifi' },
+    { name: 'win-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }
+];
+
 var ITEMS = ROOT_ITEMS;
 var SCREENS = {
     root: ROOT_ITEMS,
     airplay: AIRPLAY_ITEMS,
+    windows: WINDOWS_ITEMS,
     rdp: RDP_ITEMS,
     vnc: VNC_ITEMS
 };
@@ -872,6 +881,8 @@ function createMenuSurface(opts) {
         edit = null;
         if (next === 'airplay') {
             heading = 'AirPlay';
+        } else if (next === 'windows') {
+            heading = 'Windows';
         } else if (next === 'rdp') {
             heading = 'RDP';
         } else if (next === 'vnc') {
@@ -1132,6 +1143,7 @@ module.exports = {
     ITEMS: ITEMS,
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
+    WINDOWS_ITEMS: WINDOWS_ITEMS,
     RDP_ITEMS: RDP_ITEMS,
     VNC_ITEMS: VNC_ITEMS,
     SCREENS: SCREENS,
