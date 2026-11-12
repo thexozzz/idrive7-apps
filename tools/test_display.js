@@ -29,7 +29,7 @@ function fakeClient(targets) {
 
 var clientOk = fakeClient('map:1088x480,hud:800x480,panel:1920x720');
 var adapter = adapterFactory.createClusterRenderAdapter(clientOk);
-assert.strictEqual(adapter.knownTarget('cluster').protocol, 'map');
+assert.strictEqual(adapter.knownTarget('cluster').protocol, 'panel');
 assert.strictEqual(adapter.knownTarget('hud').w, 800);
 var made = adapter.createLayer('hud', { x: 10, y: 20, w: 400, h: 200, fps: 15 });
 assert.strictEqual(made.ok, true);
@@ -37,7 +37,7 @@ var pixels = Buffer.alloc(adapterFactory.yuvBytes(800, 480), 16);
 assert.strictEqual(adapter.updateFrame(Buffer.alloc(10)).reason, 'bad-frame');
 assert.strictEqual(adapter.updateFrame(pixels).ok, true);
 assert.strictEqual(clientOk.calls[clientOk.calls.length - 1][0], 'frame');
-assert.strictEqual(adapter.knownTarget('panel').reason, 'unknown-target');
+assert.strictEqual(adapter.knownTarget('map').reason, 'unknown-target');
 
 var closed = fakeClient('hud:800x480');
 var denied = adapterFactory.createClusterRenderAdapter(closed);

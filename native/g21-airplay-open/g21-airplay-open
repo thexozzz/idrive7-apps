@@ -99,6 +99,54 @@ stop_avahi_local() {
     fi
 }
 
+# Bundled avahi fights BMW mdnsd on UDP 5353. AirPlay uses system Bonjour.
+stop_bundled_avahi() {
+    stop_avahi_local
+    pkill -f '/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true
+    pkill -f '/var/opt/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true
+}
+
+# MGU ships Apple mdnsd + /usr/lib/libdns_sd.so; UxPlay dlopens libdns_sd.so.
+have_system_mdns() {
+    if ! pidof mdnsd >/dev/null 2>&1; then
+        return 1
+    fi
+    if [ -e /usr/lib/libdns_sd.so ] || [ -e /lib/libdns_sd.so ]; then
+        return 0
+    fi
+    return 1
+}
+
+ux_port_listening() {
+    if netstat -lnt 2>/dev/null | grep -E '[:.]7400[[:space:]]' >/dev/null 2>&1; then
+        return 0
+    fi
+    if ss -lnt 2>/dev/null | grep -E '[:.]7400[[:space:]]' >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+ux_log_stopped() {
+    if [ ! -f "$UXLOG" ]; then
+        return 1
+    fi
+    grep -E 'Stopping RAOP Server|GStreamer error' "$UXLOG" >/dev/null 2>&1
+}
+
+# Drop Windows Miracast DNS-SD only when a leftover service file exists.
+clear_mice_if_needed() {
+    if [ -n "$MICEPID" ] && kill -0 "$MICEPID" 2>/dev/null; then
+        stop_mice
+        clear_mice_service
+        return 0
+    fi
+    if [ -f /run/g21-airplay/avahi-etc-services/g21-windows.service ] || \
+       [ -f /etc/avahi/services/g21-windows.service ]; then
+        clear_mice_service
+    fi
+}
+
 clear_mice_offers() {
     rm -f /run/g21-desktop/offers /run/g21-session/accept /run/g21-session/reject 2>/dev/null || true
 }
@@ -602,15 +650,25 @@ start_ux() {
             report "mdns-brak|$label|$ip"
             return 0
         fi
+        if ux_log_stopped || ! ux_port_listening; then
+            stop_ux
+            report "uxplay-exit|$label|$ip"
+            return 0
+        fi
         report "running|$label|$ip"
         return 0
     fi
-    if ! ensure_mdns "$iface"; then
+    # Prefer BMW mdnsd (Bonjour). Bundled avahi on the same 5353 makes discovery flaky
+    # and SIGHUP reloads from Miracast leftovers were killing UxPlay's main loop.
+    if have_system_mdns; then
+        stop_bundled_avahi
+    elif ! ensure_mdns "$iface"; then
         report "mdns-brak|$label|$ip"
         return 0
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    # Tool lib first for GST; keep /usr/lib so dlopen("libdns_sd.so") hits Bonjour.
+    export LD_LIBRARY_PATH="$dir/lib:/usr/lib:/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export G21_YUV=/run/g21-airplay/latest.yuv
     export AVAHI_COMPAT_NOWARN=1
     mkdir -p /run/g21-airplay
@@ -623,20 +681,20 @@ start_ux() {
     # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
+    # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
+    # New session + ignore SIGHUP: avahi/service HUP must not stop the sink.
     # shellcheck disable=SC2086
     if [ -n "$mac_args" ]; then
-        "$bin" -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+        setsid sh -c 'trap "" HUP; exec "$0" "$@"' "$bin" -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as 0 -s 1920x720 >>"$UXLOG" 2>&1 &
     else
-        "$bin" -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+        setsid sh -c 'trap "" HUP; exec "$0" "$@"' "$bin" -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as 0 -s 1920x720 >>"$UXLOG" 2>&1 &
     fi
     UXPID=$!
-    sleep 2
+    sleep 3
     if ! kill -0 "$UXPID" 2>/dev/null; then
         UXPID=
         if ux_log_has_mdns_error; then
             report "mdns-brak|$label|$ip"
-        elif grep -E 'gst_parse_launch|no property|Error initialising socket' "$UXLOG" >/dev/null 2>&1; then
-            report "uxplay-exit|$label|$ip"
         else
             report "uxplay-exit|$label|$ip"
         fi
@@ -647,7 +705,12 @@ start_ux() {
         report "mdns-brak|$label|$ip"
         return 0
     fi
-    if grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Stopping RAOP Server' "$UXLOG" >/dev/null 2>&1; then
+    if ux_log_stopped || grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Error initialising socket' "$UXLOG" >/dev/null 2>&1; then
+        stop_ux
+        report "uxplay-exit|$label|$ip"
+        return 0
+    fi
+    if ! ux_port_listening; then
         stop_ux
         report "uxplay-exit|$label|$ip"
         return 0
@@ -669,11 +732,10 @@ apply_airplay() {
     label=$4
     net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
     stamp="uplink $iface $net"
-    stop_mice
-    clear_mice_service
+    clear_mice_if_needed
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
         stop_ux
-        stop_avahi_local
+        stop_bundled_avahi
         open_ports "$iface" "$net"
         printf '%s\n' "$stamp" > "$STAMP"
     fi
@@ -764,8 +826,7 @@ apply() {
         airplay)
             stop_present
             stop_rdp
-            stop_mice
-            clear_mice_service
+            clear_mice_if_needed
             apply_airplay
             ;;
         windows)
@@ -774,8 +835,7 @@ apply() {
         vnc)
             stop_ux
             stop_rdp
-            stop_mice
-            clear_mice_service
+            clear_mice_if_needed
             if apply_uplink_desktop; then
                 start_present
                 desk "running|vnc|"
@@ -784,8 +844,7 @@ apply() {
             ;;
         rdp)
             stop_ux
-            stop_mice
-            clear_mice_service
+            clear_mice_if_needed
             if apply_uplink_desktop; then
                 # central = g21-present on Wayland; cluster/hud = app listens on frame.sock
                 out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
@@ -802,8 +861,7 @@ apply() {
             stop_ux
             stop_present
             stop_rdp
-            stop_mice
-            clear_mice_service
+            clear_mice_if_needed
             if keep_config_ports; then
                 report "idle|session-off|"
             else
@@ -821,7 +879,7 @@ stop() {
     stop_rdp
     stop_mice
     clear_mice_service
-    stop_avahi_local
+    stop_bundled_avahi
     clear_table
     rm -f "$STAMP"
     report "idle|stopped|"

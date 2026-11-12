@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.55
+
+- AirPlay: narzedzie 0.1.15 — BMW mdnsd zamiast konfliktu z avahi, UxPlay odporny na SIGHUP, status tylko przy TCP 7400.
+
 ## 0.1.54
 
 - RDP: klient bez WL-odbiornika; Polacz → wybor ekranu (Srodek / Zegary / HUD); narzedzie 0.1.14 bez present na cluster/HUD.

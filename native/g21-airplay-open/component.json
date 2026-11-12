@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "title": "AirPlay i Windows Miracast",
-  "description": "Backend AirPlay (UxPlay+avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).",
+  "description": "Backend AirPlay (UxPlay+mdnsd/avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).",
   "uninstallable": true,
   "mguHmi": [
     "ID7"
