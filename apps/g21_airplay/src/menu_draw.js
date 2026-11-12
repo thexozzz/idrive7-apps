@@ -722,11 +722,11 @@ function drawVersionMark(draw, box, version) {
 }
 
 function parsePinDetail(detail) {
-    var match = String(detail || '').match(/\bPIN\s+(\d{4})\b/i);
+    var match = String(detail || '').match(/\bPIN\s+(\d{4,6})\b/i);
     return match ? match[1] : '';
 }
 
-function buildStreamFrame(items, selected, width, height, detail, heading, version) {
+function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
@@ -734,31 +734,73 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var titleW;
     var hint;
     var page = pageBox(width, height);
-    var pin = parsePinDetail(detail);
+    var info = streamInfo || null;
+    var pin = (info && info.pin) || parsePinDetail(detail);
+    var mirrored = !!(info && info.mirrored);
     var pinScale;
     var pinW;
     var pinX;
     var pinY;
     var label;
     var labelW;
-    // Clear only — no full-page fill so Wayland video stays visible (G21 hypothesis).
+    var lines;
+    var i;
+    var lineY;
+    var panelX;
+    var panelY;
+    var panelW;
+    var panelH;
+    // Clear only — no full-page fill so Wayland video stays visible under the HUD.
     draw.clear(0);
     drawVersionMark(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW }, version);
-    if (pin) {
-        pinScale = 12;
-        pinW = draw.textWidth(pin, pinScale);
-        pinX = page.ox + Math.floor((page.boxW - pinW) / 2);
-        pinY = page.oy + Math.floor(page.boxH / 2) - 90;
-        label = 'kod AirPlay';
+
+    panelX = page.ox + 80;
+    panelW = page.boxW - 160;
+    if (!mirrored) {
+        panelY = page.oy + 48;
+        panelH = page.boxH - 200;
+        draw.pill(panelX - 8, panelY - 8, panelW + 16, panelH + 16, ACCENT_DIM);
+        draw.pill(panelX, panelY, panelW, panelH, CARD);
+        label = String((info && info.headline) || heading || 'AirPlay');
         labelW = draw.textWidth(label, 4);
-        draw.text(label, page.ox + Math.floor((page.boxW - labelW) / 2), pinY - 48, 4, MUTED);
-        draw.text(pin, pinX, pinY, pinScale, INK);
-        label = 'wpisz na iPhonie';
-        labelW = draw.textWidth(label, 3);
-        draw.text(label, page.ox + Math.floor((page.boxW - labelW) / 2), pinY + 12 * 8 + 24, 3, HINT);
-    } else if (detail) {
-        draw.text(detail, lay.ox + 72, page.oy + 24, 3, MUTED);
+        draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 36, 4, INK);
+        if (pin) {
+            pinScale = 12;
+            pinW = draw.textWidth(pin, pinScale);
+            pinX = panelX + Math.floor((panelW - pinW) / 2);
+            pinY = panelY + 110;
+            label = 'kod — wpisz na iPhonie';
+            labelW = draw.textWidth(label, 3);
+            draw.text(label, panelX + Math.floor((panelW - labelW) / 2), pinY - 40, 3, MUTED);
+            draw.text(pin, pinX, pinY, pinScale, INK);
+            lineY = pinY + pinScale * 8 + 36;
+        } else {
+            lineY = panelY + 120;
+            label = String((info && info.hint) || detail || 'czekam na iPhone');
+            labelW = draw.textWidth(label, 3);
+            draw.text(label, panelX + Math.floor((panelW - labelW) / 2), lineY, 3, HINT);
+            lineY += 48;
+        }
+        lines = (info && info.lines) || [];
+        for (i = 0; i < lines.length; i += 1) {
+            draw.text(String(lines[i]).slice(0, 42), panelX + 48, lineY, 3, MUTED);
+            lineY += 36;
+            if (lineY > panelY + panelH - 40) {
+                break;
+            }
+        }
+    } else {
+        if (detail) {
+            draw.text(String(detail).slice(0, 48), lay.ox + 72, page.oy + 28, 3, MUTED);
+        }
+        lines = (info && info.lines) || [];
+        lineY = page.oy + 64;
+        for (i = 0; i < lines.length && i < 3; i += 1) {
+            draw.text(String(lines[i]).slice(0, 48), lay.ox + 72, lineY, 3, HINT);
+            lineY += 32;
+        }
     }
+
     draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
     draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
     draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
@@ -776,7 +818,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading, version) {
+function buildFrame(items, selected, width, height, detail, heading, version, streamInfo) {
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -793,7 +835,7 @@ function buildFrame(items, selected, width, height, detail, heading, version) {
     var labelY;
     var focus;
     if (isStreamItems(items) || heading === 'Stream') {
-        return buildStreamFrame(items, selected, width, height, detail, heading, version);
+        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo);
     }
     lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
@@ -908,6 +950,7 @@ function createMenuSurface(opts) {
     var noted = false;
     var claimNoted = false;
     var detail = '';
+    var streamInfo = null;
     var edit = null;
     var touchDown = null;
 
@@ -966,7 +1009,7 @@ function createMenuSurface(opts) {
         sendClaim();
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version);
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -1128,6 +1171,7 @@ function createMenuSurface(opts) {
             heading = 'Urzadzenia';
         } else if (next === 'stream') {
             heading = 'Stream';
+            streamInfo = null;
         } else if (next === 'rdp-out') {
             heading = 'Gdzie pokazac';
         } else if (next === 'rdp' || next === 'rdp-edit') {
@@ -1437,6 +1481,21 @@ function createMenuSurface(opts) {
                 return;
             }
             detail = next;
+            if (!edit) {
+                paint();
+            }
+        },
+        setStreamInfo: function (info) {
+            var next = info && typeof info === 'object' ? {
+                pin: info.pin ? String(info.pin) : '',
+                headline: info.headline ? String(info.headline) : '',
+                hint: info.hint ? String(info.hint) : '',
+                mirrored: !!info.mirrored,
+                lines: Array.isArray(info.lines) ? info.lines.map(function (line) {
+                    return String(line || '');
+                }) : []
+            } : null;
+            streamInfo = next;
             if (!edit) {
                 paint();
             }

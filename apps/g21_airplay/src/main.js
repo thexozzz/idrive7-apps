@@ -319,7 +319,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.69',
+        version: (this._packageJson && this._packageJson.version) || '0.1.70',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -391,7 +391,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.69') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.70') +
         ' starting'
     );
     Promise.resolve(this.registerActive()).catch(function (err) {
@@ -1065,6 +1065,10 @@ AirPlayApp.prototype._enterStream = function (protocol) {
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('stream');
     }
+    this._paintStreamInfo(
+        { ok: true, ip: '', ssid: '', reason: '' },
+        { mode: protocol === 'airplay' ? 'running' : '' }
+    );
     this._tellMenu(protocol === 'airplay' ? 'waiting' : 'running');
 };
 
@@ -1480,10 +1484,71 @@ AirPlayApp.prototype._readAirplayPin = function () {
     } catch (err) {
         return '';
     }
-    if (/^\d{4}$/.test(text)) {
+    if (/^\d{4,6}$/.test(text)) {
         return text;
     }
     return '';
+};
+
+AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
+    var pin;
+    var name;
+    var net;
+    var out;
+    var mode;
+    var mirrored;
+    var headline;
+    var lines;
+    if (!this._menu || this._menuScreen() !== 'stream') {
+        return;
+    }
+    if (typeof this._menu.setStreamInfo !== 'function') {
+        return;
+    }
+    pin = this._streamProtocol === 'airplay' ? this._readAirplayPin() : '';
+    name = this._desk.airplayName ? this._desk.airplayName() : 'G21';
+    net = air && air.ok
+        ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
+        : (air && air.reason ? String(air.reason) : 'brak wifi');
+    out = this._airOutput === 'cluster' ? 'zegary' : (this._airOutput === 'hud' ? 'HUD' : 'srodek');
+    mode = receiver && receiver.mode ? String(receiver.mode) : '';
+    mirrored = !!(this._decoded && this._streamProtocol === 'airplay');
+    if (this._streamProtocol === 'windows') {
+        mirrored = (this._sessions.getStatus().state) === 'running';
+        headline = mirrored ? 'Miracast' : 'Miracast — czekam';
+        pin = '';
+        out = 'srodek';
+    } else if (mirrored) {
+        headline = 'AirPlay — lustro';
+    } else if (pin) {
+        headline = 'AirPlay — kod';
+    } else {
+        headline = 'AirPlay — czekam';
+    }
+    lines = [
+        'nazwa ' + String(name).slice(0, 28),
+        'siec ' + String(net).slice(0, 28),
+        'ekran ' + out
+    ];
+    if (mode && this._streamProtocol === 'airplay') {
+        lines.push('odbiornik ' + mode);
+    }
+    if (pin && !mirrored) {
+        lines.push('haslo AirPlay = kod powyzej');
+    }
+    this._menu.setStreamInfo({
+        pin: pin,
+        headline: headline,
+        hint: pin ? 'wpisz kod na iPhonie' : 'polacz iPhone z G21',
+        mirrored: mirrored,
+        lines: lines
+    });
+    if (typeof this._menu.setItemHint === 'function') {
+        this._menu.setItemHint(
+            'stream-end',
+            mirrored ? 'koniec lustra' : (pin ? ('kod ' + pin + ' na iPhonie') : 'koniec')
+        );
+    }
 };
 
 AirPlayApp.prototype._tellMenu = function (code) {
@@ -1912,6 +1977,7 @@ AirPlayApp.prototype._sync = function () {
             receiver = uplink.readReceiverStatus(text);
             if (receiver.mode === 'running') {
                 this._takeFrame();
+                this._paintStreamInfo(air, receiver);
                 this._tellMenu(this._readAirplayPin() && !this._decoded ? 'pin-wait' : 'running');
                 return;
             }
@@ -1920,6 +1986,7 @@ AirPlayApp.prototype._sync = function () {
         }
         if (this._streamProtocol === 'windows' && this._sessions.active() === 'windows') {
             if ((this._sessions.getStatus().state) === 'running') {
+                this._paintStreamInfo(air, {});
                 this._tellMenu('running');
                 return;
             }

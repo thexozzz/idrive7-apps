@@ -134,12 +134,15 @@ clear_pin() {
     rm -f "$PINFILE"
 }
 
-# fakesink cannot show UxPlay's GST PIN image; copy the code from the log for the OAP UI.
+# fakesink cannot show UxPlay's GST PIN image. Never truncate PINFILE here —
+# start_ux already wrote the session code; only refresh if the log shows a new one.
 watch_ux_pin() {
     pid=$1
     last=
     mkdir -p /run/g21-airplay
-    : > "$PINFILE"
+    if [ -f "$PINFILE" ]; then
+        last=$(tr -d '\n' < "$PINFILE" 2>/dev/null || true)
+    fi
     chmod 666 "$PINFILE" 2>/dev/null || true
     while kill -0 "$pid" 2>/dev/null; do
         pin=$(sed -n 's/.*CLIENT MUST NOW ENTER PIN = "\([0-9][0-9][0-9][0-9]\)".*/\1/p' "$UXLOG" 2>/dev/null | tail -n 1)
@@ -149,7 +152,6 @@ watch_ux_pin() {
         fi
         sleep 1
     done
-    rm -f "$PINFILE"
 }
 
 stop_ux() {
@@ -942,8 +944,9 @@ start_ux() {
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
-    # -pin NNNN: Apple-style pairing code. Write PINFILE before start so the OAP UI
-    # shows the code immediately (fakesink cannot show UxPlay's GST PIN image).
+    # -pw NNNN: iPhone shows a password field (enter this code). -pin alone often
+    # skips a visible prompt on modern iOS after the first glance; -pw is reliable.
+    # Write PINFILE before start so the stream window can show the code immediately.
     # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
     # applet, so plain `setsid` aborted start with "not found" and left no listener.
     # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
@@ -954,9 +957,9 @@ start_ux() {
     printf '%s\n' "$pin" > "$PINFILE"
     chmod 666 "$PINFILE" 2>/dev/null || true
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin"
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pw "$pin"
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin"
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pw "$pin"
     fi
     if [ -x "$dir/g21-detach" ]; then
         "$dir/g21-detach" "$bin" "$@" >>"$UXLOG" 2>&1 &
