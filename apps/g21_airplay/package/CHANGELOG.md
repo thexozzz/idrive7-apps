@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.47
+
+- Font bitmap: brakujace glify `h/j/q/v` i `F/J/Q/X/Y/Z` (hint „iPhone” i kafelek `WYL`).
+
 ## 0.1.46
 
 - Root: osobne funkcje AirPlay / Miracast / RDP / VNC; przełączniki `WL`/`WYL` wg aktywnej sesji; Miracast po wykryciu PC sam łączy (auto-accept).
