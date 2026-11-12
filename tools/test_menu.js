@@ -38,8 +38,10 @@ var withVer = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start', 'G2
 assert.ok(withVer.rects > withStatus.rects);
 
 var selected = menu.buildFrame(menu.AIRPLAY_ITEMS, 2, 1920, 720, '', 'Menu');
-assert.strictEqual(selected.layout.bubbles[2].selected, true);
-assert.strictEqual(selected.layout.bubbles[1].selected, false);
+var focusRow = selected.layout.bubbles.filter(function (bubble) { return bubble.index === 2; })[0];
+assert.ok(focusRow);
+assert.strictEqual(focusRow.selected, true);
+assert.ok(selected.layout.bubbles.some(function (bubble) { return bubble.index !== 2 && bubble.selected === false; }));
 var many = [];
 var n;
 for (n = 0; n < 9; n += 1) {
@@ -95,6 +97,9 @@ var located = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, '', 'THEiPlay', 
 assert.strictEqual(located.layout.crumb, 'AirPlay');
 assert.ok(located.layout.backHit);
 assert.ok(located.layout.backHit.w > 40);
+assert.ok(located.layout.nav);
+assert.ok(located.layout.nav.ok.x > located.layout.nav.right.x);
+assert.ok(located.layout.nav.right.x > located.layout.nav.left.x);
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
 assert.ok(clipped.y + clipped.h < 596);

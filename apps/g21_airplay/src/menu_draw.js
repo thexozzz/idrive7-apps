@@ -294,6 +294,7 @@ var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
     '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
     '>': ['00001', '00010', '00100', '01000', '00100', '00010', '00001'],
+    '<': ['10000', '01000', '00100', '00010', '00100', '01000', '10000'],
     '_': ['00000', '00000', '00000', '00000', '00000', '00000', '11111'],
     '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
     '*': ['00000', '10101', '01110', '00100', '01110', '10101', '00000'],
@@ -595,7 +596,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
     var page = pageBox(width, height);
     var count = items.length || 1;
     var headerH = 68;
-    var footerH = 58;
+    var footerH = 96;
     var home = count <= 2 && page.boxW > 900;
     var gap = home ? 28 : 12;
     var bubbles = [];
@@ -667,9 +668,9 @@ function menuLayout(items, selected, width, height, detail, heading) {
                 w: rowW,
                 h: rowH,
                 hitX: x,
-                hitY: y - 4,
+                hitY: y,
                 hitW: rowW,
-                hitH: rowH + gap,
+                hitH: rowH,
                 scale: 4,
                 iconPx: 3,
                 home: false,
@@ -786,6 +787,31 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
     draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
 }
 
+function drawNav(draw, lay) {
+    var y = lay.oy + lay.boxH - 78;
+    var h = 56;
+    var arrow = 76;
+    var okW = 230;
+    var gap = 14;
+    var okX = lay.ox + lay.boxW - okW - 24;
+    var rightX = okX - gap - arrow;
+    var leftX = rightX - gap - arrow;
+    var label = 'wybierz';
+    var tw;
+    draw.pill(leftX, y, arrow, h, CARD_HI);
+    draw.text('<', leftX + 28, y + 16, 4, INK);
+    draw.pill(rightX, y, arrow, h, CARD_HI);
+    draw.text('>', rightX + 28, y + 16, 4, INK);
+    draw.pill(okX, y, okW, h, ACCENT);
+    tw = draw.textWidth(label, 4);
+    draw.text(label, okX + Math.floor((okW - tw) / 2), y + 16, 4, PAGE);
+    lay.nav = {
+        left: { x: leftX, y: y, w: arrow, h: h },
+        right: { x: rightX, y: y, w: arrow, h: h },
+        ok: { x: okX, y: y, w: okW, h: h }
+    };
+}
+
 function keyLabel(key) {
     if (key === 'SPC') {
         return 'spacja';
@@ -894,6 +920,8 @@ function buildKeyboardFrame(edit, width, height, crumb) {
             altX += altW + 8;
         }
     }
+    var board = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
+    drawNav(draw, board);
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
@@ -906,7 +934,8 @@ function buildKeyboardFrame(edit, width, height, crumb) {
             keys: hits,
             popup: popupHits,
             crumb: head.crumb,
-            backHit: head.backHit
+            backHit: head.backHit,
+            nav: board.nav
         }
     };
 }
@@ -1130,8 +1159,9 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 30, 4, INK);
     hint = items[0] && items[0].hint ? String(items[0].hint) : '';
     if (hint) {
-        draw.text(hint, lay.ox + 72, lay.hintY, 3, HINT);
+        draw.text(hint, lay.ox + 36, lay.oy + lay.boxH - 58, 3, HINT);
     }
+    drawNav(draw, lay);
     if (caption && caption.on && caption.text) {
         draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
     }
@@ -1234,10 +1264,11 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
         }
     }
     if (detail) {
-        draw.text(detail, lay.ox + 36, lay.statusY, 3, INK);
+        draw.text(detail.slice(0, 28), lay.ox + 36, lay.oy + lay.boxH - 58, 3, INK);
     } else {
-        draw.text('pokrętło: wybór   OK: wybierz', lay.ox + 36, lay.statusY, 3, MUTED);
+        draw.text('strzalki, potem wybierz', lay.ox + 36, lay.oy + lay.boxH - 58, 3, MUTED);
     }
+    drawNav(draw, lay);
     if (boxPreview && heading === 'Okno') {
         drawBoxPreview(draw, lay, boxPreview, items[selected]);
     }
@@ -1365,6 +1396,7 @@ function createMenuSurface(opts) {
     var pulseBeat = 0;
     var backBox = null;
     var backAction = '';
+    var navBoxes = null;
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -1464,6 +1496,7 @@ function createMenuSurface(opts) {
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
         backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
+        navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
         backAction = edit ? '' : findBack(items);
         write(built.frame);
         lastFrame = built.frame;
@@ -1539,25 +1572,69 @@ function createMenuSurface(opts) {
         }
     }
 
-    function hitsBack(x, y) {
+    function pointIn(box, x, y) {
         var pts;
         var pi;
         var p;
-        if (!backBox) {
+        if (!box) {
             return false;
         }
         pts = [
-            { x: x, y: y },
-            { x: x + CONTENT.x, y: y + CONTENT.y },
-            { x: x - CONTENT.x, y: y - CONTENT.y }
+            { x: x, y: y }
         ];
         for (pi = 0; pi < pts.length; pi += 1) {
             p = pts[pi];
-            if (p.x >= backBox.x && p.x < backBox.x + backBox.w && p.y >= backBox.y && p.y < backBox.y + backBox.h) {
+            if (p.x >= box.x && p.x < box.x + box.w && p.y >= box.y && p.y < box.y + box.h) {
                 return true;
             }
         }
         return false;
+    }
+
+    function hitsBack(x, y) {
+        return pointIn(backBox, x, y);
+    }
+
+    function hitsNav(x, y) {
+        if (!navBoxes) {
+            return '';
+        }
+        if (pointIn(navBoxes.ok, x, y)) {
+            return 'ok';
+        }
+        if (pointIn(navBoxes.left, x, y)) {
+            return 'left';
+        }
+        if (pointIn(navBoxes.right, x, y)) {
+            return 'right';
+        }
+        return '';
+    }
+
+    function useNav(which) {
+        if (which === 'left') {
+            if (edit) {
+                knobKeyboard.moveKey(edit, -1);
+                paint();
+            } else {
+                move(-1);
+            }
+            return;
+        }
+        if (which === 'right') {
+            if (edit) {
+                knobKeyboard.moveKey(edit, 1);
+                paint();
+            } else {
+                move(1);
+            }
+            return;
+        }
+        if (edit) {
+            applyEditResult(knobKeyboard.applyKey(edit));
+            return;
+        }
+        press();
     }
 
     function hitRow(x, y) {
@@ -1565,9 +1642,7 @@ function createMenuSurface(opts) {
         var i;
         var bubble;
         var pts = [
-            { x: x, y: y },
-            { x: x + CONTENT.x, y: y + CONTENT.y },
-            { x: x - CONTENT.x, y: y - CONTENT.y }
+            { x: x, y: y }
         ];
         var p;
         var pi;
@@ -1578,6 +1653,8 @@ function createMenuSurface(opts) {
         var dx;
         var dy;
         var dist;
+        var bestBox = -1;
+        var bestHit = 1e9;
         for (pi = 0; pi < pts.length; pi += 1) {
             p = pts[pi];
             for (i = 0; i < lay.bubbles.length; i += 1) {
@@ -1586,19 +1663,23 @@ function createMenuSurface(opts) {
                 var hy = bubble.hitY != null ? bubble.hitY : bubble.y;
                 var hw = bubble.hitW != null ? bubble.hitW : bubble.w;
                 var hh = bubble.hitH != null ? bubble.hitH : bubble.h;
-                if (p.x >= hx && p.x < hx + hw && p.y >= hy && p.y < hy + hh) {
-                    return bubble.index != null ? bubble.index : i;
-                }
                 cx = hx + hw / 2;
                 cy = hy + hh / 2;
                 dx = p.x - cx;
                 dy = p.y - cy;
                 dist = dx * dx + dy * dy;
+                if (p.x >= hx && p.x < hx + hw && p.y >= hy && p.y < hy + hh && dist < bestHit) {
+                    bestHit = dist;
+                    bestBox = i;
+                }
                 if (dist < bestDist) {
                     bestDist = dist;
                     best = i;
                 }
             }
+        }
+        if (bestBox >= 0) {
+            return lay.bubbles[bestBox].index != null ? lay.bubbles[bestBox].index : bestBox;
         }
         // Finger often lands in the gap; accept the nearest tile within ~120 px.
         if (best >= 0 && bestDist <= 120 * 120) {
@@ -2032,6 +2113,17 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if (hitsNav(tx, ty)) {
+                    if (phase === 1) {
+                        touchDown = { nav: hitsNav(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                    } else if (phase === 3 && touchDown && touchDown.nav && hitsNav(tx, ty) === touchDown.nav) {
+                        useNav(touchDown.nav);
+                        touchDown = null;
+                    } else if (phase === 3) {
+                        touchDown = null;
+                    }
+                    return;
+                }
                 if (hitsBack(tx, ty)) {
                     if (phase === 3) {
                         if (edit) {
@@ -2061,7 +2153,7 @@ function createMenuSurface(opts) {
                     var steps;
                     var origin;
                     var next;
-                    if (Math.abs(dragY) >= 48) {
+                    if (Math.abs(dragY) >= 96) {
                         steps = Math.round(dragY / 72);
                         origin = touchDown.origin;
                         if (origin < 0) {
@@ -2091,15 +2183,11 @@ function createMenuSurface(opts) {
                     if (touchDown && touchDown.dragged) {
                         touchDown = null;
                     } else {
-                    hit = hitRow(tx, ty);
-                    if (hit < 0 && touchDown) {
-                        hit = touchDown.hit;
-                    }
-                    // Ignore long drags away from the tile (>80 px) as scrolls.
+                    hit = touchDown && touchDown.hit >= 0 ? touchDown.hit : hitRow(tx, ty);
                     if (touchDown && hit >= 0) {
                         var ddx = tx - touchDown.x;
                         var ddy = ty - touchDown.y;
-                        if ((ddx * ddx + ddy * ddy) <= 80 * 80 || hit === touchDown.hit) {
+                        if ((ddx * ddx + ddy * ddy) <= 120 * 120) {
                             activateHit(hit, 'up');
                         }
                     } else if (hit >= 0) {

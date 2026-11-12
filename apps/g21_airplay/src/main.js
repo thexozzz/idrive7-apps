@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.88',
+        version: (this._packageJson && this._packageJson.version) || '0.1.89',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.88') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.89') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1179,9 +1179,6 @@ AirPlayApp.prototype._startAirplaySelected = function () {
     moving = names.indexOf('cluster') !== -1 || names.indexOf('hud') !== -1;
     if (moving && names.indexOf('central') === -1 && this._parkFlag() !== true) {
         this._tellMenu('not-parked');
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('air-out');
-        }
         this._sync();
         return;
     }
@@ -1207,9 +1204,6 @@ AirPlayApp.prototype._startAirplaySelected = function () {
     noteStart('air-out ' + names.join(',') + (started.failed && started.failed.length ? (' fail ' + started.failed.join(',')) : ''));
     if (!started.ok) {
         this._tellMenu((started.failed && started.failed[0]) || 'not-parked');
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('air-out');
-        }
         this._sync();
         return;
     }
