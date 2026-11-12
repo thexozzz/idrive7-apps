@@ -26,6 +26,11 @@ assert.strictEqual(menu.AIRPLAY_ITEMS.length, 5);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-start');
 assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
 assert.ok(menu.SCREENS.airplay);
+var rdp = menu.buildFrame(menu.RDP_ITEMS, 0, 1920, 720, 'panel :1235', 'RDP');
+assert.ok(rdp.rects > built.rects);
+assert.strictEqual(menu.RDP_ITEMS[0].name, 'rdp-start');
+assert.strictEqual(menu.RDP_ITEMS[4].name, 'rdp-panel');
+assert.ok(menu.SCREENS.rdp);
 
 assert.strictEqual(menu.encoderStep(null, 4), 0);
 assert.strictEqual(menu.encoderStep(1, 2), 1);

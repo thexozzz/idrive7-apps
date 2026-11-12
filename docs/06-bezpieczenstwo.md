@@ -14,7 +14,7 @@
 - Brak automatycznego zapisu na MGU. `scripts/publish.ps1 -ConfirmDeviceWrite` jest celowo odrzucane.
 - Brak kluczy, danych pojazdu i plików SDK w git i w wydaniach.
 - Diagnostyka SSH ma zamkniętą listę poleceń: jądro, wersja Node, obecność procesu HMI i katalogów OAP. Nie czyta provisioningu, VIN ani logów aplikacji.
-- Narzędzie `g21-airplay-open` uruchamia UxPlay oraz w razie potrzeby bundlowany `avahi-daemon` i dopisuje reguły wejścia tylko dla portów AirPlay: UDP 5353 (także do `224.0.0.251`), TCP 7100, 7000 i 7001 oraz UDP 6000, 6001 i 7011. Wyłącznie z podsieci dzierżawy Wi-Fi MGU Store i wyłącznie na jej interfejsie, także gdy ta sieć to Personal Hotspot iPhone’a. Źródło portów: README FDH2/UxPlay, opcja `-p`. Źródło ograniczenia zapory: `mgu-store` `native/mgu-uplink/firewall.go`. Usunięcie narzędzia kończy UxPlay i kasuje tabelę `inet g21_airplay`.
+- Narzędzie `g21-airplay-open` uruchamia UxPlay oraz w razie potrzeby bundlowany `avahi-daemon` i dopisuje reguły wejścia tylko dla portów AirPlay oraz panelu: UDP 5353 (także do `224.0.0.251`), TCP 7100, 7000, 7001 i 1235 oraz UDP 6000, 6001 i 7011. Wyłącznie z podsieci dzierżawy Wi-Fi MGU Store i wyłącznie na jej interfejsie, także gdy ta sieć to Personal Hotspot iPhone’a. Źródło portów AirPlay: README FDH2/UxPlay, opcja `-p`. Port 1235 to lokalny panel konfiguracji RDP aplikacji. Hasła nie trafiają do logów ani do `desktop.json`. Źródło ograniczenia zapory: `mgu-store` `native/mgu-uplink/firewall.go`. Usunięcie narzędzia kończy UxPlay i kasuje tabelę `inet g21_airplay`.
 - Każde wejście na urządzenie, także odczyt, wymaga osobnej zgody. Przygotowanie skryptu nie jest jego uruchomieniem.
 
 ## Spoza zakresu

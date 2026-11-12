@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.26
+
+- Wejscie w RDP otwiera menu z Host/User oraz panel konfiguracji na porcie 1235 (IP, user, haslo).
+
 ## 0.1.25
 
 - Wejscie w AirPlay otwiera osobne menu: Start, Stop, Nazwa, Siec i Wstecz.

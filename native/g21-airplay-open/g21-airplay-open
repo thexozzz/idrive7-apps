@@ -119,6 +119,7 @@ table inet $TABLE {
         iifname "$iface" ip saddr $net udp dport 6000 accept
         iifname "$iface" ip saddr $net udp dport 6001 accept
         iifname "$iface" ip saddr $net udp dport 7011 accept
+        iifname "$iface" ip saddr $net tcp dport 1235 accept
     }
 }
 EOF
@@ -422,6 +423,25 @@ apply_uplink_desktop() {
     return 0
 }
 
+keep_config_ports() {
+    uplink=$(find_uplink_wifi) || {
+        clear_table
+        rm -f "$STAMP"
+        return 1
+    }
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    net=$(subnet "$ip" "$prefix") || return 1
+    stamp="cfg $iface $net"
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        open_ports "$iface" "$net"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    return 0
+}
+
 apply() {
     ensure_dirs
     mode=$(mode_of)
@@ -449,8 +469,16 @@ apply() {
             fi
             ;;
         *)
-            idle
-            report "idle|session-off|"
+            stop_ux
+            stop_present
+            stop_rdp
+            if keep_config_ports; then
+                report "idle|session-off|"
+            else
+                clear_table
+                rm -f "$STAMP"
+                report "idle|session-off|"
+            fi
             ;;
     esac
 }

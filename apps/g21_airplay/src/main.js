@@ -18,6 +18,8 @@ var vncFactory = require('./vnc_client.js');
 var inputFactory = require('./input_manager.js');
 var frameSinkFactory = require('./frame_sink.js');
 var menuDraw = require('./menu_draw.js');
+var configStoreFactory = require('./config_store.js');
+var configPanelFactory = require('./config_panel.js');
 
 function noteStart(text) {
     var line = String(text) + '\n';
@@ -57,6 +59,7 @@ var STATUS_TEXT = {
     'mdns-brak': 'brak dns',
     'uxplay-exit': 'UxPlay stop',
     'brak-wifi': 'brak wifi',
+    'panel :1235': 'panel :1235',
     'idle': 'AirPlay idle',
     'waiting': 'AirPlay idle',
     'unknown': 'AirPlay idle'
@@ -110,12 +113,19 @@ function AirPlayApp() {
     this._line = { net: '', addr: '', state: '' };
     this._settings = settingsFactory.createSettings({ active: 'central' });
     this._gate = parked.createParkedGate();
-    this._desk = desktopSettings.createDesktopSettings({});
+    this._store = configStoreFactory.createConfigStore({});
+    this._desk = desktopSettings.createDesktopSettings(this._store.readSettings());
     this._paths = pathFactory.sessionPaths();
     this._chosen = 'airplay';
     this._sessionText = 'wybierz AirPlay, RDP albo VNC';
     this._decoded = null;
     this._client = new ClusterRender('g21_airplay');
+    this._panel = configPanelFactory.createConfigPanel({
+        desk: this._desk,
+        store: this._store,
+        port: 1235,
+        log: noteStart,
+    });
     this._adapter = adapterFactory.createClusterRenderAdapter(this._client);
     this._display = display.createDisplayOutputManager({
         settings: this._settings,
@@ -255,6 +265,9 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             noteStart('ready');
+            if (self._panel) {
+                self._panel.start();
+            }
             self._watchNetwork();
             self._watchCar();
             var lastUuid = self.getLastExecutedEntryPointUuid && self.getLastExecutedEntryPointUuid();
@@ -318,6 +331,9 @@ AirPlayApp.prototype._openPage = function () {
 };
 
 AirPlayApp.prototype._secret = function (kind) {
+    if (this._store && typeof this._store.readSecret === 'function') {
+        return this._store.readSecret(kind);
+    }
     try {
         return fs.readFileSync('/var/opt/g21_airplay/' + kind + '.secret', 'utf8').replace(/\s+$/, '');
     } catch (err) {
@@ -371,7 +387,16 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._sync();
         return;
     }
-    if (name === 'air-back') {
+    if (name === 'rdp') {
+        this._chosen = 'rdp';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('rdp');
+        }
+        this._tellMenu(this._sessions.active() === 'rdp' ? 'starting' : 'waiting');
+        this._sync();
+        return;
+    }
+    if (name === 'air-back' || name === 'rdp-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('root');
         }
@@ -390,17 +415,46 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._sync();
         return;
     }
-    if (name === 'air-name') {
-        this._tellMenu('running');
+    if (name === 'air-name' || name === 'air-info') {
         this._sync();
         return;
     }
-    if (name === 'air-info') {
+    if (name === 'rdp-start') {
+        this._choose('rdp');
+        return;
+    }
+    if (name === 'rdp-stop') {
+        this._sessions.disconnect();
+        this._sessionText = 'rdp stop';
+        this._tellMenu('idle');
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-host') {
+        this._desk.nextOctet();
+        try {
+            this._store.writeSettings(this._desk.snapshot());
+        } catch (err) {
+            noteStart('settings ' + (err && err.message));
+        }
+        this._sync();
+        return;
+    }
+    if (name === 'rdp-user' || name === 'rdp-panel') {
+        this._tellMenu('panel :1235');
         this._sync();
         return;
     }
     if (name === 'host') {
-        this._desk.nextOctet();
+        var protocol = this._chosen === 'airplay' ? 'rdp' : this._chosen;
+        if (protocol === 'rdp' || protocol === 'vnc') {
+            this._desk.nextOctet();
+            try {
+                this._store.writeSettings(this._desk.snapshot());
+            } catch (err2) {
+                noteStart('settings ' + (err2 && err2.message));
+            }
+        }
         this._sync();
         return;
     }
@@ -442,6 +496,23 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     this._menu.setItemHint('air-stop', live === 'dziala' ? 'Wylacz teraz' : 'Sesja off');
     this._menu.setItemHint('air-name', name);
     this._menu.setItemHint('air-info', net.slice(0, 28));
+};
+
+AirPlayApp.prototype._paintRdpMenu = function () {
+    if (!this._menu || typeof this._menu.screen !== 'function' || this._menu.screen() !== 'rdp') {
+        return;
+    }
+    if (typeof this._menu.setItemHint !== 'function') {
+        return;
+    }
+    var host = this._desk.host('rdp');
+    var active = this._sessions.active() === 'rdp';
+    var user = host.user || 'brak';
+    this._menu.setItemHint('rdp-start', active ? 'Sesja RDP' : 'Polacz RDP');
+    this._menu.setItemHint('rdp-stop', active ? 'Rozlacz teraz' : 'Sesja off');
+    this._menu.setItemHint('rdp-host', host.octets.join('.') + ':' + host.port);
+    this._menu.setItemHint('rdp-user', user.slice(0, 24));
+    this._menu.setItemHint('rdp-panel', 'http :1235');
 };
 
 AirPlayApp.prototype._bindTile = function (name, protocol) {
@@ -570,6 +641,9 @@ AirPlayApp.prototype._paint = function (choice, session) {
     this._write('airNet', choice.ssid ? ('Wi-Fi: ' + choice.ssid) : ('Interfejs: ' + choice.iface));
     if (this._chosen === 'airplay') {
         this._write('airAddr', 'iPhone: Lustro ekranu, ' + this._desk.airplayName() + '  ' + choice.ip);
+    } else if (this._chosen === 'rdp') {
+        var rdp = this._desk.host('rdp');
+        this._write('airAddr', 'RDP ' + rdp.octets.join('.') + ':' + rdp.port + ' user ' + (rdp.user || '-') + ' panel :' + choice.ip + ':1235');
     } else {
         var host = this._desk.host(this._chosen);
         this._write('airAddr', this._chosen.toUpperCase() + ' ' + host.octets.join('.') + ':' + host.port + ' oktet ' + (this._desk.octet() + 1));
@@ -615,6 +689,22 @@ AirPlayApp.prototype._sync = function () {
                 : (STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'starting' : air.reason)));
         } else if (this._menu && this._menu.screen() === 'airplay') {
             this._tellMenu(STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'waiting' : air.reason));
+        }
+        return;
+    }
+    if (this._chosen === 'rdp' || this._sessions.active() === 'rdp'
+        || (this._menu && typeof this._menu.screen === 'function' && this._menu.screen() === 'rdp')) {
+        if (!choice.ok) {
+            this._paint(choice, { state: 'idle', detail: choice.reason });
+            this._paintRdpMenu();
+            this._tellMenu(choice.reason);
+            return;
+        }
+        this._paint(choice, { state: 'waiting', detail: 'rdp' });
+        this._paintRdpMenu();
+        if (this._sessions.active() === 'rdp') {
+            var rdpLive = this._sessions.getStatus();
+            this._tellMenu(rdpLive.state || 'starting');
         }
         return;
     }
@@ -691,6 +781,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._sessions) {
         this._sessions.dispose();
+    }
+    if (this._panel) {
+        this._panel.stop();
     }
     if (this._menu) {
         this._menu.close();

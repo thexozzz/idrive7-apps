@@ -37,6 +37,27 @@ function hostText(host) {
     return host.octets.join('.') + ':' + host.port;
 }
 
+function parseIpv4(text) {
+    var parts = String(text || '').trim().split('.');
+    var octets = [];
+    var i;
+    var n;
+    if (parts.length !== 4) {
+        return null;
+    }
+    for (i = 0; i < 4; i += 1) {
+        if (!/^\d+$/.test(parts[i])) {
+            return null;
+        }
+        n = Number(parts[i]);
+        if (n < 0 || n > 255 || String(n) !== String(Number(parts[i]))) {
+            return null;
+        }
+        octets.push(n);
+    }
+    return octets;
+}
+
 function createDesktopSettings(stored) {
     var data = stored || {};
     var mode = INPUT_MODES.indexOf(data.inputMode) === -1 ? 'auto' : data.inputMode;
@@ -69,8 +90,32 @@ function createDesktopSettings(stored) {
         swapButtons: function () { return data.swapButtons === true; },
         inspect: function () { return data.inspect === true; },
         airplayName: function () { return airplayName; },
+        setAirplayName: function (next) {
+            var cleaned = String(next || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16);
+            if (!cleaned.length) {
+                return { ok: false, reason: 'bad-name' };
+            }
+            airplayName = cleaned;
+            return { ok: true, name: airplayName };
+        },
         host: function (protocol) { return hosts[protocol]; },
         hostText: function (protocol) { return hostText(hosts[protocol]); },
+        setRdpHost: function (value) {
+            var octets = Array.isArray(value) ? value : parseIpv4(value);
+            if (!octets) {
+                return { ok: false, reason: 'bad-host' };
+            }
+            hosts.rdp.octets = octets.slice(0, 4);
+            return { ok: true, octets: hosts.rdp.octets.slice() };
+        },
+        setRdpPort: function (value) {
+            hosts.rdp.port = clamp(value, 1, 65535, hosts.rdp.port || 3389);
+            return { ok: true, port: hosts.rdp.port };
+        },
+        setRdpUser: function (value) {
+            hosts.rdp.user = String(value || '').slice(0, 64);
+            return { ok: true, user: hosts.rdp.user };
+        },
         selectOctet: function (index) {
             octet = clamp(index, 0, 3, 0);
             return octet;
@@ -108,5 +153,6 @@ function createDesktopSettings(stored) {
 module.exports = {
     PROTOCOLS: PROTOCOLS,
     INPUT_MODES: INPUT_MODES,
+    parseIpv4: parseIpv4,
     createDesktopSettings: createDesktopSettings,
 };

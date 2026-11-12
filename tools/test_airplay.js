@@ -62,6 +62,7 @@ assert.ok(script.indexOf('tcp dport 7100 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7000 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7001 accept') !== -1);
 assert.ok(script.indexOf('udp dport 7011 accept') !== -1);
+assert.ok(script.indexOf('tcp dport 1235 accept') !== -1);
 assert.ok(script.indexOf('ensure_mdns') !== -1);
 assert.ok(script.indexOf('avahi-daemon') !== -1);
 assert.ok(script.indexOf('phone-is-ap') === -1);
@@ -70,7 +71,7 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.3');
+assert.strictEqual(component.version, '0.1.4');
 assert.ok(component.files.some(function (item) { return item.path === 'avahi-daemon'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libavahi-core.so.7'; }));
 assert.ok(component.files.every(function (item) { return item.path.indexOf('\\') === -1; }));

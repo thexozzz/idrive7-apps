@@ -14,6 +14,7 @@ var tools = [
     path.join(__dirname, 'test_vnc.js'),
     path.join(__dirname, 'test_session.js'),
     path.join(__dirname, 'test_menu.js'),
+    path.join(__dirname, 'test_config_panel.js'),
 ];
 
 tools.forEach(function (tool) {

@@ -110,10 +110,20 @@ var AIRPLAY_ITEMS = [
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne' }
 ];
 
+var RDP_ITEMS = [
+    { name: 'rdp-start', title: 'Start', hint: 'Polacz RDP' },
+    { name: 'rdp-stop', title: 'Stop', hint: 'Rozlacz' },
+    { name: 'rdp-host', title: 'Host', hint: '0.0.0.0' },
+    { name: 'rdp-user', title: 'User', hint: 'brak' },
+    { name: 'rdp-panel', title: 'Panel', hint: ':1235' },
+    { name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne' }
+];
+
 var ITEMS = ROOT_ITEMS;
 var SCREENS = {
     root: ROOT_ITEMS,
-    airplay: AIRPLAY_ITEMS
+    airplay: AIRPLAY_ITEMS,
+    rdp: RDP_ITEMS
 };
 
 function message(type, payload) {
@@ -452,7 +462,13 @@ function createMenuSurface(opts) {
         screenName = next;
         items = cloneScreen(next);
         selected = 0;
-        heading = next === 'airplay' ? 'AirPlay' : '';
+        if (next === 'airplay') {
+            heading = 'AirPlay';
+        } else if (next === 'rdp') {
+            heading = 'RDP';
+        } else {
+            heading = '';
+        }
         noted = false;
         paint();
         return screenName;
@@ -643,6 +659,7 @@ module.exports = {
     ITEMS: ITEMS,
     ROOT_ITEMS: ROOT_ITEMS,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
+    RDP_ITEMS: RDP_ITEMS,
     SCREENS: SCREENS,
     message: message,
     buildFrame: buildFrame,

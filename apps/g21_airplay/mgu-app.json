@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -21,7 +21,9 @@
     "src/vnc_client.js",
     "src/input_manager.js",
     "src/frame_sink.js",
-    "src/menu_draw.js"
+    "src/menu_draw.js",
+    "src/config_store.js",
+    "src/config_panel.js"
   ],
   "sdk": [
     "oap-sdk/src/core/OnlineApp.js",
