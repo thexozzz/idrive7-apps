@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.50
+
+- Cluster/HUD: napis `AIRPLAY` na `map`+`hud` (domyslnie WL); kafelek `WL`/`WYL` w menu glownym.
+
 ## 0.1.49
 
 - RDP: wbudowany profil `PC` (100.89.166.19 / thexozzz@gmail.com) z haslem seedowanym przy pierwszym starcie.

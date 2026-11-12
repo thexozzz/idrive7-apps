@@ -158,6 +158,8 @@ function createDesktopSettings(stored) {
     if (!airplayName.length) {
         airplayName = 'G21';
     }
+    // Default ON: diagnostic AIRPLAY label on cluster map + HUD until user toggles off.
+    var clusterLabel = data.clusterLabel !== false;
     var octet = 0;
 
     function findProfile(list, id) {
@@ -216,6 +218,11 @@ function createDesktopSettings(stored) {
             }
             airplayName = cleaned;
             return { ok: true, name: airplayName };
+        },
+        clusterLabel: function () { return clusterLabel; },
+        setClusterLabel: function (on) {
+            clusterLabel = !!on;
+            return { ok: true, on: clusterLabel };
         },
         profiles: function (protocol) {
             return (protocol === 'rdp' ? rdpProfiles : vncProfiles).map(function (p) {
@@ -384,6 +391,7 @@ function createDesktopSettings(stored) {
                 swapButtons: data.swapButtons === true,
                 inspect: data.inspect === true,
                 airplayName: airplayName,
+                clusterLabel: clusterLabel,
                 rdpActive: rdpActive,
                 vncActive: vncActive,
                 rdpProfiles: rdpProfiles.map(function (p) {

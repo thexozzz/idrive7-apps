@@ -10,6 +10,7 @@ var display = require('./display_output.js');
 var videoDecoder = require('./video_decoder.js');
 var adapterFactory = require('./cluster_render_adapter.js');
 var ClusterRender = require('./cluster_render_client.js').ClusterRender;
+var clusterLabelFactory = require('./cluster_label.js');
 var parked = require('./parked_gate.js');
 var pathFactory = require('./paths.js');
 var desktopSettings = require('./desktop_settings.js');
@@ -218,6 +219,11 @@ function AirPlayApp() {
     this._sessionText = 'wybierz AirPlay, Miracast, RDP albo VNC';
     this._decoded = null;
     this._client = new ClusterRender('g21_airplay');
+    this._label = clusterLabelFactory.createClusterLabel({
+        client: this._client,
+        enabled: this._desk.clusterLabel(),
+        log: noteStart,
+    });
     this._panel = configPanelFactory.createConfigPanel({
         desk: this._desk,
         store: this._store,
@@ -225,6 +231,17 @@ function AirPlayApp() {
         log: noteStart,
     });
     this._adapter = adapterFactory.createClusterRenderAdapter(this._client);
+    var selfLabel = this;
+    this._client.on('ready', function () {
+        noteStart('cluster-ready');
+        selfLabel._label.show();
+    });
+    this._client.on('refused', function (op, ref, reason) {
+        noteStart('cluster-refused ' + op + ' ' + ref + ' ' + reason);
+    });
+    this._client.on('layer', function (ref, state, reason) {
+        noteStart('cluster-layer ' + ref + ' ' + state + (reason ? (' ' + reason) : ''));
+    });
     this._display = display.createDisplayOutputManager({
         settings: this._settings,
         gate: this._gate,
@@ -1097,8 +1114,24 @@ AirPlayApp.prototype._onVncAction = function (name) {
     }
 };
 
+AirPlayApp.prototype._toggleClusterLabel = function () {
+    var on = !this._desk.clusterLabel();
+    this._desk.setClusterLabel(on);
+    this._saveDesk();
+    this._paintSwitch('label-toggle', on, 'napis cluster/HUD', 'napis wylaczony');
+    if (this._label) {
+        this._label.setEnabled(on);
+    }
+    this._tellMenu(on ? 'waiting' : 'waiting');
+    noteStart(on ? 'label-wl' : 'label-wyl');
+};
+
 AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
+    if (name === 'label-toggle') {
+        this._toggleClusterLabel();
+        return;
+    }
     if (name === 'airplay' || name === 'windows' || name === 'rdp' || name === 'vnc') {
         this._openProtocolScreen(name);
         return;
@@ -1624,6 +1657,12 @@ AirPlayApp.prototype._sync = function () {
     }
 
     this._paint(choice);
+    this._paintSwitch(
+        'label-toggle',
+        this._desk.clusterLabel(),
+        'napis cluster/HUD',
+        'napis wylaczony'
+    );
     this._tellMenu(choice.ok ? 'waiting' : (choice.reason || 'brak-wifi'));
 };
 
@@ -1692,6 +1731,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._sessions) {
         this._sessions.dispose();
+    }
+    if (this._label) {
+        this._label.hide();
     }
     if (this._panel) {
         this._panel.stop();

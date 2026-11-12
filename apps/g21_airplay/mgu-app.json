@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.49",
+  "version": "0.1.50",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -13,6 +13,7 @@
     "src/video_decoder.js",
     "src/cluster_render_adapter.js",
     "src/cluster_render_client.js",
+    "src/cluster_label.js",
     "src/paths.js",
     "src/credentials.js",
     "src/desktop_settings.js",

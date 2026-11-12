@@ -322,7 +322,8 @@ var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
     { name: 'windows', title: 'Miracast', hint: 'Win+K PC', icon: 'desktop' },
     { name: 'rdp', title: 'RDP', hint: 'pulpit Windows', icon: 'host' },
-    { name: 'vnc', title: 'VNC', hint: 'pulpit zdalny', icon: 'grid' }
+    { name: 'vnc', title: 'VNC', hint: 'pulpit zdalny', icon: 'grid' },
+    { name: 'label-toggle', title: 'WL', hint: 'napis AIRPLAY', icon: 'tag' }
 ];
 
 var AIRPLAY_ITEMS = [
