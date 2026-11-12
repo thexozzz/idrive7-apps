@@ -1,0 +1,723 @@
+{
+  "id": "g21-airplay-open",
+  "kind": "tool",
+  "version": "0.1.1",
+  "title": "AirPlay na Wi-Fi Store",
+  "description": "Wpuszcza AirPlay tylko z podsieci Wi-Fi, do ktorej jest podlaczony MGU Store. Dostarcza UxPlay i biblioteki.",
+  "uninstallable": true,
+  "mguHmi": [
+    "ID7"
+  ],
+  "files": [
+    {
+      "path": "g21-airplay-open",
+      "mode": "0755"
+    },
+    {
+      "path": "g21-present",
+      "mode": "0755"
+    },
+    {
+      "path": "g21-rdp",
+      "mode": "0755"
+    },
+    {
+      "path": "gst-plugin-scanner",
+      "mode": "0755"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstalsa.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstapp.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstaudioconvert.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstaudioparsers.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstaudioresample.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstautoconvert.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstautodetect.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstcoreelements.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstlevel.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstlibav.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstplayback.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgsttypefindfunctions.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstvideoconvert.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstvideoparsersbad.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstvideoscale.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstvolume.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/gstreamer-1.0/libgstwaylandsink.so",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libX11.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libXau.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libXdmcp.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libXext.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libXfixes.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libXrender.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libasound.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libass.so.9",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavahi-client.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavahi-common.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavcodec.so.57",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavfilter.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavformat.so.57",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavresample.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libavutil.so.55",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libblkid.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libbluray.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libbs2b.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libbsd.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libbz2.so.1.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libcairo.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libchromaprint.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libcom_err.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libcroco-0.6.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libcrypto.so.1.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libcrystalhd.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libdatrie.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libdbus-1.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libdns_sd.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libdrm.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libexpat.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libffi.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libfftw3.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmu_us_awb.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmu_us_kal.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmu_us_kal16.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmu_us_rms.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmu_us_slt.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_cmulex.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libflite_usenglish.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libfontconfig.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libfreerdp2.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libfreetype.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libfribidi.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgcc_s.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgcrypt.so.20",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgdk_pixbuf-2.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgio-2.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libglib-2.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgme.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgmodule-2.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgmp.so.10",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgnutls.so.30",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgobject-2.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgomp.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgpg-error.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgraphite2.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgsm.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgssapi_krb5.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstallocators-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstapp-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstaudio-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstbase-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstcodecparsers-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstpbutils-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstreamer-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgsttag-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstvideo-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libgstwayland-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libharfbuzz.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libhogweed.so.4",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libicudata.so.60",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libicuuc.so.60",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libidn2.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libjpeg.so.8",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libk5crypto.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libkeyutils.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libkrb5.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libkrb5support.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/liblz4.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/liblzma.so.5",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libmount.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libmp3lame.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libmpg123.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libmysofa.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libnettle.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libnorm.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libnuma.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libogg.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libopenjp2.so.7",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libopenmpt.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libopus.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/liborc-0.4.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libp11-kit.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpango-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpangocairo-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpangoft2-1.0.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpcre.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpgm-5.2.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpixman-1.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libplist.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpng16.so.16",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libpostproc.so.54",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/librsvg-2.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/librubberband.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libsamplerate.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libselinux.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libshine.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libsnappy.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libsodium.so.23",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libsoxr.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libspeex.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libssh-gcrypt.so.4",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libssl.so.1.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libstdc++.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libswresample.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libswscale.so.4",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libsystemd.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libtasn1.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libthai.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libtheoradec.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libtheoraenc.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libtwolame.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libunistring.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libuuid.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libva-drm.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libva-x11.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libva.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libvdpau.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libvorbis.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libvorbisenc.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libvorbisfile.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libvpx.so.5",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libwavpack.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libwayland-client.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libwebp.so.6",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libwebpmux.so.3",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libwinpr2.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libx264.so.152",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libx265.so.146",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxcb-render.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxcb-shm.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxcb.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxkbfile.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxml2.so.2",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libxvidcore.so.4",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libz.so.1",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libzmq.so.5",
+      "mode": "0644"
+    },
+    {
+      "path": "lib/libzvbi.so.0",
+      "mode": "0644"
+    },
+    {
+      "path": "uxplay",
+      "mode": "0755"
+    },
+    {
+      "path": "uxplay.bin",
+      "mode": "0755"
+    }
+  ],
+  "units": [
+    {
+      "name": "g21-airplay-open.service",
+      "from": "g21-airplay-open.service"
+    }
+  ],
+  "enable": [
+    {
+      "unit": "g21-airplay-open.service",
+      "target": "multi-user.target"
+    }
+  ],
+  "recmgr": [
+    "g21-airplay-open"
+  ],
+  "restart": [
+    "g21-airplay-open.service"
+  ]
+}

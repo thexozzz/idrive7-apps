@@ -1,0 +1,16 @@
+# AirPlay on the Store Wi-Fi (g21-airplay-open)
+[Unit]
+Description=AirPlay on Store Wi-Fi (g21-airplay-open)
+RequiresMountsFor=/var/opt
+After=winston.service
+StartLimitIntervalSec=0
+
+[Service]
+SupplementaryGroups=video
+Environment=XDG_RUNTIME_DIR=/run/wayland
+ExecStart=/var/opt/g21-airplay-open/current/g21-airplay-open
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.22
+
+- Narzędzie AirPlay dostarcza UxPlay. Poprzednia instalacja miała tylko skrypt, więc ekran pokazywał UxPlay brak.
+
 ## 0.1.21
 
 - Rysunek nie jest zrywany po fałszywym X_STATE. W 0.1.20 pierwsza klatka padała zaraz po starcie.

@@ -68,8 +68,26 @@ function checkTree(errors) {
     var localTools = {};
     (repo.tools || []).forEach(function (tool) {
         localTools[tool.id] = true;
+        var toolDir = path.join(ROOT, tool.path || '');
+        var componentFile = path.join(toolDir, 'component.json');
+        if (fs.existsSync(componentFile)) {
+            var toolMeta = readJson(componentFile);
+            if (toolMeta.id !== tool.id || toolMeta.kind !== 'tool' || toolMeta.version !== tool.version) {
+                fail(errors, tool.id + ' component.json must name the same id, kind tool and version as mgu-repo.json');
+            }
+            if (!Array.isArray(toolMeta.files) || !toolMeta.files.length) {
+                fail(errors, tool.id + ' component.json must list the files the unit installs');
+            }
+            toolMeta.files.forEach(function (item) {
+                var relPath = (item.from || item.path || '').split('/').join(path.sep);
+                if (!relPath || !fs.existsSync(path.join(toolDir, relPath))) {
+                    fail(errors, tool.id + ' missing file ' + (item.from || item.path));
+                }
+            });
+            return;
+        }
         if (!tool.service || tool.service.exec !== tool.id) {
-            fail(errors, tool.id + ' must run its own program as a service');
+            fail(errors, tool.id + ' must have component.json or run its own program as a service');
         }
     });
     repo.components.forEach(function (component) {
