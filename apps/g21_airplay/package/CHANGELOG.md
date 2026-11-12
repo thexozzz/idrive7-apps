@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.44
+
+- Windows/Miracast: Wlacz bez czekania na predkosc (jak AirPlay); brak Vehicle2 nie blokuje juz Win+K.
+
 ## 0.1.43
 
 - Ikona listy: tekst AirPlay na przezroczystym tle (64px); nazwa w menu KK-remoteIN; mniejsze ikony kart w menu.

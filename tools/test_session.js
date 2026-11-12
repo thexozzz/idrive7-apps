@@ -66,10 +66,14 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     assert.strictEqual(manager.active(), 'airplay');
     return manager.disconnect();
 }).then(function () {
-    gate.sample(0);
+    // Windows/Miracast must start without a speed sample (same as AirPlay).
     return manager.connect('windows', { name: 'G21' });
 }).then(function (win) {
     assert.strictEqual(win.ok, true);
+    assert.strictEqual(manager.active(), 'windows');
+    return manager.onVehicle();
+}).then(function (winKept) {
+    assert.notStrictEqual(winKept.stopped, true);
     assert.strictEqual(manager.active(), 'windows');
     return manager.connect('airplay', { name: 'G21' });
 }).then(function (backAir) {

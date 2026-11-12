@@ -24,7 +24,7 @@ Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12
 
 ## Postój
 
-AirPlay startuje bez próbki prędkości i nie jest gaszony przez jazdę. Windows (Win+K), RDP i VNC startują tylko po próbce i tylko na postoju. Brak próbki blokuje je (`speed-unknown`). Jazda albo utrata próbki rozłącza ich aktywną sesję. Usługa `g21-airplay-open` uruchamia odbiornik AirPlay (backend) i avahi, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow` i uplink Store jest Wi-Fi. Dla `windows` startuje `g21-mice` (MS-MICE TCP 7250 + RTSP do PC + RTP 1028) i ogłasza `_display._tcp` przez avahi — bez Wi-Fi Direct, po istniejącej sieci Store. iPhone może być hostem hotspotu.
+AirPlay i Windows (Win+K / Miracast) startują bez próbki prędkości i nie są gaszone przez brak `Vehicle2` — na tym G21 sygnał często nie dochodzi, a wcześniej Miracast zostawał na stałe na `speed-unknown`. RDP i VNC startują tylko po próbce i tylko na postoju. Brak próbki blokuje je (`speed-unknown`). Jazda albo utrata próbki rozłącza aktywną sesję RDP/VNC. Usługa `g21-airplay-open` uruchamia odbiornik AirPlay (backend) i avahi, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow` i uplink Store jest Wi-Fi. Dla `windows` startuje `g21-mice` (MS-MICE TCP 7250 + RTSP do PC + RTP 1028) i ogłasza `_display._tcp` przez avahi — bez Wi-Fi Direct, po istniejącej sieci Store. iPhone może być hostem hotspotu.
 
 ## Protokoły
 

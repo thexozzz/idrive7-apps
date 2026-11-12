@@ -989,10 +989,14 @@ AirPlayApp.prototype._choose = function (name) {
         return;
     }
     this._chosen = name;
+    noteStart('choose ' + name);
     this._sessions.connect(name, this._endpoint(name)).then(function (result) {
         self._sessionText = result.ok
             ? (name + ' ' + (result.state || 'ok'))
             : (name + ' ' + (result.reason || 'blad'));
+        noteStart(result.ok
+            ? ('session-ok ' + name + ' ' + (result.state || 'ok'))
+            : ('session-fail ' + name + ' ' + (result.reason || 'blad')));
         self._tellMenu(result.ok ? (result.state || 'starting') : result.reason);
         self._sync();
     });

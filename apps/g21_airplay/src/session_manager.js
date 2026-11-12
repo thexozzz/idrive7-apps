@@ -16,6 +16,13 @@ function createSessionManager(opts) {
         return { ok: true };
     }
 
+    // Central-display mirrors (AirPlay / Win+K) stay available without a speed
+    // sample. On this G21 Vehicle2 often never arrives, which used to leave
+    // Miracast permanently off (speed-unknown). RDP/VNC still need park.
+    function needsParkGate(name) {
+        return name === 'rdp' || name === 'vnc';
+    }
+
     function disconnect() {
         var name = active;
         var session = name && sessions[name];
@@ -31,8 +38,7 @@ function createSessionManager(opts) {
     }
 
     function connect(name, nextTarget) {
-        if (name !== 'airplay') {
-            // windows / rdp / vnc: only while parked (confirmed speed sample).
+        if (needsParkGate(name)) {
             var check = gateCheck();
             if (!check.ok) {
                 return Promise.resolve(check);
@@ -96,7 +102,7 @@ function createSessionManager(opts) {
         sendMouseScroll: function (delta) { return forward('sendMouseScroll', [delta]); },
         sendKey: function (key, down) { return forward('sendKey', [key, down]); },
         onVehicle: function () {
-            if (active && active !== 'airplay' && gate.hudAllowed() !== true) {
+            if (active && needsParkGate(active) && gate.hudAllowed() !== true) {
                 return disconnect().then(function () {
                     return { ok: false, reason: gate.known() ? 'not-parked' : 'speed-unknown', stopped: true };
                 });
