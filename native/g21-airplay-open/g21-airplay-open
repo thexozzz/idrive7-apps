@@ -942,16 +942,21 @@ start_ux() {
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
-    # -pw (no password): random 4-digit PIN on every iPhone connect (shown in OAP via PINFILE).
+    # -pin NNNN: Apple-style pairing code. Write PINFILE before start so the OAP UI
+    # shows the code immediately (fakesink cannot show UxPlay's GST PIN image).
     # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
     # applet, so plain `setsid` aborted start with "not found" and left no listener.
     # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
     # shellcheck disable=SC2086
     clear_pin
+    pin=$(awk 'BEGIN { srand(); printf "%04d", 1000 + int(rand() * 9000) }')
+    mkdir -p /run/g21-airplay
+    printf '%s\n' "$pin" > "$PINFILE"
+    chmod 666 "$PINFILE" 2>/dev/null || true
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pw
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin"
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pw
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin"
     fi
     if [ -x "$dir/g21-detach" ]; then
         "$dir/g21-detach" "$bin" "$@" >>"$UXLOG" 2>&1 &

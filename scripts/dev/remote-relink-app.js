@@ -1,14 +1,38 @@
 'use strict';
 
 /*
- * Rebuild oap_12249 javascript/app.js from HotPatched flat source/*.js.
+ * Rebuild g21_airplay javascript/app.js from HotPatched flat source/*.js.
+ * Finds the live oap_* dir by package name (uid changes after Store reinstall).
  * Run on MGU: node remote-relink-app.js
  */
 var fs = require('fs');
 var path = require('path');
 var link = require('/var/opt/mgu-deploy/current/oap_link.js');
 
-var OAP = '/var/opt/public/oap/oap_12249';
+function findOapRoot() {
+    var base = '/var/opt/public/oap';
+    var names = fs.readdirSync(base);
+    var i;
+    var pkgPath;
+    var pkg;
+    for (i = 0; i < names.length; i += 1) {
+        if (!/^oap_\d+$/.test(names[i])) {
+            continue;
+        }
+        pkgPath = path.join(base, names[i], 'source', 'package.json');
+        try {
+            pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        } catch (err) {
+            continue;
+        }
+        if (pkg && pkg.name === 'g21_airplay') {
+            return path.join(base, names[i]);
+        }
+    }
+    throw new Error('g21_airplay oap_* not found under ' + base);
+}
+
+var OAP = findOapRoot();
 var SRC = path.join(OAP, 'source');
 var stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
 var work = '/var/opt/g21-airplay-open/dev-staging/relink-' + stamp;

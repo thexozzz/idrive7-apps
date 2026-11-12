@@ -46,10 +46,11 @@ function Get-DevSshDefaults {
         ToolId   = 'g21-airplay-open'
         OapUid   = '12249'
         # Only these remote roots may ever be written by HotPatch (after explicit consent).
+        # oap_* uid changes after Store reinstall — allow the OAP tree; swap still
+        # greps for g21_airplay before writing source/.
         AllowWriteRoots = @(
             '/var/opt/g21-airplay-open/',
-            '/var/opt/public/oap/oap_12249/data/g21_airplay/',
-            '/var/opt/public/oap/oap_12249/source/'
+            '/var/opt/public/oap/'
         )
         # Exact cmdline path fragments required before any stop attempt.
         OwnProcessMarkers = @(
@@ -148,7 +149,7 @@ function Test-DevSshConnection {
     )
     Write-Host "Checking SSH $User@$HostName (StrictHostKeyChecking=yes)..."
     # Keep remote scripts BusyBox-safe (no `set +e`, minimal quoting).
-    $code = Invoke-DevSsh -Identity $Identity -HostName $HostName -User $User -Port $Port -RemoteCommand 'echo DEV-SSH-OK; uname -srm; test -d /var/opt/g21-airplay-open/current && echo tool=present || echo tool=missing; test -d /var/opt/public/oap/oap_12249/data/g21_airplay && echo appdata=present || echo appdata=missing; head -n 8 /var/opt/public/oap/oap_12249/source/package.json 2>/dev/null; readlink -f /var/opt/g21-airplay-open/current 2>/dev/null; echo DEV-SSH-END'
+    $code = Invoke-DevSsh -Identity $Identity -HostName $HostName -User $User -Port $Port -RemoteCommand 'echo DEV-SSH-OK; uname -srm; test -d /var/opt/g21-airplay-open/current && echo tool=present || echo tool=missing; oap=; for d in /var/opt/public/oap/oap_*/source/package.json; do if grep -q g21_airplay "$d" 2>/dev/null; then oap=$(dirname "$(dirname "$d")"); break; fi; done; if [ -n "$oap" ]; then echo "appdata=present oap=$oap"; head -n 8 "$oap/source/package.json"; else echo appdata=missing; fi; readlink -f /var/opt/g21-airplay-open/current 2>/dev/null; echo DEV-SSH-END'
     if ($code -ne 0) {
         Write-Host @'
 SSH failed.

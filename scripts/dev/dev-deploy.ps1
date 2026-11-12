@@ -86,8 +86,21 @@ if ($HostName -ne '100.125.63.29') {
 $id = Get-DevSshIdentity -Identity $Identity
 Test-DevSshConnection -Identity $id -HostName $HostName -User $cfg.User -Port $cfg.Port
 
-Write-Host 'Verifying remote package identity is g21_airplay (oap_12249)...'
-$verifyCmd = 'pkg=/var/opt/public/oap/oap_12249/source/package.json; test -f "$pkg" || { echo missing-package; exit 20; }; grep -q g21_airplay "$pkg" || { echo wrong-app; exit 21; }; test -d /var/opt/g21-airplay-open/current || { echo missing-tool; exit 22; }; echo verify-ok'
+Write-Host 'Verifying remote package identity is g21_airplay (any oap_*)...'
+$verifyCmd = @'
+oap=
+for d in /var/opt/public/oap/oap_*/source/package.json; do
+  if grep -q g21_airplay "$d" 2>/dev/null; then
+    oap=$(dirname "$(dirname "$d")")
+    break
+  fi
+done
+test -n "$oap" || { echo missing-package; exit 20; }
+grep -q g21_airplay "$oap/source/package.json" || { echo wrong-app; exit 21; }
+test -d /var/opt/g21-airplay-open/current || { echo missing-tool; exit 22; }
+echo "OAP_ROOT=$oap"
+echo verify-ok
+'@
 $null = Invoke-DevSsh -Identity $id -HostName $HostName -User $cfg.User -Port $cfg.Port -RemoteCommand $verifyCmd
 if ($LASTEXITCODE -ne 0) {
     throw 'Remote identity check failed — refusing HotPatch (wrong/missing app).'
@@ -166,12 +179,19 @@ Get-ChildItem -LiteralPath $localStage -Recurse -File | ForEach-Object {
 }
 
 # Verify checksums remotely, backup current tool binaries, then swap into current version dir only for tool files.
-# App JS HotPatch copies into oap_12249/source/ only after name check (already done).
+# App JS HotPatch copies into the live g21_airplay oap_*/source/ (uid can change after Store reinstall).
 $swap = @"
 set -e
 stage='$remoteStage'
 backup='$remoteBackup'
 tool_cur=`$(readlink -f /var/opt/g21-airplay-open/current)
+oap=
+for d in /var/opt/public/oap/oap_*/source/package.json; do
+  if grep -q g21_airplay "`$d" 2>/dev/null; then
+    oap=`$(dirname "`$(dirname "`$d")")
+    break
+  fi
+done
 # Local script already hashed before scp; confirm staged files exist.
 test -f "`$stage/MANIFEST.sha256" || exit 30
 echo hashes-trusted-local
@@ -192,7 +212,8 @@ if [ -d "`$stage/tool" ] && [ -n "`$tool_cur" ]; then
   fi
 fi
 if [ -d "`$stage/app" ] && ls "`$stage/app"/* >/dev/null 2>&1; then
-  src=/var/opt/public/oap/oap_12249/source
+  test -n "`$oap" || { echo missing-package; exit 20; }
+  src=`$oap/source
   grep -q g21_airplay "`$src/package.json"
   mkdir -p "`$backup/app"
   for f in "`$stage/app"/*; do
