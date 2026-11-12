@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.93
+
+- Zegary dostaja klatke 30 razy na sekunde. Renderer skaluje wideo sam, zamiast dostawac pelny obraz co 120 ms.
+
 ## 0.1.92
 
 - Brak limitu predkosci. Obraz na zegarach i HUD zostaje takze w czasie jazdy.

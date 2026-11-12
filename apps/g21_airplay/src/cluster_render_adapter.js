@@ -68,16 +68,32 @@ function createClusterRenderAdapter(client) {
                 this.destroyLayer(name);
             }
             box = geometry || {};
-        fw = evenSize(box.w, known.w, known.w);
-        fh = evenSize(box.h, known.h, known.h);
-        fw -= fw % 4;
-        if (fw < 16) {
-            fw = 16;
-        }
+            fw = evenSize(box.w, known.w, known.w);
+            fh = evenSize(box.h, known.h, known.h);
+            fw -= fw % 4;
+            if (fw < 16) {
+                fw = 16;
+            }
+            var vw = box.vw || fw;
+            var vh = box.vh || fh;
+            if (vw > 1920) {
+                vw = 1920;
+            }
+            if (vh > 720) {
+                vh = 720;
+            }
+            vw -= vw % 4;
+            vh -= vh % 2;
+            if (vw < 16) {
+                vw = 16;
+            }
+            if (vh < 2) {
+                vh = 2;
+            }
             ref = client.video({
                 target: known.protocol,
-                vw: fw,
-                vh: fh,
+                vw: vw,
+                vh: vh,
                 fps: box.fps || 30,
                 x: box.x || 0,
                 y: box.y || 0,
@@ -94,8 +110,8 @@ function createClusterRenderAdapter(client) {
             if (!ref) {
                 return fail('layer-refused');
             }
-            layers[name] = { ref: ref, w: fw, h: fh, frameId: 0 };
-            return { ok: true, ref: ref, w: fw, h: fh };
+            layers[name] = { ref: ref, w: vw, h: vh, frameId: 0 };
+            return { ok: true, ref: ref, w: vw, h: vh, dw: fw, dh: fh };
         },
         updateFrame: function (name, atlas) {
             var slot;

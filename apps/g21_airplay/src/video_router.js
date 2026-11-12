@@ -120,9 +120,9 @@ function createVideoRouter(opts) {
             if (n < 2) {
                 n = 2;
             }
-            if (n > 6) {
-                n = 6;
-            }
+        if (n > 60) {
+            n = 60;
+        }
             clusterFps = n;
             return clusterFps;
         },

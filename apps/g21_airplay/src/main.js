@@ -275,7 +275,7 @@ function AirPlayApp() {
     var selfRouter = this;
     this._router = videoRouter.createVideoRouter({
         centralFps: 30,
-        clusterFps: 4,
+        clusterFps: 30,
         onCentral: function (frame) {
             try {
                 if (!selfRouter._mirrorVideo) {
@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.92',
+        version: (this._packageJson && this._packageJson.version) || '0.1.93',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.92') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.93') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1157,7 +1157,15 @@ AirPlayApp.prototype._showGauges = function () {
 
 AirPlayApp.prototype._routerMode = function () {
     var names = this._settings.outputs();
-    if (names.indexOf('central') !== -1) {
+    var central = names.indexOf('central') !== -1;
+    var cluster = names.indexOf('cluster') !== -1;
+    if (central && cluster) {
+        return 'both';
+    }
+    if (cluster) {
+        return 'cluster';
+    }
+    if (central) {
         return 'central';
     }
     return 'off';
@@ -2733,7 +2741,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (outs.indexOf('hud') !== -1) {
         faces.hud = { target: 'hud', maxW: 800, maxH: 480, contend: 0 };
     }
-    if (outs.indexOf('cluster') !== -1) {
+    if (outs.indexOf('cluster') !== -1 && this._clusterVideoOk === false) {
         faces.cluster = {
             target: panel ? 'panel' : 'map',
             maxW: panel ? 1920 : 1088,
@@ -2744,15 +2752,10 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
     }
-    if (this._faceAt && (now - this._faceAt) < 120) {
+    if (this._faceAt && (now - this._faceAt) < 33) {
         return;
     }
     this._faceAt = now;
-    if (this._adapter) {
-        this._adapter.destroyLayer('map');
-        this._adapter.destroyLayer('cluster');
-        this._clusterLayer = '';
-    }
     Object.keys(faces).forEach(function (name) {
         var spec = faces[name];
         var box;
@@ -2879,12 +2882,19 @@ AirPlayApp.prototype._presentCluster = function (frame) {
     var limitH = experimental ? 720 : 480;
     var box = this._settings.picture('cluster');
     var placed = this._mapBox(box, limitW, limitH);
-    var fit = this._desk.airFit && this._desk.airFit() === 'cover' ? 'cover' : 'contain';
     var turned = this._turnedFrame(frame, 'cluster');
-    var fitted = frameFit.fitI420(turned.i420, turned.w, turned.h, placed.w, placed.h, fit);
-    var key = name + ':' + placed.x + ',' + placed.y + ':' + placed.w + 'x' + placed.h;
+    var srcW = turned.w;
+    var srcH = turned.h;
+    var buf = turned.i420;
     var made;
     var sent;
+    var direct = srcW >= 16 && srcH >= 2 && srcW <= 1920 && srcH <= 720 && (srcW % 4) === 0 && (srcH % 2) === 0;
+    if (!direct) {
+        buf = frameFit.fitI420(turned.i420, turned.w, turned.h, placed.w, placed.h, 'contain').i420;
+        srcW = placed.w;
+        srcH = placed.h;
+    }
+    var key = name + ':' + placed.x + ',' + placed.y + ':' + placed.w + 'x' + placed.h + '/' + srcW + 'x' + srcH;
     if (this._clusterLayer !== key) {
         this._adapter.destroyLayer('map');
         this._adapter.destroyLayer('cluster');
@@ -2893,7 +2903,9 @@ AirPlayApp.prototype._presentCluster = function (frame) {
             y: placed.y,
             w: placed.w,
             h: placed.h,
-            fps: this._desk.airClusterFps ? this._desk.airClusterFps() : 4,
+            vw: srcW,
+            vh: srcH,
+            fps: 30
         });
         if (!made.ok) {
             if (this._clusterFail !== made.reason) {
@@ -2901,23 +2913,27 @@ AirPlayApp.prototype._presentCluster = function (frame) {
                 this._clusterFail = made.reason;
             }
             this._clusterLayer = '';
+            this._clusterVideoOk = false;
             return;
         }
         this._clusterLayer = key;
-        noteStart('cluster-mirror ' + name + ' ' + placed.w + 'x' + placed.h + ' @' + placed.x + ',' + placed.y);
-        if (made.w !== placed.w || made.h !== placed.h) {
-            fitted = frameFit.fitI420(turned.i420, turned.w, turned.h, made.w, made.h, fit);
+        this._clusterVideoOk = true;
+        noteStart('cluster-mirror ' + name + ' ' + srcW + 'x' + srcH + ' -> ' + placed.w + 'x' + placed.h + ' @30');
+        if (made.w !== srcW || made.h !== srcH) {
+            buf = frameFit.fitI420(turned.i420, turned.w, turned.h, made.w, made.h, 'contain').i420;
         }
     }
-    sent = this._adapter.updateFrame(name, fitted.i420);
-    if (!sent.ok && sent.reason !== 'bad-frame') {
+    sent = this._adapter.updateFrame(name, buf);
+    if (!sent.ok) {
         if (this._clusterFail !== sent.reason) {
             noteStart('cluster-frame ' + sent.reason);
             this._clusterFail = sent.reason;
         }
+        this._clusterVideoOk = false;
         return;
     }
     this._clusterFail = '';
+    this._clusterVideoOk = true;
 };
 
 AirPlayApp.prototype._dropClusterMirror = function (reason) {
@@ -2962,9 +2978,6 @@ AirPlayApp.prototype._takeFrame = function () {
     if (this._router) {
         this._router.setMode(this._routerMode());
         this._router.setParked(this._parkFlag());
-        if (this._desk.airClusterFps) {
-            this._router.setClusterFps(this._desk.airClusterFps());
-        }
         this._router.push({
             i420: parsed.i420,
             w: parsed.w,
