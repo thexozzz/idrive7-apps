@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.25
+
+- Wejscie w AirPlay otwiera osobne menu: Start, Stop, Nazwa, Siec i Wstecz.
+
 ## 0.1.24
 
 - iPhone moze byc hostem hotspotu. Narzędzie dostarcza avahi, zeby Lustro ekranu widzialo G21.

@@ -38,44 +38,83 @@ var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
 
 var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+    '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+    '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
+    ':': ['00000', '01100', '01100', '00000', '01100', '01100', '00000'],
+    '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+    '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+    '2': ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+    '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+    '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+    '5': ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+    '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
+    '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+    '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+    '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
     'A': ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+    'B': ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
     'C': ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
     'D': ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+    'E': ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+    'G': ['01110', '10001', '10000', '10111', '10001', '10001', '01110'],
     'H': ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+    'I': ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
+    'K': ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
     'L': ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+    'M': ['10001', '11011', '10101', '10001', '10001', '10001', '10001'],
     'N': ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+    'O': ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
     'P': ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
     'R': ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+    'S': ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+    'T': ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+    'U': ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
     'V': ['10001', '10001', '10001', '10001', '01010', '01010', '00100'],
+    'W': ['10001', '10001', '10001', '10101', '10101', '10101', '01010'],
     'a': ['00000', '00000', '01110', '00001', '01111', '10001', '01111'],
+    'b': ['10000', '10000', '11110', '10001', '10001', '10001', '11110'],
+    'c': ['00000', '00000', '01110', '10000', '10000', '10000', '01110'],
     'd': ['00001', '00001', '01111', '10001', '10001', '10001', '01111'],
     'e': ['00000', '00000', '01110', '10001', '11111', '10000', '01110'],
+    'f': ['00111', '00100', '01110', '00100', '00100', '00100', '00100'],
+    'g': ['00000', '00000', '01111', '10001', '01111', '00001', '01110'],
     'i': ['00100', '00000', '01100', '00100', '00100', '00100', '01110'],
+    'k': ['10000', '10010', '10100', '11000', '10100', '10010', '10001'],
     'l': ['01100', '00100', '00100', '00100', '00100', '00100', '01110'],
+    'm': ['00000', '00000', '11010', '10101', '10101', '10001', '10001'],
+    'n': ['00000', '00000', '11001', '10101', '10011', '10001', '10001'],
     'o': ['00000', '00000', '01110', '10001', '10001', '10001', '01110'],
     'p': ['00000', '00000', '11110', '10001', '11110', '10000', '10000'],
     'r': ['00000', '00000', '10110', '11000', '10000', '10000', '10000'],
     's': ['00000', '00000', '01111', '10000', '01110', '00001', '11110'],
     't': ['00100', '00100', '11111', '00100', '00100', '00100', '00011'],
     'u': ['00000', '00000', '10001', '10001', '10001', '10011', '01101'],
-    'y': ['00000', '00000', '10001', '10001', '01111', '00001', '01110'],
-    'U': ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-    'b': ['10000', '10000', '11110', '10001', '10001', '10001', '11110'],
-    'c': ['00000', '00000', '01110', '10000', '10000', '10000', '01110'],
-    'f': ['00111', '00100', '01110', '00100', '00100', '00100', '00100'],
-    'k': ['10000', '10010', '10100', '11000', '10100', '10010', '10001'],
-    'n': ['00000', '00000', '11001', '10101', '10011', '10001', '10001'],
     'w': ['00000', '00000', '10001', '10001', '10101', '10101', '01010'],
     'x': ['00000', '00000', '10001', '01010', '00100', '01010', '10001'],
+    'y': ['00000', '00000', '10001', '10001', '01111', '00001', '01110'],
     'z': ['00000', '00000', '11111', '00010', '00100', '01000', '11111']
 };
 
-var ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'Lustro' },
+var ROOT_ITEMS = [
+    { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone' },
     { name: 'rdp', title: 'RDP', hint: 'Pulpit' },
     { name: 'vnc', title: 'VNC', hint: 'Pulpit' },
     { name: 'host', title: 'Adres', hint: 'Host' }
 ];
+
+var AIRPLAY_ITEMS = [
+    { name: 'air-start', title: 'Start', hint: 'Wlacz lustro' },
+    { name: 'air-stop', title: 'Stop', hint: 'Wylacz UxPlay' },
+    { name: 'air-name', title: 'Nazwa', hint: 'G21' },
+    { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store' },
+    { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne' }
+];
+
+var ITEMS = ROOT_ITEMS;
+var SCREENS = {
+    root: ROOT_ITEMS,
+    airplay: AIRPLAY_ITEMS
+};
 
 function message(type, payload) {
     var len = payload ? payload.length : 0;
@@ -154,7 +193,7 @@ FrameBuilder.prototype.bytes = function () {
     return Buffer.concat(this.parts);
 };
 
-function menuLayout(width, height, count, detail) {
+function menuLayout(width, height, count, detail, heading) {
     var boxW = width - CONTENT.x - 20;
     var boxH = height - CONTENT.y;
     var ox = 0;
@@ -166,17 +205,17 @@ function menuLayout(width, height, count, detail) {
         boxW = width;
         boxH = height;
     }
-    var gap = 12;
-    var top = 24;
-    var statusH = detail ? 48 : 0;
+    var gap = 10;
+    var top = heading ? 56 : 24;
+    var statusH = detail ? 40 : 0;
     var rowH = Math.floor((boxH - top - statusH - gap * count) / count);
     var rows = [];
     var i;
-    if (rowH > 120) {
-        rowH = 120;
+    if (rowH > 110) {
+        rowH = 110;
     }
-    if (rowH < 72) {
-        rowH = 72;
+    if (rowH < 64) {
+        rowH = 64;
     }
     for (i = 0; i < count; i += 1) {
         rows.push({
@@ -186,26 +225,43 @@ function menuLayout(width, height, count, detail) {
             h: rowH
         });
     }
-    return { ox: ox, oy: oy, boxW: boxW, boxH: boxH, rowH: rowH, gap: gap, top: top, rows: rows };
+    return {
+        ox: ox,
+        oy: oy,
+        boxW: boxW,
+        boxH: boxH,
+        rowH: rowH,
+        gap: gap,
+        top: top,
+        rows: rows,
+        heading: heading || ''
+    };
 }
 
-function buildFrame(items, selected, width, height, detail) {
+function buildFrame(items, selected, width, height, detail, heading) {
     var draw = new FrameBuilder();
-    var lay = menuLayout(width, height, items.length, detail);
+    var lay = menuLayout(width, height, items.length, detail, heading);
     var i;
     var row;
+    var titleScale;
+    var hintScale;
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
+    if (lay.heading) {
+        draw.text(lay.heading, lay.ox + 72, lay.oy + 16, 5, HINT);
+    }
     for (i = 0; i < items.length; i += 1) {
         row = lay.rows[i];
+        titleScale = lay.rowH >= 90 ? 6 : 5;
+        hintScale = lay.rowH >= 90 ? 4 : 3;
         if (i === selected) {
             draw.rect(row.x, row.y, row.w, row.h, BAR);
         }
-        draw.text(items[i].title, lay.ox + 72, row.y + 28, 6, INK);
-        draw.text(items[i].hint, lay.ox + 72, row.y + 78, 4, HINT);
+        draw.text(items[i].title, lay.ox + 72, row.y + Math.floor(lay.rowH * 0.22), titleScale, INK);
+        draw.text(items[i].hint, lay.ox + 72, row.y + Math.floor(lay.rowH * 0.58), hintScale, HINT);
     }
     if (detail) {
-        draw.text(detail, lay.ox + 72, lay.oy + lay.top + items.length * (lay.rowH + lay.gap) + 8, 5, INK);
+        draw.text(detail, lay.ox + 72, lay.oy + lay.top + items.length * (lay.rowH + lay.gap) + 4, 4, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -236,7 +292,11 @@ function encoderStep(previous, next) {
 function createMenuSurface(opts) {
     var note = opts.note || function () {};
     var choose = opts.choose || function () {};
-    var items = opts.items || ITEMS;
+    var screenName = 'root';
+    var items = (opts.items || SCREENS.root).map(function (item) {
+        return { name: item.name, title: item.title, hint: item.hint };
+    });
+    var heading = '';
     var paths = opts.sockets || ['/run/mgu-renderd/renderd.sock', '/run/mgu-render/render.sock'];
     var selected = 0;
     var shown = false;
@@ -304,7 +364,7 @@ function createMenuSurface(opts) {
         sendShow(true);
         sendGrab(true);
         sendClaim();
-        var built = buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail);
+        var built = buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
         write(built.frame);
         if (!noted) {
             noted = true;
@@ -365,7 +425,7 @@ function createMenuSurface(opts) {
     }
 
     function hitRow(x, y) {
-        var lay = menuLayout(screen.w || 1920, screen.h || 720, items.length, !!detail);
+        var lay = menuLayout(screen.w || 1920, screen.h || 720, items.length, !!detail, heading);
         var i;
         var row;
         for (i = 0; i < lay.rows.length; i += 1) {
@@ -375,6 +435,39 @@ function createMenuSurface(opts) {
             }
         }
         return -1;
+    }
+
+    function cloneScreen(name) {
+        var source = SCREENS[name] || SCREENS.root;
+        return source.map(function (item) {
+            return { name: item.name, title: item.title, hint: item.hint };
+        });
+    }
+
+    function setScreen(name) {
+        var next = String(name || 'root');
+        if (!SCREENS[next]) {
+            next = 'root';
+        }
+        screenName = next;
+        items = cloneScreen(next);
+        selected = 0;
+        heading = next === 'airplay' ? 'AirPlay' : '';
+        noted = false;
+        paint();
+        return screenName;
+    }
+
+    function setItemHint(name, text) {
+        var i;
+        for (i = 0; i < items.length; i += 1) {
+            if (items[i].name === name) {
+                items[i].hint = String(text || '');
+                paint();
+                return true;
+            }
+        }
+        return false;
     }
 
     function move(delta) {
@@ -531,6 +624,9 @@ function createMenuSurface(opts) {
         },
         move: move,
         press: press,
+        setScreen: setScreen,
+        setItemHint: setItemHint,
+        screen: function () { return screenName; },
         setStatus: function (text) {
             var next = String(text || '');
             if (next === detail) {
@@ -545,6 +641,9 @@ function createMenuSurface(opts) {
 
 module.exports = {
     ITEMS: ITEMS,
+    ROOT_ITEMS: ROOT_ITEMS,
+    AIRPLAY_ITEMS: AIRPLAY_ITEMS,
+    SCREENS: SCREENS,
     message: message,
     buildFrame: buildFrame,
     encoderStep: encoderStep,
