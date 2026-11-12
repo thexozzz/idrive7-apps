@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.23
+
+- AirPlay oglasza sie na Wi-Fi auta. Sam hotspot iPhone nie wystarcza do wykrycia G21 w Lustrze ekranu.
+- Status pod menu mowi `podlacz do auta`, gdy uplink to Personal Hotspot telefonu.
+
 ## 0.1.22
 
 - Narzędzie AirPlay dostarcza UxPlay. Poprzednia instalacja miała tylko skrypt, więc ekran pokazywał UxPlay brak.

@@ -54,6 +54,10 @@ var STATUS_TEXT = {
     'starting': 'UxPlay start',
     'running': 'UxPlay dziala',
     'missing': 'UxPlay brak',
+    'phone-is-ap': 'podlacz do auta',
+    'join-car-wifi': 'podlacz do auta',
+    'mdns-brak': 'brak dns',
+    'uxplay-exit': 'UxPlay stop',
     'idle': 'AirPlay idle',
     'waiting': 'AirPlay idle',
     'unknown': 'AirPlay idle'
@@ -491,8 +495,16 @@ AirPlayApp.prototype._write = function (name, text) {
 
 AirPlayApp.prototype._paint = function (choice, session) {
     if (!choice.ok) {
-        this._write('airNet', 'Wi-Fi Store: brak polaczenia');
-        this._write('airAddr', 'AirPlay czeka na siec, do ktorej jest podlaczony MGU Store');
+        if (choice.reason === 'phone-is-ap' || choice.reason === 'join-car-wifi') {
+            this._write('airNet', 'iPhone ma wejsc w Wi-Fi auta');
+            this._write('airAddr', 'Potem Lustro ekranu: ' + this._desk.airplayName());
+        } else if (choice.reason === 'mdns-brak') {
+            this._write('airNet', choice.ssid ? ('Wi-Fi: ' + choice.ssid) : 'AirPlay');
+            this._write('airAddr', 'Brak avahi / mDNS na jednostce');
+        } else {
+            this._write('airNet', 'Wi-Fi Store: brak polaczenia');
+            this._write('airAddr', 'AirPlay czeka na Wi-Fi auta albo wspolne Wi-Fi');
+        }
         this._write('airState', choice.reason);
         return;
     }
@@ -518,11 +530,6 @@ AirPlayApp.prototype._watchNetwork = function () {
 AirPlayApp.prototype._sync = function () {
     var snap = uplink.readUplink();
     var choice = uplink.selectStoreWifi(snap.status, snap.lease);
-    if (!choice.ok) {
-        this._paint(choice, { state: 'idle', detail: choice.reason });
-        this._tellMenu(choice.reason);
-        return;
-    }
     var text = '';
     try {
         text = fs.readFileSync(RECEIVER_STATUS, 'utf8');
@@ -535,16 +542,25 @@ AirPlayApp.prototype._sync = function () {
     }
     this._sessions.onVehicle();
     var receiver = uplink.readReceiverStatus(text);
-    if (receiver.mode === 'running') {
-        this._takeFrame();
+    if (this._chosen === 'airplay' || this._sessions.active() === 'airplay') {
+        var air = uplink.selectAirplayAnnounce(receiver, choice);
+        if (receiver.mode === 'running') {
+            this._takeFrame();
+        }
+        this._paint(air, { state: receiver.mode || 'waiting', detail: receiver.mode });
+        if (this._sessions.active() === 'airplay') {
+            this._tellMenu(receiver.mode === 'running'
+                ? 'running'
+                : (STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'starting' : air.reason)));
+        }
+        return;
     }
-    var detail = receiver.mode === 'running'
-        ? 'UxPlay G21'
-        : (receiver.mode === 'missing' ? 'brak programu uxplay' : receiver.mode);
-    this._paint(choice, { state: receiver.mode || 'waiting', detail: detail });
-    if (this._sessions.active() === 'airplay') {
-        this._tellMenu(receiver.mode === 'running' ? 'running' : (receiver.mode === 'missing' ? 'missing' : 'starting'));
+    if (!choice.ok) {
+        this._paint(choice, { state: 'idle', detail: choice.reason });
+        this._tellMenu(choice.reason);
+        return;
     }
+    this._paint(choice, { state: receiver.mode || 'waiting', detail: receiver.mode });
 };
 
 AirPlayApp.prototype._takeFrame = function () {

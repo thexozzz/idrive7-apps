@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.1",
-  "title": "AirPlay na Wi-Fi Store",
-  "description": "Wpuszcza AirPlay tylko z podsieci Wi-Fi, do ktorej jest podlaczony MGU Store. Dostarcza UxPlay i biblioteki.",
+  "version": "0.1.2",
+  "title": "AirPlay na Wi-Fi auta",
+  "description": "Oglasza UxPlay na hotspocie auta (albo wspolnym Wi-Fi). Blokuje sama siec hotspotu iPhone jako jedyna sciezke wykrywania.",
   "uninstallable": true,
   "mguHmi": [
     "ID7"

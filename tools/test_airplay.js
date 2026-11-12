@@ -16,6 +16,9 @@ var choice = uplink.selectStoreWifi(wifi, lease);
 assert.strictEqual(choice.ok, true);
 assert.strictEqual(choice.iface, 'wlan1');
 assert.strictEqual(choice.ssid, 'iPhone');
+assert.strictEqual(choice.phoneHotspot, true);
+assert.strictEqual(uplink.isPhoneHotspotIp('172.20.10.2'), true);
+assert.strictEqual(uplink.isPhoneHotspotIp('172.16.222.97'), false);
 
 assert.strictEqual(uplink.selectStoreWifi({ device: { kind: 'usb' }, wifi: { link: 'online' } }, lease).reason, 'uplink-not-wifi');
 assert.strictEqual(uplink.selectStoreWifi({ device: { kind: 'wifi' }, wifi: { link: 'scanning' } }, lease).reason, 'wifi-down');
@@ -35,10 +38,21 @@ var setup = airplay.replyFor('SETUP rtsp://172.20.10.2/stream RTSP/1.0\r\nCSeq: 
 assert.strictEqual(setup.state, 'streaming');
 assert.ok(setup.raw.indexOf('CSeq: 3') !== -1);
 
-var receiver = uplink.readReceiverStatus('running|iPhone|172.20.10.2');
+var receiver = uplink.readReceiverStatus('running|BMW|172.16.222.97');
 assert.strictEqual(receiver.mode, 'running');
-assert.strictEqual(receiver.ssid, 'iPhone');
-assert.strictEqual(receiver.ip, '172.20.10.2');
+assert.strictEqual(receiver.ssid, 'BMW');
+assert.strictEqual(receiver.ip, '172.16.222.97');
+
+var phoneBlock = uplink.selectAirplayAnnounce(
+    uplink.readReceiverStatus('phone-is-ap|Karolphone|172.20.10.2'),
+    choice
+);
+assert.strictEqual(phoneBlock.ok, false);
+assert.strictEqual(phoneBlock.reason, 'phone-is-ap');
+
+var carOk = uplink.selectAirplayAnnounce(receiver, { ok: false, reason: 'uplink-not-wifi' });
+assert.strictEqual(carOk.ok, true);
+assert.strictEqual(carOk.ip, '172.16.222.97');
 
 var script = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'g21-airplay-open'), 'utf8');
 assert.ok(script.indexOf('-n "$shown"') !== -1);
@@ -51,6 +65,12 @@ assert.ok(script.indexOf('tcp dport 7100 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7000 accept') !== -1);
 assert.ok(script.indexOf('tcp dport 7001 accept') !== -1);
 assert.ok(script.indexOf('udp dport 7011 accept') !== -1);
+assert.ok(script.indexOf('172.16.222.97') !== -1);
+assert.ok(script.indexOf('phone-is-ap') !== -1);
+assert.ok(script.indexOf('is_phone_hotspot_ip') !== -1);
+assert.ok(script.indexOf('ensure_mdns') !== -1);
+assert.ok(script.indexOf('find_car_ap') !== -1);
 assert.ok(script.indexOf('socnet') === -1);
+assert.ok(script.indexOf('\r') === -1);
 
-console.log('airplay: receiver binds only when MGU Store uplink is Wi-Fi');
+console.log('airplay: announce on car AP, block iPhone hotspot as only path');
