@@ -54,7 +54,7 @@ walk(root, files);
 files.sort(function (a, b) { return a.path.localeCompare(b.path); });
 var meta = JSON.parse(fs.readFileSync(path.join(root, 'component.json'), 'utf8'));
 meta.version = '0.1.10';
-meta.description = 'UxPlay bez -fs (waylandsink MGU nie ma fullscreen); avahi overlay.';
+meta.description = 'Backend AirPlay (odbiornik + avahi), nie osobna aplikacja UxPlay.';
 meta.files = files;
 fs.writeFileSync(path.join(root, 'component.json'), JSON.stringify(meta, null, 2) + '\n');
 console.log('files', files.length);

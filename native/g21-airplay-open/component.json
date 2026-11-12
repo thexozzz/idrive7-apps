@@ -3,7 +3,7 @@
   "kind": "tool",
   "version": "0.1.10",
   "title": "AirPlay na hotspot iPhone",
-  "description": "UxPlay bez -fs (waylandsink MGU nie ma fullscreen); avahi overlay.",
+  "description": "Backend AirPlay (odbiornik + avahi), nie osobna aplikacja UxPlay.",
   "uninstallable": true,
   "mguHmi": [
     "ID7"

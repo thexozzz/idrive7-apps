@@ -62,11 +62,11 @@ var AIR_STATUS_TEXT = {
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'brak-wifi': 'brak wifi',
-    'starting': 'UxPlay start',
-    'running': 'UxPlay dziala',
-    'missing': 'UxPlay brak',
+    'starting': 'AirPlay start',
+    'running': 'AirPlay dziala',
+    'missing': 'brak odbiornika',
     'mdns-brak': 'brak dns',
-    'uxplay-exit': 'UxPlay stop',
+    'uxplay-exit': 'AirPlay stop',
     'idle': 'AirPlay off',
     'waiting': 'gotowe do lustra',
     'unknown': 'AirPlay'
@@ -686,8 +686,8 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         ? ((air.ssid ? air.ssid + ' ' : '') + (air.ip || ''))
         : (air && air.reason ? String(air.reason) : 'brak wifi');
     var live = receiver && receiver.mode === 'running' ? 'dziala' : (receiver && receiver.mode ? receiver.mode : 'idle');
-    this._menu.setItemHint('air-start', live === 'dziala' ? 'UxPlay dziala' : 'Wlacz lustro');
-    this._menu.setItemHint('air-stop', live === 'dziala' ? 'Wylacz teraz' : 'Sesja off');
+    this._menu.setItemHint('air-start', live === 'dziala' ? 'Lustro dziala' : 'Wlacz lustro');
+    this._menu.setItemHint('air-stop', live === 'dziala' ? 'Wylacz lustro' : 'Sesja off');
     this._menu.setItemHint('air-name', name);
     this._menu.setItemHint('air-info', net.slice(0, 28));
 };

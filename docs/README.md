@@ -10,7 +10,7 @@ Fakty poniżej mają źródło. Zdania bez potwierdzenia na tym egzemplarzu są 
 | [01-platforma.md](01-platforma.md) | Sprzęt i platforma OAP opisane przez autorów aplikacji |
 | [02-oap-sdk.md](02-oap-sdk.md) | Skąd bierze się SDK i czego nie publikujemy |
 | [03-publikacja.md](03-publikacja.md) | Instalacja i aktualizacja z gałęzi oraz trzy układy Store |
-| [airplay-integracja.md](airplay-integracja.md) | Audyt UxPlay i cluster-render oraz granica lokalnych testów |
+| [airplay-integracja.md](airplay-integracja.md) | Integracja AirPlay (backend odbiornika) i cluster-render |
 | [04-renderery.md](04-renderery.md) | RHMI, mgu-render, cluster-render, HUD |
 | [05-testy.md](05-testy.md) | Co da się sprawdzić bez samochodu |
 | [06-bezpieczenstwo.md](06-bezpieczenstwo.md) | Granice tego repozytorium |

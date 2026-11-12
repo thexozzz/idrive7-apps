@@ -1,6 +1,6 @@
 # Pulpit zdalny w g21_airplay
 
-Rozszerzenie istniejącej aplikacji `g21_airplay`, nie nowa aplikacja. AirPlay zostaje na UxPlay. RDP i VNC dochodzą obok niego. W danej chwili działa jedna sesja.
+Rozszerzenie istniejącej aplikacji `g21_airplay`, nie nowa aplikacja. AirPlay to integracja lustra iPhone (silnik odbiornika pod spodem); RDP i VNC dochodzą obok. W danej chwili działa jedna sesja.
 
 ## Licencje
 
@@ -12,7 +12,7 @@ Moonride (`JustAnotherPU/moonride`, commit `d1073cef7c5be72fbbd2cdeb441e874342ae
 
 Moonride włącza touchpad zapisem `ccsControlTouchCCU = TOUCH_AKTIV` i sam opisuje skutek uboczny: po zabiciu procesu pokrętło może zostać w trybie pisania. Ten projekt tego zapisu nie wysyła. Manifest ma tylko odczyt.
 
-UxPlay zostaje na GPL-3.0. Klient RDP jest własnym programem `g21-rdp` zlinkowanym z FreeRDP 2.2.0 (Apache-2.0, pakiet Ubuntu 18.04 `freerdp2`). Klient VNC jest własną implementacją RFB 3.8 w `vnc_client.js` i nie łączy LibVNC.
+Silnik AirPlay (UxPlay) zostaje na GPL-3.0 i nie jest osobną aplikacją w menu — tylko backend. Klient RDP jest własnym programem `g21-rdp` zlinkowanym z FreeRDP 2.2.0 (Apache-2.0, pakiet Ubuntu 18.04 `freerdp2`). Klient VNC jest własną implementacją RFB 3.8 w `vnc_client.js` i nie łączy LibVNC.
 
 ## Kafelek
 
@@ -24,7 +24,7 @@ Widżety listy na tym G21 otwierają stronę i zostają puste. Odczyt 2026-11-12
 
 ## Postój
 
-AirPlay startuje bez próbki prędkości i nie jest gaszony przez jazdę. RDP i VNC nadal startują tylko po próbce i tylko na postoju. Brak próbki blokuje te dwa (`speed-unknown`). Jazda albo utrata próbki rozłącza ich aktywną sesję. Usługa `g21-airplay-open` uruchamia UxPlay i avahi, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow` i uplink Store jest Wi-Fi. iPhone może być hostem tego hotspotu.
+AirPlay startuje bez próbki prędkości i nie jest gaszony przez jazdę. RDP i VNC nadal startują tylko po próbce i tylko na postoju. Brak próbki blokuje te dwa (`speed-unknown`). Jazda albo utrata próbki rozłącza ich aktywną sesję. Usługa `g21-airplay-open` uruchamia odbiornik AirPlay (backend) i avahi, gdy aplikacja zapisze `airplay` w `/run/g21-session/allow` i uplink Store jest Wi-Fi. iPhone może być hostem tego hotspotu.
 
 ## Protokoły
 

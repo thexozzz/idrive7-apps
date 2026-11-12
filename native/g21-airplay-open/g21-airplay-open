@@ -1,10 +1,11 @@
 #!/bin/sh
-# Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) on the Wi-Fi network
-# MGU Store is using, including an iPhone Personal Hotspot host. The iPhone can
-# be the AP; the head unit is the AirPlay receiver client on that LAN.
+# AirPlay receiver integration for g21_airplay — not a standalone UxPlay app.
+# Starts the bundled AirPlay engine (UxPlay binary, GPL-3.0) on the Wi-Fi that
+# MGU Store uses, including an iPhone Personal Hotspot host. The phone can be
+# the AP; the head unit is the AirPlay sink on that LAN.
 #
 # DNS-SD needs a running avahi-daemon (bundled next to this script when the
-# unit has none). Without it UxPlay cannot register and the phone never sees G21.
+# unit has none). Without it the receiver cannot register and the phone never sees G21.
 #
 # Inbound accept, only from that lease subnet and only on that interface:
 # UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p legacy ports

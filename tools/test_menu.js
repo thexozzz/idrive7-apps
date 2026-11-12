@@ -44,6 +44,7 @@ assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-start');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'Lustro');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'airplay');
 assert.strictEqual(menu.AIRPLAY_ITEMS[1].title, 'Stop AP');
+assert.strictEqual(menu.AIRPLAY_ITEMS[1].hint, 'Wylacz lustro');
 assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
 assert.ok(menu.SCREENS.airplay);
 var rdp = menu.buildFrame(menu.RDP_ITEMS, 0, 1920, 720, 'RDP lacze', 'RDP');

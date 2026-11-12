@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.37
+
+- AirPlay to integracja lustra, nie osobna aplikacja UxPlay: statusy i menu mowia AirPlay/lustro; silnik zostaje tylko w backendzie.
+
 ## 0.1.36
 
 - Narzedzie 0.1.10: UxPlay bez `-fs` (MGU waylandsink nie ma fullscreen) — naprawa wykrywania G21 na iPhonie.

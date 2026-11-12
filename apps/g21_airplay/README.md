@@ -1,13 +1,15 @@
 # G21 AirPlay
 
-Start na tej jednostce idzie tą samą ścieżką co MGU Store: `AppBookmarks`, potem `WakeUpOnDemand`, potem `Provisioning`. Każdy brakujący plik interfejsu przerywa `OnlineApp.start`. Potwierdzone 12 listopada 2026 w logu startu: po dodaniu zakładek start padł na `de_bmw_infotainment_telematic_oap_WakeUpOnDemand.json`.
+Aplikacja iDrive 7: lustro AirPlay oraz pulpit RDP/VNC. Start idzie ścieżką Store (`AppBookmarks` → `WakeUpOnDemand` → `Provisioning`).
 
-Na postoju aplikacja ma trzy kafelki: AirPlay, RDP i VNC. Działa jedna sesja. Bez odczytanej prędkości żadna się nie uruchamia. Szczegóły są w `docs/pulpit-zdalny.md`.
+Na postoju widać trzy wejścia: AirPlay, RDP i VNC. Działa jedna sesja. Szczegóły: `docs/pulpit-zdalny.md`.
 
-Aplikacja nie otwiera własnego portu AirPlay. Odbiornikiem jest [UxPlay](https://github.com/FDH2/UxPlay) 1.73.7 (GPL-3.0). Usługa `g21-airplay-open` startuje go poleceniem `uxplay -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720`, gdy MGU Store jest na Wi-Fi, i kończy go, gdy to Wi-Fi znika.
+## AirPlay
 
-Porty wpuszczane z podsieci tej dzierżawy: UDP 5353 oraz zestaw legacy UxPlay (`-p`): TCP 7100, 7000, 7001 i UDP 6000, 6001, 7011. Źródło zestawu: README UxPlay, opcja `-p`.
+To nie jest osobna aplikacja desktopowa UxPlay. `g21_airplay` to integracja AirPlay w aucie: iPhone widzi odbiornik **G21**, obraz idzie na Wayland jednostki. Pod spodem usługa `g21-airplay-open` odpala silnik odbiornika (binarka z [UxPlay](https://github.com/FDH2/UxPlay) 1.73.7, GPL-3.0) tylko jako backend DNS-SD/RAOP + dekoder — bez trybu okna/fullscreen jak w repo FDH2.
 
-Źródła UxPlay są w `third_party/UxPlay` (tag v1.73.7, commit `df67c212a433`, GPL-3.0). Gotowy program dla jednostki leży obok usługi: `native/g21-airplay-open/uxplay` uruchamia `uxplay.bin` z bibliotekami z `lib/` (glibc 2.27, GStreamer 1.14). Usługa sama ustawia ścieżki do tych bibliotek.
+Start backendu: Wi-Fi MGU Store + wybór Lustro w menu. Porty z podsieci dzierżawy: UDP 5353 oraz legacy `-p` (TCP 7100/7000/7001, UDP 6000/6001/7011).
 
-Obraz ma iść na kompozytor Wayland jednostki (`waylandsink`, `XDG_RUNTIME_DIR=/run/wayland`). Że to okno widać na centralnym ekranie tego G21, nie jest jeszcze potwierdzone.
+Źródła silnika: `third_party/UxPlay` (tag v1.73.7). Na jednostce: `native/g21-airplay-open/` (`uxplay` → `uxplay.bin` przez `run-elf`, avahi, `lib/`).
+
+Obraz: `waylandsink`, `XDG_RUNTIME_DIR=/run/wayland`. Widoczność na centralnym ekranie tego G21 — hipoteza H13.

@@ -313,7 +313,7 @@ var ROOT_ITEMS = [
 
 var AIRPLAY_ITEMS = [
     { name: 'air-start', title: 'Lustro', hint: 'Wlacz AirPlay', icon: 'airplay' },
-    { name: 'air-stop', title: 'Stop AP', hint: 'Wylacz UxPlay', icon: 'stop' },
+    { name: 'air-stop', title: 'Stop AP', hint: 'Wylacz lustro', icon: 'stop' },
     { name: 'air-name', title: 'Nazwa', hint: 'G21', icon: 'tag' },
     { name: 'air-info', title: 'Siec', hint: 'Wi-Fi Store', icon: 'wifi' },
     { name: 'air-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' }

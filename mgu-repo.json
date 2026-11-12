@@ -29,7 +29,7 @@
       "path": "native/g21-airplay-open",
       "version": "0.1.10",
       "title": "AirPlay na hotspot iPhone",
-      "description": "UxPlay bez -fs (MGU waylandsink); avahi overlay.",
+      "description": "Backend AirPlay (odbiornik + avahi), nie osobna aplikacja UxPlay.",
       "uninstallable": true,
       "mguHmi": ["ID7"]
     }
