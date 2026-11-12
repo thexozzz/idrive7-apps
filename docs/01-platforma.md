@@ -28,4 +28,4 @@ Szablon `g21_hello` używa tylko pierwszej drogi.
 
 ## Hipoteza
 
-Że ten G21 ma ten sam układ katalogów i ten sam Node 8, wynika z opisu MGU ID7, nie z odczytu tej sztuki. Potwierdza to dopiero `scripts/diagnose.ps1` po osobnej zgodzie na połączenie odczytowe.
+Odczyt 2026-11-12 (SSH, tylko odczyt): `Linux 4.14.198-apl x86_64`, `NAME="BMW MGU"` / `VERSION="P18_23w44.2-1-3"` / `VARIANT_ID="mgu-high"`, Node `v8.16.2`. Na jednostce jednocześnie działają CarPlay (TCP 7000) i narzędzie `airplay-rx` (TCP 7101).

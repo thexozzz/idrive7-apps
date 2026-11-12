@@ -1,6 +1,7 @@
 'use strict';
 
 var fs = require('fs');
+var path = require('path');
 var OnlineApp = require('oap-sdk/src/core/OnlineApp.js');
 var logging = require('oap-sdk/src/logging/logging');
 var uplink = require('./uplink.js');
@@ -437,7 +438,7 @@ AirPlayApp.prototype._secret = function (kind) {
         return text;
     }
     try {
-        return fs.readFileSync('/var/opt/g21_airplay/' + key + '.secret', 'utf8').replace(/\s+$/, '');
+        return fs.readFileSync(path.join(this._store.dir, key + '.secret'), 'utf8').replace(/\s+$/, '');
     } catch (err) {
         return '';
     }

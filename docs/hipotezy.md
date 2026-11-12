@@ -25,6 +25,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H28 | Odbiornik MS-MICE (`g21-mice` + `_display._tcp`) pokazuje G21 w Win+K na PC w tej samej Wi-Fi Store | po Update narzedzia 0.1.11+ i Wlacz w Windows: PC widzi G21, status `Windows dziala`, obraz na srodku |
 | H29 | Pluginy GST RTP/mpegts (dokladane do narzedzia) laduja sie z bundlowanym GStreamer 1.14 na MGU | po Win+K: brak bledu gst w `/var/log/g21-mice.log`, obraz zamiast czarnego ekranu |
 | H30 | Ekran `stream` (CLEAR + jeden kafelek Zakoncz) nie zasłania `waylandsink` / GST MS-MICE po zestrojeniu | po Update: po Włacz i parze widać stream z urządzenia; Zakoncz kończy sesję |
+| H31 | UxPlay `-p 7400` omija zajęte TCP 7000 (CarPlay) i 7101 (`airplay-rx`); zapis ustawień w `data/g21_airplay` omija EACCES na `/var/opt` | po Update narzędzia 0.1.12+ i app: brak errno 98 w `g21-uxplay.log`, profile RDP zapisują się, Win+K ładuje RTP |
 | H30 | CLAIM bez bramki front + pelny prostokat ekranu daje TOUCH na kafelkach menu | po Update: tap na Polacz/Dodaj wybiera kafelek; w logu `menu-touch` |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |

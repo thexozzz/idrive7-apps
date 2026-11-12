@@ -8,8 +8,10 @@
 # unit has none). Without it the receiver cannot register and the phone never sees G21.
 #
 # Inbound accept, only from that lease subnet and only on that interface:
-# UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p legacy ports
-# TCP 7100, 7000, 7001 and UDP 6000, 6001, 7011.
+# UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p 7400 block.
+# On this MGU CarPlay already owns TCP 7000 and airplay-rx owns 7101;
+# legacy UxPlay ports (7100/7000/7001) fail with errno 98 (EADDRINUSE).
+# -p 7400 uses TCP 7400-7402 and UDP 7403-7404.
 set -u
 
 TABLE=g21_airplay
@@ -120,12 +122,8 @@ table inet $TABLE {
         type filter hook input priority -10; policy accept;
         iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
         iifname "$iface" ip saddr $net udp dport 5353 accept
-        iifname "$iface" ip saddr $net tcp dport 7100 accept
-        iifname "$iface" ip saddr $net tcp dport 7000 accept
-        iifname "$iface" ip saddr $net tcp dport 7001 accept
-        iifname "$iface" ip saddr $net udp dport 6000 accept
-        iifname "$iface" ip saddr $net udp dport 6001 accept
-        iifname "$iface" ip saddr $net udp dport 7011 accept
+        iifname "$iface" ip saddr $net tcp dport 7400-7402 accept
+        iifname "$iface" ip saddr $net udp dport 7403-7404 accept
         iifname "$iface" ip saddr $net tcp dport 1235 accept
         iifname "$iface" ip saddr $net tcp dport 7250 accept
         iifname "$iface" ip saddr $net udp dport 1028 accept
@@ -583,11 +581,12 @@ start_ux() {
     : > "$UXLOG"
     # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
+    # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # shellcheck disable=SC2086
     if [ -n "$mac_args" ]; then
-        "$bin" -n "$shown" -nh -p $mac_args -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+        "$bin" -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
     else
-        "$bin" -n "$shown" -nh -p -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
+        "$bin" -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as alsasink -s 1920x720 >>"$UXLOG" 2>&1 &
     fi
     UXPID=$!
     sleep 2

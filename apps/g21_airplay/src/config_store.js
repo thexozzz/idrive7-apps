@@ -4,7 +4,9 @@ var fs = require('fs');
 var path = require('path');
 var credentials = require('./credentials.js');
 
-var DEFAULT_DIR = '/var/opt/g21_airplay';
+// OAP apps on this MGU run as uid oap_NNNN and cannot mkdir under /var/opt.
+// Persist next to the app data tree (writable) or fall back to /tmp.
+var DEFAULT_DIR = '/tmp/g21_airplay';
 
 function ensureDir(dir) {
     try {
@@ -16,8 +18,42 @@ function ensureDir(dir) {
     }
 }
 
+function canUseDir(dir) {
+    if (!dir) {
+        return false;
+    }
+    try {
+        ensureDir(dir);
+        var probe = path.join(dir, '.g21-write-probe');
+        fs.writeFileSync(probe, 'ok');
+        fs.unlinkSync(probe);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+function resolveDataDir(preferred) {
+    var i;
+    var candidates = [
+        preferred,
+        process.env.G21_AIRPLAY_DATA,
+        path.join(process.cwd(), 'data', 'g21_airplay'),
+        path.join(process.cwd(), '..', 'data', 'g21_airplay'),
+        path.join(process.cwd(), 'data'),
+        path.join(process.cwd(), '..', 'data'),
+        DEFAULT_DIR
+    ];
+    for (i = 0; i < candidates.length; i += 1) {
+        if (canUseDir(candidates[i])) {
+            return candidates[i];
+        }
+    }
+    return DEFAULT_DIR;
+}
+
 function createConfigStore(opts) {
-    var base = (opts && opts.dir) || DEFAULT_DIR;
+    var base = resolveDataDir(opts && opts.dir);
     var settingsFile = path.join(base, 'desktop.json');
     var secrets = {
         rdp: path.join(base, 'rdp.secret'),
