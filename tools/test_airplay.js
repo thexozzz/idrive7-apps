@@ -56,7 +56,8 @@ assert.ok(script.indexOf('-n "$shown"') !== -1);
 assert.ok(script.indexOf('name=G21') !== -1);
 assert.ok(script.indexOf('session-off') !== -1);
 assert.ok(script.indexOf('-nh') !== -1);
-assert.ok(script.indexOf('-pw') !== -1);
+assert.ok(script.indexOf('-pin') !== -1);
+assert.ok(script.indexOf('-d 1') !== -1);
 assert.ok(script.indexOf('/run/g21-airplay/pin') !== -1);
 assert.ok(script.indexOf('CLIENT MUST NOW ENTER PIN') !== -1);
 assert.ok(script.indexOf(': > "$PINFILE"') === -1);
@@ -98,7 +99,7 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.30');
+assert.strictEqual(component.version, '0.1.31');
 assert.ok(script.indexOf('ip route replace "$net"') !== -1);
 assert.ok(script.indexOf('224.0.0.251/32') !== -1);
 assert.ok(script.indexOf('priority -50') !== -1);

@@ -952,8 +952,9 @@ start_ux() {
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
-    # -pw NNNN: iPhone shows a password field (enter this code). -pin alone often
-    # skips a visible prompt on modern iOS after the first glance; -pw is reliable.
+    # -pin NNNN: Apple Screen Mirroring pairing (PAIR-PIN-START). -pw digest often
+    # never shows a prompt on modern iOS and the connect fails before any UI.
+    # -d 1: debug to UXLOG (line-buffered via stdbuf when available).
     # Write PINFILE before start so the stream window can show the code immediately.
     # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
     # applet, so plain `setsid` aborted start with "not found" and left no listener.
@@ -965,16 +966,30 @@ start_ux() {
     printf '%s\n' "$pin" > "$PINFILE"
     chmod 666 "$PINFILE" 2>/dev/null || true
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pw "$pin"
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin" -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pw "$pin"
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s 1920x720 -pin "$pin" -d 1
     fi
+    printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
+    # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG
+    # (plain redirect is fully buffered; empty logs hide DNS-SD / connect errors).
+    ux_wrap=/run/g21-airplay/ux-wrap.sh
+    {
+        printf '%s\n' '#!/bin/sh'
+        printf '%s\n' 'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"'
+        printf '%s\n' 'bin="$1"; shift'
+        printf '%s\n' 'if command -v stdbuf >/dev/null 2>&1; then'
+        printf '%s\n' '  exec stdbuf -oL -eL "$bin" "$@"'
+        printf '%s\n' 'fi'
+        printf '%s\n' 'exec "$bin" "$@"'
+    } > "$ux_wrap"
+    chmod 755 "$ux_wrap" 2>/dev/null || true
     if [ -x "$dir/g21-detach" ]; then
-        "$dir/g21-detach" "$bin" "$@" >>"$UXLOG" 2>&1 &
+        "$dir/g21-detach" "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
     elif command -v nohup >/dev/null 2>&1; then
-        nohup "$bin" "$@" >>"$UXLOG" 2>&1 &
+        nohup "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
     else
-        "$bin" "$@" >>"$UXLOG" 2>&1 &
+        "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
     fi
     UXPID=$!
     # Prefer the real uxplay.bin PID after detach/exec chain; wait for :7401.

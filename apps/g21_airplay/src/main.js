@@ -1534,7 +1534,7 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
         lines.push('odbiornik ' + mode);
     }
     if (pin && !mirrored) {
-        lines.push('haslo AirPlay = kod powyzej');
+        lines.push('wpisz kod na iPhonie (parowanie)');
     }
     this._menu.setStreamInfo({
         pin: pin,
