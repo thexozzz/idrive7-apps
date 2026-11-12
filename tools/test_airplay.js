@@ -99,11 +99,11 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.37');
+assert.strictEqual(component.version, '0.1.38');
 assert.ok(script.indexOf('G21_BIND_IP') !== -1);
 assert.ok(script.indexOf('g21-bind-wlan.so') !== -1);
-assert.ok(script.indexOf('publish-addresses=$publish_addr') !== -1);
-assert.ok(script.indexOf('hosts-file=/run/g21-airplay/avahi-hosts') !== -1);
+assert.ok(script.indexOf('publish-addresses=yes') !== -1);
+assert.ok(script.indexOf('hosts-file=') === -1);
 assert.ok(script.indexOf('ip route replace "$net"') !== -1);
 assert.ok(script.indexOf('224.0.0.251/32') !== -1);
 assert.ok(script.indexOf('priority -50') !== -1);

@@ -665,14 +665,9 @@ ensure_mdns() {
     hosts=/run/g21-airplay/avahi-hosts
     services=/run/g21-airplay/avahi-services
     mkdir -p "$services"
-    bind_ip=$(ip -4 addr show dev "$iface" 2>/dev/null | awk '/inet / { sub(/\/.*/, "", $2); print $2; exit }')
-    if [ -n "$bind_ip" ]; then
-        printf '%s G21.local\n' "$bind_ip" > "$hosts"
-        publish_addr=no
-    else
-        : > "$hosts"
-        publish_addr=yes
-    fi
+    : > "$hosts"
+    # This avahi 0.7 exits on an unknown hosts key, so the iPhone sees no name.
+    # allow-interfaces already publishes only the wlan0 address.
     cat > "$conf" <<EOF
 [server]
 host-name=G21
@@ -680,7 +675,6 @@ use-ipv4=yes
 use-ipv6=no
 allow-interfaces=$iface
 deny-interfaces=lo
-hosts-file=/run/g21-airplay/avahi-hosts
 enable-dbus=yes
 check-response-ttl=no
 use-iff-running=yes
@@ -689,7 +683,7 @@ enable-wide-area=no
 [publish]
 disable-publishing=no
 disable-user-service-publishing=no
-publish-addresses=$publish_addr
+publish-addresses=yes
 publish-hinfo=no
 publish-workstation=no
 publish-domain=yes
@@ -714,7 +708,6 @@ use-ipv4=yes
 use-ipv6=no
 allow-interfaces=$iface
 deny-interfaces=lo
-hosts-file=/run/g21-airplay/avahi-hosts
 enable-dbus=no
 check-response-ttl=no
 use-iff-running=yes
@@ -722,7 +715,7 @@ use-iff-running=yes
 enable-wide-area=no
 [publish]
 disable-publishing=no
-publish-addresses=$publish_addr
+publish-addresses=yes
 publish-hinfo=no
 publish-workstation=no
 publish-domain=yes
