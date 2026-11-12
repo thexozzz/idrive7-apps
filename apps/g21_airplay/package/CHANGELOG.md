@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.18
+
+- Klatka menu idzie co sekundę. Po ciszy renderer chował powierzchnię i ekran gasł.
+
 ## 0.1.17
 
 - Rysunek wraca na cały ekran, bo węższe pole nic nie pokazało. Kolumna wstecz zostaje pusta, bez przejęcia pokrętła.

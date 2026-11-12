@@ -225,6 +225,7 @@ function createMenuSurface(opts) {
     var incoming = Buffer.alloc(0);
     var screen = { w: 1920, h: 720 };
     var retry = null;
+    var pulse = null;
     var which = 0;
     var lastOp = null;
     var lastPush = 0;
@@ -381,10 +382,25 @@ function createMenuSurface(opts) {
         });
     }
 
+    function armPulse() {
+        if (pulse) {
+            return;
+        }
+        pulse = setInterval(function () {
+            if (shown && ready) {
+                paint();
+            }
+        }, 1000);
+        if (pulse.unref) {
+            pulse.unref();
+        }
+    }
+
     return {
         items: items,
         open: function () {
             shown = true;
+            armPulse();
             if (sock) {
                 paint();
                 return;
@@ -393,6 +409,10 @@ function createMenuSurface(opts) {
         },
         close: function () {
             shown = false;
+            if (pulse) {
+                clearInterval(pulse);
+                pulse = null;
+            }
             if (retry) {
                 clearTimeout(retry);
                 retry = null;
