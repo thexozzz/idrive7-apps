@@ -100,8 +100,7 @@ var FONT = {
 var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'Lustro iPhone' },
     { name: 'rdp', title: 'RDP', hint: 'Pulpit' },
-    { name: 'vnc', title: 'VNC', hint: 'Pulpit' },
-    { name: 'host', title: 'Adres', hint: 'Host' }
+    { name: 'vnc', title: 'VNC', hint: 'Pulpit' }
 ];
 
 var AIRPLAY_ITEMS = [

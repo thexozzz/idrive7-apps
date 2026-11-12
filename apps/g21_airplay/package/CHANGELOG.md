@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.29
+
+- Menu AirPlay i RDP sa rozdzielone: osobny ekran, osobny status, wejscie w jeden protokol konczy drugi.
+- Narzedzie 0.1.6: avahi bez `--daemonize=no`, D-Bus dla DNS-SD (naprawa `brak dns`).
+
 ## 0.1.28
 
 - Menu to poziomy wiersz baniek z nazwami opcji; pokretlo przesuwa wybor.

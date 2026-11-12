@@ -226,7 +226,7 @@ allow-interfaces=$iface
 deny-interfaces=lo
 use-ipv4=yes
 use-ipv6=no
-enable-dbus=no
+enable-dbus=yes
 check-response-ttl=no
 use-iff-running=yes
 [wide-area]
@@ -244,27 +244,67 @@ enable-reflector=no
 [rlimits]
 EOF
     stop_avahi_local
+    # Do not pass --daemonize[=no]: avahi rejects =no, and we keep it in foreground under &.
     if [ -x "$dir/run-elf" ]; then
         "$dir/run-elf" "$dir/avahi-daemon" \
-            --daemonize=no \
             --no-chroot \
             --no-drop-root \
             --no-rlimits \
-            --debug \
             -f "$conf" \
             >>/var/log/g21-avahi.log 2>&1 &
     else
         "$dir/avahi-daemon" \
-            --daemonize=no \
             --no-chroot \
             --no-drop-root \
             --no-rlimits \
-            --debug \
             -f "$conf" \
             >>/var/log/g21-avahi.log 2>&1 &
     fi
     AVAHIPID=$!
-    sleep 1
+    sleep 2
+    if kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
+    fi
+    # Fallback without D-Bus if the system bus is missing on this unit.
+    cat > "$conf" <<EOF
+[server]
+host-name=G21
+allow-interfaces=$iface
+deny-interfaces=lo
+use-ipv4=yes
+use-ipv6=no
+enable-dbus=no
+check-response-ttl=no
+use-iff-running=yes
+[wide-area]
+enable-wide-area=no
+[publish]
+disable-publishing=no
+publish-addresses=yes
+publish-hinfo=no
+publish-workstation=no
+publish-domain=yes
+[reflector]
+enable-reflector=no
+[rlimits]
+EOF
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$dir/avahi-daemon" \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    else
+        "$dir/avahi-daemon" \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    fi
+    AVAHIPID=$!
+    sleep 2
     if kill -0 "$AVAHIPID" 2>/dev/null; then
         return 0
     fi

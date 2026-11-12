@@ -377,8 +377,16 @@ AirPlayApp.prototype._action = function (component, handler) {
     }
 };
 
+AirPlayApp.prototype._stopOther = function (keep) {
+    var active = this._sessions && this._sessions.active ? this._sessions.active() : null;
+    if (active && active !== keep) {
+        this._sessions.disconnect();
+    }
+};
+
 AirPlayApp.prototype._onMenuChoice = function (name) {
     if (name === 'airplay') {
+        this._stopOther('airplay');
         this._chosen = 'airplay';
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('airplay');
@@ -388,12 +396,22 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         return;
     }
     if (name === 'rdp') {
+        this._stopOther('rdp');
         this._chosen = 'rdp';
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('rdp');
         }
         this._tellMenu(this._sessions.active() === 'rdp' ? 'starting' : 'waiting');
         this._sync();
+        return;
+    }
+    if (name === 'vnc') {
+        this._stopOther('vnc');
+        this._chosen = 'vnc';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
+        this._choose('vnc');
         return;
     }
     if (name === 'air-back' || name === 'rdp-back') {
@@ -675,15 +693,24 @@ AirPlayApp.prototype._sync = function () {
     }
     this._sessions.onVehicle();
     var receiver = uplink.readReceiverStatus(text);
-    if (this._chosen === 'airplay' || this._sessions.active() === 'airplay'
-        || (this._menu && typeof this._menu.screen === 'function' && this._menu.screen() === 'airplay')) {
-        var air = uplink.selectAirplayAnnounce(receiver, choice);
-        if (receiver.mode === 'running') {
+    var screen = this._menu && typeof this._menu.screen === 'function' ? this._menu.screen() : 'root';
+
+    if (screen === 'airplay') {
+        var airLive = this._sessions.active() === 'airplay';
+        var air = airLive
+            ? uplink.selectAirplayAnnounce(receiver, choice)
+            : (choice.ok
+                ? { ok: true, ip: choice.ip, ssid: choice.ssid, iface: choice.iface, reason: '' }
+                : choice);
+        if (airLive && receiver.mode === 'running') {
             this._takeFrame();
         }
-        this._paint(air, { state: receiver.mode || 'waiting', detail: receiver.mode });
-        this._paintAirMenu(air, receiver);
-        if (this._sessions.active() === 'airplay') {
+        this._paint(air, {
+            state: airLive ? (receiver.mode || 'waiting') : 'waiting',
+            detail: airLive ? receiver.mode : 'airplay'
+        });
+        this._paintAirMenu(air, airLive ? receiver : { mode: 'idle' });
+        if (airLive) {
             if (receiver.mode === 'running') {
                 this._tellMenu('running');
             } else if (receiver.mode === 'missing' || receiver.mode === 'mdns-brak' || receiver.mode === 'uxplay-exit') {
@@ -691,13 +718,13 @@ AirPlayApp.prototype._sync = function () {
             } else {
                 this._tellMenu(air.ok ? 'starting' : air.reason);
             }
-        } else if (this._menu && this._menu.screen() === 'airplay') {
-            this._tellMenu(STATUS_TEXT[receiver.mode] ? receiver.mode : (air.ok ? 'waiting' : air.reason));
+        } else {
+            this._tellMenu(air.ok ? 'waiting' : air.reason);
         }
         return;
     }
-    if (this._chosen === 'rdp' || this._sessions.active() === 'rdp'
-        || (this._menu && typeof this._menu.screen === 'function' && this._menu.screen() === 'rdp')) {
+
+    if (screen === 'rdp') {
         if (!choice.ok) {
             this._paint(choice, { state: 'idle', detail: choice.reason });
             this._paintRdpMenu();
@@ -709,15 +736,18 @@ AirPlayApp.prototype._sync = function () {
         if (this._sessions.active() === 'rdp') {
             var rdpLive = this._sessions.getStatus();
             this._tellMenu(rdpLive.state || 'starting');
+        } else {
+            this._tellMenu('waiting');
         }
         return;
     }
+
     if (!choice.ok) {
         this._paint(choice, { state: 'idle', detail: choice.reason });
         this._tellMenu(choice.reason);
         return;
     }
-    this._paint(choice, { state: receiver.mode || 'waiting', detail: receiver.mode });
+    this._paint(choice, { state: 'waiting', detail: this._chosen || 'menu' });
 };
 
 AirPlayApp.prototype._takeFrame = function () {

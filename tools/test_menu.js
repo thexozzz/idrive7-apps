@@ -10,6 +10,11 @@ assert.strictEqual(built.frame.readUInt32LE(8), 1);
 assert.ok(built.rects > 40);
 assert.ok(built.layout);
 assert.strictEqual(built.layout.bubbles.length, menu.ROOT_ITEMS.length);
+assert.strictEqual(menu.ROOT_ITEMS.length, 3);
+assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
+assert.strictEqual(menu.ROOT_ITEMS[1].name, 'rdp');
+assert.strictEqual(menu.ROOT_ITEMS[2].name, 'vnc');
+assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));
 
 var blank = menu.buildFrame([
     { title: ' ', hint: ' ' },
