@@ -21,6 +21,8 @@ var X_GRAB = 0x4d520002;
 var X_READY = 0x4d520101;
 var X_STATE = 0x4d520102;
 var X_CCU = 0x4d520103;
+var X_MODE = 0x4d520001;
+var X_MODE_LAYER = 1;
 var CLAIM = 9;
 var TOUCH = 105;
 var CLOSED = 106;
@@ -315,17 +317,46 @@ function createMenuSurface(opts) {
         sendGrab(false);
     }
 
+    function dropSurface(reason) {
+        front = false;
+        shown = false;
+        note('menu-drop ' + (reason || 'leave'));
+        if (pulse) {
+            clearInterval(pulse);
+            pulse = null;
+        }
+        if (retry) {
+            clearTimeout(retry);
+            retry = null;
+        }
+        hideSurface();
+        ready = false;
+        if (sock) {
+            sock.destroy();
+            sock = null;
+        }
+    }
+
     function applyFront(on) {
-        if (front === on) {
-            return;
-        }
-        front = on;
-        note(on ? 'menu-front' : 'menu-back');
         if (!on) {
-            hideSurface();
+            dropSurface('back');
             return;
         }
-        paint();
+        if (front === on && ready && sock) {
+            paint();
+            return;
+        }
+        front = true;
+        shown = true;
+        note('menu-front');
+        armPulse();
+        if (sock && ready) {
+            paint();
+            return;
+        }
+        if (!sock) {
+            connect();
+        }
     }
 
     function sendClaim() {
@@ -396,13 +427,19 @@ function createMenuSurface(opts) {
             incoming = incoming.slice(8 + len);
             if (type === X_READY) {
                 native = true;
+                if (body.length >= 12) {
+                    touchOn = !!(body.readUInt32LE(8) & 1);
+                }
+                write(message(X_MODE, u32(X_MODE_LAYER)));
             } else if (type === READY) {
                 ready = true;
                 if (body.length >= 12) {
                     screen = { w: body.readUInt32LE(4), h: body.readUInt32LE(8) };
                 }
-                touchOn = body.length >= 16 && body.readUInt32LE(12) !== 0;
-                note('menu-ready ' + screen.w + 'x' + screen.h);
+                if (!native && body.length >= 16) {
+                    touchOn = body.readUInt32LE(12) !== 0;
+                }
+                note('menu-ready ' + screen.w + 'x' + screen.h + (native ? ' native' : ''));
                 paint();
             } else if (type === X_STATE && body.length >= 8) {
                 applyFront(body.readUInt32LE(4) !== 0 && shown);
@@ -438,7 +475,11 @@ function createMenuSurface(opts) {
             ready = false;
             native = false;
             incoming = Buffer.alloc(0);
-            write(message(HELLO, Buffer.from('g21_airplay')));
+            write(message(HELLO, Buffer.concat([
+                Buffer.from('g21_airplay'),
+                Buffer.from([0]),
+                Buffer.from('proto=mgu-render/1')
+            ])));
         });
         next.on('data', take);
         next.on('error', function (err) {
@@ -448,10 +489,12 @@ function createMenuSurface(opts) {
         next.on('close', function () {
             ready = false;
             sock = null;
-            if (shown && !retry) {
+            // Do not reconnect while the app is away. A quiet reconnect kept the
+            // last menu over iDrive after the owner left with the back arrow.
+            if (shown && front && !retry) {
                 retry = setTimeout(function () {
                     retry = null;
-                    if (shown) {
+                    if (shown && front) {
                         connect();
                     }
                 }, 3000);
@@ -489,30 +532,10 @@ function createMenuSurface(opts) {
             connect();
         },
         setFront: function (on) {
-            if (!on) {
-                applyFront(false);
-                return;
-            }
-            shown = true;
-            applyFront(true);
+            applyFront(!!on);
         },
         close: function () {
-            shown = false;
-            front = false;
-            if (pulse) {
-                clearInterval(pulse);
-                pulse = null;
-            }
-            if (retry) {
-                clearTimeout(retry);
-                retry = null;
-            }
-            sendShow(false);
-            sendGrab(false);
-            if (sock) {
-                sock.destroy();
-                sock = null;
-            }
+            dropSurface('close');
         },
         move: move,
         press: press,

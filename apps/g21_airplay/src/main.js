@@ -193,10 +193,35 @@ function AirPlayApp() {
     this.on('error', function (err) { logger.warn('OnlineApp error: ' + (err && err.message)); });
     this.on('entryPointExecute', function (uuid) { self._onEntryPointExecute(uuid); });
     this.on('changeVisibility', function (data) {
-        if (!data || typeof data.visible === 'undefined') {
+        noteStart('visibility ' + JSON.stringify(data));
+        if (!data) {
             return;
         }
-        self._setVisible(data.visible === true || data.visible === 1);
+        var visible = data.visible;
+        if (typeof visible === 'undefined' && data.data) {
+            visible = data.data.visible;
+        }
+        if (visible === false || visible === 0 || visible === 'false') {
+            self._setVisible(false);
+            return;
+        }
+        if (visible === true || visible === 1 || visible === 'true') {
+            self._setVisible(true);
+        }
+    });
+    this.on('hmiFocusLost', function () {
+        noteStart('hmi-focus-lost');
+        self._setVisible(false);
+    });
+    this.on('hmiFocusGained', function () {
+        noteStart('hmi-focus-gained');
+        self._setVisible(true);
+    });
+    this.on('appStatusChanged', function (status) {
+        noteStart('status ' + JSON.stringify(status));
+        if (status && (status === 'BACKGROUND' || status.foreground === false || status.visible === false)) {
+            self._setVisible(false);
+        }
     });
     noteStart('constructed');
 }
@@ -542,16 +567,21 @@ AirPlayApp.prototype._takeFrame = function () {
 };
 
 AirPlayApp.prototype._setVisible = function (visible) {
-    if (this._shutdownPromise || this._visible === visible) {
+    if (this._shutdownPromise) {
+        return;
+    }
+    if (this._visible === visible) {
+        if (!visible && this._menu) {
+            this._menu.setFront(false);
+        }
         return;
     }
     this._visible = visible;
+    noteStart(visible ? 'visible' : 'hidden');
     if (visible) {
         this._showMenu();
-    } else if (this._menu && typeof this._menu.setFront === 'function') {
-        this._menu.setFront(false);
     } else if (this._menu) {
-        this._menu.close();
+        this._menu.setFront(false);
     }
     if (!this._initialized || !this._appStatusService) {
         return;

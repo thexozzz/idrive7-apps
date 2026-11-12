@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.20
+
+- Po wyjściu zrywa powierzchnię renderera. Samo schowanie klatki zostawiało menu na iDrive.
+
 ## 0.1.19
 
 - Po wyjściu z aplikacji rysunek znika. Pokrętło i dotyk działają w menu tylko, gdy aplikacja jest z przodu.
