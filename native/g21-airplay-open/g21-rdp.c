@@ -5,12 +5,14 @@
  * /run/g21-session/cert. Otherwise the fingerprint is reported and the
  * connection stops.
  */
+#define _GNU_SOURCE
 #include <fcntl.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <winpr/crt.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -62,12 +64,15 @@ static unsigned cursor_y = 0;
 static void status(const char *text)
 {
     FILE *file = fopen(STATUS, "w");
+    fprintf(stderr, "g21-rdp status %s\n", text ? text : "");
+    fflush(stderr);
     if (!file) {
         return;
     }
     fputs(text, file);
     fputc('\n', file);
     fclose(file);
+    chmod(STATUS, 0666);
 }
 
 static int read_text(const char *path, char *dst, size_t dst_len)
@@ -127,20 +132,35 @@ static void apply_tailscale_socks5(rdpSettings *settings, const char *host)
 {
     int port;
     const char *socks_host;
+    char *copy;
     if (!settings || !host || !is_tailscale_ip(host)) {
         return;
     }
     port = read_socks5_port();
     if (port <= 0) {
+        fprintf(stderr, "g21-rdp: Tailscale host %s but no socks5-port\n", host);
+        fflush(stderr);
         return;
     }
     socks_host = getenv("G21_SOCKS5_HOST");
     if (!socks_host || !socks_host[0]) {
         socks_host = SOCKS5_HOST;
     }
+    /* Set both API and struct fields — FreeRDP 2.2 proxy path reads struct. */
     freerdp_settings_set_uint32(settings, FreeRDP_ProxyType, PROXY_TYPE_SOCKS);
     freerdp_settings_set_string(settings, FreeRDP_ProxyHostname, socks_host);
     freerdp_settings_set_uint16(settings, FreeRDP_ProxyPort, (UINT16)port);
+    settings->ProxyType = PROXY_TYPE_SOCKS;
+    settings->ProxyPort = (UINT16)port;
+    if (!settings->ProxyHostname || strcmp(settings->ProxyHostname, socks_host) != 0) {
+        copy = _strdup(socks_host);
+        if (copy) {
+            free(settings->ProxyHostname);
+            settings->ProxyHostname = copy;
+        }
+    }
+    fprintf(stderr, "g21-rdp: SOCKS5 %s:%d for %s\n", socks_host, port, host);
+    fflush(stderr);
 }
 
 static DWORD verify_certificate(freerdp *instance, const char *host, UINT16 port,
@@ -380,14 +400,27 @@ int main(void)
     instance->PostDisconnect = post_disconnect;
     instance->VerifyCertificateEx = verify_certificate;
     /* FreeRDP 2: ServerHostname/Username/Password are char* — strncpy(sizeof ptr) segfaults. */
-    freerdp_settings_set_string(instance->settings, FreeRDP_ServerHostname, host);
-    freerdp_settings_set_string(instance->settings, FreeRDP_Username, user);
-    freerdp_settings_set_string(instance->settings, FreeRDP_Password, secret);
+    if (!freerdp_settings_set_string(instance->settings, FreeRDP_ServerHostname, host) ||
+        !freerdp_settings_set_string(instance->settings, FreeRDP_Username, user) ||
+        !freerdp_settings_set_string(instance->settings, FreeRDP_Password, secret)) {
+        status("error|freerdp|");
+        freerdp_free(instance);
+        return 1;
+    }
+    if (!instance->settings->ServerHostname) {
+        instance->settings->ServerHostname = _strdup(host);
+    }
+    if (user[0] && !instance->settings->Username) {
+        instance->settings->Username = _strdup(user);
+    }
+    if (secret[0] && !instance->settings->Password) {
+        instance->settings->Password = _strdup(secret);
+    }
     instance->settings->ServerPort = (UINT32)port;
     instance->settings->DesktopWidth = 1920;
     instance->settings->DesktopHeight = 720;
     apply_tailscale_socks5(instance->settings, host);
-    if (!instance->settings->ServerHostname) {
+    if (!instance->settings->ServerHostname || !instance->settings->ServerHostname[0]) {
         status("error|freerdp|");
         freerdp_free(instance);
         return 1;
@@ -395,7 +428,16 @@ int main(void)
     memset(secret, 0, sizeof(secret));
     status("connecting|rdp|");
     open_input();
+    fprintf(stderr, "g21-rdp: connect %s:%d user=%s proxy=%u\n",
+        instance->settings->ServerHostname,
+        (int)instance->settings->ServerPort,
+        instance->settings->Username ? instance->settings->Username : "",
+        (unsigned)instance->settings->ProxyType);
+    fflush(stderr);
     if (!freerdp_connect(instance)) {
+        fprintf(stderr, "g21-rdp: freerdp_connect failed err=0x%08X\n",
+            (unsigned)freerdp_get_last_error(instance->context));
+        fflush(stderr);
         status("error|connect|");
         freerdp_free(instance);
         return 1;

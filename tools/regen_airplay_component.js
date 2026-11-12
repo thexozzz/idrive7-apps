@@ -58,7 +58,7 @@ var files = [];
 walk(root, files);
 files.sort(function (a, b) { return a.path.localeCompare(b.path); });
 var meta = JSON.parse(fs.readFileSync(path.join(root, 'component.json'), 'utf8'));
-meta.version = '0.1.19';
+meta.version = '0.1.20';
 meta.title = 'AirPlay i Windows Miracast';
 meta.description = 'Backend AirPlay (UxPlay+mdnsd/avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).';
 meta.files = files;

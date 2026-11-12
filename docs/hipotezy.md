@@ -39,6 +39,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H42 | `chmod 666` na `/run/g21-desktop.status` + `allow` przed statusem usuwa EACCES OAP → `session-fail connect-failed` | po Update narzędzia 0.1.16+app: log `session-ok rdp`, `allow=rdp`, `/var/log/g21-rdp.log` z connecting |
 | H43 | Zegary/HUD w pickerze RDP bez próbki prędkości; `g21-rdp` ustawia host/user/hasło przez `_strdup` (nie `strncpy` na `char*`) | po Update 0.1.17+/0.1.58: tap Zegary/HUD startuje; status `connecting`/`cert`/`connected`, bez `error|freerdp` z SEGV |
 | H44 | RDP/VNC do `100.x` przez SOCKS5 Tailscale `127.0.0.2:1055` (userspace) | po Update 0.1.18+: `socks5-port` istnieje, status `connecting`/`connected` do `100.89.166.19`, nie `Network is unreachable` |
+| H45 | RDP bez nadpisywania statusu FreeRDP + zwolnienie `frame.sock` przed bridge (pętla toola 1 s) daje obraz na Środek/Zegary/HUD | po Update 0.1.20+/app: status `connected|rdp|`, brak EADDRINUSE w start.log, widać pulpit |
 | H30 | CLAIM bez bramki front + pelny prostokat ekranu daje TOUCH na kafelkach menu | po Update: tap na Polacz/Dodaj wybiera kafelek; w logu `menu-touch` |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |

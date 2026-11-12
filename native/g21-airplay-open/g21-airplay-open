@@ -257,6 +257,36 @@ stop_pid() {
     fi
 }
 
+# Reset path each start — appending every apply() blew past ARG_MAX on run-elf.
+tool_lib_path() {
+    dir=$(tool_dir)
+    printf '%s\n' "$dir/lib:/usr/lib:/lib"
+}
+
+wait_pid_gone() {
+    pid=$1
+    n=0
+    while [ -n "$pid" ] && [ "$n" -lt 20 ]; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+        sleep 0.1
+        n=$((n + 1))
+    done
+    if [ -n "$pid" ]; then
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+}
+
+# True when nothing is bound to frame.sock (stale file alone is OK after unlink).
+frame_sock_free() {
+    # If a live g21-present still holds the bind, bridge gets EADDRINUSE.
+    if pgrep -f '/g21-present' >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
+
 # Prints: iface ip prefix label
 find_uplink_wifi() {
     kind=$(field kind "$STATUS")
@@ -402,7 +432,7 @@ start_avahi_bin() {
 ensure_mdns() {
     iface=$1
     dir=$(tool_dir)
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
     if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
         return 0
     fi
@@ -497,8 +527,9 @@ start_present() {
     if [ -n "$PREPID" ] && kill -0 "$PREPID" 2>/dev/null; then
         return 0
     fi
+    PREPID=
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
     export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
     export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
     export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
@@ -516,16 +547,21 @@ start_present() {
 start_rdp() {
     dir=$(tool_dir)
     bin=$dir/g21-rdp
+    cur=
     if [ ! -x "$bin" ]; then
         desk "missing|rdp|"
         return 0
     fi
     if [ -n "$RDPID" ] && kill -0 "$RDPID" 2>/dev/null; then
-        desk "running|rdp|"
+        # Do not clobber connected|cert|error from g21-rdp — that made the UI
+        # show "running" with a blank screen.
+        chmod 666 "$DESKTOP" 2>/dev/null || true
         return 0
     fi
+    RDPID=
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export WLOG_LEVEL="${WLOG_LEVEL:-INFO}"
     : >>/var/log/g21-rdp.log
     chmod 666 /var/log/g21-rdp.log 2>/dev/null || true
     # g21-rdp needs bundled libfreerdp2; always use run-elf library path.
@@ -538,21 +574,45 @@ start_rdp() {
     sleep 1
     if ! kill -0 "$RDPID" 2>/dev/null; then
         RDPID=
-        desk "error|rdp|"
+        # Keep g21-rdp's own error|connect| / error|freerdp| / cert|… if present.
+        cur=$(tr -d '\r\n' < "$DESKTOP" 2>/dev/null || true)
+        case $cur in
+            error\|*|cert\|*) ;;
+            *) desk "error|rdp|" ;;
+        esac
         return 0
     fi
     chmod 666 "$DESKTOP" 2>/dev/null || true
-    desk "starting|rdp|"
+    cur=$(tr -d '\r\n' < "$DESKTOP" 2>/dev/null || true)
+    case $cur in
+        connecting\|*|connected\|*|cert\|*|error\|*|starting\|*) ;;
+        *) desk "starting|rdp|" ;;
+    esac
 }
 
 stop_present() {
     stop_pid "$PREPID"
+    wait_pid_gone "$PREPID"
     PREPID=
+    pkill -f '/g21-present' 2>/dev/null || true
+    n=0
+    while [ "$n" -lt 20 ] && pgrep -f '/g21-present' >/dev/null 2>&1; do
+        sleep 0.1
+        n=$((n + 1))
+    done
+    if pgrep -f '/g21-present' >/dev/null 2>&1; then
+        pkill -9 -f '/g21-present' 2>/dev/null || true
+        sleep 0.2
+    fi
+    # Free the bind so app frame_bridge can listen for cluster/HUD.
+    rm -f /run/g21-desktop/frame.sock 2>/dev/null || true
 }
 
 stop_rdp() {
     stop_pid "$RDPID"
+    wait_pid_gone "$RDPID"
     RDPID=
+    pkill -f '/g21-rdp' 2>/dev/null || true
 }
 
 stop_mice() {
@@ -649,7 +709,7 @@ start_mice() {
         return 0
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
     export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
     export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
     export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
@@ -720,7 +780,7 @@ start_ux() {
     fi
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
     # Tool lib first for GST; keep /usr/lib so dlopen("libdns_sd.so") hits Bonjour.
-    export LD_LIBRARY_PATH="$dir/lib:/usr/lib:/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
     export G21_YUV=/run/g21-airplay/latest.yuv
     export AVAHI_COMPAT_NOWARN=1
     mkdir -p /run/g21-airplay
@@ -911,6 +971,12 @@ apply() {
                 out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
                 if [ "$out" = "cluster" ] || [ "$out" = "hud" ]; then
                     stop_present
+                    # Wait until present is gone so bridge bind does not hit EADDRINUSE.
+                    n=0
+                    while [ "$n" -lt 30 ] && ! frame_sock_free; do
+                        sleep 0.1
+                        n=$((n + 1))
+                    done
                 else
                     start_present
                 fi
@@ -950,5 +1016,6 @@ stop() {
 trap stop TERM INT
 while true; do
     apply
-    sleep 5
+    # 1s so allow=stop → cluster bridge wins frame.sock before the next rdp start.
+    sleep 1
 done

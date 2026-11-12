@@ -90,8 +90,12 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.19');
+assert.strictEqual(component.version, '0.1.20');
 assert.ok(component.files.some(function (item) { return item.path === 'g21-detach'; }));
+assert.ok(script.indexOf('desk "running|rdp|"') === -1);
+assert.ok(script.indexOf('tool_lib_path') !== -1);
+assert.ok(script.indexOf('frame_sock_free') !== -1);
+assert.ok(script.indexOf('sleep 1') !== -1);
 assert.ok(script.indexOf('SESSION_DIR/output') !== -1);
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstnet-1.0.so.0'; }));
 assert.ok(component.files.some(function (item) { return item.path === 'lib/libgstrtp-1.0.so.0'; }));

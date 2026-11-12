@@ -163,7 +163,7 @@ function createFrameBridge(opts) {
                 try {
                     fs.unlinkSync(sockPath);
                 } catch (errUn) {
-                    // ignore
+                    // ignore stale path; live present bind still causes EADDRINUSE
                 }
                 server = net.createServer(function (sock) {
                     resetParse();
@@ -175,20 +175,29 @@ function createFrameBridge(opts) {
                 });
                 server.on('error', function (err) {
                     log('frame-bridge-listen ' + (err && err.message));
+                    try {
+                        server.close();
+                    } catch (errClose) {
+                        // ignore
+                    }
                     server = null;
                 });
-                server.listen(sockPath);
-                try {
-                    fs.chmodSync(sockPath, 438);
-                } catch (errCh) {
-                    // ignore
-                }
-                log('frame-bridge-listen ok');
+                server.listen(sockPath, function () {
+                    try {
+                        fs.chmodSync(sockPath, 438);
+                    } catch (errCh) {
+                        // ignore
+                    }
+                    log('frame-bridge-listen ok');
+                });
                 return { ok: true };
             } catch (err) {
                 server = null;
                 return { ok: false, reason: err && err.message };
             }
+        },
+        isListening: function () {
+            return !!(server && server.listening);
         },
         stop: function () {
             if (!server) {

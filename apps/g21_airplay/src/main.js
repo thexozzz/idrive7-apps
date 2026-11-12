@@ -871,20 +871,48 @@ AirPlayApp.prototype._startRdpToOutput = function (outputName) {
     }
     limits = settingsFactory.LIMITS[out];
     // Drop present's hold on frame.sock, then listen before g21-rdp connects.
+    // Tool apply() used to run only every 5s — wait/retry until bridge can bind.
     try {
         fs.writeFileSync(this._paths.allow, 'stop\n');
     } catch (errStop) {
         noteStart('rdp-prestop ' + (errStop && errStop.message));
     }
     this._tellMenu('starting');
-    setTimeout(function () {
-        if (self._frameBridge) {
-            self._frameBridge.setTargetSize(limits.w, limits.h);
-            self._frameBridge.start();
-        }
+    this._startRdpBridgeWhenFree(out, limits, 0);
+};
+
+AirPlayApp.prototype._startRdpBridgeWhenFree = function (out, limits, attempt) {
+    var self = this;
+    var next = typeof attempt === 'number' ? attempt : 0;
+    if (!self._frameBridge) {
+        noteStart('rdp-bridge-missing');
+        self._tellMenu('error');
+        return;
+    }
+    self._frameBridge.setTargetSize(limits.w, limits.h);
+    if (self._frameBridge.isListening && self._frameBridge.isListening()) {
         noteStart('rdp-out ' + out);
         self._beginRdpConnect();
-    }, 400);
+        return;
+    }
+    self._frameBridge.start();
+    setTimeout(function () {
+        if (self._frameBridge && self._frameBridge.isListening && self._frameBridge.isListening()) {
+            noteStart('rdp-out ' + out);
+            self._beginRdpConnect();
+            return;
+        }
+        noteStart('rdp-bridge-wait ' + out + ' ' + next);
+        if (next >= 25) {
+            noteStart('rdp-bridge-fail ' + out);
+            self._tellMenu('error');
+            return;
+        }
+        if (self._frameBridge) {
+            self._frameBridge.stop();
+        }
+        self._startRdpBridgeWhenFree(out, limits, next + 1);
+    }, 200);
 };
 
 AirPlayApp.prototype._paintSwitch = function (itemName, on, onHint, offHint) {
