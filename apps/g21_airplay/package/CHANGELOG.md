@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.53
+
+- Cluster label: napis AIRPLAY na `panel` (zegary 0x203), nie na `map`; HUD bez zmian.
+
 ## 0.1.52
 
 - Odbiorniki: root hints AirPlay/Miracast/RDP/VNC; RDP i VNC maja `WL`/`WYL` jak AirPlay (start pulpitu z aktywnego profilu).

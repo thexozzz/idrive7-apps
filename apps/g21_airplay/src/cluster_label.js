@@ -1,8 +1,9 @@
 'use strict';
 
 /*
- * Diagnostic "AIRPLAY" image overlay on cluster-render targets map + hud.
- * PROTOCOL.md image layers + pixels(); targets from README (map 1088x480, hud 800x480).
+ * Diagnostic "AIRPLAY" image overlay on cluster-render targets panel + hud.
+ * README: panel 0x203 = whole cluster over gauges (1920x720); hud 0x323 (800x480).
+ * map (0x100) is only the nav pocket under the needles — not the zegary surface.
  */
 
 var LABEL = 'AIRPLAY';
@@ -17,15 +18,15 @@ var FONT = {
 };
 
 var TARGETS = {
-    map: { w: 1088, h: 480 },
-    hud: { w: 800, h: 480 }
+    panel: { w: 1920, h: 720, contend: 1 },
+    hud: { w: 800, h: 480, contend: 0 }
 };
 
 function renderTextRgba(text, scale) {
     var chars = String(text || '').toUpperCase().split('');
     var cellW = 6;
     var cellH = 7;
-    var pad = 8;
+    var pad = 12;
     var w = pad * 2 + chars.length * cellW * scale;
     var h = pad * 2 + cellH * scale;
     var rgba = Buffer.alloc(w * h * 4);
@@ -40,6 +41,13 @@ function renderTextRgba(text, scale) {
     var glyph;
     var bit;
     var o;
+    // Dark plate so white glyphs stay readable on bright cluster chrome.
+    for (i = 0; i < rgba.length; i += 4) {
+        rgba[i] = 0;
+        rgba[i + 1] = 0;
+        rgba[i + 2] = 0;
+        rgba[i + 3] = 180;
+    }
     for (i = 0; i < chars.length; i += 1) {
         glyph = FONT[chars[i]];
         if (!glyph) {
@@ -84,7 +92,7 @@ function createClusterLabel(opts) {
     var enabled = opts.enabled !== false;
     var scale = opts.scale || 8;
     var bitmap = renderTextRgba(LABEL, scale);
-    var layers = { map: 0, hud: 0 };
+    var layers = { panel: 0, hud: 0 };
 
     function dropOne(name) {
         if (layers[name]) {
@@ -98,7 +106,7 @@ function createClusterLabel(opts) {
     }
 
     function hide() {
-        dropOne('map');
+        dropOne('panel');
         dropOne('hud');
     }
 
@@ -123,7 +131,7 @@ function createClusterLabel(opts) {
             ih: bitmap.h,
             opacity: 1,
             exclusive: 0,
-            contend: 0,
+            contend: size.contend ? 1 : 0,
             guide_hold: 0,
             yield: 1,
             prewarm: 1
@@ -142,15 +150,15 @@ function createClusterLabel(opts) {
     }
 
     function show() {
-        var okMap;
+        var okPanel;
         var okHud;
         if (!enabled) {
             hide();
             return { ok: true, enabled: false };
         }
-        okMap = showTarget('map');
+        okPanel = showTarget('panel');
         okHud = showTarget('hud');
-        return { ok: okMap || okHud, map: okMap, hud: okHud, enabled: true };
+        return { ok: okPanel || okHud, panel: okPanel, hud: okHud, enabled: true };
     }
 
     return {
