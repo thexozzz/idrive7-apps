@@ -195,99 +195,83 @@ iface_mac() {
     esac
 }
 
-ensure_mdns() {
-    iface=$1
-    dir=$(tool_dir)
-    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+# Rootfs is read-only; avahi still hard-requires user "avahi". Overlay passwd/group
+# from /run via bind mount (cleared on reboot). Same for a D-Bus policy so
+# DNSServiceRegister from UxPlay can talk to the daemon.
+ensure_avahi_account() {
+    mkdir -p /run/g21-airplay /run/avahi-daemon
+    passwd_run=/run/g21-airplay/passwd
+    group_run=/run/g21-airplay/group
+    if ! grep -q ' /etc/passwd ' /proc/mounts 2>/dev/null; then
+        cp /etc/passwd "$passwd_run"
+        cp /etc/group "$group_run"
+    fi
+    if [ ! -f "$passwd_run" ]; then
+        cp /etc/passwd "$passwd_run"
+    fi
+    if [ ! -f "$group_run" ]; then
+        cp /etc/group "$group_run"
+    fi
+    if ! grep -q '^avahi:' "$passwd_run" 2>/dev/null; then
+        echo 'avahi:x:189:189:Avahi mDNS daemon:/run/avahi-daemon:/bin/false' >> "$passwd_run"
+    fi
+    if ! grep -q '^avahi:' "$group_run" 2>/dev/null; then
+        echo 'avahi:x:189:' >> "$group_run"
+    fi
+    if ! grep -q ' /etc/passwd ' /proc/mounts 2>/dev/null; then
+        mount --bind "$passwd_run" /etc/passwd || return 1
+    fi
+    if ! grep -q ' /etc/group ' /proc/mounts 2>/dev/null; then
+        mount --bind "$group_run" /etc/group || return 1
+    fi
+    chown 189:189 /run/avahi-daemon 2>/dev/null || true
+    return 0
+}
+
+ensure_avahi_dbus() {
+    src=/etc/dbus-1/system.d
+    dst=/run/g21-airplay/dbus-system.d
+    conf=$dst/g21-avahi.conf
+    if [ ! -d "$src" ]; then
         return 0
     fi
-    if pidof avahi-daemon >/dev/null 2>&1; then
-        return 0
+    mkdir -p "$dst"
+    if ! grep -q ' /etc/dbus-1/system.d ' /proc/mounts 2>/dev/null; then
+        cp "$src"/* "$dst"/ 2>/dev/null || true
     fi
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl start avahi-daemon.service 2>/dev/null || true
-        if pidof avahi-daemon >/dev/null 2>&1; then
-            return 0
-        fi
-    fi
-    if [ ! -x "$dir/avahi-daemon" ]; then
-        return 1
-    fi
-    conf=/run/g21-airplay/avahi-daemon.conf
-    hosts=/run/g21-airplay/avahi-hosts
-    services=/run/g21-airplay/avahi-services
-    mkdir -p "$services"
-    : > "$hosts"
-    cat > "$conf" <<EOF
-[server]
-host-name=G21
-allow-interfaces=$iface
-deny-interfaces=lo
-use-ipv4=yes
-use-ipv6=no
-enable-dbus=yes
-check-response-ttl=no
-use-iff-running=yes
-[wide-area]
-enable-wide-area=no
-[publish]
-disable-publishing=no
-disable-user-service-publishing=no
-publish-addresses=yes
-publish-hinfo=no
-publish-workstation=no
-publish-domain=yes
-publish-resolv-conf-dns-servers=no
-[reflector]
-enable-reflector=no
-[rlimits]
+    cat > "$conf" <<'EOF'
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <policy user="root">
+    <allow own="org.freedesktop.Avahi"/>
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+  <policy user="avahi">
+    <allow own="org.freedesktop.Avahi"/>
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+  <policy context="default">
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+</busconfig>
 EOF
-    stop_avahi_local
-    # Do not pass --daemonize[=no]: avahi rejects =no, and we keep it in foreground under &.
-    if [ -x "$dir/run-elf" ]; then
-        "$dir/run-elf" "$dir/avahi-daemon" \
-            --no-chroot \
-            --no-drop-root \
-            --no-rlimits \
-            -f "$conf" \
-            >>/var/log/g21-avahi.log 2>&1 &
-    else
-        "$dir/avahi-daemon" \
-            --no-chroot \
-            --no-drop-root \
-            --no-rlimits \
-            -f "$conf" \
-            >>/var/log/g21-avahi.log 2>&1 &
+    if ! grep -q ' /etc/dbus-1/system.d ' /proc/mounts 2>/dev/null; then
+        mount --bind "$dst" "$src" || return 1
     fi
-    AVAHIPID=$!
-    sleep 2
-    if kill -0 "$AVAHIPID" 2>/dev/null; then
-        return 0
+    if command -v dbus-send >/dev/null 2>&1; then
+        dbus-send --system --type=method_call --dest=org.freedesktop.DBus \
+            /org/freedesktop/DBus org.freedesktop.DBus.ReloadConfig >/dev/null 2>&1 || true
     fi
-    # Fallback without D-Bus if the system bus is missing on this unit.
-    cat > "$conf" <<EOF
-[server]
-host-name=G21
-allow-interfaces=$iface
-deny-interfaces=lo
-use-ipv4=yes
-use-ipv6=no
-enable-dbus=no
-check-response-ttl=no
-use-iff-running=yes
-[wide-area]
-enable-wide-area=no
-[publish]
-disable-publishing=no
-publish-addresses=yes
-publish-hinfo=no
-publish-workstation=no
-publish-domain=yes
-[reflector]
-enable-reflector=no
-[rlimits]
-EOF
+    return 0
+}
+
+start_avahi_bin() {
+    dir=$1
+    conf=$2
     if [ -x "$dir/run-elf" ]; then
         "$dir/run-elf" "$dir/avahi-daemon" \
             --no-chroot \
@@ -309,6 +293,98 @@ EOF
         return 0
     fi
     AVAHIPID=
+    return 1
+}
+
+ensure_mdns() {
+    iface=$1
+    dir=$(tool_dir)
+    export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
+    fi
+    if pidof avahi-daemon >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl start avahi-daemon.service 2>/dev/null || true
+        if pidof avahi-daemon >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    if [ ! -x "$dir/avahi-daemon" ]; then
+        return 1
+    fi
+    if ! ensure_avahi_account; then
+        echo "g21-airplay-open: avahi account overlay failed" >>/var/log/g21-avahi.log
+        return 1
+    fi
+    ensure_avahi_dbus || true
+    conf=/run/g21-airplay/avahi-daemon.conf
+    hosts=/run/g21-airplay/avahi-hosts
+    services=/run/g21-airplay/avahi-services
+    mkdir -p "$services"
+    : > "$hosts"
+    cat > "$conf" <<EOF
+[server]
+host-name=G21
+use-ipv4=yes
+use-ipv6=no
+allow-interfaces=$iface
+deny-interfaces=lo
+enable-dbus=yes
+check-response-ttl=no
+use-iff-running=yes
+user=avahi
+group=avahi
+[wide-area]
+enable-wide-area=no
+[publish]
+disable-publishing=no
+disable-user-service-publishing=no
+publish-addresses=yes
+publish-hinfo=no
+publish-workstation=no
+publish-domain=yes
+publish-resolv-conf-dns-servers=no
+[reflector]
+enable-reflector=no
+[rlimits]
+EOF
+    stop_avahi_local
+    printf '\n# start iface=%s\n' "$iface" >>/var/log/g21-avahi.log
+    if start_avahi_bin "$dir" "$conf"; then
+        return 0
+    fi
+    # Fallback without D-Bus if the bus rejects ownership.
+    cat > "$conf" <<EOF
+[server]
+host-name=G21
+use-ipv4=yes
+use-ipv6=no
+allow-interfaces=$iface
+deny-interfaces=lo
+enable-dbus=no
+check-response-ttl=no
+use-iff-running=yes
+user=avahi
+group=avahi
+[wide-area]
+enable-wide-area=no
+[publish]
+disable-publishing=no
+publish-addresses=yes
+publish-hinfo=no
+publish-workstation=no
+publish-domain=yes
+[reflector]
+enable-reflector=no
+[rlimits]
+EOF
+    printf '\n# fallback no-dbus iface=%s\n' "$iface" >>/var/log/g21-avahi.log
+    if start_avahi_bin "$dir" "$conf"; then
+        return 0
+    fi
     return 1
 }
 

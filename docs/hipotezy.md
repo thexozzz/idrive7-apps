@@ -17,7 +17,7 @@ Zdania poniżej nie są potwierdzone na tym BMW G21 2020. Nie wolno ich zapisywa
 | H11 | Reguła nft o priorytecie -10 wpuszcza AirPlay zanim `mgu-uplink` odrzuci nowe połączenia na tym interfejsie | po instalacji `g21_airplay` iPhone-host Personal Hotspot widzi „G21” w lustrze ekranu |
 | H12 | Odpowiedź `/info` i ogłoszenie mDNS wystarczą, żeby iOS zaczął sesję | H11; pierwsza linia żądania pojawia się na ekranie aplikacji |
 | H13 | `waylandsink` UxPlay rysuje lustro na centralnym ekranie przez kompozytor jednostki | po instalacji `g21_airplay` z gałęzi `test`: na iPhonie w hotspocie widać G21, a obraz pojawia się na ekranie |
-| H21 | Bundlowany `avahi-daemon` (bez `--daemonize=no`, z D-Bus albo fallbackiem) rejestruje DNS-SD na uplink Store | po Update narzędzia i starcie AirPlay brak `mdns-brak` w `/run/g21-airplay.status` |
+| H21 | Bundlowany avahi z overlay konta `avahi` + D-Bus z `/run` (rootfs RO) rejestruje DNS-SD na uplink Store | po Update narzędzia 0.1.7+ i starcie AirPlay: brak `mdns-brak`, iPhone widzi G21 |
 | H24 | Rozdzielenie ekranów AirPlay/RDP w menu i `_sync` usuwa mieszanie statusów między protokołami | po Update aplikacji wejście w RDP nie pokazuje `brak dns`, a AirPlay nie pokazuje hosta RDP |
 | H22 | iPhone jako host Personal Hotspot widzi odbiornik AirPlay u klienta swojej sieci (UxPlay+avahi) | H11 na Karolphone / `172.20.10.0/28` |
 | H23 | Binarki z `/lib64` INTERP wstają na MGU przez `run-elf` i `/lib/ld-linux-x86-64.so.2` | potwierdzone odczytem 2026-11-12: sam `uxplay.bin` = not found, przez linker startuje |

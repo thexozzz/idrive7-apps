@@ -1,9 +1,9 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "title": "AirPlay na hotspot iPhone",
-  "description": "UxPlay przez /lib linker, avahi bez --daemonize=no, D-Bus DNS-SD, panel :1235.",
+  "description": "UxPlay + avahi: konto avahi i D-Bus przez bind-mount z /run (rootfs RO).",
   "uninstallable": true,
   "mguHmi": [
     "ID7"

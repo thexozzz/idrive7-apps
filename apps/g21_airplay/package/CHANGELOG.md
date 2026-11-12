@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.30
+
+- Narzedzie 0.1.7: konto avahi i polityka D-Bus przez bind-mount z /run (rootfs tylko do odczytu) — naprawa `brak dns` / brak G21 w hotspocie.
+
 ## 0.1.29
 
 - Menu AirPlay i RDP sa rozdzielone: osobny ekran, osobny status, wejscie w jeden protokol konczy drugi.
