@@ -1,13 +1,15 @@
 ---
-description: Head unit 100.125.63.29 is read-only. Never change files or services on it.
+description: Head unit 100.125.63.29 is read-only unless explicit HotPatch consent.
 alwaysApply: true
 ---
 
-# MGU 100.125.63.29 is read-only
+# MGU 100.125.63.29 — domyślnie tylko odczyt
 
-The owner's head unit is `100.125.63.29`. On that host, and on any SSH session to it:
+The owner's head unit is `100.125.63.29`.
 
-- Allowed: read files, list directories, and read service status or logs.
-- Forbidden: write, delete, move, chmod, install, update, restart, stop, or start anything. No `>`, `tee`, `sed -i`, `systemctl restart`, `mount`, or package commands.
-- A request to look at a crash is not permission to repair it on the unit. Fix the repository, then the owner installs from MGU Store.
-- Do not print SSH private keys, the archive that holds them, or VIN data.
+- Default: read files, list directories, read our app/tool status or logs only.
+- Forbidden by default: write, delete, move, chmod, install, update, restart, stop, or start anything. No `systemctl` on factory units, no nft/firewall, no other OAP apps.
+- Exception: `1/scripts/dev/dev-deploy.ps1 -Mode HotPatch` (or rollback) **only** when the current user message explicitly approves MGU write **and** the script is invoked with `-AllowMguWrite -ConfirmPhrase DEPLOY-G21-AIRPLAY`. Still only allowlisted g21 paths.
+- A crash look-up is not permission to HotPatch. Prefer Store Update after a repo fix.
+- Host key: `StrictHostKeyChecking=yes`. Never auto-remove `known_hosts` on mismatch.
+- Do not print SSH private keys or VIN data.

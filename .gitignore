@@ -28,3 +28,7 @@ reference/
 preview/
 *.log
 node_modules/
+
+# Developer SSH cycle artifacts (never commit HU logs / staging).
+dev-logs/
+dev-staging/

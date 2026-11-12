@@ -10,13 +10,15 @@ Manifest aplikacji nie deklaruje tych interfejsów. Walidator odrzuca ich nazwy 
 
 ## Zapis na samochód
 
-Żaden skrypt w tym repozytorium nie kopiuje plików na MGU, nie restartuje usług i nie wywołuje instalatora Store. `scripts/diagnose.ps1` ma stałą listę poleceń odczytu. `scripts/publish.ps1` przy próbie zapisu na urządzenie kończy się błędem.
+**Domyślna ścieżka:** MGU Store. `scripts/dev/dev-deploy.ps1 -Mode Store` (albo `-PushTest`) wypycha gałąź `test`; właściciel robi Update na ekranie. `scripts/publish.ps1` nadal nie zapisuje na jednostkę.
 
-Połączenie SSH, instalacja, aktualizacja i usunięcie wymagają osobnej, wyraźnej zgody w bieżącej wiadomości użytkownika. Zgoda na diagnostykę nie jest zgodą na instalację. Zgoda na jedną aplikację nie obejmuje następnej.
+**Odczyt SSH** (`100.125.63.29`): `scripts/dev/dev-logs.ps1`, `dev-test.ps1 -RemoteSmoke`, `scripts/diagnose.ps1` — tylko stałe / allowlistowane polecenia odczytu. `StrictHostKeyChecking=yes`. Przy `REMOTE HOST IDENTIFICATION HAS CHANGED` zatrzymaj się; nie kasuj `known_hosts` automatycznie.
 
-Jednostka właściciela ma adres `100.125.63.29`. Na tym hoście dozwolony jest wyłącznie odczyt plików, katalogów i logów. Zakazany jest każdy zapis, usunięcie, zmiana uprawnień, restart usługi, instalacja i aktualizacja. Naprawa idzie do repozytorium, a na samochód wraca tylko przez MGU Store, z ekranu, po osobnej zgodzie.
+**HotPatch SSH** (opcjonalny, nie Store): wyłącznie po zgodzie w bieżącej wiadomości **i** przełącznikach `-AllowMguWrite -ConfirmPhrase DEPLOY-G21-AIRPLAY`. Skrypt zapisuje tylko pod allowlistą (`/var/opt/g21-airplay-open/…`, `…/oap_12249/data/g21_airplay/`, `…/oap_12249/source/` po weryfikacji `name=g21_airplay`), ze stagingiem, SHA-256 i backupem. Zabronione: system BMW, inne OAP, nft, mdnsd systemowy, `systemctl` fabryczny, `pkill` bez ścieżki z allowlisty.
 
-Na samochodzie instaluje i usuwa właściciel, z ekranu MGU Store. Aktualizacje nie instalują się same. Każda aplikacja w `mgu-repo.json` ma `uninstallable: true`.
+Zgoda na diagnostykę ≠ zgoda na HotPatch. Zgoda na Store Update ≠ zgoda na zapis SSH. Naprawa kodu idzie do repozytorium; na auto wraca przez Store albo jawny HotPatch.
+
+Każda aplikacja w `mgu-repo.json` ma `uninstallable: true`.
 
 ## Sekrety i SDK
 
