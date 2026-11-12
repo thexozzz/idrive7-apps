@@ -66,8 +66,12 @@ function createClusterRenderAdapter(client) {
                 this.destroyLayer(name);
             }
             box = geometry || {};
-            fw = evenSize(box.w, known.w, known.w);
-            fh = evenSize(box.h, known.h, known.h);
+        fw = evenSize(box.w, known.w, known.w);
+        fh = evenSize(box.h, known.h, known.h);
+        fw -= fw % 4;
+        if (fw < 16) {
+            fw = 16;
+        }
             ref = client.video({
                 target: known.protocol,
                 vw: fw,

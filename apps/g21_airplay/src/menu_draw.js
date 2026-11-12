@@ -1162,6 +1162,7 @@ function createMenuSurface(opts) {
     var caption = null;
     var lastFrame = null;
     var noted = false;
+    var surfaced = false;
     var claimNoted = false;
     var detail = '';
     var streamInfo = null;
@@ -1244,10 +1245,13 @@ function createMenuSurface(opts) {
         if (!ready || !shown) {
             return;
         }
-        sendPlace();
-        sendShow(true);
-        sendGrab(true);
-        sendClaim();
+        if (!surfaced) {
+            sendPlace();
+            sendShow(true);
+            sendGrab(true);
+            sendClaim();
+            surfaced = true;
+        }
         if (streamInfo) {
             streamInfo.video = !!(streamInfo.mirrored && native && streamInfo.window);
         }
@@ -1278,6 +1282,7 @@ function createMenuSurface(opts) {
             clearInterval(pulse);
             pulse = null;
         }
+        surfaced = false;
         if (retry) {
             clearTimeout(retry);
             retry = null;
@@ -1788,10 +1793,13 @@ function createMenuSurface(opts) {
                 note('menu-ready ' + screen.w + 'x' + screen.h + (native ? ' native' : ''));
                 paint();
             } else if (type === X_STATE && body.length >= 8) {
-                // On this unit X_STATE goes false right after READY and killed the
-                // first frame. Leave detection stays on changeVisibility.
-                front = body.readUInt32LE(4) !== 0;
-                note(front ? 'menu-front' : 'menu-away');
+                // Byte 4 is on-screen. Logging every repeat looked like a leak;
+                // the renderer also hides the layer when this flips.
+                var onScreen = body.readUInt32LE(4) !== 0;
+                if (onScreen !== front) {
+                    front = onScreen;
+                    note(front ? 'menu-front' : 'menu-away');
+                }
             } else if (type === CLOSED) {
                 note('menu-closed');
             } else if (type === TOUCH && body.length >= 12 && shown) {
