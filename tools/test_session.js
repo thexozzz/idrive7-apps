@@ -89,13 +89,14 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     gate.sample(10000);
     return manager.onVehicle();
 }).then(function (rdpCut) {
-    assert.strictEqual(rdpCut.stopped, true);
-    assert.strictEqual(manager.active(), null);
+    assert.notStrictEqual(rdpCut.stopped, true);
+    assert.strictEqual(manager.active(), 'rdp');
     gate.sample(10000);
     return manager.connect('vnc', { host: '10.0.0.8' });
 }).then(function (moving) {
-    assert.strictEqual(moving.reason, 'not-parked');
-    assert.strictEqual(vncCalls.connect, 0);
+    assert.strictEqual(moving.ok, true);
+    assert.strictEqual(manager.active(), 'vnc');
+    assert.strictEqual(vncCalls.connect, 1);
     gate.sample(0);
     return manager.connect('vnc', { host: '10.0.0.8' });
 }).then(function (started) {
@@ -104,13 +105,13 @@ manager.connect('airplay', { name: 'G21' }).then(function (startedAir) {
     return manager.connect('rdp', { host: '10.0.0.9' });
 }).then(function (switched) {
     assert.strictEqual(switched.ok, true);
-    assert.strictEqual(vncCalls.disconnect, 1);
+    assert.strictEqual(vncCalls.disconnect, 2);
     assert.strictEqual(manager.active(), 'rdp');
     gate.sample(10000);
     return manager.onVehicle();
 }).then(function (stopped) {
-    assert.strictEqual(stopped.stopped, true);
-    assert.strictEqual(manager.active(), null);
+    assert.notStrictEqual(stopped.stopped, true);
+    assert.strictEqual(manager.active(), 'rdp');
     var rdp = desktop.createRdpSession({
         paths: files,
         clientExists: function () { return false; },

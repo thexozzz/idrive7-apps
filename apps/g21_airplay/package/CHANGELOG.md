@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.92
+
+- Brak limitu predkosci. Obraz na zegarach i HUD zostaje takze w czasie jazdy.
+
 ## 0.1.91
 
 - Zegary i HUD dostaja obraz ta sama droga co Napis. Domyslne okno jest na srodku ekranu. Pozycja wraca jako osobna lista: Srodek, wiekszy, mniejszy i cztery kierunki.

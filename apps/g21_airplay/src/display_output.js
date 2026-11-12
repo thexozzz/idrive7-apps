@@ -3,10 +3,6 @@
 var settingsFactory = require('./settings_manager.js');
 var parked = require('./parked_gate.js');
 
-function movingOutput(name) {
-    return name === 'cluster' || name === 'hud';
-}
-
 function createDisplayOutputManager(opts) {
     var settings = opts.settings;
     var outputs = opts.outputs;
@@ -23,11 +19,6 @@ function createDisplayOutputManager(opts) {
         var status = output.status();
         if (!status.available) {
             return { ok: false, reason: status.reason || 'unavailable' };
-        }
-        // Without a Vehicle2 sample this G21 never looks "parked", so Zegary/HUD
-        // RDP picks used to no-op (not-parked). Only refuse once we know it moves.
-        if (movingOutput(name) && gate.known() && gate.hudAllowed() !== true) {
-            return { ok: false, reason: 'not-parked' };
         }
         return { ok: true };
     }
@@ -133,25 +124,7 @@ function createDisplayOutputManager(opts) {
         } else {
             gate.sample(raw);
         }
-        var moving = Object.keys(playing).filter(movingOutput);
-        if (moving.length && gate.known() && gate.hudAllowed() !== true) {
-            moving.forEach(function (name) {
-                dropOutput(name, 'driving');
-            });
-            log('moving-image-off', moving.join(','), 'driving');
-        }
-        if (moving.length && !gate.known()) {
-            moving.forEach(function (name) {
-                dropOutput(name, 'speed-unknown');
-            });
-            log('moving-image-off', moving.join(','), 'speed-unknown');
-        }
-        var left = Object.keys(playing);
-        if (left.indexOf(active) === -1) {
-            active = left.indexOf('central') !== -1 ? 'central' : (left[0] || 'central');
-            settings.setActive(active);
-        }
-        return { ok: true, active: active, parked: gate.hudAllowed() === true };
+        return { ok: true, active: active, parked: true };
     }
 
     function frame(payload) {

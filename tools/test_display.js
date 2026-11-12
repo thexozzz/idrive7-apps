@@ -95,23 +95,22 @@ assert.strictEqual(cold.box.select('cluster').ok, true);
 assert.strictEqual(cold.outputs.cluster.state.starts, 1);
 cold.box.select('central');
 
-var parked = manager();
-parked.box.vehicle(0);
-assert.strictEqual(parked.box.select('cluster').ok, true);
-assert.strictEqual(parked.outputs.cluster.state.starts, 1);
-var moved = parked.box.vehicle(1000);
-assert.strictEqual(moved.active, 'central');
-assert.strictEqual(parked.outputs.cluster.state.releases, 1);
-assert.ok(parked.log.join(' ').indexOf('moving-image-off') !== -1);
+var parkedRun = manager();
+parkedRun.box.vehicle(0);
+assert.strictEqual(parkedRun.box.select('cluster').ok, true);
+assert.strictEqual(parkedRun.outputs.cluster.state.starts, 1);
+var moved = parkedRun.box.vehicle(1000);
+assert.strictEqual(moved.active, 'cluster');
+assert.strictEqual(parkedRun.outputs.cluster.state.releases, 0);
 var driving = manager();
 driving.box.vehicle(1000);
-assert.strictEqual(driving.box.select('cluster').reason, 'not-parked');
+assert.strictEqual(driving.box.select('cluster').ok, true);
 
 var lost = manager();
 lost.box.vehicle(0);
 lost.box.select('hud');
 var cleared = lost.box.vehicle(null);
-assert.strictEqual(cleared.active, 'central');
+assert.strictEqual(cleared.active, 'hud');
 
 var missing = manager({ cluster: { available: false, reason: 'no-yuv-source' } });
 missing.box.vehicle(0);
@@ -135,4 +134,4 @@ assert.strictEqual(hud.scale, 'cover');
 var placed = settingsFactory.fit(1920, 1080, hud);
 assert.ok(placed.w >= hud.w);
 
-console.log('display: one output, cluster and HUD only while parked, frames must be YUV');
+console.log('display: outputs stay on at any speed, frames must be YUV');

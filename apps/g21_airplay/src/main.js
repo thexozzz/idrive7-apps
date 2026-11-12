@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.91',
+        version: (this._packageJson && this._packageJson.version) || '0.1.92',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.91') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.92') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1152,9 +1152,6 @@ AirPlayApp.prototype._saveWindows = function () {
 };
 
 AirPlayApp.prototype._showGauges = function () {
-    if (this._gate && this._gate.known && this._gate.known() && this._gate.hudAllowed() !== true) {
-        return false;
-    }
     return true;
 };
 
@@ -1167,22 +1164,17 @@ AirPlayApp.prototype._routerMode = function () {
 };
 
 AirPlayApp.prototype._parkFlag = function () {
-    if (!this._gate || !this._gate.known || !this._gate.known()) {
-        return null;
-    }
-    return this._gate.hudAllowed() === true;
+    return true;
 };
 
 AirPlayApp.prototype._startAirplaySelected = function () {
     var names = this._settings.outputs();
     var started;
-    var moving;
     if (!names.length) {
         this._settings.toggleOutput('central');
         this._saveWindows();
         names = this._settings.outputs();
     }
-    moving = names.indexOf('cluster') !== -1 || names.indexOf('hud') !== -1;
     if (this._router) {
         this._router.setMode(this._routerMode());
         this._router.setParked(this._parkFlag());
@@ -1207,9 +1199,6 @@ AirPlayApp.prototype._startAirplaySelected = function () {
         this._tellMenu((started.failed && started.failed[0]) || 'not-parked');
         this._sync();
         return;
-    }
-    if (moving && this._parkFlag() !== true) {
-        noteStart('air-gauges-wait-park');
     }
     this._airStarting = true;
     this._choose('airplay');

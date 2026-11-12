@@ -22,12 +22,12 @@ function createSessionManager(opts) {
     // missing sample blocked Polacz after the output picker. Cluster/HUD for
     // RDP are still refused in the UI via display.select. VNC still needs park
     // to start. Once a real sample exists, moving cuts RDP and VNC.
-    function needsParkToStart(name) {
-        return name === 'vnc';
+    function needsParkToStart() {
+        return false;
     }
 
-    function cutOnMove(name) {
-        return name === 'rdp' || name === 'vnc';
+    function cutOnMove() {
+        return false;
     }
 
     function disconnect() {
