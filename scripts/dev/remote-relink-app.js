@@ -111,6 +111,7 @@ var mods = [
     'display_output.js',
     'parked_gate.js',
     'video_decoder.js',
+    'mirror_video.js',
     'cluster_render_adapter.js',
     'cluster_render_client.js',
     'cluster_label.js',
@@ -139,7 +140,7 @@ mods.forEach(function (name) {
 var manifest = {
     schema: 1,
     id: 'g21_airplay',
-    version: '0.1.70',
+    version: '0.1.77',
     tree: 'package',
     internet: true,
     modules: mods.map(function (f) { return 'src/' + f; }),

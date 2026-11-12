@@ -92,10 +92,19 @@ function createClusterRenderAdapter(client) {
             return { ok: true, ref: ref, w: fw, h: fh };
         },
         updateFrame: function (name, atlas) {
-            var slot = layers[name];
+            var slot;
+            var keys;
             var need;
-            if (!slot && atlas && !name) {
-                return fail('no-layer');
+            if (Buffer.isBuffer(name)) {
+                atlas = name;
+                name = null;
+            }
+            slot = name ? layers[name] : null;
+            if (!slot && !name) {
+                keys = Object.keys(layers);
+                if (keys.length === 1) {
+                    slot = layers[keys[0]];
+                }
             }
             if (!slot) {
                 return fail('no-layer');

@@ -15,6 +15,9 @@ var HELLO = 1;
 var PLACE = 2;
 var SHOW = 3;
 var FRAME = 7;
+var VIDEO = 13;
+var DROP_VIDEO = 14;
+var MIRROR_FILE = '/dev/shm/mgu-video-g21airplay';
 var GRAB = 10;
 var READY = 101;
 var CCU = 105;
@@ -466,6 +469,19 @@ FrameBuilder.prototype.clear = function (color) {
     this.op(color);
 };
 
+FrameBuilder.prototype.video = function (x, y, w, h, id) {
+    if (!(w > 0) || !(h > 0)) {
+        return;
+    }
+    this.op(19);
+    this.f32(x);
+    this.f32(y);
+    this.f32(w);
+    this.f32(h);
+    this.f32(0);
+    this.op(id || 1);
+};
+
 FrameBuilder.prototype.rect = function (x, y, w, h, color) {
     if (!(w > 0) || !(h > 0)) {
         return;
@@ -831,7 +847,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var panelY;
     var panelW;
     var panelH;
-    // Clear only — no full-page fill so Wayland video stays visible under the HUD.
+    // The window is drawn here. waylandsink under the HMI stays blank on this unit.
     draw.clear(0);
     drawVersionMark(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW }, version);
 
@@ -839,6 +855,10 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     panelW = page.boxW - 160;
     if (info && info.window && info.window.w > 80 && info.window.h > 80) {
         var win = info.window;
+        draw.rect(win.x, win.y, win.w, win.h, PAGE);
+        if (info.video) {
+            draw.video(win.x, win.y, win.w, win.h, 1);
+        }
         draw.rect(win.x, win.y, win.w, 44, ACCENT);
         draw.rect(win.x, win.y + 44, win.w, 3, ACCENT_DIM);
         draw.rect(win.x, win.y, 3, win.h, ACCENT);
@@ -1097,6 +1117,7 @@ function createMenuSurface(opts) {
     var popupHits = [];
     var holdTimer = null;
     var dragWin = null;
+    var mirrorSent = false;
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -1143,6 +1164,28 @@ function createMenuSurface(opts) {
         write(message(native ? X_GRAB : GRAB, u32(on ? 1 : 0)));
     }
 
+    function sendMirror(on) {
+        var body;
+        if (!native) {
+            return;
+        }
+        if (on) {
+            if (mirrorSent) {
+                return;
+            }
+            body = Buffer.alloc(4 + MIRROR_FILE.length + 1);
+            body.writeUInt32LE(1, 0);
+            body.write(MIRROR_FILE, 4);
+            write(message(VIDEO, body));
+            mirrorSent = true;
+            return;
+        }
+        if (mirrorSent) {
+            write(message(DROP_VIDEO, u32(1)));
+            mirrorSent = false;
+        }
+    }
+
     function paint() {
         if (!ready || !shown) {
             return;
@@ -1151,6 +1194,10 @@ function createMenuSurface(opts) {
         sendShow(true);
         sendGrab(true);
         sendClaim();
+        if (streamInfo) {
+            streamInfo.video = !!(streamInfo.mirrored && native && streamInfo.window);
+        }
+        sendMirror(!!(streamInfo && streamInfo.video));
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
             : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption);
@@ -1756,6 +1803,7 @@ function createMenuSurface(opts) {
         next.on('connect', function () {
             ready = false;
             native = false;
+            mirrorSent = false;
             incoming = Buffer.alloc(0);
             write(message(HELLO, Buffer.concat([
                 Buffer.from('g21_airplay'),

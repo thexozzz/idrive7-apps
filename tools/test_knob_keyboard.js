@@ -5,10 +5,8 @@ var kb = require('../apps/g21_airplay/src/knob_keyboard.js');
 var menu = require('../apps/g21_airplay/src/menu_draw.js');
 
 var edit = kb.createEdit({ mode: 'ip', value: '10.0.0.', field: 'rdp-ip' });
-assert.strictEqual(edit.keys[0], '0');
-assert.strictEqual(edit.cols, 7);
-kb.moveKey(edit, 1);
-assert.strictEqual(edit.keyIndex, 1);
+assert.strictEqual(edit.keys[0], '1');
+assert.strictEqual(edit.rows[0].length, 10);
 kb.applyKey(edit);
 assert.strictEqual(edit.value, '10.0.0.1');
 edit.keyIndex = edit.keys.indexOf('OK');

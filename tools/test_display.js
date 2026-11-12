@@ -33,7 +33,7 @@ assert.strictEqual(adapter.knownTarget('cluster').protocol, 'panel');
 assert.strictEqual(adapter.knownTarget('hud').w, 800);
 var made = adapter.createLayer('hud', { x: 10, y: 20, w: 400, h: 200, fps: 15 });
 assert.strictEqual(made.ok, true);
-var pixels = Buffer.alloc(adapterFactory.yuvBytes(800, 480), 16);
+var pixels = Buffer.alloc(adapterFactory.yuvBytes(made.w, made.h), 16);
 assert.strictEqual(adapter.updateFrame(Buffer.alloc(10)).reason, 'bad-frame');
 assert.strictEqual(adapter.updateFrame(pixels).ok, true);
 assert.strictEqual(clientOk.calls[clientOk.calls.length - 1][0], 'frame');

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.77
+
+- AirPlay: klatki I420 ida do menu jako wideo mgu-render, zeby lustro bylo widac na srodku.
+
 ## 0.1.76
 
 - Okno: Wielkosc (pokretlo, proporcje, podglad) i Pozycja (strzalki, OK wychodzi).

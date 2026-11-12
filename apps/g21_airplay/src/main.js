@@ -8,6 +8,7 @@ var uplink = require('./uplink.js');
 var settingsFactory = require('./settings_manager.js');
 var display = require('./display_output.js');
 var videoDecoder = require('./video_decoder.js');
+var mirrorVideo = require('./mirror_video.js');
 var adapterFactory = require('./cluster_render_adapter.js');
 var ClusterRender = require('./cluster_render_client.js').ClusterRender;
 var clusterLabelFactory = require('./cluster_label.js');
@@ -332,7 +333,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.76',
+        version: (this._packageJson && this._packageJson.version) || '0.1.77',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -422,7 +423,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.76') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.77') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2517,6 +2518,14 @@ AirPlayApp.prototype._takeFrame = function () {
         return;
     }
     this._decoded = parsed;
+    try {
+        if (!this._mirrorVideo) {
+            this._mirrorVideo = mirrorVideo.createMirrorVideo();
+        }
+        this._mirrorVideo.push(parsed.i420, parsed.w, parsed.h);
+    } catch (mirrorErr) {
+        noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
+    }
     live = this._display.playing ? this._display.playing() : [this._display.active()];
     payload = {};
     if (live.indexOf('central') !== -1 && this._frames) {

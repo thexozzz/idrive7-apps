@@ -71,7 +71,20 @@ function createDisplayOutputManager(opts) {
     }
 
     function select(name) {
-        return selectMany([name]);
+        var check = available(name);
+        var previous;
+        var result;
+        if (!check.ok) {
+            log('output-refused', name, check.reason);
+            return check;
+        }
+        previous = Object.keys(playing);
+        result = selectMany([name]);
+        if (!result.ok && previous.length) {
+            selectMany(previous);
+            result.restored = true;
+        }
+        return result;
     }
 
     function selectMany(names) {
@@ -133,7 +146,11 @@ function createDisplayOutputManager(opts) {
             });
             log('moving-image-off', moving.join(','), 'speed-unknown');
         }
-        active = Object.keys(playing)[0] || active;
+        var left = Object.keys(playing);
+        if (left.indexOf(active) === -1) {
+            active = left.indexOf('central') !== -1 ? 'central' : (left[0] || 'central');
+            settings.setActive(active);
+        }
         return { ok: true, active: active, parked: gate.hudAllowed() === true };
     }
 
