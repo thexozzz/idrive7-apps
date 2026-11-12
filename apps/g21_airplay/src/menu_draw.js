@@ -293,6 +293,7 @@ var ICONS = {
 var FONT = {
     ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
     '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+    '>': ['00001', '00010', '00100', '01000', '00100', '00010', '00001'],
     '_': ['00000', '00000', '00000', '00000', '00000', '00000', '11111'],
     '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
     '*': ['00000', '10101', '01110', '00100', '01110', '10101', '00000'],
@@ -690,6 +691,95 @@ function menuLayout(items, selected, width, height, detail, heading) {
     };
 }
 
+function findBack(list) {
+    var i;
+    var name;
+    var end = '';
+    for (i = 0; i < list.length; i += 1) {
+        name = list[i] && list[i].name ? list[i].name : '';
+        if (/back$/.test(name)) {
+            return name;
+        }
+        if (name === 'stream-end') {
+            end = name;
+        }
+    }
+    return end;
+}
+
+function crumbFor(name, head, where) {
+    var base;
+    if (name === 'airplay') {
+        base = 'AirPlay';
+    } else if (name === 'air-out') {
+        base = 'AirPlay > Ekrany';
+    } else if (name === 'air-box') {
+        base = 'AirPlay > Ekrany > Okno';
+    } else if (name === 'label') {
+        base = 'Napis';
+    } else if (name === 'stream') {
+        base = 'AirPlay > Lustro';
+    } else if (head && head !== 'THEiPlay' && head !== 'Stream') {
+        base = 'THEiPlay > ' + head;
+    } else {
+        base = 'THEiPlay';
+    }
+    if (where) {
+        return base + ' > ' + where;
+    }
+    return base;
+}
+
+function placeName(field, title) {
+    if (field === 'air-name') {
+        return 'Nazwa';
+    }
+    if (field === 'label-text') {
+        return 'Tekst';
+    }
+    if (field === 'rdp-label' || field === 'vnc-label') {
+        return 'Nazwa';
+    }
+    if (field === 'rdp-ip' || field === 'vnc-ip') {
+        return 'IP';
+    }
+    if (field === 'rdp-port' || field === 'vnc-port') {
+        return 'Port';
+    }
+    if (field === 'rdp-user') {
+        return 'Konto';
+    }
+    if (field === 'rdp-pass') {
+        return 'Haslo';
+    }
+    return title ? String(title) : 'Wpisz';
+}
+
+function fitCrumb(draw, text, scale, maxW) {
+    var s = String(text || '');
+    while (s.length > 4 && draw.textWidth(s, scale) > maxW) {
+        s = s.slice(0, -2);
+    }
+    return s;
+}
+
+function drawMenuHeader(draw, lay, crumb, showBack) {
+    var textX = lay.ox + 36;
+    var scale = 4;
+    var label;
+    lay.crumb = crumb || 'THEiPlay';
+    lay.backHit = null;
+    if (showBack) {
+        draw.pill(lay.ox + 20, lay.oy + 14, 150, 40, CARD);
+        draw.text('wstecz', lay.ox + 40, lay.oy + 24, 3, ACCENT);
+        lay.backHit = { x: lay.ox + 20, y: lay.oy + 14, w: 150, h: 40 };
+        textX = lay.ox + 188;
+        scale = 4;
+    }
+    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 200);
+    draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
+}
+
 function keyLabel(key) {
     if (key === 'SPC') {
         return 'spacja';
@@ -706,7 +796,7 @@ function keyLabel(key) {
     return key;
 }
 
-function buildKeyboardFrame(edit, width, height) {
+function buildKeyboardFrame(edit, width, height, crumb) {
     var draw = new FrameBuilder();
     var page = pageBox(width, height);
     var rows = edit.rows || [];
@@ -734,10 +824,16 @@ function buildKeyboardFrame(edit, width, height) {
     var altX;
     var altY;
     var shown = knobKeyboard.displayValue(edit) + '_';
+    var head = {
+        ox: page.ox,
+        oy: page.oy,
+        boxW: page.boxW,
+        boxH: page.boxH
+    };
     draw.clear(0);
     draw.rect(page.ox, page.oy, page.boxW, page.boxH, PAGE);
     draw.rect(page.ox, page.oy, page.boxW, 56, PAGE_TOP);
-    draw.text(edit.title || 'Wpisz', page.ox + 72, page.oy + 16, 5, ACCENT);
+    drawMenuHeader(draw, head, crumb || edit.title || 'Wpisz', true);
     draw.text('tap: litera   przytrzymaj: polskie', page.ox + 72, page.oy + 72, 3, MUTED);
     draw.pill(page.ox + 48, page.oy + 100, page.boxW - 96, 44, CARD_HI);
     draw.text(shown.slice(0, 40), page.ox + 68, page.oy + 112, 4, INK);
@@ -802,7 +898,9 @@ function buildKeyboardFrame(edit, width, height) {
             boxH: page.boxH,
             bubbles: [],
             keys: hits,
-            popup: popupHits
+            popup: popupHits,
+            crumb: head.crumb,
+            backHit: head.backHit
         }
     };
 }
@@ -897,7 +995,7 @@ function streamWindow(win, page) {
     return { x: x, y: y, w: w, h: h };
 }
 
-function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption) {
+function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
@@ -923,12 +1021,26 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var panelH;
     // The window is drawn here. waylandsink under the HMI stays blank on this unit.
     draw.clear(0);
+    var head = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
+    if (crumb) {
+        draw.rect(page.ox, page.oy, page.boxW, 64, PAGE_TOP);
+        drawMenuHeader(draw, head, crumb, true);
+        lay.crumb = head.crumb;
+        lay.backHit = head.backHit;
+    }
     drawVersionMark(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW }, version);
 
     panelX = page.ox + 80;
     panelW = page.boxW - 160;
         if (info && info.window && info.window.w > 80 && info.window.h > 80) {
             var win = streamWindow(info.window, page);
+            if (crumb && win.y < page.oy + 72) {
+                win.h -= (page.oy + 72 - win.y);
+                win.y = page.oy + 72;
+                if (win.h < 80) {
+                    win.h = 80;
+                }
+            }
             draw.rect(win.x, win.y, win.w, win.h, PAGE);
         if (info.video) {
             draw.video(win.x, win.y, win.w, win.h, 1);
@@ -1026,7 +1138,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption) {
+function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb) {
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -1043,7 +1155,7 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     var labelY;
     var focus;
     if (isStreamItems(items) || heading === 'Stream') {
-        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption);
+        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb);
     }
     lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
@@ -1051,7 +1163,9 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     draw.rect(lay.ox, lay.oy, 8, lay.boxH, ACCENT);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.headerH, PAGE_TOP);
     draw.rect(lay.ox + 28, lay.oy + lay.headerH - 3, 96, 3, ACCENT);
-    if (lay.heading) {
+    if (crumb) {
+        drawMenuHeader(draw, lay, crumb, crumb !== 'THEiPlay');
+    } else if (lay.heading) {
         draw.text(lay.heading, lay.ox + 36, lay.oy + 22, 5, INK);
     } else {
         draw.text('THEiPlay', lay.ox + 36, lay.oy + 22, 5, ACCENT);
@@ -1242,6 +1356,8 @@ function createMenuSurface(opts) {
     var dragWin = null;
     var mirrorSent = false;
     var pulseBeat = 0;
+    var backBox = null;
+    var backAction = '';
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -1333,11 +1449,15 @@ function createMenuSurface(opts) {
             streamInfo.video = !!(streamInfo.mirrored && native && streamInfo.window);
         }
         sendMirror(!!(streamInfo && streamInfo.video));
+        var place = edit ? placeName(edit.field, edit.title) : '';
+        var crumb = crumbFor(screenName, heading, place);
         var built = edit
-            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption);
+            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb)
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb);
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
+        backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
+        backAction = edit ? '' : findBack(items);
         write(built.frame);
         lastFrame = built.frame;
         if (!noted) {
@@ -1410,6 +1530,27 @@ function createMenuSurface(opts) {
             claimNoted = true;
             note('menu-claim ' + w + 'x' + h);
         }
+    }
+
+    function hitsBack(x, y) {
+        var pts;
+        var pi;
+        var p;
+        if (!backBox) {
+            return false;
+        }
+        pts = [
+            { x: x, y: y },
+            { x: x + CONTENT.x, y: y + CONTENT.y },
+            { x: x - CONTENT.x, y: y - CONTENT.y }
+        ];
+        for (pi = 0; pi < pts.length; pi += 1) {
+            p = pts[pi];
+            if (p.x >= backBox.x && p.x < backBox.x + backBox.w && p.y >= backBox.y && p.y < backBox.y + backBox.h) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function hitRow(x, y) {
@@ -1880,12 +2021,21 @@ function createMenuSurface(opts) {
             } else if (type === CLOSED) {
                 note('menu-closed');
             } else if (type === TOUCH && body.length >= 12 && shown) {
-                // Iterio/native: phase 1=down, 2=move, 3=up. Same type 105 as
-                // upstream CCU, so require 12+ byte touch payload.
                 var phase = body.readUInt32LE(0);
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if (hitsBack(tx, ty)) {
+                    if (phase === 3) {
+                        if (edit) {
+                            cancelEdit();
+                        } else if (backAction) {
+                            choose(backAction);
+                        }
+                    }
+                    touchDown = null;
+                    return;
+                }
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
                 if (!edit && onWindowDrag(phase, tx, ty)) {
                     return;
@@ -2145,6 +2295,7 @@ module.exports = {
     streamWindow: streamWindow,
     buildKeyboardFrame: buildKeyboardFrame,
     encoderStep: encoderStep,
+    crumbFor: crumbFor,
     createMenuSurface: createMenuSurface,
     FONT: FONT
 };

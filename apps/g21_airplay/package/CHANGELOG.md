@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.87
+
+- W nagłówku menu jest stały przycisk Wstecz i ścieżka miejsca, na przykład AirPlay > Nazwa.
+
 ## 0.1.86
 
 - Lista w menu przewija się razem z pokrętłem i ze swipe, więc widać opcje, które nie mieszczą się na ekranie.
