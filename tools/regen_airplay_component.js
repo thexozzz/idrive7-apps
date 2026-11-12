@@ -18,6 +18,7 @@ var skip = {
 };
 var execNames = {
     'g21-airplay-open': true,
+    'g21-detach': true,
     'g21-present': true,
     'g21-rdp': true,
     'g21-mice': true,
@@ -57,7 +58,7 @@ var files = [];
 walk(root, files);
 files.sort(function (a, b) { return a.path.localeCompare(b.path); });
 var meta = JSON.parse(fs.readFileSync(path.join(root, 'component.json'), 'utf8'));
-meta.version = '0.1.18';
+meta.version = '0.1.19';
 meta.title = 'AirPlay i Windows Miracast';
 meta.description = 'Backend AirPlay (UxPlay+mdnsd/avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).';
 meta.files = files;

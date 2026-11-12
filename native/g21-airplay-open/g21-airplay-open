@@ -734,12 +734,21 @@ start_ux() {
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
-    # New session + ignore SIGHUP: avahi/service HUP must not stop the sink.
+    # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
+    # applet, so plain `setsid` aborted start with "not found" and left no :7400.
+    # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
     # shellcheck disable=SC2086
     if [ -n "$mac_args" ]; then
-        setsid sh -c 'trap "" HUP; exec "$0" "$@"' "$bin" -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as 0 -s 1920x720 >>"$UXLOG" 2>&1 &
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs waylandsink -as 0 -s 1920x720
     else
-        setsid sh -c 'trap "" HUP; exec "$0" "$@"' "$bin" -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as 0 -s 1920x720 >>"$UXLOG" 2>&1 &
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs waylandsink -as 0 -s 1920x720
+    fi
+    if [ -x "$dir/g21-detach" ]; then
+        "$dir/g21-detach" "$bin" "$@" >>"$UXLOG" 2>&1 &
+    elif command -v nohup >/dev/null 2>&1; then
+        nohup "$bin" "$@" >>"$UXLOG" 2>&1 &
+    else
+        "$bin" "$@" >>"$UXLOG" 2>&1 &
     fi
     UXPID=$!
     sleep 3
