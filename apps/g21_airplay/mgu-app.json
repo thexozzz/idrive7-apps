@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "tree": "package",
   "internet": true,
   "modules": [

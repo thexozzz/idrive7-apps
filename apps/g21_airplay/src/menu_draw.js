@@ -29,8 +29,10 @@ var CLOSED = 106;
 
 var INK = 0xF2F4F8FF;
 var HINT = 0x9AA3B2FF;
-var BAR = 0x243044FF;
+var BAR = 0x2B3B55FF;
+var BUBBLE = 0x1A2436FF;
 var PAGE = 0x10141CFF;
+var ACCENT = 0x3D7EFFFF;
 // Margins left clear inside a full-screen surface. On this car a PLACE of only
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
@@ -199,11 +201,40 @@ FrameBuilder.prototype.text = function (str, x, y, scale, color) {
     }
 };
 
+FrameBuilder.prototype.textWidth = function (str, scale) {
+    return String(str || '').length * 6 * scale;
+};
+
+FrameBuilder.prototype.pill = function (x, y, w, h, color) {
+    var radius = Math.floor(h / 2);
+    var i;
+    var inset;
+    var span;
+    if (radius < 8) {
+        this.rect(x, y, w, h, color);
+        return;
+    }
+    for (i = 0; i < radius; i += 1) {
+        inset = radius - 1 - Math.floor(Math.sqrt((radius * radius) - ((radius - 1 - i) * (radius - 1 - i))));
+        if (inset < 0) {
+            inset = 0;
+        }
+        span = w - (inset * 2);
+        if (span > 0) {
+            this.rect(x + inset, y + i, span, 1, color);
+            this.rect(x + inset, y + h - 1 - i, span, 1, color);
+        }
+    }
+    if (h > radius * 2) {
+        this.rect(x, y + radius, w, h - (radius * 2), color);
+    }
+};
+
 FrameBuilder.prototype.bytes = function () {
     return Buffer.concat(this.parts);
 };
 
-function menuLayout(width, height, count, detail, heading) {
+function pageBox(width, height) {
     var boxW = width - CONTENT.x - 20;
     var boxH = height - CONTENT.y;
     var ox = 0;
@@ -215,67 +246,107 @@ function menuLayout(width, height, count, detail, heading) {
         boxW = width;
         boxH = height;
     }
-    var gap = 10;
-    var top = heading ? 56 : 24;
-    var statusH = detail ? 40 : 0;
-    var rowH = Math.floor((boxH - top - statusH - gap * count) / count);
-    var rows = [];
+    return { ox: ox, oy: oy, boxW: boxW, boxH: boxH };
+}
+
+function menuLayout(items, selected, width, height, detail, heading) {
+    var page = pageBox(width, height);
+    var gap = 28;
+    var padX = 40;
+    var scale = 5;
+    var bubbleH = 108;
+    var bubbles = [];
     var i;
-    if (rowH > 110) {
-        rowH = 110;
-    }
-    if (rowH < 64) {
-        rowH = 64;
-    }
-    for (i = 0; i < count; i += 1) {
-        rows.push({
-            x: ox + 40,
-            y: oy + top + i * (rowH + gap),
-            w: boxW - 80,
-            h: rowH
+    var textW;
+    var bw;
+    var total = 0;
+    var before = 0;
+    var startX;
+    var y;
+    for (i = 0; i < items.length; i += 1) {
+        textW = String(items[i].title || '').length * 6 * scale;
+        bw = textW + (padX * 2);
+        if (bw < 160) {
+            bw = 160;
+        }
+        if (i === selected) {
+            bw += 24;
+        }
+        bubbles.push({
+            w: bw,
+            h: i === selected ? bubbleH + 12 : bubbleH,
+            scale: i === selected ? 6 : scale
         });
+        total += bw + (i ? gap : 0);
+        if (i < selected) {
+            before += bw + gap;
+        }
+    }
+    startX = page.ox + Math.floor(page.boxW / 2) - Math.floor(bubbles[selected].w / 2) - before;
+    y = page.oy + Math.floor((page.boxH - bubbleH) / 2) - 20;
+    for (i = 0; i < bubbles.length; i += 1) {
+        bubbles[i].x = startX;
+        bubbles[i].y = y - (i === selected ? 6 : 0);
+        startX += bubbles[i].w + gap;
     }
     return {
-        ox: ox,
-        oy: oy,
-        boxW: boxW,
-        boxH: boxH,
-        rowH: rowH,
+        ox: page.ox,
+        oy: page.oy,
+        boxW: page.boxW,
+        boxH: page.boxH,
         gap: gap,
-        top: top,
-        rows: rows,
-        heading: heading || ''
+        bubbles: bubbles,
+        heading: heading || '',
+        detail: detail || '',
+        hintY: y + bubbleH + 36,
+        statusY: y + bubbleH + 84
     };
 }
 
 function buildFrame(items, selected, width, height, detail, heading) {
     var draw = new FrameBuilder();
-    var lay = menuLayout(width, height, items.length, detail, heading);
+    var lay = menuLayout(items, selected, width, height, detail, heading);
     var i;
-    var row;
-    var titleScale;
-    var hintScale;
+    var bubble;
+    var title;
+    var titleW;
+    var color;
+    var ink;
+    var hint;
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
     if (lay.heading) {
-        draw.text(lay.heading, lay.ox + 72, lay.oy + 16, 5, HINT);
+        draw.text(lay.heading, lay.ox + 72, lay.oy + 20, 5, HINT);
     }
     for (i = 0; i < items.length; i += 1) {
-        row = lay.rows[i];
-        titleScale = lay.rowH >= 90 ? 6 : 5;
-        hintScale = lay.rowH >= 90 ? 4 : 3;
+        bubble = lay.bubbles[i];
+        title = String(items[i].title || '');
+        color = i === selected ? ACCENT : BUBBLE;
+        ink = i === selected ? INK : HINT;
         if (i === selected) {
-            draw.rect(row.x, row.y, row.w, row.h, BAR);
+            draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, BAR);
         }
-        draw.text(items[i].title, lay.ox + 72, row.y + Math.floor(lay.rowH * 0.22), titleScale, INK);
-        draw.text(items[i].hint, lay.ox + 72, row.y + Math.floor(lay.rowH * 0.58), hintScale, HINT);
+        draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, color);
+        titleW = draw.textWidth(title, bubble.scale);
+        draw.text(
+            title,
+            bubble.x + Math.floor((bubble.w - titleW) / 2),
+            bubble.y + Math.floor((bubble.h - (7 * bubble.scale)) / 2),
+            bubble.scale,
+            ink
+        );
+    }
+    hint = items[selected] && items[selected].hint ? String(items[selected].hint) : '';
+    if (hint) {
+        draw.text(hint, lay.ox + 72, lay.hintY, 4, HINT);
     }
     if (detail) {
-        draw.text(detail, lay.ox + 72, lay.oy + lay.top + items.length * (lay.rowH + lay.gap) + 4, 4, INK);
+        draw.text(detail, lay.ox + 72, lay.statusY, 4, INK);
     }
     return {
         frame: message(FRAME, draw.bytes()),
-        rects: draw.rects
+        rects: draw.rects,
+        layout: lay
     };
 }
 
@@ -435,12 +506,12 @@ function createMenuSurface(opts) {
     }
 
     function hitRow(x, y) {
-        var lay = menuLayout(screen.w || 1920, screen.h || 720, items.length, !!detail, heading);
+        var lay = menuLayout(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
         var i;
-        var row;
-        for (i = 0; i < lay.rows.length; i += 1) {
-            row = lay.rows[i];
-            if (x >= row.x && x < row.x + row.w && y >= row.y && y < row.y + row.h) {
+        var bubble;
+        for (i = 0; i < lay.bubbles.length; i += 1) {
+            bubble = lay.bubbles[i];
+            if (x >= bubble.x && x < bubble.x + bubble.w && y >= bubble.y && y < bubble.y + bubble.h) {
                 return i;
             }
         }

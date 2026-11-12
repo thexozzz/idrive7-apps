@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.28
+
+- Menu to poziomy wiersz baniek z nazwami opcji; pokretlo przesuwa wybor.
+
 ## 0.1.27
 
 - Start AirPlay pokazuje UxPlay start zamiast mylacego AirPlay idle. Narzedzie odpala binarki przez linker /lib.

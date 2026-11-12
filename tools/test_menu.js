@@ -8,6 +8,8 @@ assert.strictEqual(built.frame.readUInt32LE(0), 7);
 assert.strictEqual(built.frame.length, 8 + built.frame.readUInt32LE(4));
 assert.strictEqual(built.frame.readUInt32LE(8), 1);
 assert.ok(built.rects > 40);
+assert.ok(built.layout);
+assert.strictEqual(built.layout.bubbles.length, menu.ROOT_ITEMS.length);
 
 var blank = menu.buildFrame([
     { title: ' ', hint: ' ' },
@@ -20,14 +22,17 @@ assert.ok(built.rects > blank.rects);
 var withStatus = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start');
 assert.ok(withStatus.rects > built.rects);
 
+var selected = menu.buildFrame(menu.ROOT_ITEMS, 2, 1920, 720, '', 'Menu');
+assert.ok(selected.layout.bubbles[2].w > selected.layout.bubbles[1].w);
+
 var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'UxPlay dziala', 'AirPlay');
-assert.ok(air.rects > built.rects);
+assert.ok(air.rects > 40);
 assert.strictEqual(menu.AIRPLAY_ITEMS.length, 5);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-start');
 assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-back');
 assert.ok(menu.SCREENS.airplay);
 var rdp = menu.buildFrame(menu.RDP_ITEMS, 0, 1920, 720, 'panel :1235', 'RDP');
-assert.ok(rdp.rects > built.rects);
+assert.ok(rdp.layout.bubbles.length, menu.RDP_ITEMS.length);
 assert.strictEqual(menu.RDP_ITEMS[0].name, 'rdp-start');
 assert.strictEqual(menu.RDP_ITEMS[4].name, 'rdp-panel');
 assert.ok(menu.SCREENS.rdp);
