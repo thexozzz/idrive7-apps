@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.95',
+        version: (this._packageJson && this._packageJson.version) || '0.1.96',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.95') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.96') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1111,7 +1111,7 @@ AirPlayApp.prototype._stopVideoTimer = function () {
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
-    // ~30 fps. Unchanged files are skipped. No full-screen BGRA convert.
+    // 40 fps. Unchanged files are skipped. HUD and the cluster share this clock.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
@@ -1125,7 +1125,7 @@ AirPlayApp.prototype._startVideoTimer = function () {
         } else {
             self._stopVideoTimer();
         }
-    }, 33);
+    }, 25);
 };
 
 AirPlayApp.prototype._turnedFrame = function (frame, name) {
@@ -2749,7 +2749,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
     }
-    if (this._faceAt && (now - this._faceAt) < 33) {
+    if (this._faceAt && (now - this._faceAt) < 25) {
         return;
     }
     this._faceAt = now;

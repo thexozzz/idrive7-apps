@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.96
+
+- Zegary i HUD odswiezaja obraz 40 razy na sekunde. iPhone jest proszony o 40 klatek.
+
 ## 0.1.95
 
 - Zegary znowu licza kolor tak jak przed 30 FPS, czyli przez RGB, i odswiezaja sie 30 razy na sekunde.
