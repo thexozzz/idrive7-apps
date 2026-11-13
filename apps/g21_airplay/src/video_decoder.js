@@ -76,6 +76,25 @@ function atlasFromI420(i420, sw, sh, dw, dh) {
     return toAtlas(scaleI420(i420, sw, sh, dw, dh));
 }
 
+function i420ToAtlas(i420, w, h) {
+    var ySize = w * h;
+    var uvW = w >> 1;
+    var uvH = h >> 1;
+    var atlas = Buffer.alloc(ySize + uvW * uvH * 2);
+    var srcU = ySize;
+    var srcV = ySize + uvW * uvH;
+    var offset = ySize;
+    var row;
+    i420.copy(atlas, 0, 0, ySize);
+    for (row = 0; row < uvH; row += 1) {
+        i420.copy(atlas, offset, srcU + row * uvW, srcU + row * uvW + uvW);
+        offset += uvW;
+        i420.copy(atlas, offset, srcV + row * uvW, srcV + row * uvW + uvW);
+        offset += uvW;
+    }
+    return atlas;
+}
+
 function i420ToBgra(i420, w, h) {
     var ySize = w * h;
     var uvW = w >> 1;
@@ -219,6 +238,7 @@ module.exports = {
     scaleI420: scaleI420,
     toAtlas: toAtlas,
     atlasFromI420: atlasFromI420,
+    i420ToAtlas: i420ToAtlas,
     i420ToBgra: i420ToBgra,
     bgraFromI420: bgraFromI420,
     placeBgra: placeBgra,

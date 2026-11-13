@@ -22,6 +22,13 @@ assert.strictEqual(atlas.length, 6);
 assert.strictEqual(atlas[0], 10);
 assert.strictEqual(atlas[4], 50);
 assert.strictEqual(atlas[5], 60);
+var plane = Buffer.alloc(2 * 2 * 3 / 2);
+plane.fill(16, 0, 4);
+plane.fill(200, 4, 5);
+plane.fill(40, 5, 6);
+var rows = dec.i420ToAtlas(plane, 2, 2);
+assert.strictEqual(rows[4], 200);
+assert.strictEqual(rows[5], 40);
 
 var packed = Buffer.alloc(8 + 6);
 packed[0] = 0x47;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.94
+
+- Zegary: kolor w formacie atlasu (wiersz U, potem V). Plaski I420 dawal fiolet i zielen.
+
 ## 0.1.93
 
 - Zegary dostaja klatke 30 razy na sekunde. Renderer skaluje wideo sam, zamiast dostawac pelny obraz co 120 ms.

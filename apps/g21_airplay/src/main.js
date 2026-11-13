@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.93',
+        version: (this._packageJson && this._packageJson.version) || '0.1.94',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.93') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.94') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2921,8 +2921,11 @@ AirPlayApp.prototype._presentCluster = function (frame) {
         noteStart('cluster-mirror ' + name + ' ' + srcW + 'x' + srcH + ' -> ' + placed.w + 'x' + placed.h + ' @30');
         if (made.w !== srcW || made.h !== srcH) {
             buf = frameFit.fitI420(turned.i420, turned.w, turned.h, made.w, made.h, 'contain').i420;
+            srcW = made.w;
+            srcH = made.h;
         }
     }
+    buf = videoDecoder.i420ToAtlas(buf, srcW, srcH);
     sent = this._adapter.updateFrame(name, buf);
     if (!sent.ok) {
         if (this._clusterFail !== sent.reason) {

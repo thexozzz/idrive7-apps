@@ -1,6 +1,6 @@
 {
   "name": "g21_airplay",
-  "version": "0.1.93",
+  "version": "0.1.94",
   "description": "THEiPlay — lustro ekranu iPhone przez AirPlay na MGU Store Wi-Fi.",
   "private": false,
   "main": "javascript/runner.js",
