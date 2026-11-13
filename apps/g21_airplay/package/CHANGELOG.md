@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.95
+
+- Zegary znowu licza kolor tak jak przed 30 FPS, czyli przez RGB, i odswiezaja sie 30 razy na sekunde.
+
 ## 0.1.94
 
 - Zegary: kolor w formacie atlasu (wiersz U, potem V). Plaski I420 dawal fiolet i zielen.

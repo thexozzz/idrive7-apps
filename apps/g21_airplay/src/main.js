@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.94',
+        version: (this._packageJson && this._packageJson.version) || '0.1.95',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.94') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.95') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1157,15 +1157,7 @@ AirPlayApp.prototype._showGauges = function () {
 
 AirPlayApp.prototype._routerMode = function () {
     var names = this._settings.outputs();
-    var central = names.indexOf('central') !== -1;
-    var cluster = names.indexOf('cluster') !== -1;
-    if (central && cluster) {
-        return 'both';
-    }
-    if (cluster) {
-        return 'cluster';
-    }
-    if (central) {
+    if (names.indexOf('central') !== -1) {
         return 'central';
     }
     return 'off';
@@ -2741,13 +2733,18 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (outs.indexOf('hud') !== -1) {
         faces.hud = { target: 'hud', maxW: 800, maxH: 480, contend: 0 };
     }
-    if (outs.indexOf('cluster') !== -1 && this._clusterVideoOk === false) {
+    if (outs.indexOf('cluster') !== -1) {
         faces.cluster = {
             target: panel ? 'panel' : 'map',
             maxW: panel ? 1920 : 1088,
             maxH: panel ? 720 : 480,
             contend: panel ? 1 : 0
         };
+        if (this._adapter && this._clusterLayer) {
+            this._adapter.destroyLayer('map');
+            this._adapter.destroyLayer('cluster');
+            this._clusterLayer = '';
+        }
     }
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
