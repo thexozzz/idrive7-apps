@@ -371,7 +371,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.103',
+        version: (this._packageJson && this._packageJson.version) || '0.1.104',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -464,7 +464,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.103') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.104') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1215,10 +1215,11 @@ AirPlayApp.prototype._startAirplaySelected = function () {
     var names = this._settings.outputs();
     var started;
     if (!names.length) {
-        this._settings.toggleOutput('central');
-        this._saveWindows();
-        names = this._settings.outputs();
+        this._airNeedPick = true;
+        this._refreshAirBadge();
+        return;
     }
+    this._airNeedPick = false;
     if (this._router) {
         this._router.setMode(this._routerMode());
         this._router.setParked(this._parkFlag());
@@ -1901,6 +1902,19 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._openProtocolScreen('airplay');
         return;
     }
+    if (name === 'air-pick-central' || name === 'air-pick-cluster' || name === 'air-pick-hud') {
+        this._settings.toggleOutput(name.replace('air-pick-', ''));
+        this._airNeedPick = false;
+        this._saveWindows();
+        if (this._router) {
+            this._router.setMode(this._routerMode());
+        }
+        if (this._menuScreen() === 'air-out') {
+            this._paintAirOut();
+        }
+        this._refreshAirBadge();
+        return;
+    }
     if (name === 'air-badge') {
         this._toggleProtocol('airplay');
         return;
@@ -2185,7 +2199,7 @@ AirPlayApp.prototype._refreshAirBadge = function () {
     online = !!(live.on && (this._decoded || client.state === 'mirroring'));
     bad = false;
     if (!live.on) {
-        status = 'offline';
+        status = this._airNeedPick ? 'wybierz ekran' : 'offline';
     } else if (online) {
         status = 'sukces';
     } else if (client.state === 'error') {
@@ -2210,7 +2224,8 @@ AirPlayApp.prototype._refreshAirBadge = function () {
     } else {
         status = 'czekam na iPhone';
     }
-    if (live.on && online && this._settings.outputs().indexOf('central') !== -1) {
+    var picked = this._settings.outputs();
+    if (live.on && online && picked.indexOf('central') !== -1) {
         picture = this._settings.picture('central');
     }
     this._menu.setAirState({
@@ -2218,6 +2233,11 @@ AirPlayApp.prototype._refreshAirBadge = function () {
         online: online,
         bad: bad,
         status: status,
+        screens: [
+            { key: 'central', on: picked.indexOf('central') !== -1 },
+            { key: 'cluster', on: picked.indexOf('cluster') !== -1 },
+            { key: 'hud', on: picked.indexOf('hud') !== -1 }
+        ],
         mirrored: online,
         window: picture,
         tune: live.on ? this._tuneView() : null
@@ -3149,6 +3169,12 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     }
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
+    }
+    if (outs.indexOf('hud') === -1) {
+        this._dropMirrorFace('hud');
+    }
+    if (outs.indexOf('cluster') === -1) {
+        this._dropMirrorFace('cluster');
     }
     if (this._faceAt && (now - this._faceAt) < 42) {
         this._armFace(42 - (now - this._faceAt));

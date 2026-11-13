@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.104
+
+- Obok statusu sa Srodek, Zegary i HUD. Start wlacza tylko zaznaczone ekrany.
+
 ## 0.1.103
 
 - Pasek AirPlay jest waski, w rogu naglowka. Obraz nie ma paska ani przyciskow, a menu pod nim nie lapie dotyku.

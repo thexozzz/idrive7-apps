@@ -781,7 +781,7 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         textX = lay.ox + 188;
         scale = 4;
     }
-    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 380);
+    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 780);
     draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
 }
 
@@ -1109,26 +1109,60 @@ function pushHit(hits, box) {
 }
 
 function drawAirBadge(draw, lay, air, versionText) {
+    var picks;
+    var chosen;
+    var screens;
+    var i;
+    var row;
     var label;
     var tone;
     var tw;
-    var w;
-    var h = 40;
+    var chips;
+    var chipW;
+    var total;
     var x;
     var y;
+    var h;
+    var cx;
     var btn;
     if (!air || !lay) {
         return null;
     }
-    label = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 18);
-    tw = draw.textWidth(label, 3);
-    w = 36 + tw + 16 + 112 + 16;
-    if (w < 260) {
-        w = 260;
+    picks = [
+        { name: 'air-pick-central', title: 'Środek', key: 'central' },
+        { name: 'air-pick-cluster', title: 'Zegary', key: 'cluster' },
+        { name: 'air-pick-hud', title: 'HUD', key: 'hud' }
+    ];
+    chosen = {};
+    screens = air.screens || [];
+    for (i = 0; i < screens.length; i += 1) {
+        row = screens[i];
+        if (row && row.on) {
+            chosen[row.key || row.name] = true;
+        }
     }
-    x = lay.ox + lay.boxW - w - 16;
+    label = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 16);
+    tw = draw.textWidth(label, 3);
+    chips = [];
+    total = 36 + tw + 12;
+    for (i = 0; i < picks.length; i += 1) {
+        chipW = draw.textWidth(picks[i].title, 3) + 22;
+        if (chipW < 72) {
+            chipW = 72;
+        }
+        chips.push({
+            name: picks[i].name,
+            title: picks[i].title,
+            on: !!chosen[picks[i].key],
+            w: chipW
+        });
+        total += chipW + 8;
+    }
+    total += 112 + 16;
+    h = 40;
+    x = lay.ox + lay.boxW - total - 16;
     y = lay.oy + 14;
-    draw.rect(x, y, w, h, PAGE_TOP);
+    draw.rect(x, y, total, h, PAGE_TOP);
     if (air.online) {
         draw.rect(x + 12, y + 12, 16, 16, ACCENT);
     } else {
@@ -1137,8 +1171,21 @@ function drawAirBadge(draw, lay, air, versionText) {
     }
     tone = air.online ? ACCENT : (air.bad ? INK : HINT);
     draw.text(label, x + 36, y + 10, 3, tone);
-    btn = { name: 'air-badge', x: x + w - 124, y: y + 6, w: 112, h: 28 };
+    cx = x + 36 + tw + 12;
+    lay.airHits = [];
+    for (i = 0; i < chips.length; i += 1) {
+        btn = { name: chips[i].name, x: cx, y: y + 6, w: chips[i].w, h: 28 };
+        drawChip(draw, btn, chips[i].on, chips[i].title);
+        lay.airHits.push(btn);
+        cx += chips[i].w + 8;
+    }
+    btn = { name: 'air-badge', x: x + total - 128, y: y + 6, w: 112, h: 28 };
     drawChip(draw, btn, !!air.on, air.on ? 'Stop' : 'Start');
+    lay.airHits.push(btn);
+    lay.airStrip = { x: x, y: y, w: total, h: h };
+    if (versionText) {
+        lay.airStrip.version = String(versionText);
+    }
     return btn;
 }
 
@@ -1676,6 +1723,8 @@ function createMenuSurface(opts) {
     var streamHits = [];
     var airState = null;
     var airBadge = null;
+    var airHits = [];
+    var airStrip = null;
     var airWindow = null;
     var airKey = '';
     var mirrorSent = false;
@@ -1787,6 +1836,8 @@ function createMenuSurface(opts) {
         navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
         streamHits = (built.layout && built.layout.hits) || [];
         airBadge = built.layout && built.layout.airBadge ? built.layout.airBadge : null;
+        airHits = (built.layout && built.layout.airHits) || [];
+        airStrip = built.layout && built.layout.airStrip ? built.layout.airStrip : null;
         airWindow = built.layout && built.layout.airWindow ? built.layout.airWindow : null;
         backAction = edit ? '' : findBack(items);
         write(built.frame);
@@ -2418,6 +2469,21 @@ function createMenuSurface(opts) {
         return '';
     }
 
+    function hitAir(x, y) {
+        var i;
+        var box;
+        if (!airHits) {
+            return '';
+        }
+        for (i = airHits.length - 1; i >= 0; i -= 1) {
+            box = airHits[i];
+            if (pointIn(box, x, y)) {
+                return box.name;
+            }
+        }
+        return '';
+    }
+
     function take(buf) {
         incoming = incoming.length ? Buffer.concat([incoming, buf]) : buf;
         while (incoming.length >= 8) {
@@ -2482,11 +2548,11 @@ function createMenuSurface(opts) {
                     return;
                 }
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
-                if (airBadge && pointIn(airBadge, tx, ty)) {
-                    if (phase === 1) {
-                        touchDown = { stream: 'air-badge', x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
-                    } else if (phase === 3 && touchDown && touchDown.stream === 'air-badge') {
-                        choose('air-badge');
+                if (hitAir(tx, ty) || (airStrip && pointIn(airStrip, tx, ty)) || (airBadge && pointIn(airBadge, tx, ty))) {
+                    if (phase === 1 && hitAir(tx, ty)) {
+                        touchDown = { stream: hitAir(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                    } else if (phase === 3 && touchDown && touchDown.stream && hitAir(tx, ty) === touchDown.stream) {
+                        choose(touchDown.stream);
                         touchDown = null;
                     } else if (phase === 3) {
                         touchDown = null;
@@ -2797,6 +2863,12 @@ function createMenuSurface(opts) {
                 online: !!(info && info.online),
                 bad: !!(info && info.bad),
                 status: info && info.status ? String(info.status) : 'offline',
+                screens: Array.isArray(info && info.screens) ? info.screens.map(function (row) {
+                    return {
+                        key: row && (row.key || row.name) ? String(row.key || row.name) : '',
+                        on: !!(row && row.on)
+                    };
+                }) : [],
                 mirrored: !!(info && info.mirrored),
                 window: win ? {
                     x: win.x | 0,
@@ -2831,6 +2903,7 @@ function createMenuSurface(opts) {
                 next.online ? 1 : 0,
                 next.bad ? 1 : 0,
                 next.status,
+                next.screens.map(function (row) { return row.key + (row.on ? '1' : '0'); }).join(','),
                 next.mirrored ? 1 : 0,
                 next.window ? (next.window.x + ',' + next.window.y + ',' + next.window.w + ',' + next.window.h) : '',
                 next.tune ? (next.tune.name + '/' + next.tune.tool + '/' + next.tune.axis + '/' + next.tune.x + '/' + next.tune.y + '/' + next.tune.w + '/' + next.tune.h + '/' + (next.tune.saved ? 1 : 0)) : ''

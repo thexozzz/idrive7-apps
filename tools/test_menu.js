@@ -159,6 +159,8 @@ assert.ok(badged.layout.airBadge);
 assert.strictEqual(badged.layout.airBadge.name, 'air-badge');
 assert.ok(badged.layout.airBadge.w > 80);
 assert.ok(badged.layout.airBadge.h < 56);
+assert.ok(badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-central'; }));
+assert.ok(badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-hud'; }));
 assert.ok(!hitNamed(badged, 'stream-central'));
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
