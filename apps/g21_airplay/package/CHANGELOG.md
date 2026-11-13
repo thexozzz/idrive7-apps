@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.97
+
+- Wybor ekranow (srodek, HUD, zegary) zostaje po zakonczeniu AirPlay.
+
 ## 0.1.96
 
 - Zegary i HUD odswiezaja obraz 40 razy na sekunde. iPhone jest proszony o 40 klatek.

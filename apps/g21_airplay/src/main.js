@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.96',
+        version: (this._packageJson && this._packageJson.version) || '0.1.97',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.96') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.97') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1220,7 +1220,11 @@ AirPlayApp.prototype._endStream = function (protocol) {
     }
     this._rdpOutput = 'central';
     this._airOutput = 'central';
+    var keepScreens = this._settings.outputs().slice();
     this._display.select('central');
+    if (keepScreens.length) {
+        this._settings.setOutputs(keepScreens);
+    }
     this._sessions.disconnect();
     this._airStarting = false;
     this._sessionText = back + ' stop';
