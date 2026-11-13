@@ -101,11 +101,12 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.42');
+assert.strictEqual(component.version, '0.1.43');
 assert.ok(script.indexOf('-s "$vsize"') !== -1);
-assert.ok(script.indexOf('1280x720') !== -1);
-assert.ok(script.indexOf('1920x1080') !== -1);
-assert.ok(script.indexOf('-fps 40') !== -1);
+assert.ok(script.indexOf('vsize=600x400') !== -1);
+assert.ok(script.indexOf('1920x1080') === -1);
+assert.ok(script.indexOf('-fps 24') !== -1);
+assert.ok(script.indexOf('-fps 40') === -1);
 assert.ok(script.indexOf('G21_BIND_IP') !== -1);
 assert.ok(script.indexOf('g21-bind-wlan.so') !== -1);
 assert.ok(script.indexOf('publish-addresses=yes') !== -1);

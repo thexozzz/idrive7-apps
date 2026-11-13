@@ -389,7 +389,7 @@ var ROOT_ITEMS = [
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
     { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
-    { name: 'air-quality', title: '720p', hint: '4 Mb/s', icon: 'desktop' },
+    { name: 'air-quality', title: '600x400', hint: '24 kl/s', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
     { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }

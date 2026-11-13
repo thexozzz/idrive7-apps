@@ -371,7 +371,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.101',
+        version: (this._packageJson && this._packageJson.version) || '0.1.102',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -464,7 +464,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.101') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.102') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -999,13 +999,12 @@ AirPlayApp.prototype._toggleItem = function (protocol) {
 };
 
 AirPlayApp.prototype._writeAirplaySize = function () {
-    var q = this._desk && this._desk.airQuality && this._desk.airQuality() === '1080' ? '1080' : '720';
     try {
-        fs.writeFileSync(this._paths.airplaySize, q + '\n');
+        fs.writeFileSync(this._paths.airplaySize, '600x400\n');
     } catch (err) {
         noteStart('airplay-size ' + (err && err.message));
     }
-    return q;
+    return '600x400';
 };
 
 AirPlayApp.prototype._writeSessionOutput = function (name) {
@@ -1156,7 +1155,7 @@ AirPlayApp.prototype._stopVideoTimer = function () {
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
-    // Central follows each new file. HUD and the cluster paint at 30 fps.
+    // Central follows each new file. HUD and the cluster paint at 24 fps.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
@@ -1459,15 +1458,12 @@ AirPlayApp.prototype._onAirAction = function (name) {
         return;
     }
     if (name === 'air-quality') {
-        var nextQuality = this._desk.airQuality() === '1080' ? '720' : '1080';
-        this._desk.setAirQuality(nextQuality);
-        this._saveDesk();
         this._writeAirplaySize();
         if (typeof this._menu.setItemTitle === 'function') {
-            this._menu.setItemTitle('air-quality', nextQuality === '1080' ? '1080p' : '720p');
+            this._menu.setItemTitle('air-quality', '600x400');
         }
         if (typeof this._menu.setItemHint === 'function') {
-            this._menu.setItemHint('air-quality', nextQuality === '1080' ? '8 Mb/s' : '4 Mb/s');
+            this._menu.setItemHint('air-quality', '24 kl/s');
         }
         return;
     }
@@ -2470,9 +2466,9 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     );
     this._menu.setItemHint('air-name', name);
     if (typeof this._menu.setItemTitle === 'function') {
-        this._menu.setItemTitle('air-quality', this._desk.airQuality() === '1080' ? '1080p' : '720p');
+        this._menu.setItemTitle('air-quality', '600x400');
     }
-    this._menu.setItemHint('air-quality', this._desk.airQuality() === '1080' ? '8 Mb/s' : '4 Mb/s');
+    this._menu.setItemHint('air-quality', '24 kl/s');
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
@@ -3154,8 +3150,8 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
     }
-    if (this._faceAt && (now - this._faceAt) < 33) {
-        this._armFace(33 - (now - this._faceAt));
+    if (this._faceAt && (now - this._faceAt) < 42) {
+        this._armFace(42 - (now - this._faceAt));
         return;
     }
     if (this._faceWait) {
@@ -3221,7 +3217,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
                 h: h,
                 iw: paint.iw,
                 ih: paint.ih,
-                fps: 30,
+                fps: 24,
                 sampling: (paint.iw === w && paint.ih === h) ? 'nearest' : 'bilinear',
                 opacity: 1,
                 exclusive: 0,

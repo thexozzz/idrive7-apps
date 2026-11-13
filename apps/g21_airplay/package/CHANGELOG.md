@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.102
+
+- Zegary i HUD ida w 24 klatkach na sekunde. iPhone jest proszony o obraz 600x400, tez 24 razy na sekunde.
+
 ## 0.1.101
 
 - Zegary i HUD maluja 30 razy na sekunde. Klatka jest mniejsza, a ekran ja powieksza, wiec obraz idzie rownym taktem.
