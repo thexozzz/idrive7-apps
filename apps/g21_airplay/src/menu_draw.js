@@ -781,7 +781,7 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         textX = lay.ox + 188;
         scale = 4;
     }
-    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 200);
+    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 460);
     draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
 }
 
@@ -842,7 +842,7 @@ function keyLabel(key) {
     return key;
 }
 
-function buildKeyboardFrame(edit, width, height, crumb) {
+function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     var draw = new FrameBuilder();
     var page = pageBox(width, height);
     var rows = edit.rows || [];
@@ -935,7 +935,9 @@ function buildKeyboardFrame(edit, width, height, crumb) {
         }
     }
     var board = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
+    var airBadge;
     drawNav(draw, board);
+    airBadge = drawAirBadge(draw, board, air, versionText);
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
@@ -949,7 +951,8 @@ function buildKeyboardFrame(edit, width, height, crumb) {
             popup: popupHits,
             crumb: head.crumb,
             backHit: head.backHit,
-            nav: board.nav
+            nav: board.nav,
+            airBadge: airBadge
         }
     };
 }
@@ -1105,61 +1108,54 @@ function pushHit(hits, box) {
     hits.push({ name: box.name, x: box.x, y: box.y, w: box.w, h: box.h });
 }
 
-function appendStreamChrome(draw, lay, page, info, win) {
-    var hits = [];
-    var barY = page.oy + page.boxH - 92;
-    var x = page.ox + 20;
-    var screens = (info && info.screens) || [];
-    var i;
-    var chip;
-    var tune;
-    var panel;
+function drawAirBadge(draw, lay, air, versionText) {
+    var w = 430;
+    var h = 86;
+    var x = lay.ox + lay.boxW - w - 12;
+    var y = lay.oy + 6;
+    var status;
+    var tone;
+    var btn;
+    var ver;
+    var tw;
+    if (!air || !lay) {
+        return null;
+    }
+    draw.rect(x, y, w, h, PAGE_TOP);
+    draw.rect(x, y, 8, h, air.online ? ACCENT : MUTED);
+    if (air.online) {
+        draw.rect(x + 22, y + 16, 16, 16, ACCENT);
+    } else {
+        draw.rect(x + 22, y + 16, 16, 16, MUTED);
+        draw.rect(x + 26, y + 20, 8, 8, PAGE_TOP);
+    }
+    draw.text(air.online ? 'online' : 'offline', x + 48, y + 14, 3, air.online ? ACCENT : HINT);
+    ver = String(versionText || '').replace(/^v/i, '');
+    if (ver) {
+        tw = draw.textWidth('v' + ver, 3);
+        draw.text('v' + ver, x + w - 160 - tw, y + 14, 3, MUTED);
+    }
+    btn = { name: 'air-badge', x: x + w - 146, y: y + 8, w: 132, h: 34 };
+    drawChip(draw, btn, !!air.on, air.on ? 'Stop' : 'Start');
+    status = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 34);
+    tone = air.online ? ACCENT : (air.bad ? INK : MUTED);
+    draw.text(status, x + 22, y + 52, 3, tone);
+    return btn;
+}
+
+function drawTunePanel(draw, hits, panel, tune) {
     var tools;
     var tool;
+    var chip;
+    var i;
+    var x;
     var sliderY;
     var shown;
-    var active;
     var maxX;
     var maxY;
-    lay.hits = hits;
-    for (i = 0; i < screens.length; i += 1) {
-        chip = {
-            name: screens[i].name,
-            x: x,
-            y: barY,
-            w: screens[i].title === 'HUD' ? 150 : 210,
-            h: 64
-        };
-        active = !!(info.tune && info.tune.name === String(screens[i].name || '').replace('stream-', ''));
-        drawChip(draw, chip, active, screens[i].title);
-        if (screens[i].on && !active) {
-            draw.rect(chip.x + 12, chip.y + chip.h - 8, chip.w - 24, 4, ACCENT);
-        }
-        pushHit(hits, chip);
-        x += chip.w + 14;
-    }
-    if (lay.bubbles && lay.bubbles[0]) {
-        pushHit(hits, {
-            name: 'stream-end',
-            x: lay.bubbles[0].x,
-            y: lay.bubbles[0].y,
-            w: lay.bubbles[0].w,
-            h: lay.bubbles[0].h
-        });
-    }
-    if (win && win.w >= 520 && win.h >= 80) {
-        chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
-        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'pos'), 'pozycja');
-        pushHit(hits, chip);
-        chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
-        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'size'), 'rozmiar');
-        pushHit(hits, chip);
-    }
-    tune = info && info.tune;
     if (!tune) {
         return;
     }
-    panel = { x: page.ox + 20, y: barY - 276, w: 1120, h: 260 };
     draw.rect(panel.x, panel.y, panel.w, panel.h, PAGE_TOP);
     draw.rect(panel.x, panel.y, 6, panel.h, ACCENT);
     draw.text(String(tune.title || 'Ekran'), panel.x + 24, panel.y + 16, 4, INK);
@@ -1220,7 +1216,132 @@ function appendStreamChrome(draw, lay, page, info, win) {
     draw.text('na zywo', panel.x + panel.w - 250, panel.y + 186, 3, MUTED);
 }
 
-function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb) {
+function applyAirOverlay(draw, lay, air, versionText) {
+    var hits = lay.hits || [];
+    var names;
+    var chip;
+    var i;
+    var x;
+    var win;
+    var active;
+    lay.hits = hits;
+    lay.airBadge = drawAirBadge(draw, lay, air, versionText);
+    if (!air || lay.stream) {
+        return;
+    }
+    if (air.on) {
+        names = [
+            { name: 'stream-central', title: 'Środek', key: 'central', w: 160 },
+            { name: 'stream-cluster', title: 'Zegary', key: 'cluster', w: 160 },
+            { name: 'stream-hud', title: 'HUD', key: 'hud', w: 120 }
+        ];
+        x = lay.ox + 20;
+        for (i = 0; i < names.length; i += 1) {
+            chip = {
+                name: names[i].name,
+                x: x,
+                y: lay.oy + lay.boxH - 68,
+                w: names[i].w,
+                h: 48
+            };
+            active = !!(air.tune && air.tune.name === names[i].key);
+            drawChip(draw, chip, active, names[i].title);
+            pushHit(hits, chip);
+            x += chip.w + 12;
+        }
+    }
+    if (air.mirrored && air.window && air.window.w > 80 && air.window.h > 80) {
+        win = {
+            x: air.window.x | 0,
+            y: air.window.y | 0,
+            w: air.window.w | 0,
+            h: air.window.h | 0
+        };
+        draw.rect(win.x, win.y, win.w, win.h, PAGE);
+        draw.video(win.x, win.y, win.w, win.h, 1);
+        draw.rect(win.x, win.y, win.w, 44, ACCENT);
+        draw.rect(win.x, win.y, 3, win.h, ACCENT);
+        draw.rect(win.x + win.w - 3, win.y, 3, win.h, ACCENT);
+        draw.rect(win.x, win.y + win.h - 3, win.w, 3, ACCENT);
+        draw.text('THEiPlay', win.x + 16, win.y + 12, 3, PAGE);
+        if (win.w >= 520) {
+            chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
+            drawChip(draw, chip, !!(air.tune && air.tune.name === 'central' && air.tune.tool === 'pos'), 'pozycja');
+            pushHit(hits, chip);
+            chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
+            drawChip(draw, chip, !!(air.tune && air.tune.name === 'central' && air.tune.tool === 'size'), 'rozmiar');
+            pushHit(hits, chip);
+        }
+        lay.airWindow = win;
+    }
+    if (air.tune) {
+        drawTunePanel(draw, hits, {
+            x: lay.ox + 20,
+            y: lay.oy + lay.boxH - 340,
+            w: 1120,
+            h: 260
+        }, air.tune);
+    }
+}
+
+function appendStreamChrome(draw, lay, page, info, win) {
+    var hits = [];
+    var barY = page.oy + page.boxH - 92;
+    var x = page.ox + 20;
+    var screens = (info && info.screens) || [];
+    var i;
+    var chip;
+    var tune;
+    var panel;
+    var tools;
+    var tool;
+    var sliderY;
+    var shown;
+    var active;
+    var maxX;
+    var maxY;
+    lay.hits = hits;
+    for (i = 0; i < screens.length; i += 1) {
+        chip = {
+            name: screens[i].name,
+            x: x,
+            y: barY,
+            w: screens[i].title === 'HUD' ? 150 : 210,
+            h: 64
+        };
+        active = !!(info.tune && info.tune.name === String(screens[i].name || '').replace('stream-', ''));
+        drawChip(draw, chip, active, screens[i].title);
+        if (screens[i].on && !active) {
+            draw.rect(chip.x + 12, chip.y + chip.h - 8, chip.w - 24, 4, ACCENT);
+        }
+        pushHit(hits, chip);
+        x += chip.w + 14;
+    }
+    if (lay.bubbles && lay.bubbles[0]) {
+        pushHit(hits, {
+            name: 'stream-end',
+            x: lay.bubbles[0].x,
+            y: lay.bubbles[0].y,
+            w: lay.bubbles[0].w,
+            h: lay.bubbles[0].h
+        });
+    }
+    if (win && win.w >= 520 && win.h >= 80) {
+        chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'pos'), 'pozycja');
+        pushHit(hits, chip);
+        chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'size'), 'rozmiar');
+        pushHit(hits, chip);
+    }
+    tune = info && info.tune;
+    if (!tune) {
+        return;
+    }
+    drawTunePanel(draw, hits, { x: page.ox + 20, y: barY - 276, w: 1120, h: 260 }, tune);
+}
+
+function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
@@ -1349,6 +1470,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     titleW = draw.textWidth(title, 4);
     draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 18, 4, INK);
     appendStreamChrome(draw, lay, page, info, placedWin);
+    applyAirOverlay(draw, lay, air, version);
     if (caption && caption.on && caption.text) {
         draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
     }
@@ -1359,7 +1481,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb) {
+function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb, air) {
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -1376,7 +1498,7 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     var labelY;
     var focus;
     if (isStreamItems(items) || heading === 'Stream') {
-        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb);
+        return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air);
     }
     lay = menuLayout(items, selected, width, height, detail, heading);
     draw.clear(0);
@@ -1391,7 +1513,9 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     } else {
         draw.text('THEiPlay', lay.ox + 36, lay.oy + 22, 5, ACCENT);
     }
-    drawVersionMark(draw, lay, version);
+    if (!air) {
+        drawVersionMark(draw, lay, version);
+    }
     for (i = 0; i < lay.bubbles.length; i += 1) {
         bubble = lay.bubbles[i];
         var itemIndex = bubble.index != null ? bubble.index : i;
@@ -1462,6 +1586,7 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     if (caption && caption.on && caption.text) {
         draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
     }
+    applyAirOverlay(draw, lay, air, version);
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
@@ -1596,6 +1721,9 @@ function createMenuSurface(opts) {
     var dragWin = null;
     var dragTimer = null;
     var streamHits = [];
+    var airState = null;
+    var airBadge = null;
+    var airKey = '';
     var mirrorSent = false;
     var pulseBeat = 0;
     var backBox = null;
@@ -1688,20 +1816,23 @@ function createMenuSurface(opts) {
             sendClaim();
             surfaced = true;
         }
-        if (streamInfo) {
+        if (streamInfo && screenName === 'stream') {
             streamInfo.video = !!(streamInfo.mirrored && native && streamInfo.window);
+        } else if (streamInfo) {
+            streamInfo.video = false;
         }
-        sendMirror(!!(streamInfo && streamInfo.video));
+        sendMirror(!!((streamInfo && streamInfo.video) || (screenName !== 'stream' && airState && airState.mirrored && airState.window && native)));
         var place = edit ? placeName(edit.field, edit.title) : '';
         var crumb = crumbFor(screenName, heading, place);
         var built = edit
-            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb);
+            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb, airState, version)
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb, airState);
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
         backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
         navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
         streamHits = (built.layout && built.layout.hits) || [];
+        airBadge = built.layout && built.layout.airBadge ? built.layout.airBadge : null;
         backAction = edit ? '' : findBack(items);
         write(built.frame);
         lastFrame = built.frame;
@@ -2239,10 +2370,13 @@ function createMenuSurface(opts) {
         var moved;
         var maxX;
         var maxY;
-        if (screenName !== 'stream' || !streamInfo || !streamInfo.window) {
+        if (screenName === 'stream' && streamInfo && streamInfo.window) {
+            win = streamInfo.window;
+        } else if (airState && airState.mirrored && airState.window) {
+            win = airState.window;
+        } else {
             return false;
         }
-        win = streamInfo.window;
         if (phase === 1) {
             if (tx >= win.x && tx < win.x + win.w && ty >= win.y && ty < win.y + 48) {
                 dragWin = { x: tx, y: ty, ox: win.x, oy: win.y };
@@ -2279,6 +2413,14 @@ function createMenuSurface(opts) {
         }
         win.x = moved.x | 0;
         win.y = moved.y | 0;
+        if (airState && airState.tune && airState.tune.name === 'central' && win === airState.window) {
+            airState.tune.x = win.x;
+            airState.tune.y = win.y;
+            if (airState.tune.shown) {
+                airState.tune.shown.x = win.x;
+                airState.tune.shown.y = win.y;
+            }
+        }
         if (typeof opts.onWindowMove === 'function') {
             opts.onWindowMove(win.x, win.y, phase === 3);
         }
@@ -2385,7 +2527,18 @@ function createMenuSurface(opts) {
                     return;
                 }
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
-                if (screenName === 'stream') {
+                if (airBadge && pointIn(airBadge, tx, ty)) {
+                    if (phase === 1) {
+                        touchDown = { stream: 'air-badge', x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                    } else if (phase === 3 && touchDown && touchDown.stream === 'air-badge') {
+                        choose('air-badge');
+                        touchDown = null;
+                    } else if (phase === 3) {
+                        touchDown = null;
+                    }
+                    return;
+                }
+                if (screenName === 'stream' || (airState && (airState.window || airState.tune || airState.on))) {
                     if (touchDown && touchDown.stream) {
                         if (phase === 3) {
                             if (hitStream(tx, ty) === touchDown.stream) {
@@ -2673,6 +2826,61 @@ function createMenuSurface(opts) {
                 } : null
             } : null;
             streamInfo = next;
+            if (!edit) {
+                paint();
+            }
+        },
+        setAirState: function (info) {
+            var tune = info && info.tune && typeof info.tune === 'object' ? info.tune : null;
+            var win = info && info.window && typeof info.window === 'object' ? info.window : null;
+            var next = {
+                on: !!(info && info.on),
+                online: !!(info && info.online),
+                bad: !!(info && info.bad),
+                status: info && info.status ? String(info.status) : 'offline',
+                mirrored: !!(info && info.mirrored),
+                window: win ? {
+                    x: win.x | 0,
+                    y: win.y | 0,
+                    w: win.w | 0,
+                    h: win.h | 0
+                } : null,
+                tune: tune ? {
+                    name: String(tune.name || ''),
+                    title: String(tune.title || ''),
+                    tool: String(tune.tool || ''),
+                    axis: tune.axis === 'y' ? 'y' : 'x',
+                    x: tune.x | 0,
+                    y: tune.y | 0,
+                    w: tune.w | 0,
+                    h: tune.h | 0,
+                    limitW: tune.limitW | 0,
+                    limitH: tune.limitH | 0,
+                    saved: !!tune.saved,
+                    shown: tune.shown && typeof tune.shown === 'object' ? {
+                        x: tune.shown.x | 0,
+                        y: tune.shown.y | 0,
+                        w: tune.shown.w | 0,
+                        h: tune.shown.h | 0,
+                        limitW: tune.shown.limitW | 0,
+                        limitH: tune.shown.limitH | 0
+                    } : null
+                } : null
+            };
+            var key = [
+                next.on ? 1 : 0,
+                next.online ? 1 : 0,
+                next.bad ? 1 : 0,
+                next.status,
+                next.mirrored ? 1 : 0,
+                next.window ? (next.window.x + ',' + next.window.y + ',' + next.window.w + ',' + next.window.h) : '',
+                next.tune ? (next.tune.name + '/' + next.tune.tool + '/' + next.tune.axis + '/' + next.tune.x + '/' + next.tune.y + '/' + next.tune.w + '/' + next.tune.h + '/' + (next.tune.saved ? 1 : 0)) : ''
+            ].join('|');
+            if (key === airKey) {
+                return;
+            }
+            airState = next;
+            airKey = key;
             if (!edit) {
                 paint();
             }

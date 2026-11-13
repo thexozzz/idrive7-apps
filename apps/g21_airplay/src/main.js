@@ -371,7 +371,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.99',
+        version: (this._packageJson && this._packageJson.version) || '0.1.100',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -464,7 +464,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.99') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.100') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1271,22 +1271,27 @@ AirPlayApp.prototype._endStream = function (protocol) {
     this._sessionText = back + ' stop';
     this._streamProtocol = '';
     this._tune = null;
-    if (this._menu && typeof this._menu.setScreen === 'function') {
+    if (this._menuScreen() === 'stream' && this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen(back);
     }
     this._chosen = back;
     this._paintSwitch(this._toggleItem(back), false);
     this._tellMenu('idle');
     this._sync();
+    this._refreshAirBadge();
 };
 
 AirPlayApp.prototype._enterStream = function (protocol) {
-    if (this._menuScreen() === 'stream' && this._streamProtocol === protocol) {
-        return;
-    }
-    this._streamProtocol = protocol;
-    this._tune = null;
     if (protocol === 'airplay') {
+        if (this._streamProtocol === 'airplay' && this._videoTimer) {
+            if (this._menuScreen() === 'stream' && this._menu && typeof this._menu.setScreen === 'function') {
+                this._menu.setScreen('airplay');
+            }
+            this._refreshAirBadge();
+            return;
+        }
+        this._streamProtocol = 'airplay';
+        this._tune = null;
         this._decoded = null;
         this._mirrorPainted = false;
         this._yuvStamp = '';
@@ -1296,16 +1301,28 @@ AirPlayApp.prototype._enterStream = function (protocol) {
             this._menu.rebindVideo();
         }
         this._startVideoTimer();
+        this._chosen = 'airplay';
+        if (this._menuScreen() === 'stream' && this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('airplay');
+        }
+        this._refreshAirBadge();
+        this._tellMenu('waiting');
+        return;
     }
+    if (this._menuScreen() === 'stream' && this._streamProtocol === protocol) {
+        return;
+    }
+    this._streamProtocol = protocol;
+    this._tune = null;
     this._chosen = protocol;
     if (this._menu && typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('stream');
     }
     this._paintStreamInfo(
         { ok: true, ip: '', ssid: '', reason: '' },
-        { mode: protocol === 'airplay' ? 'running' : '' }
+        { mode: '' }
     );
-    this._tellMenu(protocol === 'airplay' ? 'waiting' : 'running');
+    this._tellMenu('running');
 };
 
 AirPlayApp.prototype._readWinOffers = function () {
@@ -1565,7 +1582,7 @@ AirPlayApp.prototype._onStreamAction = function (name) {
             this._tune.axis = this._tune.axis === 'y' ? 'y' : 'x';
         }
         this._tune.saved = false;
-        this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+        this._refreshAirBadge();
         return;
     }
     if (name === 'stream-axis-x' || name === 'stream-axis-y') {
@@ -1574,7 +1591,7 @@ AirPlayApp.prototype._onStreamAction = function (name) {
         }
         this._tune.tool = 'pos';
         this._tune.axis = name === 'stream-axis-y' ? 'y' : 'x';
-        this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+        this._refreshAirBadge();
         return;
     }
     if (name === 'stream-save') {
@@ -1884,7 +1901,11 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._openProtocolScreen('airplay');
         return;
     }
-    if (screen === 'stream' && name.indexOf('stream-') === 0) {
+    if (name === 'air-badge') {
+        this._toggleProtocol('airplay');
+        return;
+    }
+    if (name.indexOf('stream-') === 0) {
         this._onStreamAction(name);
         return;
     }
@@ -2046,13 +2067,13 @@ AirPlayApp.prototype._openTune = function (name, tool) {
             }
             this._tune.tool = '';
             this._tune.saved = false;
-            this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+            this._refreshAirBadge();
             return;
         }
         this._tune.tool = tool;
         this._tune.axis = 'x';
         this._tune.saved = false;
-        this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+        this._refreshAirBadge();
         return;
     }
     if (this._settings.outputs().indexOf(name) === -1) {
@@ -2100,7 +2121,7 @@ AirPlayApp.prototype._saveTune = function () {
     this._tune.snap = this._copyBox(box);
     this._tune.added = false;
     this._tune.saved = true;
-    this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+    this._refreshAirBadge();
 };
 
 AirPlayApp.prototype._cancelTune = function () {
@@ -2126,9 +2147,81 @@ AirPlayApp.prototype._liveApply = function (name) {
         this._faceAt = 0;
         this._placeMirrorFaces(this._lastFrame.i420, this._lastFrame.w, this._lastFrame.h);
     }
-    if (this._menuScreen() === 'stream') {
+    if (this._menuScreen() === 'stream' && this._streamProtocol !== 'airplay') {
         this._paintStreamInfo(this._streamAir || { ok: false, reason: '' }, this._streamReceiver || {});
+        return;
     }
+    this._refreshAirBadge();
+};
+
+AirPlayApp.prototype._refreshAirBadge = function () {
+    var live = this._sessionLive('airplay');
+    var client = live.on ? this._readAirplayClient() : { state: '', detail: '' };
+    var text = '';
+    var receiver = { mode: '' };
+    var snap;
+    var choice;
+    var online;
+    var status;
+    var bad;
+    var pin = '';
+    var picture = null;
+    if (!this._menu || typeof this._menu.setAirState !== 'function') {
+        return;
+    }
+    if (live.on) {
+        try {
+            text = fs.readFileSync(RECEIVER_STATUS, 'utf8');
+        } catch (errBadge) {
+            text = '';
+        }
+        receiver = uplink.readReceiverStatus(text);
+        if (this._desk.airplayPin && this._desk.airplayPin()) {
+            pin = this._readAirplayPin();
+        }
+    }
+    snap = uplink.readUplink();
+    choice = uplink.selectStoreWifi(snap.status, snap.lease);
+    online = !!(live.on && (this._decoded || client.state === 'mirroring'));
+    bad = false;
+    if (!live.on) {
+        status = 'offline';
+    } else if (online) {
+        status = 'sukces';
+    } else if (client.state === 'error') {
+        status = client.detail ? ('blad ' + String(client.detail).slice(0, 16)) : 'blad lustra';
+        bad = true;
+    } else if (client.state === 'pair') {
+        status = 'iPhone laczy';
+    } else if (pin) {
+        status = 'kod ' + pin;
+    } else if (receiver.mode === 'missing') {
+        status = 'brak odbiornika';
+        bad = true;
+    } else if (receiver.mode === 'mdns-brak') {
+        status = 'brak dns';
+        bad = true;
+    } else if (receiver.mode === 'uxplay-exit') {
+        status = 'odbiornik spadl';
+        bad = true;
+    } else if (!choice.ok) {
+        status = 'brak wifi';
+        bad = true;
+    } else {
+        status = 'czekam na iPhone';
+    }
+    if (live.on && online && this._settings.outputs().indexOf('central') !== -1) {
+        picture = this._settings.picture('central');
+    }
+    this._menu.setAirState({
+        on: !!live.on,
+        online: online,
+        bad: bad,
+        status: status,
+        mirrored: online,
+        window: picture,
+        tune: live.on ? this._tuneView() : null
+    });
 };
 
 AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
@@ -2676,7 +2769,10 @@ AirPlayApp.prototype._paint = function (choice) {
 
 AirPlayApp.prototype._watchNetwork = function () {
     var self = this;
-    var tick = function () { self._sync(); };
+    var tick = function () {
+        self._sync();
+        self._refreshAirBadge();
+    };
     tick();
     // 1s: AirPlay/Miracast switches and Win+K auto-accept need a short loop.
     this._timer = setInterval(tick, 1000);
@@ -2714,6 +2810,13 @@ AirPlayApp.prototype._sync = function () {
             return;
         }
         this._maybeAutoAcceptWin();
+    }
+
+    if (screen === 'stream' && this._streamProtocol === 'airplay') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('airplay');
+        }
+        screen = 'airplay';
     }
 
     if (screen === 'stream') {
@@ -2796,11 +2899,7 @@ AirPlayApp.prototype._sync = function () {
             : choice;
         if (airLive) {
             air = uplink.selectAirplayAnnounce(receiver, choice);
-            if (receiver.mode === 'running') {
-                this._takeFrame();
-                this._enterStream('airplay');
-                return;
-            }
+            this._takeFrame();
         }
         this._paint(air);
         this._paintAirMenu(air, airLive ? receiver : { mode: 'idle' });

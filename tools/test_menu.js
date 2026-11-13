@@ -148,6 +148,18 @@ assert.ok(hitNamed(tuned, 'stream-win-size'));
 assert.ok(hitNamed(tuned, 'stream-win-pos'));
 assert.ok(hitNamed(tuned, 'stream-end'));
 assert.ok(tuned.rects > stream.rects);
+var badged = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', {
+    on: true,
+    online: false,
+    bad: true,
+    status: 'brak odbiornika',
+    mirrored: false
+});
+assert.ok(badged.layout.airBadge);
+assert.strictEqual(badged.layout.airBadge.name, 'air-badge');
+assert.ok(badged.layout.airBadge.w > 80);
+assert.ok(hitNamed(badged, 'stream-central'));
+assert.ok(hitNamed(badged, 'stream-hud'));
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
 assert.ok(clipped.y + clipped.h < 596);
