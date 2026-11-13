@@ -407,8 +407,9 @@ var AIR_OUT_ITEMS = [
 var AIR_BOX_ITEMS = [
     { name: 'air-box-target', title: 'Ekran', hint: 'klik: nastepny', icon: 'desktop' },
     { name: 'air-box-center', title: 'Srodek', hint: 'klik: wyrodkuj', icon: 'grid' },
-    { name: 'air-box-bigger', title: 'Wiekszy', hint: 'klik', icon: 'desktop' },
-    { name: 'air-box-smaller', title: 'Mniejszy', hint: 'klik', icon: 'desktop' },
+    { name: 'air-box-s', title: '640x360', hint: 'domyslnie, 16:9', icon: 'desktop' },
+    { name: 'air-box-m', title: '960x540', hint: '16:9', icon: 'desktop' },
+    { name: 'air-box-l', title: '1280x720', hint: '16:9', icon: 'desktop' },
     { name: 'air-box-up', title: 'Gora', hint: 'klik', icon: 'grid' },
     { name: 'air-box-down', title: 'Dol', hint: 'klik', icon: 'grid' },
     { name: 'air-box-left', title: 'Lewo', hint: 'klik', icon: 'grid' },

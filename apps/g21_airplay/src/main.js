@@ -366,7 +366,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.97',
+        version: (this._packageJson && this._packageJson.version) || '0.1.98',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -456,7 +456,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.97') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.98') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1473,8 +1473,9 @@ AirPlayApp.prototype._onAirAction = function (name) {
         this._paintAirBox();
         return;
     }
-    if (name === 'air-box-bigger' || name === 'air-box-smaller') {
-        this._settings.scale(this._boxFocus || 'central', name === 'air-box-bigger' ? 1 : -1);
+    if (name === 'air-box-s' || name === 'air-box-m' || name === 'air-box-l') {
+        var preset = name === 'air-box-l' ? { w: 1280, h: 720 } : (name === 'air-box-m' ? { w: 960, h: 540 } : { w: 640, h: 360 });
+        this._settings.setFrameSize(this._boxFocus || 'central', preset.w, preset.h);
         this._saveWindows();
         this._clusterLayer = '';
         this._paintAirBox();
@@ -2062,8 +2063,9 @@ AirPlayApp.prototype._paintAirBox = function () {
     this._menu.setItemTitle('air-box-target', this._outputLabel(name));
     this._menu.setItemHint('air-box-target', 'klik: nastepny ekran');
     this._menu.setItemHint('air-box-center', shown.x + ',' + shown.y);
-    this._menu.setItemHint('air-box-bigger', shown.w + 'x' + shown.h);
-    this._menu.setItemHint('air-box-smaller', shown.w + 'x' + shown.h);
+    this._menu.setItemHint('air-box-s', box.w === 640 && box.h === 360 ? 'wybrane, 16:9' : '16:9');
+    this._menu.setItemHint('air-box-m', box.w === 960 && box.h === 540 ? 'wybrane, 16:9' : '16:9');
+    this._menu.setItemHint('air-box-l', box.w === 1280 && box.h === 720 ? 'wybrane, 16:9' : '16:9');
     this._menu.setItemHint('air-box-up', 'y ' + shown.y);
     this._menu.setItemHint('air-box-down', 'y ' + shown.y);
     this._menu.setItemHint('air-box-left', 'x ' + shown.x);
@@ -2829,16 +2831,19 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
             noteStart('mirror-face ' + name + ' ' + w + 'x' + h);
         }
         var turned = self._turnedFrame({ i420: i420, w: sw, h: sh }, name);
-        videoDecoder.i420IntoRgba(turned.i420, turned.w, turned.h, face.rgba, face.w, face.h);
+        videoDecoder.i420IntoRgbaContain(turned.i420, turned.w, turned.h, face.rgba, face.w, face.h);
         self._client.pixels(face.ref, null, face.rgba);
     });
 };
 
 AirPlayApp.prototype._mapBox = function (box, limitW, limitH) {
-    var x = Math.round((box.x || 0) * limitW / 1920);
-    var y = Math.round((box.y || 0) * limitH / 720);
-    var w = Math.round((box.w || 1920) * limitW / 1920);
-    var h = Math.round((box.h || 720) * limitH / 720);
+    var scale = Math.min(limitW / 1920, limitH / 720);
+    var designW = Math.round(1920 * scale);
+    var designH = Math.round(720 * scale);
+    var w = Math.round((box.w || 640) * scale);
+    var h = Math.round((box.h || 360) * scale);
+    var x = Math.round((box.x || 0) * scale) + Math.floor((limitW - designW) / 2);
+    var y = Math.round((box.y || 0) * scale) + Math.floor((limitH - designH) / 2);
     w -= w % 4;
     h -= h % 2;
     x -= x % 2;

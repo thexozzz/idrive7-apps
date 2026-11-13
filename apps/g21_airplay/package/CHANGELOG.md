@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.98
+
+- Obraz trzyma proporcje: pion i poziom sa w letterboxie. Rozmiary okna to 640x360, 960x540 i 1280x720, wszystkie 16:9. Domyslnie 640x360 na srodku.
+
 ## 0.1.97
 
 - Wybor ekranow (srodek, HUD, zegary) zostaje po zakonczeniu AirPlay.

@@ -29,10 +29,16 @@ function centered(limitW, limitH, w, h) {
 }
 
 var WINDOW_DEFAULTS = {
-    central: centered(1920, 720, 1280, 640),
-    cluster: centered(1920, 720, 1280, 640),
+    central: centered(1920, 720, 640, 360),
+    cluster: centered(1920, 720, 640, 360),
     hud: centered(800, 480, 640, 360)
 };
+
+var FRAME_SIZES = [
+    { w: 640, h: 360 },
+    { w: 960, h: 540 },
+    { w: 1280, h: 720 }
+];
 
 var LIMITS = {
     central: { w: 1920, h: 720, fps: 30 },
@@ -96,12 +102,31 @@ function fit(frameW, frameH, box) {
 }
 
 function isOldDefault(name, saved) {
-    var old = {
-        central: { x: 180, y: 36, w: 1280, h: 640 },
-        cluster: { x: 320, y: 48, w: 1280, h: 640 },
-        hud: { x: 24, y: 16, w: 752, h: 448 }
-    }[name];
-    return !!(saved && old && saved.x === old.x && saved.y === old.y && saved.w === old.w && saved.h === old.h);
+    var list = {
+        central: [
+            { x: 180, y: 36, w: 1280, h: 640 },
+            { x: 320, y: 40, w: 1280, h: 640 }
+        ],
+        cluster: [
+            { x: 320, y: 48, w: 1280, h: 640 },
+            { x: 320, y: 40, w: 1280, h: 640 }
+        ],
+        hud: [
+            { x: 24, y: 16, w: 752, h: 448 }
+        ]
+    }[name] || [];
+    var i;
+    var old;
+    if (!saved) {
+        return false;
+    }
+    for (i = 0; i < list.length; i += 1) {
+        old = list[i];
+        if (saved.x === old.x && saved.y === old.y && saved.w === old.w && saved.h === old.h) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function normalizeOutputs(list) {
@@ -238,6 +263,43 @@ function createSettings(stored) {
             picture[name] = clampBox(name, {});
             return picture[name];
         },
+        setFrameSize: function (name, w, h) {
+            var box = picture[name];
+            var limit = LIMITS[name];
+            var scale = Math.min(1, limit.w / w, limit.h / h);
+            var nw = Math.round(w * scale);
+            var nh = Math.round(h * scale);
+            var x;
+            var y;
+            nw -= nw % 4;
+            nh -= nh % 2;
+            if (nw < 16) {
+                nw = 16;
+            }
+            if (nh < 16) {
+                nh = 16;
+            }
+            x = Math.floor((limit.w - nw) / 2);
+            y = Math.floor((limit.h - nh) / 2);
+            x -= x % 2;
+            y -= y % 2;
+            if (x < 0) {
+                x = 0;
+            }
+            if (y < 0) {
+                y = 0;
+            }
+            picture[name] = clampBox(name, {
+                scale: 'contain',
+                x: x,
+                y: y,
+                w: nw,
+                h: nh,
+                fps: box.fps,
+                rotate: box.rotate
+            });
+            return picture[name];
+        },
         center: function (name) {
             var box = picture[name];
             var limit = LIMITS[name];
@@ -279,5 +341,6 @@ module.exports = {
     LIMITS: LIMITS,
     clampBox: clampBox,
     fit: fit,
+    FRAME_SIZES: FRAME_SIZES,
     createSettings: createSettings,
 };

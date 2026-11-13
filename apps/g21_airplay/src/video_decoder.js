@@ -171,6 +171,90 @@ function placeBgra(src, sw, sh, dw, dh, box) {
     return { w: dw, h: dh, bgra: canvas };
 }
 
+function i420IntoRgbaContain(i420, sw, sh, dst, dw, dh) {
+    var scale = Math.min(dw / sw, dh / sh);
+    var tw = Math.round(sw * scale);
+    var th = Math.round(sh * scale);
+    var x0;
+    var y0;
+    var ySize = sw * sh;
+    var uvW = sw >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * (sh >> 1);
+    var row;
+    var col;
+    var sy;
+    var sx;
+    var yy;
+    var u;
+    var v;
+    var c;
+    var d;
+    var e;
+    var r;
+    var g;
+    var b;
+    var o;
+    tw -= tw % 2;
+    th -= th % 2;
+    if (tw < 2) {
+        tw = 2;
+    }
+    if (th < 2) {
+        th = 2;
+    }
+    if (tw > dw) {
+        tw = dw - (dw % 2);
+    }
+    if (th > dh) {
+        th = dh - (dh % 2);
+    }
+    x0 = Math.floor((dw - tw) / 2);
+    y0 = Math.floor((dh - th) / 2);
+    dst.fill(0);
+    for (row = 0; row < th; row += 1) {
+        sy = (row * sh / th) | 0;
+        if (sy >= sh) {
+            sy = sh - 1;
+        }
+        for (col = 0; col < tw; col += 1) {
+            sx = (col * sw / tw) | 0;
+            if (sx >= sw) {
+                sx = sw - 1;
+            }
+            yy = i420[sy * sw + sx];
+            u = i420[uOff + (sy >> 1) * uvW + (sx >> 1)];
+            v = i420[vOff + (sy >> 1) * uvW + (sx >> 1)];
+            c = yy - 16;
+            d = u - 128;
+            e = v - 128;
+            r = (298 * c + 409 * e + 128) >> 8;
+            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            b = (298 * c + 516 * d + 128) >> 8;
+            if (r < 0) {
+                r = 0;
+            } else if (r > 255) {
+                r = 255;
+            }
+            if (g < 0) {
+                g = 0;
+            } else if (g > 255) {
+                g = 255;
+            }
+            if (b < 0) {
+                b = 0;
+            } else if (b > 255) {
+                b = 255;
+            }
+            o = ((y0 + row) * dw + (x0 + col)) << 2;
+            dst[o] = r;
+            dst[o + 1] = g;
+            dst[o + 2] = b;
+            dst[o + 3] = 255;
+        }
+    }
+}
+
 function i420IntoRgba(i420, sw, sh, dst, dw, dh) {
     var ySize = sw * sh;
     var uvW = sw >> 1;
@@ -243,4 +327,5 @@ module.exports = {
     bgraFromI420: bgraFromI420,
     placeBgra: placeBgra,
     i420IntoRgba: i420IntoRgba,
+    i420IntoRgbaContain: i420IntoRgbaContain,
 };

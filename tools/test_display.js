@@ -12,8 +12,8 @@ assert.strictEqual(adapterFactory.yuvBytes(800, 480), 800 * 720);
 var centered = settingsFactory.createSettings({
     picture: { central: { x: 180, y: 36, w: 1280, h: 640 } }
 }).picture('central');
-assert.strictEqual(centered.x, 320);
-assert.strictEqual(centered.y, 40);
+assert.strictEqual(centered.x, 640);
+assert.strictEqual(centered.y, 180);
 
 function fakeClient(targets) {
     var calls = [];

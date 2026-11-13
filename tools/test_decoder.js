@@ -29,6 +29,13 @@ plane.fill(40, 5, 6);
 var rows = dec.i420ToAtlas(plane, 2, 2);
 assert.strictEqual(rows[4], 200);
 assert.strictEqual(rows[5], 40);
+var wide = Buffer.alloc(4 * 2 * 3 / 2);
+wide.fill(235, 0, 8);
+wide.fill(128, 8);
+var letter = Buffer.alloc(4 * 4 * 4);
+dec.i420IntoRgbaContain(wide, 4, 2, letter, 4, 4);
+assert.strictEqual(letter[3], 0);
+assert.strictEqual(letter[(1 * 4) * 4 + 3], 255);
 
 var packed = Buffer.alloc(8 + 6);
 packed[0] = 0x47;
