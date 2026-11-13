@@ -1109,7 +1109,7 @@ function pushHit(hits, box) {
 }
 
 function drawAirBadge(draw, lay, air, versionText) {
-    var w = 430;
+    var w = 520;
     var h = 86;
     var x = lay.ox + lay.boxW - w - 12;
     var y = lay.oy + 6;
@@ -1133,7 +1133,7 @@ function drawAirBadge(draw, lay, air, versionText) {
     ver = String(versionText || '').replace(/^v/i, '');
     if (ver) {
         tw = draw.textWidth('v' + ver, 3);
-        draw.text('v' + ver, x + w - 160 - tw, y + 14, 3, MUTED);
+        draw.text('v' + ver, x + w - 168 - tw, y + 14, 3, MUTED);
     }
     btn = { name: 'air-badge', x: x + w - 146, y: y + 8, w: 132, h: 34 };
     drawChip(draw, btn, !!air.on, air.on ? 'Stop' : 'Start');

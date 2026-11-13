@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.101
+
+- Zegary i HUD maluja 30 razy na sekunde. Klatka jest mniejsza, a ekran ja powieksza, wiec obraz idzie rownym taktem.
+
 ## 0.1.100
 
 - AirPlay nie zabiera menu. W prawym gornym rogu jest lampka online albo offline, przycisk Start/Stop i status: sukces albo konkretny blad.

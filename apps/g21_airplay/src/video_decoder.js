@@ -171,6 +171,37 @@ function placeBgra(src, sw, sh, dw, dh, box) {
     return { w: dw, h: dh, bgra: canvas };
 }
 
+var YR = new Int16Array(256);
+var RV = new Int16Array(256);
+var GU = new Int16Array(256);
+var GV = new Int16Array(256);
+var BU = new Int16Array(256);
+var CLAMP_OFF = 1024;
+var CLAMP = new Uint8Array(3072);
+var lutI;
+var lutV;
+for (lutI = 0; lutI < 256; lutI += 1) {
+    lutV = lutI - 128;
+    YR[lutI] = 298 * (lutI - 16);
+    RV[lutI] = 409 * lutV;
+    GU[lutI] = -100 * lutV;
+    GV[lutI] = -208 * lutV;
+    BU[lutI] = 516 * lutV;
+}
+for (lutI = 0; lutI < 3072; lutI += 1) {
+    lutV = lutI - CLAMP_OFF;
+    if (lutV < 0) {
+        lutV = 0;
+    } else if (lutV > 255) {
+        lutV = 255;
+    }
+    CLAMP[lutI] = lutV;
+}
+
+function yuvSat(sum) {
+    return CLAMP[(sum >> 8) + CLAMP_OFF];
+}
+
 function i420IntoRgbaContain(i420, sw, sh, dst, dw, dh) {
     var scale = Math.min(dw / sw, dh / sh);
     var tw = Math.round(sw * scale);
@@ -188,12 +219,6 @@ function i420IntoRgbaContain(i420, sw, sh, dst, dw, dh) {
     var yy;
     var u;
     var v;
-    var c;
-    var d;
-    var e;
-    var r;
-    var g;
-    var b;
     var o;
     tw -= tw % 2;
     th -= th % 2;
@@ -225,31 +250,10 @@ function i420IntoRgbaContain(i420, sw, sh, dst, dw, dh) {
             yy = i420[sy * sw + sx];
             u = i420[uOff + (sy >> 1) * uvW + (sx >> 1)];
             v = i420[vOff + (sy >> 1) * uvW + (sx >> 1)];
-            c = yy - 16;
-            d = u - 128;
-            e = v - 128;
-            r = (298 * c + 409 * e + 128) >> 8;
-            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
-            b = (298 * c + 516 * d + 128) >> 8;
-            if (r < 0) {
-                r = 0;
-            } else if (r > 255) {
-                r = 255;
-            }
-            if (g < 0) {
-                g = 0;
-            } else if (g > 255) {
-                g = 255;
-            }
-            if (b < 0) {
-                b = 0;
-            } else if (b > 255) {
-                b = 255;
-            }
             o = ((y0 + row) * dw + (x0 + col)) << 2;
-            dst[o] = r;
-            dst[o + 1] = g;
-            dst[o + 2] = b;
+            dst[o] = yuvSat(YR[yy] + RV[v] + 128);
+            dst[o + 1] = yuvSat(YR[yy] + GU[u] + GV[v] + 128);
+            dst[o + 2] = yuvSat(YR[yy] + BU[u] + 128);
             dst[o + 3] = 255;
         }
     }

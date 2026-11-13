@@ -371,7 +371,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.100',
+        version: (this._packageJson && this._packageJson.version) || '0.1.101',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -464,7 +464,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.100') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.101') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1147,12 +1147,16 @@ AirPlayApp.prototype._stopVideoTimer = function () {
         clearInterval(this._videoTimer);
         this._videoTimer = null;
     }
+    if (this._faceWait) {
+        clearTimeout(this._faceWait);
+        this._faceWait = null;
+    }
 };
 
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
-    // 40 fps. Unchanged files are skipped. HUD and the cluster share this clock.
+    // Central follows each new file. HUD and the cluster paint at 30 fps.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
@@ -3084,6 +3088,47 @@ AirPlayApp.prototype._dropMirrorFaces = function () {
     });
 };
 
+function facePaintSize(w, h) {
+    var maxPixels = 360 * 200;
+    var iw = w;
+    var ih = h;
+    var scale;
+    if (iw * ih > maxPixels && iw > 0 && ih > 0) {
+        scale = Math.sqrt(maxPixels / (iw * ih));
+        iw = Math.round(iw * scale);
+        ih = Math.round(ih * scale);
+    }
+    iw -= iw % 2;
+    ih -= ih % 2;
+    if (iw < 16) {
+        iw = 16;
+    }
+    if (ih < 16) {
+        ih = 16;
+    }
+    if (iw > w) {
+        iw = w - (w % 2);
+    }
+    if (ih > h) {
+        ih = h - (h % 2);
+    }
+    return { iw: iw, ih: ih };
+}
+
+AirPlayApp.prototype._armFace = function (delay) {
+    var self = this;
+    if (this._faceWait || !this._lastFrame) {
+        return;
+    }
+    this._faceWait = setTimeout(function () {
+        self._faceWait = null;
+        if (!self._lastFrame || self._streamProtocol !== 'airplay') {
+            return;
+        }
+        self._placeMirrorFaces(self._lastFrame.i420, self._lastFrame.w, self._lastFrame.h);
+    }, delay > 0 ? delay : 1);
+};
+
 AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     var self = this;
     var outs = this._settings.outputs();
@@ -3109,8 +3154,13 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (!this._mirrorFaces) {
         this._mirrorFaces = {};
     }
-    if (this._faceAt && (now - this._faceAt) < 25) {
+    if (this._faceAt && (now - this._faceAt) < 33) {
+        this._armFace(33 - (now - this._faceAt));
         return;
+    }
+    if (this._faceWait) {
+        clearTimeout(this._faceWait);
+        this._faceWait = null;
     }
     this._faceAt = now;
     Object.keys(faces).forEach(function (name) {
@@ -3122,6 +3172,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
         var y;
         var face;
         var ref;
+        var paint;
         if (outs.indexOf(name) === -1) {
             self._dropMirrorFace(name);
             return;
@@ -3156,8 +3207,9 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
         y = box.y > 0 ? box.y : 0;
         x -= x % 2;
         y -= y % 2;
+        paint = facePaintSize(w, h);
         face = self._mirrorFaces[name];
-        if (!face || face.w !== w || face.h !== h || face.x !== x || face.y !== y || face.target !== spec.target) {
+        if (!face || face.w !== w || face.h !== h || face.iw !== paint.iw || face.ih !== paint.ih || face.x !== x || face.y !== y || face.target !== spec.target) {
             self._dropMirrorFace(name);
             ref = self._client.image({
                 target: spec.target,
@@ -3167,8 +3219,10 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
                 y: y,
                 w: w,
                 h: h,
-                iw: w,
-                ih: h,
+                iw: paint.iw,
+                ih: paint.ih,
+                fps: 30,
+                sampling: (paint.iw === w && paint.ih === h) ? 'nearest' : 'bilinear',
                 opacity: 1,
                 exclusive: 0,
                 contend: spec.contend,
@@ -3180,12 +3234,22 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
                 noteStart('mirror-face-refused ' + name);
                 return;
             }
-            face = { ref: ref, w: w, h: h, x: x, y: y, target: spec.target, rgba: Buffer.alloc(w * h * 4) };
+            face = {
+                ref: ref,
+                w: w,
+                h: h,
+                iw: paint.iw,
+                ih: paint.ih,
+                x: x,
+                y: y,
+                target: spec.target,
+                rgba: Buffer.alloc(paint.iw * paint.ih * 4)
+            };
             self._mirrorFaces[name] = face;
-            noteStart('mirror-face ' + name + ' ' + w + 'x' + h);
+            noteStart('mirror-face ' + name + ' ' + w + 'x' + h + ' paint ' + paint.iw + 'x' + paint.ih);
         }
         var turned = self._turnedFrame({ i420: i420, w: sw, h: sh }, name);
-        videoDecoder.i420IntoRgbaContain(turned.i420, turned.w, turned.h, face.rgba, face.w, face.h);
+        videoDecoder.i420IntoRgbaContain(turned.i420, turned.w, turned.h, face.rgba, face.iw, face.ih);
         self._client.pixels(face.ref, null, face.rgba);
     });
 };
