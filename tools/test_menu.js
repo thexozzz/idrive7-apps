@@ -70,6 +70,11 @@ assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
 }));
 assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.SCREENS['air-out']);
+assert.strictEqual(menu.SCREENS['air-box'][1].name, 'air-box-pos');
+assert.strictEqual(menu.SCREENS['air-box'][2].name, 'air-box-size');
+assert.strictEqual(menu.SCREENS['air-box'][3].name, 'air-box-h');
+assert.strictEqual(menu.SCREENS['air-box'][4].name, 'air-box-w');
+assert.ok(!menu.SCREENS['air-box'].some(function (item) { return item.name === 'air-box-up' || item.name === 'air-box-s'; }));
 assert.strictEqual(menu.AIR_OUT_ITEMS[0].name, 'air-out-central');
 assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-out-hud');
 assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-out-cluster');
@@ -100,6 +105,49 @@ assert.ok(located.layout.backHit.w > 40);
 assert.ok(located.layout.nav);
 assert.ok(located.layout.nav.ok.x > located.layout.nav.right.x);
 assert.ok(located.layout.nav.right.x > located.layout.nav.left.x);
+function hitNamed(frame, hitName) {
+    var i;
+    var hits = frame.layout.hits || [];
+    for (i = 0; i < hits.length; i += 1) {
+        if (hits[i].name === hitName) {
+            return hits[i];
+        }
+    }
+    return null;
+}
+var tuned = menu.buildFrame(menu.STREAM_ITEMS, 0, 1920, 720, '', 'Stream', '0.1.99', {
+    screens: [
+        { name: 'stream-central', title: 'Środek', on: true },
+        { name: 'stream-cluster', title: 'Zegary', on: false },
+        { name: 'stream-hud', title: 'HUD', on: false }
+    ],
+    tune: {
+        name: 'central',
+        title: 'Środek',
+        tool: 'w',
+        axis: 'x',
+        x: 640,
+        y: 180,
+        w: 640,
+        h: 360,
+        limitW: 1920,
+        limitH: 720,
+        saved: false,
+        shown: { x: 640, y: 180, w: 640, h: 360, limitW: 1920, limitH: 720 }
+    },
+    window: { x: 640, y: 180, w: 640, h: 360 },
+    mirrored: true
+});
+assert.ok(hitNamed(tuned, 'stream-central'));
+assert.ok(hitNamed(tuned, 'stream-cluster'));
+assert.ok(hitNamed(tuned, 'stream-hud'));
+assert.ok(hitNamed(tuned, 'stream-w'));
+assert.ok(hitNamed(tuned, 'stream-save'));
+assert.ok(hitNamed(tuned, 'stream-cancel'));
+assert.ok(hitNamed(tuned, 'stream-win-size'));
+assert.ok(hitNamed(tuned, 'stream-win-pos'));
+assert.ok(hitNamed(tuned, 'stream-end'));
+assert.ok(tuned.rects > stream.rects);
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
 assert.ok(clipped.y + clipped.h < 596);

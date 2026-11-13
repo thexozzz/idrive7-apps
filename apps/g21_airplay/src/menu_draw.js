@@ -406,15 +406,11 @@ var AIR_OUT_ITEMS = [
 
 var AIR_BOX_ITEMS = [
     { name: 'air-box-target', title: 'Ekran', hint: 'klik: nastepny', icon: 'desktop' },
-    { name: 'air-box-center', title: 'Srodek', hint: 'klik: wyrodkuj', icon: 'grid' },
-    { name: 'air-box-s', title: '640x360', hint: 'domyslnie, 16:9', icon: 'desktop' },
-    { name: 'air-box-m', title: '960x540', hint: '16:9', icon: 'desktop' },
-    { name: 'air-box-l', title: '1280x720', hint: '16:9', icon: 'desktop' },
-    { name: 'air-box-up', title: 'Gora', hint: 'klik', icon: 'grid' },
-    { name: 'air-box-down', title: 'Dol', hint: 'klik', icon: 'grid' },
-    { name: 'air-box-left', title: 'Lewo', hint: 'klik', icon: 'grid' },
-    { name: 'air-box-right', title: 'Prawo', hint: 'klik', icon: 'grid' },
-    { name: 'air-box-rot', title: 'Obrot 0', hint: 'klik: +90', icon: 'play' },
+    { name: 'air-box-pos', title: 'Pozycja', hint: 'pokretlo, klik: os', icon: 'grid' },
+    { name: 'air-box-size', title: 'Rozmiar', hint: 'proporcje, suwak', icon: 'desktop' },
+    { name: 'air-box-h', title: 'Wysokość', hint: 'suwak', icon: 'desktop' },
+    { name: 'air-box-w', title: 'Szerokość', hint: 'suwak', icon: 'desktop' },
+    { name: 'air-box-center', title: 'Wyśrodkuj', hint: 'na srodek ekranu', icon: 'grid' },
     { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
 ];
 
@@ -964,10 +960,10 @@ function isStreamItems(items) {
 
 function streamLayout(items, selected, width, height, detail, heading) {
     var page = pageBox(width, height);
-    var btnW = 280;
-    var btnH = 88;
-    var x = page.ox + Math.floor((page.boxW - btnW) / 2);
-    var y = page.oy + page.boxH - btnH - 36;
+    var btnW = 240;
+    var btnH = 64;
+    var x = page.ox + page.boxW - btnW - 24;
+    var y = page.oy + page.boxH - btnH - 28;
     return {
         ox: page.ox,
         oy: page.oy,
@@ -1048,13 +1044,188 @@ function streamWindow(win, page) {
     return { x: x, y: y, w: w, h: h };
 }
 
+function drawChip(draw, box, on, label) {
+    var scale = 3;
+    var text = String(label || '');
+    var tw = draw.textWidth(text, scale);
+    draw.rect(box.x, box.y, box.w, box.h, on ? ACCENT : CARD);
+    draw.rect(box.x, box.y + box.h - 3, box.w, 3, on ? PAGE : LINE);
+    draw.text(text, box.x + Math.floor((box.w - tw) / 2), box.y + Math.floor((box.h - 21) / 2), scale, on ? PAGE : INK);
+}
+
+function drawSlider(draw, x, y, w, value, min, max) {
+    var span = (max | 0) - (min | 0);
+    var t = span > 0 ? ((value | 0) - (min | 0)) / span : 0;
+    var fill;
+    if (!(w > 8)) {
+        return;
+    }
+    if (t < 0) {
+        t = 0;
+    }
+    if (t > 1) {
+        t = 1;
+    }
+    fill = Math.round((w - 4) * t);
+    draw.rect(x, y, w, 16, PAGE);
+    if (fill > 0) {
+        draw.rect(x + 2, y + 2, fill, 12, ACCENT);
+    }
+    draw.rect(x + 2 + fill - 5, y - 4, 10, 24, INK);
+}
+
+function drawStage(draw, x, y, maxW, maxH, shown) {
+    var limitW = (shown && shown.limitW) || 1920;
+    var limitH = (shown && shown.limitH) || 720;
+    var scale = Math.min(maxW / limitW, maxH / limitH);
+    var stageW = Math.max(40, Math.round(limitW * scale));
+    var stageH = Math.max(24, Math.round(limitH * scale));
+    var wx = x + Math.round(((shown && shown.x) || 0) * scale);
+    var wy = y + Math.round(((shown && shown.y) || 0) * scale);
+    var ww = Math.max(8, Math.round(((shown && shown.w) || limitW) * scale));
+    var wh = Math.max(8, Math.round(((shown && shown.h) || limitH) * scale));
+    if (ww > stageW) {
+        ww = stageW;
+    }
+    if (wh > stageH) {
+        wh = stageH;
+    }
+    if (wx + ww > x + stageW) {
+        wx = x + stageW - ww;
+    }
+    if (wy + wh > y + stageH) {
+        wy = y + stageH - wh;
+    }
+    draw.rect(x, y, stageW, stageH, PAGE);
+    draw.rect(wx, wy, ww, wh, ACCENT_DIM);
+    draw.rect(wx, wy, ww, Math.min(8, wh), ACCENT);
+}
+
+function pushHit(hits, box) {
+    hits.push({ name: box.name, x: box.x, y: box.y, w: box.w, h: box.h });
+}
+
+function appendStreamChrome(draw, lay, page, info, win) {
+    var hits = [];
+    var barY = page.oy + page.boxH - 92;
+    var x = page.ox + 20;
+    var screens = (info && info.screens) || [];
+    var i;
+    var chip;
+    var tune;
+    var panel;
+    var tools;
+    var tool;
+    var sliderY;
+    var shown;
+    var active;
+    var maxX;
+    var maxY;
+    lay.hits = hits;
+    for (i = 0; i < screens.length; i += 1) {
+        chip = {
+            name: screens[i].name,
+            x: x,
+            y: barY,
+            w: screens[i].title === 'HUD' ? 150 : 210,
+            h: 64
+        };
+        active = !!(info.tune && info.tune.name === String(screens[i].name || '').replace('stream-', ''));
+        drawChip(draw, chip, active, screens[i].title);
+        if (screens[i].on && !active) {
+            draw.rect(chip.x + 12, chip.y + chip.h - 8, chip.w - 24, 4, ACCENT);
+        }
+        pushHit(hits, chip);
+        x += chip.w + 14;
+    }
+    if (lay.bubbles && lay.bubbles[0]) {
+        pushHit(hits, {
+            name: 'stream-end',
+            x: lay.bubbles[0].x,
+            y: lay.bubbles[0].y,
+            w: lay.bubbles[0].w,
+            h: lay.bubbles[0].h
+        });
+    }
+    if (win && win.w >= 520 && win.h >= 80) {
+        chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'pos'), 'pozycja');
+        pushHit(hits, chip);
+        chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'size'), 'rozmiar');
+        pushHit(hits, chip);
+    }
+    tune = info && info.tune;
+    if (!tune) {
+        return;
+    }
+    panel = { x: page.ox + 20, y: barY - 276, w: 1120, h: 260 };
+    draw.rect(panel.x, panel.y, panel.w, panel.h, PAGE_TOP);
+    draw.rect(panel.x, panel.y, 6, panel.h, ACCENT);
+    draw.text(String(tune.title || 'Ekran'), panel.x + 24, panel.y + 16, 4, INK);
+    draw.text('pokretlo zmienia, klik zapisuje', panel.x + 280, panel.y + 22, 3, MUTED);
+    tools = [
+        { name: 'stream-pos', title: 'Pozycja', tool: 'pos' },
+        { name: 'stream-size', title: 'Rozmiar', tool: 'size' },
+        { name: 'stream-h', title: 'Wysokość', tool: 'h' },
+        { name: 'stream-w', title: 'Szerokość', tool: 'w' }
+    ];
+    x = panel.x + 24;
+    for (i = 0; i < tools.length; i += 1) {
+        tool = tools[i];
+        chip = { name: tool.name, x: x, y: panel.y + 58, w: 176, h: 48 };
+        drawChip(draw, chip, tune.tool === tool.tool, tool.title);
+        pushHit(hits, chip);
+        x += 186;
+    }
+    sliderY = panel.y + 124;
+    maxX = Math.max(0, (tune.limitW || 1920) - (tune.w || 0));
+    maxY = Math.max(0, (tune.limitH || 720) - (tune.h || 0));
+    if (tune.tool === 'pos') {
+        draw.text('X', panel.x + 24, sliderY, 3, tune.axis === 'y' ? MUTED : ACCENT);
+        drawSlider(draw, panel.x + 56, sliderY, 460, tune.x, 0, maxX);
+        draw.text(String(tune.x | 0), panel.x + 530, sliderY, 3, INK);
+        pushHit(hits, { name: 'stream-axis-x', x: panel.x + 24, y: sliderY - 6, w: 560, h: 28 });
+        draw.text('Y', panel.x + 24, sliderY + 40, 3, tune.axis === 'y' ? ACCENT : MUTED);
+        drawSlider(draw, panel.x + 56, sliderY + 40, 460, tune.y, 0, maxY);
+        draw.text(String(tune.y | 0), panel.x + 530, sliderY + 40, 3, INK);
+        pushHit(hits, { name: 'stream-axis-y', x: panel.x + 24, y: sliderY + 34, w: 560, h: 28 });
+    } else if (tune.tool === 'size' || tune.tool === 'w' || tune.tool === 'h') {
+        if (tune.tool === 'h') {
+            draw.text('wys.', panel.x + 24, sliderY + 8, 3, ACCENT);
+            drawSlider(draw, panel.x + 110, sliderY + 6, 400, tune.h, 90, tune.limitH || 720);
+        } else {
+            draw.text(tune.tool === 'size' ? 'calosc' : 'szer.', panel.x + 24, sliderY + 8, 3, ACCENT);
+            drawSlider(draw, panel.x + 110, sliderY + 6, 400, tune.w, 160, tune.limitW || 1920);
+        }
+        draw.text(String(tune.w) + 'x' + String(tune.h), panel.x + 524, sliderY + 8, 3, INK);
+    } else {
+        draw.text('wybierz pozycje, rozmiar, wysokosc albo szerokosc', panel.x + 24, sliderY + 10, 3, HINT);
+    }
+    chip = { name: 'stream-save', x: panel.x + 24, y: panel.y + 204, w: 180, h: 44 };
+    drawChip(draw, chip, !!tune.saved, tune.saved ? 'zapisane' : 'Zapisz');
+    pushHit(hits, chip);
+    chip = { name: 'stream-cancel', x: panel.x + 216, y: panel.y + 204, w: 180, h: 44 };
+    drawChip(draw, chip, false, 'Anuluj');
+    pushHit(hits, chip);
+    shown = tune.shown || {
+        x: tune.x,
+        y: tune.y,
+        w: tune.w,
+        h: tune.h,
+        limitW: tune.limitW,
+        limitH: tune.limitH
+    };
+    drawStage(draw, panel.x + panel.w - 250, panel.y + 58, 220, 120, shown);
+    draw.text('na zywo', panel.x + panel.w - 250, panel.y + 186, 3, MUTED);
+}
+
 function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
     var title = String((items[0] && items[0].title) || 'Zakończ');
     var titleW;
-    var hint;
     var page = pageBox(width, height);
     var info = streamInfo || null;
     var pin = (info && info.pin) || parsePinDetail(detail);
@@ -1072,6 +1243,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var panelY;
     var panelW;
     var panelH;
+    var placedWin = null;
     // The window is drawn here. waylandsink under the HMI stays blank on this unit.
     draw.clear(0);
     var head = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
@@ -1092,6 +1264,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
                 w: info.window.w | 0,
                 h: info.window.h | 0
             };
+            placedWin = win;
             draw.rect(win.x, win.y, win.w, win.h, PAGE);
         if (info.video) {
             draw.video(win.x, win.y, win.w, win.h, 1);
@@ -1102,9 +1275,6 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
         draw.rect(win.x + win.w - 3, win.y, 3, win.h, ACCENT);
         draw.rect(win.x, win.y + win.h - 3, win.w, 3, ACCENT);
         draw.text('THEiPlay', win.x + 16, win.y + 12, 3, PAGE);
-        label = 'przesun';
-        labelW = draw.textWidth(label, 3);
-        draw.text(label, win.x + win.w - labelW - 16, win.y + 12, 3, PAGE);
         if (!mirrored && pin) {
             pinScale = 8;
             pinW = draw.textWidth(pin, pinScale);
@@ -1175,14 +1345,10 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
     draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
     draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
-    draw.icon('stop', bubble.x + 28, bubble.y + 22, 3, ICON_ACCENT);
+    draw.icon('stop', bubble.x + 28, bubble.y + 8, 3, ICON_ACCENT);
     titleW = draw.textWidth(title, 4);
-    draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 30, 4, INK);
-    hint = items[0] && items[0].hint ? String(items[0].hint) : '';
-    if (hint) {
-        draw.text(hint, lay.ox + 36, lay.oy + lay.boxH - 58, 3, HINT);
-    }
-    drawNav(draw, lay);
+    draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 18, 4, INK);
+    appendStreamChrome(draw, lay, page, info, placedWin);
     if (caption && caption.on && caption.text) {
         draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
     }
@@ -1306,8 +1472,8 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
 function drawBoxPreview(draw, lay, preview, selectedItem) {
     var limitW = preview.limitW || 1920;
     var limitH = preview.limitH || 720;
-    var maxW = 600;
-    var maxH = 420;
+    var maxW = 520;
+    var maxH = preview.sliders && preview.sliders.length ? 200 : 280;
     var scale = Math.min(maxW / limitW, maxH / limitH);
     var stageW = Math.max(80, Math.round(limitW * scale));
     var stageH = Math.max(48, Math.round(limitH * scale));
@@ -1319,10 +1485,14 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     var wh = Math.max(12, Math.round((preview.h || limitH) * scale));
     var mode = preview.mode || '';
     var caption;
-    if (mode !== 'move' && selectedItem && (selectedItem.name === 'air-box-bigger' || selectedItem.name === 'air-box-smaller')) {
+    var si;
+    var row;
+    var sy;
+    var lab;
+    if (selectedItem && (selectedItem.name === 'air-box-size' || selectedItem.name === 'air-box-w' || selectedItem.name === 'air-box-h')) {
         mode = 'size';
     }
-    if (selectedItem && (selectedItem.name === 'air-box-up' || selectedItem.name === 'air-box-down' || selectedItem.name === 'air-box-left' || selectedItem.name === 'air-box-right')) {
+    if (selectedItem && selectedItem.name === 'air-box-pos') {
         mode = 'move';
     }
     if (ww > stageW) {
@@ -1346,7 +1516,18 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
         caption = String(preview.label) + '  ' + caption;
     }
     draw.text(caption, x, y + stageH + 18, 3, HINT);
-    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0) + '  obrot ' + String(preview.rotate || 0), x, y + stageH + 48, 3, MUTED);
+    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0), x, y + stageH + 48, 3, MUTED);
+    if (preview.sliders && preview.sliders.length) {
+        sy = y + stageH + 78;
+        for (si = 0; si < preview.sliders.length; si += 1) {
+            row = preview.sliders[si];
+            lab = String(row.label || '');
+            draw.text(lab, x, sy, 3, row.on ? ACCENT : MUTED);
+            drawSlider(draw, x + 130, sy, Math.max(80, stageW - 220), row.value | 0, row.min | 0, row.max | 0);
+            draw.text(String(row.value | 0), x + stageW - 72, sy, 3, INK);
+            sy += 36;
+        }
+    }
 }
 
 function encoderStep(previous, next) {
@@ -1413,6 +1594,8 @@ function createMenuSurface(opts) {
     var popupHits = [];
     var holdTimer = null;
     var dragWin = null;
+    var dragTimer = null;
+    var streamHits = [];
     var mirrorSent = false;
     var pulseBeat = 0;
     var backBox = null;
@@ -1518,6 +1701,7 @@ function createMenuSurface(opts) {
         popupHits = (built.layout && built.layout.popup) || [];
         backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
         navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
+        streamHits = (built.layout && built.layout.hits) || [];
         backAction = edit ? '' : findBack(items);
         write(built.frame);
         lastFrame = built.frame;
@@ -1849,6 +2033,12 @@ function createMenuSurface(opts) {
             paint();
             return;
         }
+        if (streamInfo && streamInfo.tune) {
+            if (streamInfo.tune.tool) {
+                choose('stream-save');
+            }
+            return;
+        }
         item = items[selected];
         if (item) {
             choose(item.name);
@@ -1881,12 +2071,18 @@ function createMenuSurface(opts) {
         lastTilt = tilt;
         if (tilted && !edit) {
             adjusted = typeof opts.onTilt === 'function' && !!opts.onTilt(tilt);
-            if (!adjusted && (tilt === 'n' || tilt === 's')) {
+            if (!adjusted && (tilt === 'n' || tilt === 's') && !(streamInfo && streamInfo.tune)) {
                 move(tilt === 's' ? 1 : -1);
             }
         }
-        if (step && !edit && item && typeof opts.adjust === 'function') {
-            adjusted = !!opts.adjust(item.name, step > 0 ? 1 : -1);
+        if (step && !edit && streamInfo && streamInfo.tune) {
+            if (streamInfo.tune.tool && typeof opts.adjust === 'function') {
+                opts.adjust('stream-tune', step);
+            }
+            adjusted = true;
+        }
+        if (step && !edit && !adjusted && item && typeof opts.adjust === 'function') {
+            adjusted = !!opts.adjust(item.name, step);
         }
         if (step && !adjusted) {
             move(step > 0 ? 1 : -1);
@@ -2088,9 +2284,41 @@ function createMenuSurface(opts) {
         }
         if (phase === 3) {
             dragWin = null;
+            if (dragTimer) {
+                clearTimeout(dragTimer);
+                dragTimer = null;
+            }
+            paint();
+            return true;
+        }
+        if (!dragTimer) {
+            pumpDrag();
+        }
+        return true;
+    }
+
+    function pumpDrag() {
+        dragTimer = null;
+        if (!dragWin) {
+            return;
         }
         paint();
-        return true;
+        dragTimer = setTimeout(pumpDrag, 50);
+    }
+
+    function hitStream(x, y) {
+        var i;
+        var box;
+        if (!streamHits) {
+            return '';
+        }
+        for (i = streamHits.length - 1; i >= 0; i -= 1) {
+            box = streamHits[i];
+            if (pointIn(box, x, y)) {
+                return box.name;
+            }
+        }
+        return '';
     }
 
     function take(buf) {
@@ -2157,7 +2385,28 @@ function createMenuSurface(opts) {
                     return;
                 }
                 note('menu-touch ' + phase + ' ' + Math.round(tx) + ',' + Math.round(ty));
+                if (screenName === 'stream') {
+                    if (touchDown && touchDown.stream) {
+                        if (phase === 3) {
+                            if (hitStream(tx, ty) === touchDown.stream) {
+                                choose(touchDown.stream);
+                            }
+                            touchDown = null;
+                        }
+                        return;
+                    }
+                    if (phase === 1 && hitStream(tx, ty)) {
+                        touchDown = { stream: hitStream(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                        return;
+                    }
+                }
                 if (!edit && onWindowDrag(phase, tx, ty)) {
+                    return;
+                }
+                if (screenName === 'stream') {
+                    if (phase === 3) {
+                        touchDown = null;
+                    }
                     return;
                 }
                 if (edit) {
@@ -2363,7 +2612,16 @@ function createMenuSurface(opts) {
                 limitH: info.limitH | 0,
                 mode: info.mode ? String(info.mode) : '',
                 rotate: info.rotate | 0,
-                label: info.label ? String(info.label) : ''
+                label: info.label ? String(info.label) : '',
+                sliders: Array.isArray(info.sliders) ? info.sliders.map(function (row) {
+                    return {
+                        label: row && row.label ? String(row.label) : '',
+                        value: row && row.value ? (row.value | 0) : 0,
+                        min: row && row.min ? (row.min | 0) : 0,
+                        max: row && row.max ? (row.max | 0) : 0,
+                        on: !!(row && row.on)
+                    };
+                }) : []
             } : null;
             if (!edit) {
                 paint();
@@ -2384,6 +2642,34 @@ function createMenuSurface(opts) {
                     y: info.window.y | 0,
                     w: info.window.w | 0,
                     h: info.window.h | 0
+                } : null,
+                screens: Array.isArray(info.screens) ? info.screens.map(function (row) {
+                    return {
+                        name: row && row.name ? String(row.name) : '',
+                        title: row && row.title ? String(row.title) : '',
+                        on: !!(row && row.on)
+                    };
+                }) : [],
+                tune: info.tune && typeof info.tune === 'object' ? {
+                    name: String(info.tune.name || ''),
+                    title: String(info.tune.title || ''),
+                    tool: String(info.tune.tool || ''),
+                    axis: info.tune.axis === 'y' ? 'y' : 'x',
+                    x: info.tune.x | 0,
+                    y: info.tune.y | 0,
+                    w: info.tune.w | 0,
+                    h: info.tune.h | 0,
+                    limitW: info.tune.limitW | 0,
+                    limitH: info.tune.limitH | 0,
+                    saved: !!info.tune.saved,
+                    shown: info.tune.shown && typeof info.tune.shown === 'object' ? {
+                        x: info.tune.shown.x | 0,
+                        y: info.tune.shown.y | 0,
+                        w: info.tune.shown.w | 0,
+                        h: info.tune.shown.h | 0,
+                        limitW: info.tune.shown.limitW | 0,
+                        limitH: info.tune.shown.limitH | 0
+                    } : null
                 } : null
             } : null;
             streamInfo = next;

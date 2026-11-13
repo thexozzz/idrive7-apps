@@ -238,6 +238,113 @@ function createSettings(stored) {
             });
             return picture[name];
         },
+        slide: function (name, key, delta) {
+            var box = picture[name];
+            var limit = LIMITS[name];
+            var steps = delta | 0;
+            var count;
+            var sign;
+            var step;
+            var ratio;
+            var next;
+            var cx;
+            var cy;
+            if (!box || !steps || !limit) {
+                return box;
+            }
+            if (steps > 4) {
+                steps = 4;
+            }
+            if (steps < -4) {
+                steps = -4;
+            }
+            sign = steps > 0 ? 1 : -1;
+            count = steps < 0 ? -steps : steps;
+            next = {
+                scale: box.scale,
+                x: box.x,
+                y: box.y,
+                w: box.w,
+                h: box.h,
+                fps: box.fps,
+                rotate: box.rotate
+            };
+            if (key === 'x' || key === 'y') {
+                next[key] = box[key] + (64 * count * sign);
+            } else if (key === 'w' || key === 'h') {
+                step = Math.round(box[key] * 0.08);
+                if (step < 32) {
+                    step = 32;
+                }
+                next[key] = box[key] + (step * count * sign);
+                if (key === 'w') {
+                    cx = box.x + box.w / 2;
+                    next.x = Math.round(cx - next.w / 2);
+                } else {
+                    cy = box.y + box.h / 2;
+                    next.y = Math.round(cy - next.h / 2);
+                }
+            } else if (key === 'size') {
+                ratio = box.h ? (box.w / box.h) : (16 / 9);
+                step = Math.round(box.w * 0.08);
+                if (step < 32) {
+                    step = 32;
+                }
+                next.w = box.w + (step * count * sign);
+                next.h = Math.round(next.w / ratio);
+                cx = box.x + box.w / 2;
+                cy = box.y + box.h / 2;
+                next.x = Math.round(cx - next.w / 2);
+                next.y = Math.round(cy - next.h / 2);
+            } else {
+                return box;
+            }
+            if (next.w < 160) {
+                next.w = 160;
+            }
+            if (next.h < 90) {
+                next.h = 90;
+            }
+            if (next.w > limit.w) {
+                if (key === 'size' && next.w) {
+                    next.h = Math.round(next.h * (limit.w / next.w));
+                }
+                next.w = limit.w - (limit.w % 2);
+            }
+            if (next.h > limit.h) {
+                if (key === 'size' && next.h) {
+                    next.w = Math.round(next.w * (limit.h / next.h));
+                }
+                next.h = limit.h - (limit.h % 2);
+            }
+            next.w -= next.w % 2;
+            next.h -= next.h % 2;
+            if (next.w < 160) {
+                next.w = Math.min(limit.w, 160);
+            }
+            if (next.h < 90) {
+                next.h = Math.min(limit.h, 90);
+            }
+            picture[name] = clampBox(name, next);
+            return picture[name];
+        },
+        span: function (name, key) {
+            var box = picture[name];
+            var limit = LIMITS[name];
+            if (!box || !limit) {
+                return { min: 0, max: 1, value: 0 };
+            }
+            if (key === 'x') {
+                return { min: 0, max: Math.max(0, limit.w - box.w), value: box.x };
+            }
+            if (key === 'y') {
+                return { min: 0, max: Math.max(0, limit.h - box.h), value: box.y };
+            }
+            if (key === 'h') {
+                return { min: 90, max: limit.h, value: box.h };
+            }
+            return { min: 160, max: limit.w, value: box.w };
+        },
         nudge: function (name, key, delta) {
             var box = picture[name];
             var next;

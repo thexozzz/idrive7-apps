@@ -14,6 +14,21 @@ var centered = settingsFactory.createSettings({
 }).picture('central');
 assert.strictEqual(centered.x, 640);
 assert.strictEqual(centered.y, 180);
+var slidSettings = settingsFactory.createSettings({});
+var beforeSlide = slidSettings.picture('central');
+var wider = slidSettings.slide('central', 'w', 1);
+assert.ok(wider.w > beforeSlide.w);
+assert.strictEqual(wider.h, beforeSlide.h);
+var sized = slidSettings.slide('central', 'size', -1);
+assert.ok(sized.w < wider.w);
+var kept = settingsFactory.createSettings({});
+var baseBox = kept.picture('central');
+var grown = kept.slide('central', 'size', 1);
+assert.ok(grown.w > baseBox.w);
+assert.ok(Math.abs((grown.w / grown.h) - (baseBox.w / baseBox.h)) < 0.05);
+var xBefore = sized.x;
+slidSettings.slide('central', 'x', 1);
+assert.ok(slidSettings.picture('central').x >= xBefore + 32);
 
 function fakeClient(targets) {
     var calls = [];
