@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.103
+
+- Pasek AirPlay jest waski, w rogu naglowka. Obraz nie ma paska ani przyciskow, a menu pod nim nie lapie dotyku.
+
 ## 0.1.102
 
 - Zegary i HUD ida w 24 klatkach na sekunde. iPhone jest proszony o obraz 600x400, tez 24 razy na sekunde.

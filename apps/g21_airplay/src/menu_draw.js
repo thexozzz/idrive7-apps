@@ -781,7 +781,7 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         textX = lay.ox + 188;
         scale = 4;
     }
-    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 460);
+    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 380);
     draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
 }
 
@@ -1109,37 +1109,36 @@ function pushHit(hits, box) {
 }
 
 function drawAirBadge(draw, lay, air, versionText) {
-    var w = 520;
-    var h = 86;
-    var x = lay.ox + lay.boxW - w - 12;
-    var y = lay.oy + 6;
-    var status;
+    var label;
     var tone;
-    var btn;
-    var ver;
     var tw;
+    var w;
+    var h = 40;
+    var x;
+    var y;
+    var btn;
     if (!air || !lay) {
         return null;
     }
+    label = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 18);
+    tw = draw.textWidth(label, 3);
+    w = 36 + tw + 16 + 112 + 16;
+    if (w < 260) {
+        w = 260;
+    }
+    x = lay.ox + lay.boxW - w - 16;
+    y = lay.oy + 14;
     draw.rect(x, y, w, h, PAGE_TOP);
-    draw.rect(x, y, 8, h, air.online ? ACCENT : MUTED);
     if (air.online) {
-        draw.rect(x + 22, y + 16, 16, 16, ACCENT);
+        draw.rect(x + 12, y + 12, 16, 16, ACCENT);
     } else {
-        draw.rect(x + 22, y + 16, 16, 16, MUTED);
-        draw.rect(x + 26, y + 20, 8, 8, PAGE_TOP);
+        draw.rect(x + 12, y + 12, 16, 16, MUTED);
+        draw.rect(x + 16, y + 16, 8, 8, PAGE_TOP);
     }
-    draw.text(air.online ? 'online' : 'offline', x + 48, y + 14, 3, air.online ? ACCENT : HINT);
-    ver = String(versionText || '').replace(/^v/i, '');
-    if (ver) {
-        tw = draw.textWidth('v' + ver, 3);
-        draw.text('v' + ver, x + w - 168 - tw, y + 14, 3, MUTED);
-    }
-    btn = { name: 'air-badge', x: x + w - 146, y: y + 8, w: 132, h: 34 };
+    tone = air.online ? ACCENT : (air.bad ? INK : HINT);
+    draw.text(label, x + 36, y + 10, 3, tone);
+    btn = { name: 'air-badge', x: x + w - 124, y: y + 6, w: 112, h: 28 };
     drawChip(draw, btn, !!air.on, air.on ? 'Stop' : 'Start');
-    status = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 34);
-    tone = air.online ? ACCENT : (air.bad ? INK : MUTED);
-    draw.text(status, x + 22, y + 52, 3, tone);
     return btn;
 }
 
@@ -1218,70 +1217,24 @@ function drawTunePanel(draw, hits, panel, tune) {
 
 function applyAirOverlay(draw, lay, air, versionText) {
     var hits = lay.hits || [];
-    var names;
-    var chip;
-    var i;
-    var x;
     var win;
-    var active;
     lay.hits = hits;
     lay.airBadge = drawAirBadge(draw, lay, air, versionText);
+    lay.airWindow = null;
     if (!air || lay.stream) {
         return;
     }
-    if (air.on) {
-        names = [
-            { name: 'stream-central', title: 'Środek', key: 'central', w: 160 },
-            { name: 'stream-cluster', title: 'Zegary', key: 'cluster', w: 160 },
-            { name: 'stream-hud', title: 'HUD', key: 'hud', w: 120 }
-        ];
-        x = lay.ox + 20;
-        for (i = 0; i < names.length; i += 1) {
-            chip = {
-                name: names[i].name,
-                x: x,
-                y: lay.oy + lay.boxH - 68,
-                w: names[i].w,
-                h: 48
-            };
-            active = !!(air.tune && air.tune.name === names[i].key);
-            drawChip(draw, chip, active, names[i].title);
-            pushHit(hits, chip);
-            x += chip.w + 12;
-        }
+    if (!(air.mirrored && air.window && air.window.w > 80 && air.window.h > 80)) {
+        return;
     }
-    if (air.mirrored && air.window && air.window.w > 80 && air.window.h > 80) {
-        win = {
-            x: air.window.x | 0,
-            y: air.window.y | 0,
-            w: air.window.w | 0,
-            h: air.window.h | 0
-        };
-        draw.rect(win.x, win.y, win.w, win.h, PAGE);
-        draw.video(win.x, win.y, win.w, win.h, 1);
-        draw.rect(win.x, win.y, win.w, 44, ACCENT);
-        draw.rect(win.x, win.y, 3, win.h, ACCENT);
-        draw.rect(win.x + win.w - 3, win.y, 3, win.h, ACCENT);
-        draw.rect(win.x, win.y + win.h - 3, win.w, 3, ACCENT);
-        draw.text('THEiPlay', win.x + 16, win.y + 12, 3, PAGE);
-        if (win.w >= 520) {
-            chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
-            drawChip(draw, chip, !!(air.tune && air.tune.name === 'central' && air.tune.tool === 'pos'), 'pozycja');
-            pushHit(hits, chip);
-            chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
-            drawChip(draw, chip, !!(air.tune && air.tune.name === 'central' && air.tune.tool === 'size'), 'rozmiar');
-            pushHit(hits, chip);
-        }
-        lay.airWindow = win;
-    }
-    if (air.tune) {
-        drawTunePanel(draw, hits, {
-            x: lay.ox + 20,
-            y: lay.oy + lay.boxH - 340,
-            w: 1120,
-            h: 260
-        }, air.tune);
-    }
+    win = {
+        x: air.window.x | 0,
+        y: air.window.y | 0,
+        w: air.window.w | 0,
+        h: air.window.h | 0
+    };
+    draw.video(win.x, win.y, win.w, win.h, 1);
+    lay.airWindow = win;
 }
 
 function appendStreamChrome(draw, lay, page, info, win) {
@@ -1723,6 +1676,7 @@ function createMenuSurface(opts) {
     var streamHits = [];
     var airState = null;
     var airBadge = null;
+    var airWindow = null;
     var airKey = '';
     var mirrorSent = false;
     var pulseBeat = 0;
@@ -1833,6 +1787,7 @@ function createMenuSurface(opts) {
         navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
         streamHits = (built.layout && built.layout.hits) || [];
         airBadge = built.layout && built.layout.airBadge ? built.layout.airBadge : null;
+        airWindow = built.layout && built.layout.airWindow ? built.layout.airWindow : null;
         backAction = edit ? '' : findBack(items);
         write(built.frame);
         lastFrame = built.frame;
@@ -2536,6 +2491,10 @@ function createMenuSurface(opts) {
                     } else if (phase === 3) {
                         touchDown = null;
                     }
+                    return;
+                }
+                if (airWindow && pointIn(airWindow, tx, ty)) {
+                    touchDown = null;
                     return;
                 }
                 if (screenName === 'stream' || (airState && (airState.window || airState.tune || airState.on))) {
