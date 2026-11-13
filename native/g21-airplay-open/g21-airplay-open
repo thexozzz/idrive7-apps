@@ -1081,7 +1081,13 @@ start_ux() {
     # Direct waylandsink under HMI is blank (H13/H30). Keep G21_YUV export above.
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
-    # -as 0: alsasink GST errors quit the RAOP main loop on this unit; video-only mirror.
+    # Cabin speakers are not card 0. That card is only Bluetooth handsfree.
+    # Front media is the SmartX ALSA plugin (aplay -Dsmartx:NAME). CarPlayMain
+    # is the 48 kHz stereo source the audio manager already routes.
+    # A sink with no device opens "default", which this unit does not have,
+    # and that GStreamer error stops the whole AirPlay server.
+    audio_sink='alsasink device=smartx:CarPlayMain'
+    export ALSA_PLUGIN_DIR="${ALSA_PLUGIN_DIR:-/usr/lib/alsa-lib}"
     # Auth: menu writes /run/g21-session/airplay-auth (pin|open).
     # -pin NNNN = PAIR-PIN-START on iPhone. open = jak kkds, bez kodu.
     # -pw digest often never prompts on modern iOS.
@@ -1109,9 +1115,9 @@ start_ux() {
         esac
     fi
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as 0 -s "$vsize" -fps 30 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as "$audio_sink" -s "$vsize" -fps 30 $pin_args -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as 0 -s "$vsize" -fps 30 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as "$audio_sink" -s "$vsize" -fps 30 $pin_args -d 1
     fi
     printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
     # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG
