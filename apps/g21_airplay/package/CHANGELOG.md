@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.105
+
+- Zegary i HUD dostają klatkę YUV na GPU, bez przeliczania kolorów w aplikacji. Obraz trzyma proporcje, a menu nie zacina się na każdej klatce.
+- Pierwsza klatka nie czeka, aż iPhone zgasi i zapali ekran. Odbiornik puszcza obraz od razu (narzędzie 0.1.44).
+
 ## 0.1.104
 
 - Obok statusu sa Srodek, Zegary i HUD. Start wlacza tylko zaznaczone ekrany.

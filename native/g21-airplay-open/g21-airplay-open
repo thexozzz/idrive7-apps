@@ -1077,7 +1077,9 @@ start_ux() {
     : > "$UXLOG"
     # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
-    # -vs fakesink: decode + G21_YUV tee only; app presents via g21-present / cluster-render.
+    # -vs fakesink with async=false: decode + G21_YUV tee only. async=false lets the
+    # first iPhone frame through; the default sink waits and the picture stays
+    # black until the phone screen turns off and on. The app presents the file.
     # Direct waylandsink under HMI is blank (H13/H30). Keep G21_YUV export above.
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
@@ -1115,9 +1117,9 @@ start_ux() {
         esac
     fi
     if [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs fakesink -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs fakesink -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
     fi
     printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
     # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG

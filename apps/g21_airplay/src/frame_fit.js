@@ -76,6 +76,96 @@ function fitRect(sw, sh, dw, dh, mode) {
     return { x: x, y: y, w: w, h: h, sx: sx, sy: sy, sw: srcW, sh: srcH };
 }
 
+function containPlace(sw, sh, box, limitW, limitH) {
+    var x0 = box && box.x > 0 ? (box.x | 0) : 0;
+    var y0 = box && box.y > 0 ? (box.y | 0) : 0;
+    var bw = box && box.w ? (box.w | 0) : limitW;
+    var bh = box && box.h ? (box.h | 0) : limitH;
+    var scale;
+    var dw;
+    var dh;
+    var x;
+    var y;
+    if (sw < 2) {
+        sw = 2;
+    }
+    if (sh < 2) {
+        sh = 2;
+    }
+    if (limitW < 16) {
+        limitW = 16;
+    }
+    if (limitH < 16) {
+        limitH = 16;
+    }
+    if (x0 >= limitW) {
+        x0 = 0;
+    }
+    if (y0 >= limitH) {
+        y0 = 0;
+    }
+    if (x0 + bw > limitW) {
+        bw = limitW - x0;
+    }
+    if (y0 + bh > limitH) {
+        bh = limitH - y0;
+    }
+    if (bw < 16) {
+        bw = 16;
+    }
+    if (bh < 16) {
+        bh = 16;
+    }
+    scale = Math.min(bw / sw, bh / sh);
+    dw = Math.round(sw * scale);
+    dh = Math.round(sh * scale);
+    dw -= dw % 4;
+    dh -= dh % 2;
+    if (dw < 16) {
+        dw = 16;
+    }
+    if (dh < 16) {
+        dh = 16;
+    }
+    if (dw > bw) {
+        dw = bw - (bw % 4);
+    }
+    if (dh > bh) {
+        dh = bh - (bh % 2);
+    }
+    if (dw < 16) {
+        dw = 16;
+    }
+    if (dh < 16) {
+        dh = 16;
+    }
+    x = x0 + Math.floor((bw - dw) / 2);
+    y = y0 + Math.floor((bh - dh) / 2);
+    x -= x % 2;
+    y -= y % 2;
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    if (x + dw > limitW) {
+        x = limitW - dw;
+        x -= x % 2;
+    }
+    if (y + dh > limitH) {
+        y = limitH - dh;
+        y -= y % 2;
+    }
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    return { x: x, y: y, w: dw, h: dh };
+}
+
 function fitI420(i420, sw, sh, dw, dh, mode) {
     var rect = fitRect(sw, sh, dw, dh, mode);
     var ySize = dw * dh;
@@ -195,6 +285,7 @@ module.exports = {
     even2: even2,
     even4: even4,
     fitRect: fitRect,
+    containPlace: containPlace,
     fitI420: fitI420,
     rotateI420: rotateI420,
 };

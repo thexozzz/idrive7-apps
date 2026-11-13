@@ -12,6 +12,13 @@ function white(w, h) {
     return buf;
 }
 
+var placed = fit.containPlace(600, 400, { x: 100, y: 40, w: 640, h: 360 }, 1920, 720);
+assert.strictEqual(placed.w, 540);
+assert.strictEqual(placed.h, 360);
+assert.strictEqual(placed.x, 150);
+assert.strictEqual(placed.y, 40);
+assert.strictEqual(placed.w / placed.h, 600 / 400);
+
 var box = fit.fitRect(1920, 1080, 1088, 480, 'contain');
 assert.strictEqual(box.w % 4, 0);
 assert.strictEqual(box.h % 2, 0);

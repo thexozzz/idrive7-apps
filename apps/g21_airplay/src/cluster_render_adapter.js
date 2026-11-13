@@ -84,11 +84,11 @@ function createClusterRenderAdapter(client) {
             }
             vw -= vw % 4;
             vh -= vh % 2;
-            if (vw < 16) {
-                vw = 16;
+            if (vw < 64) {
+                vw = 64;
             }
-            if (vh < 2) {
-                vh = 2;
+            if (vh < 32) {
+                vh = 32;
             }
             ref = client.video({
                 target: known.protocol,
@@ -100,12 +100,17 @@ function createClusterRenderAdapter(client) {
                 w: fw,
                 h: fh,
                 rotate: box.rotate || 0,
-                klass: 'content',
+                klass: box.klass || 'content',
+                z: box.z || 0,
                 yield: 1,
                 exclusive: 0,
                 guide_hold: 0,
-                contend: known.protocol === 'panel' ? 1 : 0,
+                contend: box.contend === undefined ? (known.protocol === 'panel' ? 1 : 0) : box.contend,
                 prewarm: 1,
+                level_bits: box.level_bits,
+                dirty_threshold: box.dirty_threshold,
+                pan_blocks: box.pan_blocks,
+                stall_ms: box.stall_ms,
             });
             if (!ref) {
                 return fail('layer-refused');
