@@ -125,14 +125,15 @@ var ITEMS = ['Cars review', 'Night drive', 'Podcast 12', 'Track day', 'Trailer']
     var spellAsked = [];
     var exits = 0;
     var kombi = false;
+    var screens = {};
     var rt = rideTube.createRideTube({
         log: function (t) { notes.push(t); },
         dataDir: dir,
         version: '0.0.0-test',
         spell: function (title) { spellAsked.push(title); return Promise.resolve('cars'); },
         onExit: function () { exits += 1; },
-        screen: function () { return false; },
-        setScreen: function () {},
+        screen: function (key) { return !!screens[key]; },
+        setScreen: function (key, on) { screens[key] = on; },
         kombiWanted: function () { return kombi; },
         videoRect: function () { return '848x480'; },
     });
@@ -207,6 +208,17 @@ var ITEMS = ['Cars review', 'Night drive', 'Podcast 12', 'Track day', 'Trailer']
     await until(function () { return d.cmds('video').some(function (m) { return m.on === true; }); }, 2000, 'video on');
     await sleep(400);
     png('player');
+    // the player's own buttons: the film also on the cluster / the HUD (THEiPlay's screens)
+    var ov = function (k) { return rt.display.pageTargets.filter(function (t) { return t.key === k; })[0]; };
+    assert.ok(ov('ov:kombi') && ov('ov:hud'), 'Wyświetl na zegarach / na HUD in the player');
+    ov('ov:kombi').run();
+    assert.strictEqual(screens.yt_cluster, true, 'cluster on');
+    await sleep(100);
+    ov('ov:hud').run();
+    assert.strictEqual(screens.yt_hud, true, 'HUD on');
+    await sleep(100);
+    ov('ov:hud').run();
+    assert.strictEqual(screens.yt_hud, false, 'HUD off again');
 
     // back to the list, then the THEiPlay entry on the rail: the screen closes, the renderer goes
     rt.display.onBack(false);

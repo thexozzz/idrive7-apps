@@ -168,6 +168,7 @@ var EN = {
     'wlaczone': 'on',
     'wylaczone': 'off',
     'Gotowe': 'Done',
+    'Otwórz YouTube': 'Open YouTube',
     'Pozycja': 'Position',
     'Start': 'Start',
     'Stop': 'Stop',
@@ -1652,6 +1653,9 @@ function drawWhereSheet(draw, lay, air) {
     }
     var pick = (air && air.pickPrefix) || 'air-pick-';
     var shut = (air && air.pickClose) || 'air-where-close';
+    // the YouTube start sheet: a tap beside the panel cancels, the button opens YouTube
+    var cancel = (air && air.pickCancel) || shut;
+    var hints = {};
     tiles = [
         { name: pick + 'cluster', key: 'cluster', title: 'Zegary', kind: 'cluster' },
         { name: pick + 'hud', key: 'hud', title: 'HUD', kind: 'hud' },
@@ -1663,6 +1667,9 @@ function drawWhereSheet(draw, lay, air) {
         row = screens[i];
         if (row && row.on) {
             chosen[row.key || row.name] = true;
+        }
+        if (row && row.hint) {
+            hints[row.key || row.name] = String(row.hint);
         }
     }
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
@@ -1687,7 +1694,7 @@ function drawWhereSheet(draw, lay, air) {
     if (!lay.airHits) {
         lay.airHits = [];
     }
-    lay.airHits.push({ name: shut, x: lay.ox, y: lay.oy, w: lay.boxW, h: lay.boxH });
+    lay.airHits.push({ name: cancel, x: lay.ox, y: lay.oy, w: lay.boxW, h: lay.boxH });
     for (i = 0; i < tiles.length; i += 1) {
         tile = tiles[i];
         on = !!chosen[tile.key];
@@ -1696,11 +1703,16 @@ function drawWhereSheet(draw, lay, air) {
         drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), y + 100);
         draw.text(tr(tile.title), tx + 16, y + 250, 3, on ? RED : INK);
         draw.text(tr(on ? 'wlaczone' : 'wylaczone'), tx + 16, y + 282, 3, on ? ACCENT : MUTED);
+        if (hints[tile.key]) {
+            draw.text(hints[tile.key], tx + 16, y + 314, 2, MUTED);
+        }
         lay.airHits.push({ name: tile.name, x: tx, y: y + 78, w: tileW, h: 280 });
         tx += tileW + gap;
     }
-    close = { name: shut, x: x + panelW - 180, y: y + panelH - 64, w: 148, h: 40 };
-    drawChip(draw, close, cursor === 3, tr('Gotowe'));
+    var closeLabel = (air && air.closeLabel) || 'Gotowe';
+    var closeW = closeLabel.length > 8 ? 300 : 148;
+    close = { name: shut, x: x + panelW - closeW - 32, y: y + panelH - 64, w: closeW, h: 40 };
+    drawChip(draw, close, cursor === 3, tr(closeLabel));
     lay.airHits.push(close);
 }
 
@@ -1741,7 +1753,9 @@ function applyAirOverlay(draw, lay, air, versionText) {
             screens: air.yt.screens,
             whereCursor: air.yt.whereCursor,
             pickPrefix: 'yt-pick-',
-            pickClose: 'yt-where-close'
+            pickClose: 'yt-where-close',
+            pickCancel: air.yt.whereGo ? 'yt-where-cancel' : '',
+            closeLabel: air.yt.whereGo ? 'Otwórz YouTube' : ''
         });
     }
     if (air && air.whereOpen) {
@@ -2493,6 +2507,8 @@ function createMenuSurface(opts) {
     var armed = '';
     var whereOpen = false;
     var ytOpen = false;
+    // ytGo: the sheet was opened by THEiPlay's YouTube tile (openYtWhere): its button opens YouTube
+    var ytGo = false;
     var ytCursor = 0;
     var ytState = null;
     var whereCursor = 0;
@@ -2704,6 +2720,7 @@ function createMenuSurface(opts) {
         if (ytState) {
             ytState.whereOpen = ytOpen;
             ytState.whereCursor = ytCursor;
+            ytState.whereGo = ytGo;
         }
         if (airState) {
             airState.yt = screenName === 'youtube' ? ytState : null;
@@ -3199,6 +3216,10 @@ function createMenuSurface(opts) {
             if (push === 1 && lastPush !== 1) {
                 if (ytCursor >= 3) {
                     ytOpen = false;
+                    if (ytGo) {
+                        ytGo = false;
+                        choose('yt-where-go');
+                    }
                 } else if (ytCursor === 0) {
                     choose('yt-pick-cluster');
                 } else if (ytCursor === 1) {
@@ -3622,6 +3643,15 @@ function createMenuSurface(opts) {
                             paint();
                         } else if (touchDown.stream === 'yt-where-close') {
                             ytOpen = false;
+                            if (ytGo) {
+                                ytGo = false;
+                                choose('yt-where-go');
+                            }
+                            paint();
+                        } else if (touchDown.stream === 'yt-where-cancel') {
+                            ytOpen = false;
+                            ytGo = false;
+                            choose('yt-where-cancel');
                             paint();
                         } else if (touchDown.stream === 'yt-play') {
                             choose('yt-play');
@@ -3990,10 +4020,20 @@ function createMenuSurface(opts) {
         },
         setYtState: function (info) {
             ytState = info || null;
-            if (ytState && !ytState.live) {
+            if (ytState && !ytState.live && !ytGo) {
                 ytOpen = false;
             }
             paint();
+        },
+        /** THEiPlay's YouTube tile: the sheet "where to show YouTube"; its button chooses 'yt-where-go', a tap beside it 'yt-where-cancel'. */
+        openYtWhere: function () {
+            ytGo = true;
+            ytOpen = true;
+            ytCursor = 3;
+            paint();
+        },
+        ytWhereOpen: function () {
+            return ytOpen;
         },
         setAirState: function (info) {
             var tune = info && info.tune && typeof info.tune === 'object' ? info.tune : null;

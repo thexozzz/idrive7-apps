@@ -723,7 +723,7 @@ module.exports = {
          * the page's px (dx, dy). Hidden, the same keys cover the whole screen and only show it again (the
          * controller stays on its key, so a turn or a press wakes it; a tap anywhere too).
          */
-        const OVK = ['ov:back', 'ov:qr', 'ov:rw', 'ov:play', 'ov:ff', 'ov:q', 'ov:zoom', 'ov:bar'];
+        const OVK = ['ov:back', 'ov:qr', 'ov:kombi', 'ov:hud', 'ov:rw', 'ov:play', 'ov:ff', 'ov:q', 'ov:zoom', 'ov:bar'];   // THEiPlay: + kombi, hud
         // podcast mode (driving): artwork, title, chapter, the bar with chapter ticks and skipped segments, controls
         // a glove can hit (-10 s, play/pause, +10 s, next in the row), the next video, a skipped-sponsor notice
         function drawPodcast(cv, SW, SH, LX, tg, run, live) {
@@ -883,6 +883,20 @@ module.exports = {
                     else { cv.roundRect(cx - 17, cy - 22, 12, 44, 3, c); cv.roundRect(cx + 5, cy - 22, 12, 44, 3, c); }
                 });
                 skip('ov:ff', cx + 210, 1, 10000);
+                // THEiPlay, left: the film also on the cluster / the HUD (THEiPlay's screens, at the position set there)
+                const screenToggle = (key, sk, x, label, glyph) => {
+                    const on = !!settings.get(sk);
+                    ctl(key, x, cy, 42, () => settings.set(sk, !on), (c) => { if (on) cv.arc(x, cy, 37, 42, 0, 360, C.red); glyph(x, c); });
+                    cv.text(label, x, cy + 76, 20, on ? C.red : '#dddddd', { literal: true, font: on ? 'bold' : 'label', align: 'center' });
+                    cv.text(on ? 'włączone' : 'wyłączone', x, cy + 102, 18, on ? C.red : '#999999', { literal: true, align: 'center' });
+                };
+                screenToggle('ov:kombi', 'yt_cluster', LX + 140, 'Wyświetl na zegarach', (x, c) => {
+                    cv.arc(x, cy + 6, 15, 19, -135, 135, c); cv.line(x, cy + 6, x + 9, cy - 4, 4, c);
+                });
+                screenToggle('ov:hud', 'yt_hud', LX + 380, 'Wyświetl na HUD', (x, c) => {
+                    cv.quad([[x - 20, cy + 12], [x - 12, cy - 14], [x + 12, cy - 14], [x + 20, cy + 12]], c);
+                    cv.text('HUD', x, cy + 5, 13, '#0f0f0f', { literal: true, font: 'bold', align: 'center' });
+                });
                 // right: Video quality (a press takes the next one; the video starts again there) and zoom (fill crops)
                 const qv = String(settings.get('quality') || 'auto'), fl = settings.get('fill') !== false, qx = SW - 330, zx = SW - 150;
                 ctl('ov:q', qx, cy, 42, () => { const q = QUALITIES[(QUALITIES.indexOf(qv) + 1) % QUALITIES.length]; settings.set('quality', q); model.quality(q); },

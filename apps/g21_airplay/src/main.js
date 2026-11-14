@@ -397,7 +397,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.123',
+        version: (this._packageJson && this._packageJson.version) || '0.1.124',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -514,7 +514,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.123') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.124') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2563,10 +2563,16 @@ AirPlayApp.prototype._refreshLabel = function () {
 AirPlayApp.prototype._paintYoutube = function () {
     var playing = this._ytModel && (this._ytModel.state === 'preparing' || this._ytModel.state === 'playing' || this._ytModel.state === 'paused');
     var live = !!this._ytLive || !!playing;
+    var self = this;
+    // Each tile says where the picture stands there (THEiPlay's position menu).
+    var where = function (key) {
+        var p = self._settings && self._settings.picture ? self._settings.picture(key) : null;
+        return p ? 'pozycja ' + (p.x | 0) + ', ' + (p.y | 0) : '';
+    };
     var screens = [
-        { key: 'cluster', on: !!this._ytCluster },
-        { key: 'hud', on: !!this._ytHud },
-        { key: 'central', on: this._ytCentral !== false }
+        { key: 'cluster', on: !!this._ytCluster, hint: where('cluster') },
+        { key: 'hud', on: !!this._ytHud, hint: where('hud') },
+        { key: 'central', on: this._ytCentral !== false, hint: this._rt ? 'pełny ekran' : where('central') }
     ];
     if (this._menu && typeof this._menu.setItemHint === 'function' && !(this._ytModel && this._ytModel.title)) {
         this._menu.setItemHint('yt-play', live ? 'odtwarzanie' : (this._ytModel && this._ytModel.connected ? 'gotowy' : 'brak usługi'), true);
@@ -2854,6 +2860,16 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         return;
     }
     if (name === 'youtube') {
+        // First the sheet "where to show YouTube" (centre, cluster, HUD; each at
+        // the position set in THEiPlay), its button opens RideTube.
+        if (this._rt && this._menu && typeof this._menu.openYtWhere === 'function') {
+            if (typeof this._menu.setScreen === 'function') {
+                this._menu.setScreen('youtube');
+            }
+            this._paintYoutube();
+            this._menu.openYtWhere();
+            return;
+        }
         if (this._rt) {
             this._openRideTube();
             return;
@@ -3001,6 +3017,16 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         return;
     }
     if (name === 'yt-where') {
+        return;
+    }
+    if (name === 'yt-where-go') {
+        this._openRideTube();
+        return;
+    }
+    if (name === 'yt-where-cancel') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
         return;
     }
     if (name === 'yt-pick-central' || name === 'yt-pick-cluster' || name === 'yt-pick-hud') {
