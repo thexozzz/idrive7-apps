@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.126
+
+- AirPlay po obróceniu telefonu: nowy rozmiar obrazu idzie do nowego pliku dla renderera (rename), a nie przez ucięcie pliku, który renderer właśnie czyta — to mogło zacinać obraz i zrywać połączenie z ekranem. Klatka większa niż profil Ekran centralny (np. w trakcie obrotu) nie jest już odrzucana (obraz stawał): idzie wolniej (do ~8/s) i jest zmniejszana do profilu. Zegary i HUD zostają wtedy na ostatnim obrazie zamiast gasnąć. Każda zmiana rozmiaru klatki trafia do dziennika startu (air-frame WxH).
+
+## 0.1.125
+
+- Jakość YouTube w RideTube to ta sama Jakość obrazu co w menu THEiPlay: gdy film jest na środku, dekoder robi obraz w profilu Ekran centralny (600x400 → film 600x336), gdy tylko na zegarach i HUD — w profilu Zegary i HUD (np. 240x180 → 240x132). Film pobiera się w najniższej jakości YouTube, która to pokrywa (360p/480p/720p). Na zegary i HUD klatka idzie zawsze w profilu Zegary i HUD. W RideTube jakość jest tylko pokazana (odtwarzacz i ustawienia), zmienia się ją w menu THEiPlay; zmiana działa od następnego filmu.
+
 ## 0.1.124
 
 - YouTube w menu THEiPlay najpierw otwiera okienko „Gdzie pokazać”: kafelki Zegary, HUD i Środek (włącz/wyłącz), na każdym pozycja ustawiona w menu Pozycja THEiPlay. Przycisk Otwórz YouTube uruchamia RideTube; dotknięcie obok okienka wraca do menu.

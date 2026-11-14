@@ -29,7 +29,8 @@ const SB_OPTIONS = [['skip', 'Skip'], ['ask', 'Show a Skip button'], ['off', 'Of
 // then THEiPlay's: where the film also goes, and the account.
 const SCHEMA = [
     { key: 'fill', label: 'Fill the screen (crops the video; off: black side bars)', type: 'bool', default: false },
-    { key: 'quality', label: 'Video quality', type: 'choice', default: '480', options: [['auto', 'Auto (720p on Wi-Fi, 480p on phone data)'], ['720', '720p'], ['480', '480p (less data)'], ['360', '360p (least data)']] },
+    // THEiPlay: the quality is THEiPlay's "Jakość obrazu" (centre / cluster and HUD profiles), shown here, set there
+    { key: 'quality', label: 'Jakość obrazu (menu THEiPlay)', type: 'action', host: true },
     { key: 'video_driving', label: 'Video while driving - at your own risk, only for a car coded for video in motion (passengers); takes effect once parked', type: 'bool', default: false },
     { key: 'members', label: 'Show members-only videos', type: 'bool', default: false },
     { key: 'sb_sponsor', label: 'SponsorBlock: Sponsors', type: 'choice', default: 'skip', options: SB_OPTIONS },
@@ -56,6 +57,7 @@ class Settings {
     }
     get(key) {
         const it = this.item(key);
+        if (it && it.host && this.hooks.host) return this.hooks.host(key);
         if (it && it.screen && this.hooks.screen) return !!this.hooks.screen(key);
         return this.values[key];
     }
@@ -73,6 +75,7 @@ class Settings {
     display(key) {
         const s = this.item(key), v = this.get(key);
         if (!s) return String(v);
+        if (s.host && this.hooks.hostText) return this.hooks.hostText(key);
         if (s.type === 'action') return this.hooks.actionText ? this.hooks.actionText(key) : '';
         if (s.type === 'choice') { const o = (s.options || []).find((x) => x[0] === v); return o ? o[1] : String(v); }
         if (s.type === 'bool') return v ? 'On' : 'Off';
@@ -81,6 +84,7 @@ class Settings {
     cycle(key) {
         const s = this.item(key);
         if (!s) return;
+        if (s.host) return;                                   // set in THEiPlay's menu
         if (s.type === 'action') { if (this.hooks.action) this.hooks.action(key); return; }
         if (s.type === 'bool') { this.set(key, !this.get(key)); return; }
         const list = s.type === 'choice' ? s.options.map((o) => o[0]) : [];
@@ -238,6 +242,8 @@ function createRideTube(opts) {
     let model = null;
     const settings = new Settings(SCHEMA, path.join(opts.dataDir || process.cwd(), 'ridetube-settings.json'), log, {
         screen: (key) => (opts.screen ? opts.screen(key) : false),
+        host: () => (opts.videoQuality ? opts.videoQuality() : '480'),
+        hostText: () => (opts.qualityText ? opts.qualityText() : ''),
         setScreen: (key, on) => { if (opts.setScreen) opts.setScreen(key, on); },
         actionText: () => (model && model.auth && model.auth.state === 'signed_in' ? 'Signed in - press to sign out' : 'Sign in'),
         // signed in: out at once (the sheet stays); else the Home page shows the sign-in code
@@ -282,6 +288,7 @@ function createRideTube(opts) {
         kombiWanted: () => !!(opts.kombiWanted && opts.kombiWanted()),
         centralVideo: () => !opts.centralVideo || !!opts.centralVideo(),
         videoRect: opts.videoRect,
+        qualityText: opts.qualityText,
         exit: () => host.exit(),
         controller: { grab(on) { display.grab(on); }, onInput(fn) { display.onCcu = fn; } },
         onTab(fn) { display.onTab = fn; },

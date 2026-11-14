@@ -899,9 +899,17 @@ module.exports = {
                 });
                 // right: Video quality (a press takes the next one; the video starts again there) and zoom (fill crops)
                 const qv = String(settings.get('quality') || 'auto'), fl = settings.get('fill') !== false, qx = SW - 330, zx = SW - 150;
-                ctl('ov:q', qx, cy, 42, () => { const q = QUALITIES[(QUALITIES.indexOf(qv) + 1) % QUALITIES.length]; settings.set('quality', q); model.quality(q); },
-                    (c) => cv.text(qv === 'auto' ? 'Auto' : qv + 'p', qx, cy + 8, 22, c, { literal: true, font: 'bold', align: 'center' }));
-                cv.text('Quality', qx, cy + 76, 22, '#dddddd', { literal: true, align: 'center' });
+                if (ctx.qualityText) {
+                    // THEiPlay: the quality is set in THEiPlay's "Jakość obrazu" menu; shown here, no button
+                    cv.circle(qx, cy, 42, '#00000099');
+                    cv.text(qv + 'p', qx, cy + 8, 22, '#ffffff', { literal: true, font: 'bold', align: 'center' });
+                    cv.text(fit(cv, ctx.qualityText(), 18, 260, LIT), qx, cy + 76, 18, '#dddddd', { literal: true, align: 'center' });
+                    cv.text('Jakość: menu THEiPlay', qx, cy + 100, 16, '#999999', { literal: true, align: 'center' });
+                } else {
+                    ctl('ov:q', qx, cy, 42, () => { const q = QUALITIES[(QUALITIES.indexOf(qv) + 1) % QUALITIES.length]; settings.set('quality', q); model.quality(q); },
+                        (c) => cv.text(qv === 'auto' ? 'Auto' : qv + 'p', qx, cy + 8, 22, c, { literal: true, font: 'bold', align: 'center' }));
+                    cv.text('Quality', qx, cy + 76, 22, '#dddddd', { literal: true, align: 'center' });
+                }
                 ctl('ov:zoom', zx, cy, 42, () => { settings.set('fill', !fl); model.fill(!fl); }, (c) => {
                     cv.strokeRoundRect(zx - 22, cy - 15, 44, 30, 4, 3, c);
                     if (fl) cv.fillRect(zx - 22, cy - 15, 44, 30, c); else cv.fillRect(zx - 12, cy - 15, 24, 30, c);

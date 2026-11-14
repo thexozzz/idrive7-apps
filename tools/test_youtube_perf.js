@@ -1,7 +1,7 @@
 'use strict';
 
-// YouTube load: small decoder picture, 480p, <= 24 fps to the gauges, and a
-// head-only look at the film file when no gauge shows it.
+// YouTube load: the decoder picture and download follow THEiPlay's "Jakość obrazu", <= 24 fps to the
+// gauges, and a head-only look at the film file when no gauge shows it.
 var assert = require('assert');
 var fs = require('fs');
 var os = require('os');
@@ -11,34 +11,37 @@ var appDir = path.join(__dirname, '..', 'apps', 'g21_airplay', 'src');
 var main = fs.readFileSync(path.join(appDir, 'main.js'), 'utf8');
 var youtubeFile = require(path.join(appDir, 'youtube_file.js'));
 
-assert.ok(/var YT_RECT = '848x480';/.test(main), 'decoder rect 848x480');
-assert.ok(/var YT_QUALITY = '480';/.test(main), 'download 480p');
 assert.ok(/var YT_GAUGE_MS = 42;/.test(main), 'gauge frames every 42 ms (24 fps)');
-assert.ok(/var YT_GAUGE_QUALITY = '360';/.test(main), 'gauges only: 360p');
 assert.ok(main.indexOf('this._ytModel.play(row.id, film.rect, false, row, { quality: film.quality });') !== -1);
-
-// _ytFilm: centre on -> 848x480/480p; only the cluster/HUD -> the KOMBI profile, 16:9, 360p.
-var frameFit = require(path.join(appDir, 'frame_fit.js'));
-var desk = require(path.join(appDir, 'desktop_settings.js'));
-var body = /AirPlayApp\.prototype\._ytFilm = (function \(\) \{[\s\S]*?\n\});/.exec(main);
-assert.ok(body, '_ytFilm found');
-var ytFilm = new Function('YT_RECT', 'YT_QUALITY', 'YT_GAUGE_QUALITY', 'frameFit', 'return ' + body[1])('848x480', '480', '360', frameFit);
-function film(central, cluster, hud, kombi) {
-    return ytFilm.call({ _ytCentral: central, _ytCluster: cluster, _ytHud: hud, _quality: function () { return desk.qualitySize(kombi); } });
-}
-assert.deepStrictEqual(film(true, true, true, '400x240'), { rect: '848x480', quality: '480' });
-assert.deepStrictEqual(film(false, false, false, '400x240'), { rect: '848x480', quality: '480' }, 'no screen chosen: the centre');
-assert.deepStrictEqual(film(false, true, false, '240x180'), { rect: '240x132', quality: '360' });
-assert.deepStrictEqual(film(false, false, true, '400x240'), { rect: '400x224', quality: '360' });
-desk.QUALITY_KOMBI.forEach(function (q) {
-    var r = film(false, true, true, q).rect.split('x').map(Number);
-    assert.ok(r[0] % 4 === 0 && r[1] % 2 === 0 && r[0] >= 16 && r[1] >= 16, q + ' rect legal for ytdec/cluster-render: ' + r.join('x'));
-});
 assert.ok(main.indexOf("'1280x720', false, row") === -1, 'no 1280x720 film any more');
 assert.ok(main.indexOf('this._ytFile.pull(!gauges)') !== -1, 'head only without gauges');
-var rect = /var YT_RECT = '(\d+)x(\d+)'/.exec(main);
-assert.strictEqual(Number(rect[1]) % 4, 0, 'cluster-render wants width % 4');
-assert.strictEqual(Number(rect[2]) % 2, 0);
+
+// _ytFilm: THEiPlay's "Jakość obrazu" decides. Centre on -> the centre profile, only the
+// cluster/HUD -> the KOMBI profile; the film 16:9 inside it, downloaded at the lowest height covering it.
+var frameFit = require(path.join(appDir, 'frame_fit.js'));
+var desk = require(path.join(appDir, 'desktop_settings.js'));
+var hb = /\nfunction ytHeight\(h\) \{[\s\S]*?\n\}/.exec(main);
+assert.ok(hb, 'ytHeight found');
+var ytHeight = new Function(hb[0] + '\nreturn ytHeight;')();
+assert.deepStrictEqual([132, 336, 360, 400, 480, 600].map(ytHeight), ['360', '360', '360', '480', '480', '720']);
+var fb = /AirPlayApp\.prototype\._ytFilm = (function \(\) \{[\s\S]*?\n\});/.exec(main);
+assert.ok(fb, '_ytFilm found');
+var ytFilm = new Function('frameFit', 'ytHeight', 'return ' + fb[1])(frameFit, ytHeight);
+function film(central, cluster, hud, kombi, centre) {
+    return ytFilm.call({ _ytCentral: central, _ytCluster: cluster, _ytHud: hud, _quality: function (kind) { return desk.qualitySize(kind === 'kombi' ? kombi : (centre || '600x400')); } });
+}
+assert.deepStrictEqual(film(true, true, true, '400x240'), { rect: '600x336', quality: '360', profile: '600x400', kind: 'central' }, 'centre: the centre profile');
+assert.deepStrictEqual(film(false, false, false, '400x240'), { rect: '600x336', quality: '360', profile: '600x400', kind: 'central' }, 'no screen chosen: the centre');
+assert.deepStrictEqual(film(false, true, false, '240x180'), { rect: '240x132', quality: '360', profile: '240x180', kind: 'kombi' });
+assert.deepStrictEqual(film(false, false, true, '400x240'), { rect: '400x224', quality: '360', profile: '400x240', kind: 'kombi' });
+assert.deepStrictEqual(film(true, false, false, '400x240', '1280x720').quality, '720', 'a bigger centre profile: a bigger download');
+desk.QUALITY_KOMBI.concat(desk.QUALITY_CENTRAL).forEach(function (q) {
+    var r = film(false, true, true, q).rect.split('x').map(Number);
+    var c = film(true, false, false, '400x240', q).rect.split('x').map(Number);
+    [r, c].forEach(function (x) {
+        assert.ok(x[0] % 4 === 0 && x[1] % 2 === 0 && x[0] >= 16 && x[1] >= 16, q + ' rect legal for ytdec/cluster-render: ' + x.join('x'));
+    });
+});
 
 // A film file: 64-byte head + 3 slots of I420.
 var W = 848, H = 480, FSZ = W * H * 3 / 2;

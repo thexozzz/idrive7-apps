@@ -135,7 +135,9 @@ var ITEMS = ['Cars review', 'Night drive', 'Podcast 12', 'Track day', 'Trailer']
         screen: function (key) { return !!screens[key]; },
         setScreen: function (key, on) { screens[key] = on; },
         kombiWanted: function () { return kombi; },
-        videoRect: function () { return '848x480'; },
+        videoRect: function () { return '600x336'; },
+        videoQuality: function () { return '360'; },
+        qualityText: function () { return 'Środek 600x400 (360p)'; },
     });
     var frames = [];
     var send0 = rt.display._send.bind(rt.display);
@@ -199,7 +201,11 @@ var ITEMS = ['Cars review', 'Night drive', 'Podcast 12', 'Track day', 'Trailer']
     assert.ok(tile, 'a tile to press');
     tile.run();
     await until(function () { return d.cmds('play').length; }, 2000, 'play sent');
-    assert.strictEqual(d.cmds('play')[0].rect, '848x480', 'the small decoder picture');
+    assert.strictEqual(d.cmds('play')[0].rect, '600x336', 'the decoder picture: THEiPlay\'s quality profile');
+    assert.strictEqual(String(d.cmds('play')[0].quality), '360', 'the download: THEiPlay\'s quality');
+    assert.strictEqual(rt.settings.display('quality'), 'Środek 600x400 (360p)', 'RideTube shows THEiPlay\'s quality');
+    rt.settings.cycle('quality');
+    assert.strictEqual(rt.settings.get('quality'), '360', 'not changed in RideTube');
     fs.writeFileSync(VFILE, Buffer.alloc(64));
     d.send({ ev: 'state', state: 'playing', pct: 100, id: d.cmds('play')[0].id, title: 'Cars review' });
     d.send({ ev: 'time', elapsed: 5000, total: 300000 });

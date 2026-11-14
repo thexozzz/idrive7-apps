@@ -34,12 +34,13 @@ var frameBridgeFactory = require('./frame_bridge.js');
 var rideTube = require('./rt_host.js');
 
 // YouTube load on the MGU: ytdec decodes in software at the film's own
-// frame rate, so the picture is kept small. 848x480 (16:9, width % 16)
-// from a 480p download; the centre screen scales it on the GPU, the
-// cluster/HUD get at most 24 frames a second (YT_GAUGE_MS).
-var YT_RECT = '848x480';
-var YT_QUALITY = '480';
-var YT_GAUGE_QUALITY = '360';
+// frame rate, so the picture is kept small: the size of THEiPlay's
+// "Jakość obrazu" profile (_ytFilm); the centre screen scales it on the GPU,
+// the cluster/HUD get at most 24 frames a second (YT_GAUGE_MS).
+// The YouTube download for a picture h px tall: the lowest of 360/480/720 that covers it.
+function ytHeight(h) {
+    return h <= 360 ? '360' : (h <= 480 ? '480' : '720');
+}
 var YT_GAUGE_MS = 42;
 
 function noteStart(text) {
@@ -397,7 +398,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.124',
+        version: (this._packageJson && this._packageJson.version) || '0.1.126',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -514,7 +515,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.124') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.126') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1785,14 +1786,14 @@ AirPlayApp.prototype._playYoutube = function (row) {
 // _placeMirrorFaces has nothing left to scale. The daemon cannot change
 // the size mid-film: a screen switched on later counts from the next film.
 AirPlayApp.prototype._ytFilm = function () {
-    var p;
-    var d;
-    if (this._ytCentral !== false || (!this._ytCluster && !this._ytHud)) {
-        return { rect: YT_RECT, quality: YT_QUALITY };
-    }
-    p = this._quality('kombi');
-    d = frameFit.profileDims(1920, 1080, p.w, p.h);
-    return { rect: d.w + 'x' + d.h, quality: YT_GAUGE_QUALITY };
+    // THEiPlay's "Jakość obrazu" decides: the centre profile while the centre
+    // screen shows the film, else the cluster/HUD profile. The film is 16:9
+    // inside the profile (600x400 -> 600x336, 240x180 -> 240x132) and is
+    // downloaded at the lowest YouTube height that covers it (360/480/720).
+    var central = this._ytCentral !== false || (!this._ytCluster && !this._ytHud);
+    var p = this._quality(central ? 'central' : 'kombi');
+    var d = frameFit.profileDims(1920, 1080, p.w, p.h);
+    return { rect: d.w + 'x' + d.h, quality: ytHeight(d.h), profile: p.w + 'x' + p.h, kind: central ? 'central' : 'kombi' };
 };
 
 // RideTube's screen: browse with thumbnails, the player, sign-in, channels and
@@ -1829,6 +1830,14 @@ AirPlayApp.prototype._bindRideTube = function () {
             },
             videoRect: function () {
                 return self._ytFilm().rect;
+            },
+            // RideTube's quality is THEiPlay's "Jakość obrazu" (not its own setting)
+            videoQuality: function () {
+                return self._ytFilm().quality;
+            },
+            qualityText: function () {
+                var f = self._ytFilm();
+                return (f.kind === 'central' ? 'Środek ' : 'Zegary/HUD ') + f.profile + ' (' + f.quality + 'p)';
             },
         });
         this._ytModel = this._rt.model;
@@ -4774,9 +4783,13 @@ AirPlayApp.prototype._takeFrame = function () {
         return;
     }
     // A movie-sized frame at 60 fps is read on this thread and the picture collapses.
-    // The phone is asked for 600x400. Anything past that stays on the last good frame.
-    if (st.size > 8 + (640 * 400 * 3) / 2) {
-        this._yuvStamp = stamp;
+    // The phone is asked for the centre profile ("Jakość obrazu", 600x400), in
+    // either orientation. A bigger frame (seen while the phone turns) is no
+    // longer dropped, which froze the picture: it is taken at most ~8 times a
+    // second and scaled down to the profile (_centralFrame, _placeMirrorFaces).
+    var cq = this._quality('central');
+    var big = st.size > 8 + Math.ceil(cq.w * cq.h * 1.1 * 3 / 2);
+    if (big && this._bigAt && (now - this._bigAt) < 120) {
         return;
     }
     this._yuvStamp = stamp;
@@ -4793,7 +4806,15 @@ AirPlayApp.prototype._takeFrame = function () {
         this._ingestGap = 16;
         return;
     }
-    heavy = parsed.w * parsed.h > (640 * 400);
+    if (big) {
+        this._bigAt = now;
+    }
+    // The phone turned (or changed its picture): one line per new size in the start log.
+    if (!this._airDims || this._airDims.w !== parsed.w || this._airDims.h !== parsed.h) {
+        noteStart('air-frame ' + parsed.w + 'x' + parsed.h + (this._airDims ? ' (was ' + this._airDims.w + 'x' + this._airDims.h + ')' : '') + (big ? ' big' : ''));
+        this._airDims = { w: parsed.w, h: parsed.h };
+    }
+    heavy = parsed.w * parsed.h > Math.ceil(cq.w * cq.h * 1.1);
     this._lastFrame = { i420: parsed.i420, w: parsed.w, h: parsed.h };
     outs = this._settings.outputs();
     try {
@@ -4810,7 +4831,8 @@ AirPlayApp.prototype._takeFrame = function () {
             if (outs.indexOf('hud') === -1 && outs.indexOf('cluster') === -1) {
                 this._dropMirrorFace('hud');
                 this._dropMirrorFace('cluster');
-            } else if (!this._showGauges() || heavy) {
+            } else if (!this._showGauges()) {
+                // (a big frame while the phone turns: the cluster/HUD keep their last picture)
                 this._dropMirrorFace('hud');
                 this._dropMirrorFace('cluster');
             }
