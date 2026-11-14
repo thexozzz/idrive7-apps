@@ -1,24 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <application>
     <container id="1" type="state" widget="LT_State_Wide">
-        <layoutGroup id="100" name="Titlebar">
-            <component id="10" type="title">
+        <layoutGroup id="5" name="List">
+            <property id="3" value="1"/>
+            <component id="31" type="button" widget="LT_Button_2Row_2Text">
                 <property id="2" value="1"/>
+                <property id="3" value="2"/>
+            </component>
+            <component id="32" type="button" widget="LT_Button_2Row_2Text">
+                <property id="2" value="1"/>
+                <property id="3" value="2"/>
+            </component>
+            <component id="33" type="button" widget="LT_Button_2Row_2Text">
+                <property id="2" value="1"/>
+                <property id="3" value="2"/>
+            </component>
+            <component id="34" type="button" widget="LT_Button_2Row_2Text">
+                <property id="2" value="1"/>
+                <property id="3" value="2"/>
             </component>
         </layoutGroup>
-        <layoutGroup id="200" name="List">
-            <component id="21" type="label" widget="LT_Label_1Row">
-                <property id="2" value="1"/>
-                <property id="3" value="0"/>
-            </component>
-            <component id="22" type="label" widget="LT_Label_1Row">
-                <property id="2" value="1"/>
-                <property id="3" value="0"/>
-            </component>
-            <component id="23" type="label" widget="LT_Label_1Row">
-                <property id="2" value="1"/>
-                <property id="3" value="0"/>
-            </component>
+        <layoutGroup id="7" name="Titlebar">
+            <component id="10" type="title"/>
         </layoutGroup>
     </container>
 </application>

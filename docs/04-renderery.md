@@ -10,6 +10,8 @@ Aplikacja OAP nie rysuje pikseli HMI. Wysyła opis ekranu i aktualizacje modelu.
 
 Szablon ma jeden stan `ST_OnlineApps_G21Hello`, tytuł i jedną etykietę. Kod woła `getByName`, `mapEntryState`, `setAvailability`, `openEntryState` i `setValue(0, 'Text', ...)`. Te metody są użyte w `idrive-apps` `apps/robertn_waze_cluster/src/robertn_waze_cluster.js`.
 
+AirPlay 0.1.10 otworzył sam obraz i został pusty. AirPlay 0.1.11 otworzył listę `LT_State_Wide` i ta też została pusta, więc hipoteza H18 nie utrzymała się na tym aucie. Właściciel potwierdził 2026-11-12, że menu 0.1.13 jest widoczne: napisy są ramką `CLEAR` i `RECT` na gnieździe renderera. To jest sposób rysowania na tym G21.
+
 ## mgu-render
 
 Renderer GPU rysuje komendy albo klatki nad HMI, na gnieździe `/run/mgu-render/render.sock` (albo `/run/mgu-renderd/renderd.sock`). Projekt ekranu aplikacji z `idrive7-apps` to 1920×720. Bez renderera aplikacja koduje PNG i oddaje go HMI, co daje kilka klatek na sekundę. Źródła: `idrive7-apps` `kit/renderd/README.md` i `kit/renderd/PROTOCOL.md`.

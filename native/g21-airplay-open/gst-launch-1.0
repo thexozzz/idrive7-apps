@@ -1,0 +1,18 @@
+#!/bin/sh
+# Wrapper so g21-mice can exec gst-launch with the bundled INTERP/libs.
+dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+export LD_LIBRARY_PATH="$dir/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+if [ -x "$dir/gst-plugin-scanner" ]; then
+    export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+fi
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+if [ -x "$dir/run-elf" ] && [ -x "$dir/gst-launch-1.0.bin" ]; then
+    exec "$dir/run-elf" "$dir/gst-launch-1.0.bin" "$@"
+fi
+if [ -x "$dir/gst-launch-1.0.bin" ]; then
+    exec "$dir/gst-launch-1.0.bin" "$@"
+fi
+exec gst-launch-1.0 "$@"

@@ -5,26 +5,25 @@
       "type": "state",
       "name": "ST_OnlineApps_G21Hello",
       "components": {
-        "10": {
-          "type": "title",
-          "name": "helloTitle",
-          "properties": {
-            "Visible": { "value": 1, "type": "UInt" }
-          },
-          "rows": [
-            { "Text": { "value": "SID_HELLO_TITLE", "type": "StringId" } }
-          ]
-        },
-        "21": {
+        "2": {
           "type": "label",
-          "name": "helloStatus",
+          "name": "helloCanvas",
           "properties": {
             "Visible": { "value": 1, "type": "UInt" },
             "Focusable": { "value": 0, "type": "UInt" }
           },
-          "rows": [
-            { "Text": { "value": "Template ready", "type": "Text" } }
-          ]
+          "rows": [ { "Graphic": { "value": "", "type": "Text" } } ]
+        },
+        "21": {
+          "type": "button",
+          "name": "helloStatus",
+          "properties": { "Focusable": { "value": 3, "type": "UInt" } },
+          "rows": [ { "Text": { "value": "G21 Hello", "type": "Text" } } ]
+        },
+        "10": {
+          "type": "title",
+          "name": "helloTitle",
+          "rows": [ { "Text": { "value": "SID_HELLO_TITLE", "type": "StringId" } } ]
         }
       }
     }

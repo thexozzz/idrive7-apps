@@ -5,13 +5,15 @@
     "type": "OnlineApp",
     "name": "g21_hello",
     "vendor": "owner",
-    "version": "0.1.0",
+    "version": "0.1.3",
     "defaultLanguage": "en_GB",
     "uiDescriptions": [
       {
         "applicationFilePath": "./uiDescriptions/ID7/application.xml",
         "uiDescriptionFilePath": "./uiDescriptions/ID7/uiDescription.json",
-        "hmi": ["ID7"]
+        "hmi": [
+          "ID7"
+        ]
       }
     ],
     "stringBundleUuid": "a1b2c3d4-e5f6-4789-8012-3456789abcde",
@@ -20,8 +22,12 @@
       {
         "stringsPath": "./variantGroups/Common/texts",
         "resourcesPath": "./variantGroups/Common/images",
-        "hmi": ["ID7"],
-        "brands": ["BMW"]
+        "hmi": [
+          "ID7"
+        ],
+        "brands": [
+          "BMW"
+        ]
       }
     ],
     "entryPoints": [
@@ -30,14 +36,14 @@
         "uuid": "c3d4e5f6-a7b8-4901-8234-56789abcdef0",
         "textId": "SID_HELLO_TITLE",
         "icon": "hello_icon.png",
-        "insertionStateId": 24107,
+        "insertionStateId": 20974,
         "insertionFocusId": 2,
         "insertionMode": "INSERT_BELOW",
-        "insertionOrder": 0,
+        "insertionOrder": 31,
         "insertionPriority": 0,
         "previewType": "NONE",
         "bookmarkable": true,
-        "private": null,
+        "private": false,
         "appearance": "DEFAULT",
         "isGroupHeader": false,
         "insertionGroup": 0

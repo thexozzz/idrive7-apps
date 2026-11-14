@@ -7,8 +7,11 @@ dist/
 *.mgu
 *.tgz
 native/g21-airplay-open/build/
+native/g21-airplay-open/avahi-extract/
 
 # Vehicle and credential material. Never commit these.
+*.7z
+data.7z
 .env
 .env.*
 *.pem
@@ -25,3 +28,12 @@ reference/
 preview/
 *.log
 node_modules/
+
+# Local SSH material for the head unit (keys, notes). Never commit.
+ssh/
+# Python caches next to native tools.
+__pycache__/
+
+# Developer SSH cycle artifacts (never commit HU logs / staging).
+dev-logs/
+dev-staging/

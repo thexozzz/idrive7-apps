@@ -1,12 +1,17 @@
 #!/bin/sh
-# Runs UxPlay (https://github.com/FDH2/UxPlay, GPL-3.0) on the Wi-Fi network
-# MGU Store is using. The program next to this script is a wrapper: it runs
-# uxplay.bin with lib/ and the GStreamer plugins in lib/gstreamer-1.0.
+# AirPlay receiver integration for g21_airplay — not a standalone UxPlay app.
+# Starts the bundled AirPlay engine (UxPlay binary, GPL-3.0) on the Wi-Fi that
+# MGU Store uses, including an iPhone Personal Hotspot host. The phone can be
+# the AP; the head unit is the AirPlay sink on that LAN.
+#
+# DNS-SD needs a running avahi-daemon (bundled next to this script when the
+# unit has none). Without it the receiver cannot register and the phone never sees G21.
 #
 # Inbound accept, only from that lease subnet and only on that interface:
-# UDP 5353 (mDNS) and UxPlay -p legacy ports
-# TCP 7100, 7000, 7001 and UDP 6000, 6001, 7011.
-# Documented in FDH2/UxPlay README, "After installation" and option -p.
+# UDP 5353 (mDNS, also 224.0.0.251) and UxPlay -p 7400 block.
+# On this MGU CarPlay already owns TCP 7000 and airplay-rx owns 7101;
+# legacy UxPlay ports (7100/7000/7001) fail with errno 98 (EADDRINUSE).
+# -p 7400 uses TCP/UDP 7400-7402 (httpd listens on TCP 7401).
 set -u
 
 TABLE=g21_airplay
@@ -14,7 +19,18 @@ STATUS=/run/mgu-uplink/status.json
 LEASE=/run/mgu-uplink/lease.json
 STAMP=/run/g21-airplay.stamp
 REPORT=/run/g21-airplay.status
+SESSION_DIR=/run/g21-session
+ALLOW=$SESSION_DIR/allow
+DESKTOP=/run/g21-desktop.status
+UXLOG=/var/log/g21-uxplay.log
+PINFILE=/run/g21-airplay/pin
+CLIENTFILE=/run/g21-airplay/client
 UXPID=
+PINWATCH=
+PREPID=
+RDPID=
+MICEPID=
+AVAHIPID=
 
 field() {
     sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "$2" | head -n 1
@@ -53,23 +69,350 @@ find_ux() {
     command -v uxplay 2>/dev/null
 }
 
+tool_dir() {
+    CDPATH= cd -- "$(dirname "$0")" && pwd
+}
+
 report() {
     printf '%s\n' "$1" > "$REPORT"
+    chmod 666 "$REPORT" 2>/dev/null || true
+}
+
+desk() {
+    # World-writable: OAP app (uid 12249) must update this file; root 644 → EACCES → connect-failed.
+    printf '%s\n' "$1" > "$DESKTOP"
+    chmod 666 "$DESKTOP" 2>/dev/null || true
+}
+
+# nftables accept in our table does NOT stop a later base chain. mgu_uplink
+# drops Store Wi-Fi, and ip filter input ends in logblocked ("Blocking
+# unknown connection") which drops wlan0 mDNS and AirPlay after our accept.
+# Rules must live in those chains, tagged by comment, and come out on idle.
+clear_tagged_rules() {
+    family=$1
+    table=$2
+    chain=$3
+    nft -a list chain "$family" "$table" "$chain" 2>/dev/null | grep 'g21-airplay' | while read -r line; do
+        h=$(printf '%s\n' "$line" | sed -n 's/.*# handle \([0-9][0-9]*\).*/\1/p')
+        if [ -n "$h" ]; then
+            nft delete rule "$family" "$table" "$chain" handle "$h" 2>/dev/null || true
+        fi
+    done
+}
+
+clear_uplink_airplay_rules() {
+    for chain in output input; do
+        clear_tagged_rules inet mgu_uplink "$chain"
+    done
+    # BMW ip filter has no wlan0 allow; logblocked drops the phone's queries.
+    clear_tagged_rules ip filter input
 }
 
 clear_table() {
+    if [ -f /run/g21-airplay/mdns-iface ]; then
+        old_iface=$(tr -d '\r\n' < /run/g21-airplay/mdns-iface 2>/dev/null || true)
+        if [ -n "$old_iface" ]; then
+            ip route del 224.0.0.251/32 dev "$old_iface" 2>/dev/null || true
+        fi
+        rm -f /run/g21-airplay/mdns-iface
+    fi
+    clear_uplink_airplay_rules
     nft delete table inet "$TABLE" 2>/dev/null || true
 }
 
+# Path-qualified stops only — never killall / bare pkill names.
+# This MGU's BusyBox has no pgrep/pkill (0.1.50 car logs: "pgrep: not found"), so every
+# lookup reads /proc/*/cmdline. $1 is a shell glob matched against the whole command line
+# (NUL bytes as spaces). Our own shell is never listed.
+procs_matching() {
+    for f in /proc/[0-9]*/cmdline; do
+        p=${f#/proc/}
+        p=${p%/cmdline}
+        [ "$p" = "$$" ] && continue
+        c=$(tr '\000' ' ' < "$f" 2>/dev/null) || continue
+        case "$c" in
+            $1) printf '%s\n' "$p" ;;
+        esac
+    done
+}
+
+# Signal (default TERM) every process procs_matching finds.
+kill_matching() {
+    sig=${2:-TERM}
+    for p in $(procs_matching "$1"); do
+        kill "-$sig" "$p" 2>/dev/null || true
+    done
+}
+
+our_uxplay_pids() {
+    procs_matching '*/var/opt/g21-airplay-open/*/uxplay.bin*'
+}
+
+our_avahi_pids() {
+    # run-elf keeps the path in argv; after ready, avahi rewrites cmdline to
+    # "avahi-daemon: running […]". Match both, then confirm our private libs.
+    pids=$(procs_matching '*/var/opt/g21-airplay-open/*/avahi-daemon*')
+    pids="$pids $(procs_matching '*avahi-daemon: running*')"
+    for p in $pids; do
+        [ -r "/proc/$p/maps" ] || continue
+        if grep -q '/var/opt/g21-airplay-open/.*/libavahi' "/proc/$p/maps" 2>/dev/null; then
+            printf '%s\n' "$p"
+        fi
+    done
+}
+
+clear_pin() {
+    if [ -n "$PINWATCH" ]; then
+        kill "$PINWATCH" 2>/dev/null || true
+        PINWATCH=
+    fi
+    rm -f "$PINFILE" "$CLIENTFILE"
+}
+
+client_state() {
+    mkdir -p /run/g21-airplay
+    printf '%s\n' "$1" > "$CLIENTFILE"
+    chmod 666 "$CLIENTFILE" 2>/dev/null || true
+}
+
+# fakesink cannot show UxPlay's GST PIN image. Never truncate PINFILE here —
+# start_ux already wrote the session code; only refresh if the log shows a new one.
+# Also track iPhone connect/mirror and bounce UxPlay when the mirror TCP port
+# sticks after disconnect (UxPlay issue: "initializing socket(s) failed").
+watch_ux_pin() {
+    pid=$1
+    last=
+    last_log=
+    size=0
+    prev=0
+    saw_mirror=0
+    mkdir -p /run/g21-airplay
+    if [ -f "$PINFILE" ]; then
+        last=$(tr -d '\n' < "$PINFILE" 2>/dev/null || true)
+    fi
+    chmod 666 "$PINFILE" 2>/dev/null || true
+    client_state "idle|waiting"
+    while kill -0 "$pid" 2>/dev/null; do
+        pin=$(sed -n 's/.*CLIENT MUST NOW ENTER PIN = "\([0-9][0-9][0-9][0-9]\)".*/\1/p' "$UXLOG" 2>/dev/null | tail -n 1)
+        if [ -n "$pin" ] && [ "$pin" != "$last" ]; then
+            printf '%s\n' "$pin" > "$PINFILE"
+            last=$pin
+            client_state "pair|pin-$pin"
+        fi
+        if [ -f "$UXLOG" ]; then
+            size=$(wc -c < "$UXLOG" 2>/dev/null || echo 0)
+            size=$(echo "$size" | tr -d ' ')
+            if [ -n "$size" ] && [ "$size" -gt "$prev" ] 2>/dev/null; then
+                # Only scan newly appended lines.
+                last_log=$(tail -c $((size - prev + 1)) "$UXLOG" 2>/dev/null || true)
+                prev=$size
+                case $last_log in
+                    *"connection request from"*|*"Client identified as"*)
+                        client_state "pair|iphone"
+                        ;;
+                esac
+                case $last_log in
+                    *"raop_rtp_mirror starting mirroring"*|*"Begin streaming"*)
+                        saw_mirror=1
+                        client_state "mirroring|stream"
+                        ;;
+                esac
+                case $last_log in
+                    *"initializing socket failed"*|*"initializing sockets failed"*)
+                        client_state "error|mirror-port"
+                        # Free stuck TCP mirror port (7400) so the next apply() can start clean.
+                        kill "$pid" 2>/dev/null || true
+                        for p in $(our_uxplay_pids); do
+                            kill "$p" 2>/dev/null || true
+                        done
+                        break
+                        ;;
+                esac
+                case $last_log in
+                    *"Connection closed"*|*"Removing connection"*|*"Stopping RAOP"*|*"tcp socket is closed"*)
+                        client_state "idle|disconnected"
+                        # After a real mirror session, recycle UxPlay: next iPhone
+                        # connect otherwise hits sticky tcp[0]=7400 (kkds proof).
+                        if [ "$saw_mirror" = "1" ]; then
+                            kill "$pid" 2>/dev/null || true
+                            for p in $(our_uxplay_pids); do
+                                kill "$p" 2>/dev/null || true
+                            done
+                            break
+                        fi
+                        ;;
+                esac
+            fi
+        fi
+        sleep 1
+    done
+}
+
+# g21-yuvring: the AirPlay picture straight into mgu-render's video file, scaled
+# to the centre profile (airplay-size), as ytdec does for YouTube: no frame passes
+# through the app's Node for the centre screen. Only with the picture (not AirPlay Sound).
+RINGSTATUS=/run/g21-airplay/ring
+# This MGU's BusyBox has no pgrep (seen 0.1.48/0.1.49: ring_pids found nothing and a new ring
+# started every second, hundreds of them). /proc is read directly; g21-yuvring also refuses to run
+# twice (a lock), so a second start ends at once.
+RINGPID=
+ring_pids() {
+    procs_matching '*/var/opt/g21-airplay-open/*/g21-yuvring *'
+}
+
+start_ring() {
+    if [ "$(airplay_mode_of)" = "audio" ]; then
+        stop_ring
+        return 0
+    fi
+    rbin=$(tool_dir)/g21-yuvring
+    if [ ! -x "$rbin" ]; then
+        return 0
+    fi
+    if [ -n "$RINGPID" ] && kill -0 "$RINGPID" 2>/dev/null; then
+        return 0
+    fi
+    for p in $(ring_pids); do
+        RINGPID=$p
+        return 0
+    done
+    # kombi-size (the app: KOMBI profile or "off") -> kombi.yuv for the cluster/HUD, <= 24 fps
+    "$rbin" /run/g21-airplay/latest.yuv /dev/shm/mgu-video-g21airplay "$RINGSTATUS" "$SESSION_DIR/airplay-size" "$SESSION_DIR/kombi-size" /run/g21-airplay/kombi.yuv >>/var/log/g21-yuvring.log 2>&1 &
+    RINGPID=$!
+}
+
+stop_ring() {
+    if [ -n "$RINGPID" ]; then
+        kill "$RINGPID" 2>/dev/null || true
+        RINGPID=
+    fi
+    for p in $(ring_pids); do
+        kill "$p" 2>/dev/null || true
+    done
+    rm -f "$RINGSTATUS" /run/g21-airplay/kombi.yuv
+    # the app writes this file itself without the ring (a root file in sticky /dev/shm would block it)
+    if [ -f /dev/shm/mgu-video-g21airplay ] && [ "$(stat -c %u /dev/shm/mgu-video-g21airplay 2>/dev/null)" = "0" ]; then
+        rm -f /dev/shm/mgu-video-g21airplay
+    fi
+}
+
+# AirPlay sound route (g21-audio-route.js, /usr/bin/node as root like jap-ridetube-d).
+AUDIOLOG=/var/log/g21-audio-route.log
+# node in a clean environment, as jap-ridetube-d.service runs it. start_ux has by then exported
+# UxPlay's: LD_LIBRARY_PATH (the bundled Ubuntu 18.04 libstdc++/libssl/libz in front of the car's
+# own) and LD_PRELOAD=g21-bind-wlan.so with G21_BIND_IP (every socket pinned to the iPhone hotspot
+# address), so the SOME/IP connection to the audio manager could not work and the sound went to
+# the busy CarPlayMain: silence (0.1.132).
+audio_node() {
+    (
+        unset LD_LIBRARY_PATH LD_PRELOAD G21_BIND_IP G21_YUV GST_PLUGIN_PATH GST_PLUGIN_SYSTEM_PATH \
+            GST_PLUGIN_SYSTEM_PATH_1_0 GST_PLUGIN_SCANNER GST_REGISTRY ALSA_PLUGIN_DIR
+        exec /usr/bin/node "$@"
+    )
+}
+
+audio_route_connect() {
+    js=$(tool_dir)/g21-audio-route.js
+    if [ ! -f "$js" ] || [ ! -x /usr/bin/node ]; then
+        printf '%s g21-audio-route: missing (%s or /usr/bin/node)\n' "$(date '+%F %T')" "$js" >>"$AUDIOLOG"
+        return 0
+    fi
+    mkdir -p /run/g21-airplay
+    audio_node "$js" connect 2>>"$AUDIOLOG" | tail -n 1
+}
+
+audio_route_disconnect() {
+    [ -f /run/g21-airplay/audio-route ] || return 0
+    js=$(tool_dir)/g21-audio-route.js
+    [ -f "$js" ] && [ -x /usr/bin/node ] || return 0
+    audio_node "$js" disconnect 2>>"$AUDIOLOG" || true
+}
+
 stop_ux() {
+    stop_ring
+    audio_route_disconnect
+    clear_pin
     if [ -n "$UXPID" ]; then
         kill "$UXPID" 2>/dev/null || true
         UXPID=
     fi
+    # Orphans keep AirPlay TCP/UDP ports (errno 98) and block the next start.
+    for p in $(our_uxplay_pids); do
+        kill "$p" 2>/dev/null || true
+    done
+}
+
+stop_avahi_local() {
+    if [ -n "$AVAHIPID" ]; then
+        kill "$AVAHIPID" 2>/dev/null || true
+        AVAHIPID=
+    fi
+}
+
+stop_bundled_avahi() {
+    stop_avahi_local
+    for p in $(our_avahi_pids); do
+        kill "$p" 2>/dev/null || true
+    done
+    AVAHIPID=
+}
+
+# MGU ships Apple mdnsd + /usr/lib/libdns_sd.so; UxPlay dlopens libdns_sd.so.
+have_system_mdns() {
+    if ! pidof mdnsd >/dev/null 2>&1; then
+        return 1
+    fi
+    if [ -e /usr/lib/libdns_sd.so ] || [ -e /lib/libdns_sd.so ]; then
+        return 0
+    fi
+    return 1
+}
+
+ux_port_listening() {
+    # UxPlay "-p 7400" maps tcp[0]=7400 (mirror data), tcp[1]=7401 (RAOP/AirPlay
+    # httpd), tcp[2]=7402. The process listens on TCP 7401 while advertising; 7400
+    # may appear only after a client starts mirroring. Health must accept 7401.
+    if netstat -lnt 2>/dev/null | grep -E '[:.]740[01][[:space:]]' >/dev/null 2>&1; then
+        return 0
+    fi
+    if ss -lnt 2>/dev/null | grep -E '[:.]740[01][[:space:]]' >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+ux_log_stopped() {
+    if [ ! -f "$UXLOG" ]; then
+        return 1
+    fi
+    grep -E 'Stopping RAOP Server|GStreamer error' "$UXLOG" >/dev/null 2>&1
+}
+
+# Drop Windows Miracast DNS-SD only when a leftover service file exists.
+clear_mice_if_needed() {
+    if [ -n "$MICEPID" ] && kill -0 "$MICEPID" 2>/dev/null; then
+        stop_mice
+        clear_mice_service
+        return 0
+    fi
+    if [ -f /run/g21-airplay/avahi-etc-services/g21-windows.service ] || \
+       [ -f /etc/avahi/services/g21-windows.service ]; then
+        clear_mice_service
+    fi
+}
+
+clear_mice_offers() {
+    rm -f /run/g21-desktop/offers /run/g21-session/accept /run/g21-session/reject 2>/dev/null || true
 }
 
 idle() {
     stop_ux
+    stop_present
+    stop_rdp
+    stop_mice
+    clear_mice_service
+    clear_mice_offers
+    stop_bundled_avahi
     if [ -f "$STAMP" ]; then
         clear_table
         rm -f "$STAMP"
@@ -79,46 +422,205 @@ idle() {
 open_ports() {
     iface=$1
     net=$2
+    ipaddr=${3:-}
+    mkdir -p /run/g21-airplay
+    # BMW routes 224.0.0.0/4 via vlan73; without a /32 on the Store Wi-Fi
+    # iface, avahi announces mDNS on the wrong interface and iPhone sees nothing.
+    if [ -f /run/g21-airplay/mdns-iface ]; then
+        old_iface=$(tr -d '\r\n' < /run/g21-airplay/mdns-iface 2>/dev/null || true)
+        if [ -n "$old_iface" ] && [ "$old_iface" != "$iface" ]; then
+            ip route del 224.0.0.251/32 dev "$old_iface" 2>/dev/null || true
+        fi
+    fi
+    printf '%s\n' "$iface" > /run/g21-airplay/mdns-iface
+    ip route replace 224.0.0.251/32 dev "$iface" 2>/dev/null || true
+    # Store Wi-Fi can have an address with NO connected route (policy routing).
+    # Then AirPlay TCP SYN from the phone arrives, but SYN-ACK never leaves —
+    # iPhone never reaches the password prompt. Force the lease subnet on-link.
+    if [ -n "$net" ] && [ -n "$ipaddr" ]; then
+        ip route replace "$net" dev "$iface" src "$ipaddr" 2>/dev/null || \
+            ip route add "$net" dev "$iface" src "$ipaddr" 2>/dev/null || true
+    fi
+    # Own table is only an audit. ip filter input is what drops wlan0.
     nft -f - <<EOF
 add table inet $TABLE
 delete table inet $TABLE
 table inet $TABLE {
     chain input {
         type filter hook input priority -10; policy accept;
+        iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
         iifname "$iface" ip saddr $net udp dport 5353 accept
-        iifname "$iface" ip saddr $net tcp dport 7100 accept
-        iifname "$iface" ip saddr $net tcp dport 7000 accept
-        iifname "$iface" ip saddr $net tcp dport 7001 accept
-        iifname "$iface" ip saddr $net udp dport 6000 accept
-        iifname "$iface" ip saddr $net udp dport 6001 accept
-        iifname "$iface" ip saddr $net udp dport 7011 accept
+        # 7400-7499: UxPlay -p 7400 block + headroom (mirror TCP is tcp[0]=7400).
+        iifname "$iface" ip saddr $net tcp dport 7400-7499 accept
+        iifname "$iface" ip saddr $net udp dport 7400-7499 accept
+        iifname "$iface" ip saddr $net tcp dport 1235 accept
+        iifname "$iface" ip saddr $net tcp dport 7250 accept
+        iifname "$iface" ip saddr $net udp dport 1028 accept
+        iifname "$iface" ip saddr $net udp dport 1029 accept
+    }
+    chain output {
+        type filter hook output priority -50; policy accept;
+        oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept
+        oifname "$iface" ip daddr $net udp dport 5353 accept
+        oifname "$iface" udp sport 5353 accept
+        oifname "$iface" tcp sport 7400-7499 accept
+        oifname "$iface" udp sport 7400-7499 accept
+        oifname "$iface" ip daddr $net accept
     }
 }
 EOF
+    clear_uplink_airplay_rules
+    # insert = head of chain, before skuid allow / drop.
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" tcp sport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" udp sport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink output oifname "$iface" ip daddr "$net" accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 1235 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" tcp dport 7250 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 1028 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule inet mgu_uplink input iifname "$iface" ip saddr "$net" udp dport 1029 accept comment \"g21-airplay\" 2>/dev/null || true
+    # ip filter input is the chain that actually drops wlan0. Accept only the
+    # hotspot subnet: mDNS plus the UxPlay port block. Output on wlan0 is
+    # already accepted at the head of ip filter output.
+    nft insert rule ip filter input iifname "$iface" ip saddr "$net" udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule ip filter input iifname "$iface" ip daddr 224.0.0.251 udp dport 5353 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule ip filter input iifname "$iface" ip saddr "$net" tcp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
+    nft insert rule ip filter input iifname "$iface" ip saddr "$net" udp dport 7400-7499 accept comment \"g21-airplay\" 2>/dev/null || true
 }
 
-start_ux() {
-    ssid=$1
-    ip=$2
-    bin=$(find_ux) || true
-    if [ -z "$bin" ]; then
-        stop_ux
-        report "missing|$ssid|$ip"
+# Tailscale on MGU is userspace-only: no kernel route to 100.64/10.
+# Opt-in SOCKS5 on 127.0.0.2 lets RDP/VNC reach the tailnet.
+ensure_tailscale_socks5() {
+    tsroot=/var/opt/iteriodev-tailscale
+    portfile=$tsroot/socks5-port
+    port=1055
+    porthex=
+    if [ ! -d "$tsroot" ]; then
         return 0
     fi
-    if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
-        report "running|$ssid|$ip"
+    if [ ! -f "$portfile" ]; then
+        printf '%s\n' "$port" > "$portfile"
+        chmod 644 "$portfile" 2>/dev/null || true
+    fi
+    port=$(tr -d ' \t\r\n' < "$portfile" 2>/dev/null || true)
+    case $port in
+        ''|*[!0-9]*) port=1055; printf '%s\n' "$port" > "$portfile" ;;
+    esac
+    export G21_SOCKS5_HOST=127.0.0.2
+    export G21_SOCKS5_PORT=$port
+    printf '%s\n' "$port" > "$SESSION_DIR/socks5-port"
+    chmod 666 "$SESSION_DIR/socks5-port" 2>/dev/null || true
+    # 127.0.0.2 = 0200007F in /proc/net/tcp; listen state 0A.
+    porthex=$(printf '%04X' "$port")
+    if grep -qiE " 0200007F:${porthex} .* 0A " /proc/net/tcp 2>/dev/null; then
         return 0
     fi
-    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
-    export G21_YUV=/run/g21-airplay/latest.yuv
-    mkdir -p /run/g21-airplay
-    "$bin" -n G21 -nh -p -vsync no -fs -vs waylandsink -as alsasink -s 1920x720 >>/var/log/g21-uxplay.log 2>&1 &
-    UXPID=$!
-    report "running|$ssid|$ip"
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart iteriodev-tailscale.service >/dev/null 2>&1 || true
+        sleep 2
+    fi
+    return 0
 }
 
-apply() {
+ensure_dirs() {
+    mkdir -p "$SESSION_DIR" /run/g21-desktop /run/g21-airplay
+    chmod 1777 "$SESSION_DIR" /run/g21-desktop 2>/dev/null || true
+    # Keep status files writable by the Store app after root/tool updates.
+    : >> "$DESKTOP"
+    : >> "$REPORT"
+    chmod 666 "$DESKTOP" "$REPORT" 2>/dev/null || true
+    ensure_tailscale_socks5
+}
+
+mode_of() {
+    if [ -f "$ALLOW" ]; then
+        tr -d '\r\n' < "$ALLOW"
+    fi
+}
+
+name_of() {
+    name=THEiPlay
+    if [ -f "$SESSION_DIR/name" ]; then
+        name=$(tr -d '\r\n' < "$SESSION_DIR/name")
+    fi
+    # DNS-SD name stays ASCII; Polish letters from the keyboard fold here.
+    name=$(printf '%s' "$name" | sed 'y/ąćęłńóśźżĄĆĘŁŃÓŚŹŻ/acelnoszzACELNOSZZ/')
+    case $name in
+        ""|*[!A-Za-z0-9_-]*) name=THEiPlay ;;
+    esac
+    printf '%s\n' "$name"
+}
+
+# open = bez kodu (jak kkds); pin = -pin NNNN na iPhonie.
+airplay_auth_of() {
+    auth=open
+    if [ -f "$SESSION_DIR/airplay-auth" ]; then
+        auth=$(tr -d '\r\n' < "$SESSION_DIR/airplay-auth" | tr 'A-Z' 'a-z')
+    fi
+    case $auth in
+        pin|1|on|kod|yes|true) printf '%s\n' pin ;;
+        *) printf '%s\n' open ;;
+    esac
+}
+
+# AirPlay Sound (menu): audio = UxPlay with -vs 0 (streamed audio only, no picture);
+# anything else = the mirror as before. Written by the app to $SESSION_DIR/airplay-mode.
+airplay_mode_of() {
+    m=video
+    if [ -f "$SESSION_DIR/airplay-mode" ]; then
+        m=$(tr -d '\r\n' < "$SESSION_DIR/airplay-mode" | tr 'A-Z' 'a-z')
+    fi
+    case $m in
+        audio|sound|dzwiek) printf '%s\n' audio ;;
+        *) printf '%s\n' video ;;
+    esac
+}
+
+stop_pid() {
+    pid=$1
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+}
+
+# Reset path each start — appending every apply() blew past ARG_MAX on run-elf.
+tool_lib_path() {
+    dir=$(tool_dir)
+    printf '%s\n' "$dir/lib:/usr/lib:/lib"
+}
+
+wait_pid_gone() {
+    pid=$1
+    n=0
+    while [ -n "$pid" ] && [ "$n" -lt 20 ]; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+        sleep 0.1
+        n=$((n + 1))
+    done
+    if [ -n "$pid" ]; then
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+}
+
+# True when nothing is bound to frame.sock (stale file alone is OK after unlink).
+frame_sock_free() {
+    # If a live g21-present still holds the bind, bridge gets EADDRINUSE.
+    if [ -n "$(procs_matching '*/g21-present*')" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Prints: iface ip prefix label
+find_uplink_wifi() {
     kind=$(field kind "$STATUS")
     link=$(field link "$STATUS")
     iface=$(field interface "$LEASE")
@@ -127,26 +629,921 @@ apply() {
     ssid=$(field ssid "$STATUS")
     case $kind in
         wifi) ;;
-        *) idle; report "idle|uplink-not-wifi|"; return 0 ;;
+        *) return 1 ;;
     esac
     case $link in
         online|connected) ;;
-        *) idle; report "idle|wifi-down|"; return 0 ;;
+        *) return 1 ;;
     esac
     case $iface in
-        ""|*[!A-Za-z0-9._-]*) idle; report "idle|bad-interface|"; return 0 ;;
+        ""|*[!A-Za-z0-9._-]*) return 1 ;;
     esac
+    case $prefix in
+        ""|*[!0-9]*) return 1 ;;
+    esac
+    if [ "$prefix" -lt 1 ] || [ "$prefix" -gt 32 ]; then
+        return 1
+    fi
+    case $ssid in
+        "") ssid=$iface ;;
+    esac
+    printf '%s %s %s %s\n' "$iface" "$ip" "$prefix" "$ssid"
+}
+
+iface_mac() {
+    iface=$1
+    mac=$(tr '[:upper:]' '[:lower:]' < "/sys/class/net/$iface/address" 2>/dev/null | tr -d '\r\n')
+    case $mac in
+        [0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f])
+            printf '%s\n' "$mac"
+            ;;
+    esac
+}
+
+# Rootfs is read-only; avahi still hard-requires user "avahi". Overlay passwd/group
+# from /run via bind mount (cleared on reboot). Same for a D-Bus policy so
+# DNSServiceRegister from UxPlay can talk to the daemon.
+ensure_avahi_account() {
+    mkdir -p /run/g21-airplay /run/avahi-daemon
+    passwd_run=/run/g21-airplay/passwd
+    group_run=/run/g21-airplay/group
+    if ! grep -q ' /etc/passwd ' /proc/mounts 2>/dev/null; then
+        cp /etc/passwd "$passwd_run"
+        cp /etc/group "$group_run"
+    fi
+    if [ ! -f "$passwd_run" ]; then
+        cp /etc/passwd "$passwd_run"
+    fi
+    if [ ! -f "$group_run" ]; then
+        cp /etc/group "$group_run"
+    fi
+    if ! grep -q '^avahi:' "$passwd_run" 2>/dev/null; then
+        echo 'avahi:x:189:189:Avahi mDNS daemon:/run/avahi-daemon:/bin/false' >> "$passwd_run"
+    fi
+    if ! grep -q '^avahi:' "$group_run" 2>/dev/null; then
+        echo 'avahi:x:189:' >> "$group_run"
+    fi
+    if ! grep -q ' /etc/passwd ' /proc/mounts 2>/dev/null; then
+        mount --bind "$passwd_run" /etc/passwd || return 1
+    fi
+    if ! grep -q ' /etc/group ' /proc/mounts 2>/dev/null; then
+        mount --bind "$group_run" /etc/group || return 1
+    fi
+    chown 189:189 /run/avahi-daemon 2>/dev/null || true
+    return 0
+}
+
+ensure_avahi_dbus() {
+    src=/etc/dbus-1/system.d
+    dst=/run/g21-airplay/dbus-system.d
+    conf=$dst/g21-avahi.conf
+    if [ ! -d "$src" ]; then
+        return 0
+    fi
+    mkdir -p "$dst"
+    if ! grep -q ' /etc/dbus-1/system.d ' /proc/mounts 2>/dev/null; then
+        cp "$src"/* "$dst"/ 2>/dev/null || true
+    fi
+    cat > "$conf" <<'EOF'
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <policy user="root">
+    <allow own="org.freedesktop.Avahi"/>
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+  <policy user="avahi">
+    <allow own="org.freedesktop.Avahi"/>
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+  <policy context="default">
+    <allow send_destination="org.freedesktop.Avahi"/>
+    <allow receive_sender="org.freedesktop.Avahi"/>
+  </policy>
+</busconfig>
+EOF
+    if ! grep -q ' /etc/dbus-1/system.d ' /proc/mounts 2>/dev/null; then
+        mount --bind "$dst" "$src" || return 1
+    fi
+    if command -v dbus-send >/dev/null 2>&1; then
+        dbus-send --system --type=method_call --dest=org.freedesktop.DBus \
+            /org/freedesktop/DBus org.freedesktop.DBus.ReloadConfig >/dev/null 2>&1 || true
+    fi
+    return 0
+}
+
+start_avahi_bin() {
+    dir=$1
+    conf=$2
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$dir/avahi-daemon" \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    else
+        "$dir/avahi-daemon" \
+            --no-chroot \
+            --no-drop-root \
+            --no-rlimits \
+            -f "$conf" \
+            >>/var/log/g21-avahi.log 2>&1 &
+    fi
+    AVAHIPID=$!
+    sleep 2
+    if kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
+    fi
+    AVAHIPID=
+    return 1
+}
+
+# Bundled avahi is started via run-elf — BusyBox pidof "avahi-daemon" often misses
+# it (comm=ld-linux). Detect by path and recover AVAHIPID so we never double-start
+# (double-start → SIGTERM storm in g21-avahi.log).
+recover_avahi_pid() {
+    pid=
+    for pid in $(our_avahi_pids); do
+        if kill -0 "$pid" 2>/dev/null; then
+            AVAHIPID=$pid
+            return 0
+        fi
+    done
+    AVAHIPID=
+    return 1
+}
+
+ensure_mdns() {
+    iface=$1
+    dir=$(tool_dir)
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+        return 0
+    fi
+    if recover_avahi_pid; then
+        return 0
+    fi
+    # Do NOT systemctl-start factory avahi — stay inside this tool only.
+    if [ ! -x "$dir/avahi-daemon" ]; then
+        return 1
+    fi
+    if ! ensure_avahi_account; then
+        echo "g21-airplay-open: avahi account overlay failed" >>/var/log/g21-avahi.log
+        return 1
+    fi
+    ensure_avahi_dbus || true
+    conf=/run/g21-airplay/avahi-daemon.conf
+    hosts=/run/g21-airplay/avahi-hosts
+    services=/run/g21-airplay/avahi-services
+    mkdir -p "$services"
+    : > "$hosts"
+    # This avahi 0.7 exits on an unknown hosts key, so the iPhone sees no name.
+    # allow-interfaces already publishes only the wlan0 address.
+    cat > "$conf" <<EOF
+[server]
+host-name=G21
+use-ipv4=yes
+use-ipv6=no
+allow-interfaces=$iface
+deny-interfaces=lo
+enable-dbus=yes
+check-response-ttl=no
+use-iff-running=yes
+[wide-area]
+enable-wide-area=no
+[publish]
+disable-publishing=no
+disable-user-service-publishing=no
+publish-addresses=yes
+publish-hinfo=no
+publish-workstation=no
+publish-domain=yes
+publish-resolv-conf-dns-servers=no
+[reflector]
+enable-reflector=no
+[rlimits]
+EOF
+    # Clear any orphan from a previous tool incarnation before bind.
+    stop_bundled_avahi
+    sleep 0.3
+    # This avahi build rejects user=/group= config keys; stay root via --no-drop-root.
+    printf '\n# start iface=%s\n' "$iface" >>/var/log/g21-avahi.log
+    if start_avahi_bin "$dir" "$conf"; then
+        return 0
+    fi
+    # Fallback without D-Bus if the bus rejects ownership.
+    cat > "$conf" <<EOF
+[server]
+host-name=G21
+use-ipv4=yes
+use-ipv6=no
+allow-interfaces=$iface
+deny-interfaces=lo
+enable-dbus=no
+check-response-ttl=no
+use-iff-running=yes
+[wide-area]
+enable-wide-area=no
+[publish]
+disable-publishing=no
+publish-addresses=yes
+publish-hinfo=no
+publish-workstation=no
+publish-domain=yes
+[reflector]
+enable-reflector=no
+[rlimits]
+EOF
+    printf '\n# fallback no-dbus iface=%s\n' "$iface" >>/var/log/g21-avahi.log
+    if start_avahi_bin "$dir" "$conf"; then
+        return 0
+    fi
+    return 1
+}
+
+start_present() {
+    dir=$(tool_dir)
+    bin=$dir/g21-present
+    if [ ! -x "$bin" ]; then
+        return 0
+    fi
+    if [ -n "$PREPID" ] && kill -0 "$PREPID" 2>/dev/null; then
+        return 0
+    fi
+    PREPID=
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/var/log/g21-present.log 2>&1 &
+    else
+        "$bin" >>/var/log/g21-present.log 2>&1 &
+    fi
+    PREPID=$!
+}
+
+start_rdp() {
+    dir=$(tool_dir)
+    bin=$dir/g21-rdp
+    cur=
+    if [ ! -x "$bin" ]; then
+        desk "missing|rdp|"
+        return 0
+    fi
+    if [ -n "$RDPID" ] && kill -0 "$RDPID" 2>/dev/null; then
+        # Do not clobber connected|cert|error from g21-rdp — that made the UI
+        # show "running" with a blank screen.
+        chmod 666 "$DESKTOP" 2>/dev/null || true
+        return 0
+    fi
+    RDPID=
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export WLOG_LEVEL="${WLOG_LEVEL:-INFO}"
+    : >>/var/log/g21-rdp.log
+    chmod 666 /var/log/g21-rdp.log 2>/dev/null || true
+    # g21-rdp needs bundled libfreerdp2; always use run-elf library path.
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    else
+        "$bin" >>/var/log/g21-rdp.log 2>&1 &
+    fi
+    RDPID=$!
+    sleep 1
+    if ! kill -0 "$RDPID" 2>/dev/null; then
+        RDPID=
+        # Keep g21-rdp's own error|connect| / error|freerdp| / cert|… if present.
+        cur=$(tr -d '\r\n' < "$DESKTOP" 2>/dev/null || true)
+        case $cur in
+            error\|*|cert\|*) ;;
+            *) desk "error|rdp|" ;;
+        esac
+        return 0
+    fi
+    chmod 666 "$DESKTOP" 2>/dev/null || true
+    cur=$(tr -d '\r\n' < "$DESKTOP" 2>/dev/null || true)
+    case $cur in
+        connecting\|*|connected\|*|cert\|*|error\|*|starting\|*) ;;
+        *) desk "starting|rdp|" ;;
+    esac
+}
+
+stop_present() {
+    stop_pid "$PREPID"
+    wait_pid_gone "$PREPID"
+    PREPID=
+    kill_matching '*/g21-present*'
+    n=0
+    while [ "$n" -lt 20 ] && [ -n "$(procs_matching '*/g21-present*')" ]; do
+        sleep 0.1
+        n=$((n + 1))
+    done
+    if [ -n "$(procs_matching '*/g21-present*')" ]; then
+        kill_matching '*/g21-present*' KILL
+        sleep 0.2
+    fi
+    # Free the bind so app frame_bridge can listen for cluster/HUD.
+    rm -f /run/g21-desktop/frame.sock 2>/dev/null || true
+}
+
+stop_rdp() {
+    stop_pid "$RDPID"
+    wait_pid_gone "$RDPID"
+    RDPID=
+    kill_matching '*/g21-rdp*'
+}
+
+stop_mice() {
+    stop_pid "$MICEPID"
+    MICEPID=
+    kill_matching '*/g21-mice*'
+}
+
+ensure_avahi_services_dir() {
+    src=/etc/avahi/services
+    dst=/run/g21-airplay/avahi-etc-services
+    mkdir -p "$dst"
+    mkdir -p /etc/avahi 2>/dev/null || true
+    if [ ! -d "$src" ]; then
+        mkdir -p "$src" 2>/dev/null || true
+    fi
+    if [ -d "$src" ] && ! grep -q ' /etc/avahi/services ' /proc/mounts 2>/dev/null; then
+        cp "$src"/* "$dst"/ 2>/dev/null || true
+        mount --bind "$dst" "$src" || return 1
+    fi
+    return 0
+}
+
+# MS-MICE requires TXT container_id=<GUID> or Win+K on Windows 11 skips the sink.
+mice_container_id() {
+    idfile=/run/g21-airplay/mice-container.id
+    if [ -f "$idfile" ]; then
+        tr -d '\r\n' < "$idfile"
+        return 0
+    fi
+    mkdir -p /run/g21-airplay
+    if [ -r /proc/sys/kernel/random/uuid ]; then
+        tr -d '\r\n' < /proc/sys/kernel/random/uuid > "$idfile"
+    else
+        printf '00000000-0000-4000-8000-%012d\n' "$$$(date +%s)" > "$idfile"
+    fi
+    tr -d '\r\n' < "$idfile"
+}
+
+reload_avahi_services() {
+    # Avahi picks up new .service files after HUP / short restart of our daemon.
+    if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+        kill -HUP "$AVAHIPID" 2>/dev/null || true
+        return 0
+    fi
+    if pidof avahi-daemon >/dev/null 2>&1; then
+        kill -HUP "$(pidof avahi-daemon | awk '{print $1}')" 2>/dev/null || true
+    fi
+}
+
+publish_mice_service() {
+    shown=$(name_of)
+    guid=$(mice_container_id)
+    ensure_avahi_services_dir || true
+    services=/run/g21-airplay/avahi-etc-services
+    mkdir -p "$services"
+    # Also write into the live /etc/avahi/services if bind-mounted.
+    for svcdir in /run/g21-airplay/avahi-etc-services /etc/avahi/services; do
+        [ -d "$svcdir" ] || continue
+        cat > "$svcdir/g21-windows.service" <<EOF
+<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">$shown</name>
+  <service>
+    <type>_display._tcp</type>
+    <port>7250</port>
+    <txt-record>container_id=$guid</txt-record>
+  </service>
+</service-group>
+EOF
+    done
+    reload_avahi_services
+}
+
+clear_mice_service() {
+    rm -f /run/g21-airplay/avahi-etc-services/g21-windows.service 2>/dev/null || true
+    rm -f /run/g21-airplay/avahi-services/g21-windows.service 2>/dev/null || true
+    rm -f /etc/avahi/services/g21-windows.service 2>/dev/null || true
+    reload_avahi_services
+}
+
+start_mice() {
+    dir=$(tool_dir)
+    bin=$dir/g21-mice
+    if [ ! -x "$bin" ]; then
+        desk "missing|windows|"
+        report "missing|windows|"
+        return 0
+    fi
+    if [ -n "$MICEPID" ] && kill -0 "$MICEPID" 2>/dev/null; then
+        desk "waiting|windows|"
+        report "running|windows|"
+        return 0
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    export PATH="$dir:$PATH"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
+    clear_mice_offers
+    publish_mice_service
+    : >>/tmp/g21-airplay-start.log
+    if [ -x "$dir/run-elf" ]; then
+        "$dir/run-elf" "$bin" >>/tmp/g21-airplay-start.log 2>&1 &
+    else
+        "$bin" >>/tmp/g21-airplay-start.log 2>&1 &
+    fi
+    MICEPID=$!
+    sleep 1
+    if kill -0 "$MICEPID" 2>/dev/null; then
+        desk "waiting|windows|"
+        report "running|windows|"
+    else
+        MICEPID=
+        desk "error|windows|"
+        report "uxplay-exit|windows|"
+    fi
+}
+
+ux_log_has_mdns_error() {
+    if [ ! -f "$UXLOG" ]; then
+        return 1
+    fi
+    tail -n 80 "$UXLOG" 2>/dev/null | grep -E 'DNSServiceRegister|kDNSServiceErr|dnssd_error|No DNS-SD' >/dev/null 2>&1
+}
+
+start_ux() {
+    iface=$1
+    label=$2
+    ip=$3
+    shown=$4
+    dir=$(tool_dir)
+    bin=$(find_ux) || true
+    if [ -z "$bin" ]; then
+        stop_ux
+        report "missing|$label|$ip"
+        return 0
+    fi
+    # Recover PID after tool restart (g21-detach/exec chain).
+    if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
+        UXPID=
+        for p in $(our_uxplay_pids); do
+            UXPID=$p
+            break
+        done
+    fi
+    auth=$(airplay_auth_of)
+    if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
+        if ux_log_has_mdns_error; then
+            stop_ux
+            report "mdns-brak|$label|$ip"
+            return 0
+        fi
+        # Living process: port is the source of truth. "Stopping RAOP" in a prior
+        # generation must not kill a healthy listener (log is truncated on start).
+        if ! ux_port_listening; then
+            stop_ux
+            report "uxplay-exit|$label|$ip"
+            return 0
+        fi
+        # Menu toggled pin/open: recycle so UxPlay picks the new auth mode.
+        if [ -f /run/g21-airplay/ux.cmd ]; then
+            if [ "$auth" = "pin" ] && ! grep -q -- ' -pin ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                stop_ux
+            elif [ "$auth" = "open" ] && grep -q -- ' -pin ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                stop_ux
+            fi
+            # Menu toggled AirPlay Sound: recycle so UxPlay starts with or without the picture.
+            if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
+                if [ "$(airplay_mode_of)" = "audio" ] && ! grep -q -- ' -vs 0 ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                    stop_ux
+                elif [ "$(airplay_mode_of)" = "video" ] && grep -q -- ' -vs 0 ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                    stop_ux
+                fi
+            fi
+        fi
+        if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
+            :
+        else
+        # DNS-SD lives in avahi: if it died/restarted after UxPlay registered,
+        # the phone still sees a stale name and spins with zero TCP to :7401.
+        # Keep avahi up; bounce UxPlay when the daemon instance changed.
+        old_avahi=
+        if [ -n "$AVAHIPID" ] && kill -0 "$AVAHIPID" 2>/dev/null; then
+            old_avahi=$AVAHIPID
+        elif recover_avahi_pid; then
+            old_avahi=$AVAHIPID
+        fi
+        if ! ensure_mdns "$iface"; then
+            report "mdns-brak|$label|$ip"
+            return 0
+        fi
+        if [ -z "$old_avahi" ] || [ "$old_avahi" != "$AVAHIPID" ]; then
+            stop_ux
+            # Fall through and start a fresh UxPlay so register_dnssd runs again.
+        else
+            start_ring
+            report "running|$label|$ip"
+            return 0
+        fi
+        fi
+    fi
+    # UxPlay is linked to libdns_sd.so.1 (Avahi compat) and also dlopen("libdns_sd.so").
+    # BMW mdnsd + /usr/lib/libdns_sd.so accept the call but return kDNSServiceErr_Unknown
+    # for this third-party client → UI "brak dns". Always run bundled avahi and force
+    # the tool's libdns_sd ahead of /usr/lib (symlink .so → .so.1 for dlopen).
+    if ! ensure_mdns "$iface"; then
+        report "mdns-brak|$label|$ip"
+        return 0
+    fi
+    if [ -f "$dir/lib/libdns_sd.so.1" ]; then
+        ln -sfn libdns_sd.so.1 "$dir/lib/libdns_sd.so" 2>/dev/null || true
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/wayland}"
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+    export LD_LIBRARY_PATH="$(tool_lib_path)"
+    export GST_PLUGIN_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH="$dir/lib/gstreamer-1.0"
+    export GST_PLUGIN_SYSTEM_PATH_1_0="$dir/lib/gstreamer-1.0"
+    export GST_REGISTRY="${GST_REGISTRY:-/run/g21-airplay/registry.bin}"
+    if [ -x "$dir/gst-plugin-scanner" ]; then
+        export GST_PLUGIN_SCANNER="$dir/gst-plugin-scanner"
+    fi
+    export G21_YUV=/run/g21-airplay/latest.yuv
+    export AVAHI_COMPAT_NOWARN=1
+    # Listen only on the hotspot address. INADDR_ANY also opens vlan/wlan_bridge,
+    # and the phone then tries an address it cannot route.
+    export G21_BIND_IP="$ip"
+    if [ -n "$ip" ] && [ -f "$dir/g21-bind-wlan.so" ]; then
+        export LD_PRELOAD="$dir/g21-bind-wlan.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    fi
+    mkdir -p /run/g21-airplay
+    mac=$(iface_mac "$iface")
+    mac_args=
+    if [ -n "$mac" ]; then
+        mac_args="-m $mac"
+    fi
+    : > "$UXLOG"
+    # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
+    # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
+    # -vs fakesink with async=false: decode + G21_YUV tee only. async=false lets the
+    # first iPhone frame through; the default sink waits and the picture stays
+    # black until the phone screen turns off and on. The app presents the file.
+    # Direct waylandsink under HMI is blank (H13/H30). Keep G21_YUV export above.
+    # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
+    # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
+    # Cabin speakers are not card 0. That card is only Bluetooth handsfree.
+    # Front media is the SmartX ALSA plugin (aplay -Dsmartx:NAME).
+    # A sink with no device opens "default", which this unit does not have,
+    # and that GStreamer error stops the whole AirPlay server.
+    # Car 2026-11-14: smartx:CarPlayMain is held by BMW's carplay daemon ("Could not open
+    # audio device"), and a SmartX device is only heard while the audio manager connects its
+    # source to a sink. g21-audio-route.js makes that connection (as RideTube does) and names a
+    # free device; without one, CarPlayMain as before.
+    audio_dev=$(audio_route_connect)
+    [ -n "$audio_dev" ] || audio_dev=CarPlayMain
+    audio_sink="alsasink device=smartx:$audio_dev"
+    printf '%s\n' "$audio_dev" > /run/g21-airplay/audio-device 2>/dev/null || true
+    export ALSA_PLUGIN_DIR="${ALSA_PLUGIN_DIR:-/usr/lib/alsa-lib}"
+    # Auth: menu writes /run/g21-session/airplay-auth (pin|open).
+    # -pin NNNN = PAIR-PIN-START on iPhone. open = jak kkds, bez kodu.
+    # -pw digest often never prompts on modern iOS.
+    # -d 1: debug to UXLOG (line-buffered via stdbuf when available).
+    # New session via g21-detach (libc setsid): BusyBox on this MGU has no setsid
+    # applet, so plain `setsid` aborted start with "not found" and left no listener.
+    # Helper is a static ELF so it runs without /lib64. Fall back to nohup.
+    # shellcheck disable=SC2086
+    clear_pin
+    auth=$(airplay_auth_of)
+    pin=
+    pin_args=
+    mkdir -p /run/g21-airplay
+    if [ "$auth" = "pin" ]; then
+        pin=$(awk 'BEGIN { srand(); printf "%04d", 1000 + int(rand() * 9000) }')
+        printf '%s\n' "$pin" > "$PINFILE"
+        chmod 666 "$PINFILE" 2>/dev/null || true
+        pin_args="-pin $pin"
+    fi
+    # One small stream. The phone picks a lower bitrate for 600x400 than for 720p or 1080p.
+    vsize=600x400
+    if [ -f "$SESSION_DIR/airplay-size" ]; then
+        case $(tr -d '\r\n' < "$SESSION_DIR/airplay-size") in
+            [0-9]*x[0-9]*) vsize=$(tr -d '\r\n' < "$SESSION_DIR/airplay-size") ;;
+        esac
+    fi
+    if [ "$(airplay_mode_of)" = "audio" ]; then
+        # AirPlay Sound: -vs 0 = streamed audio only (the phone picks G21 as a speaker).
+        set -- -n "$shown" -nh -p 7400 $mac_args -vs 0 -as "$audio_sink" $pin_args -d 1
+    elif [ -n "$mac_args" ]; then
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+    else
+        set -- -n "$shown" -nh -p 7400 -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+    fi
+    printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
+    # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG
+    # (plain redirect is fully buffered; empty logs hide DNS-SD / connect errors).
+    ux_wrap=/run/g21-airplay/ux-wrap.sh
+    {
+        printf '%s\n' '#!/bin/sh'
+        printf '%s\n' 'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"'
+        # The car's own libasound (2023): the SmartX plugin and /usr/share/alsa are built for it.
+        # The bundled one (Ubuntu 18.04) is only a fallback for hosts without it.
+        if [ -f /usr/lib/libasound.so.2 ]; then
+            printf '%s\n' 'export LD_PRELOAD=/usr/lib/libasound.so.2${LD_PRELOAD:+:$LD_PRELOAD}'
+        fi
+        printf '%s\n' 'bin="$1"; shift'
+        printf '%s\n' 'if command -v stdbuf >/dev/null 2>&1; then'
+        printf '%s\n' '  exec stdbuf -oL -eL "$bin" "$@"'
+        printf '%s\n' 'fi'
+        printf '%s\n' 'exec "$bin" "$@"'
+    } > "$ux_wrap"
+    chmod 755 "$ux_wrap" 2>/dev/null || true
+    if [ -x "$dir/g21-detach" ]; then
+        "$dir/g21-detach" "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
+    elif command -v nohup >/dev/null 2>&1; then
+        nohup "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
+    else
+        "$ux_wrap" "$bin" "$@" >>"$UXLOG" 2>&1 &
+    fi
+    UXPID=$!
+    # Prefer the real uxplay.bin PID after detach/exec chain; wait for :7401.
+    n=0
+    while [ "$n" -lt 10 ]; do
+        for p in $(our_uxplay_pids); do
+            UXPID=$p
+            break
+        done
+        if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null && ux_port_listening; then
+            break
+        fi
+        sleep 1
+        n=$((n + 1))
+    done
+    for p in $(our_uxplay_pids); do
+        UXPID=$p
+        break
+    done
+    if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
+        UXPID=
+        clear_pin
+        if ux_log_has_mdns_error; then
+            report "mdns-brak|$label|$ip"
+        else
+            report "uxplay-exit|$label|$ip"
+        fi
+        return 0
+    fi
+    if ux_log_has_mdns_error; then
+        stop_ux
+        report "mdns-brak|$label|$ip"
+        return 0
+    fi
+    if grep -E 'gst_parse_launch failed|no property \"fullscreen\"|Error initialising socket|Required gstreamer plugin' "$UXLOG" >/dev/null 2>&1; then
+        stop_ux
+        report "uxplay-exit|$label|$ip"
+        return 0
+    fi
+    if ! ux_port_listening; then
+        stop_ux
+        report "uxplay-exit|$label|$ip"
+        return 0
+    fi
+    watch_ux_pin "$UXPID" &
+    PINWATCH=$!
+    start_ring
+    report "running|$label|$ip"
+}
+
+apply_airplay() {
+    shown=$(name_of)
+    uplink=$(find_uplink_wifi) || {
+        idle
+        report "idle|brak-wifi|"
+        return 0
+    }
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    label=$4
     net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
-    stamp="$iface $net"
+    stamp="uplink $iface $net"
+    clear_mice_if_needed
     if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
-        open_ports "$iface" "$net"
+        stop_ux
+        # Keep bundled avahi if already up for this Wi-Fi; killing it every stamp
+        # change raced UxPlay DNS-SD (SIGTERM in g21-avahi.log).
+        open_ports "$iface" "$net" "$ip"
         printf '%s\n' "$stamp" > "$STAMP"
     fi
-    start_ux "$ssid" "$ip"
+    # Re-assert on-link route every apply: mgu-uplink may strip it again.
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
+    fi
+    start_ux "$iface" "$label" "$ip" "$shown"
+}
+
+apply_windows() {
+    shown=$(name_of)
+    uplink=$(find_uplink_wifi) || {
+        idle
+        report "idle|brak-wifi|"
+        return 0
+    }
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    label=$4
+    net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 0; }
+    stamp="windows $iface $net"
+    stop_ux
+    stop_present
+    stop_rdp
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        stop_mice
+        stop_avahi_local
+        open_ports "$iface" "$net" "$ip"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
+    fi
+    if ! ensure_mdns "$iface"; then
+        report "mdns-brak|$label|$ip"
+        desk "error|mdns|"
+        return 0
+    fi
+    publish_mice_service
+    start_mice
+}
+
+apply_uplink_desktop() {
+    kind=$(field kind "$STATUS")
+    link=$(field link "$STATUS")
+    iface=$(field interface "$LEASE")
+    ip=$(field ip "$LEASE")
+    prefix=$(number prefix "$LEASE")
+    case $kind in
+        wifi) ;;
+        *) idle; report "idle|uplink-not-wifi|"; return 1 ;;
+    esac
+    case $link in
+        online|connected) ;;
+        *) idle; report "idle|wifi-down|"; return 1 ;;
+    esac
+    case $iface in
+        ""|*[!A-Za-z0-9._-]*) idle; report "idle|bad-interface|"; return 1 ;;
+    esac
+    net=$(subnet "$ip" "$prefix") || { idle; report "idle|bad-prefix|"; return 1; }
+    stamp="desk $iface $net"
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        open_ports "$iface" "$net" "$ip"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
+    fi
+    return 0
+}
+
+keep_config_ports() {
+    uplink=$(find_uplink_wifi) || {
+        clear_table
+        rm -f "$STAMP"
+        return 1
+    }
+    set -- $uplink
+    iface=$1
+    ip=$2
+    prefix=$3
+    net=$(subnet "$ip" "$prefix") || return 1
+    stamp="cfg $iface $net"
+    if [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$stamp" ]; then
+        open_ports "$iface" "$net" "$ip"
+        printf '%s\n' "$stamp" > "$STAMP"
+    fi
+    if [ -n "$net" ] && [ -n "$ip" ]; then
+        ip route replace "$net" dev "$iface" src "$ip" 2>/dev/null || true
+    fi
+    return 0
+}
+
+# jap-ridetube-d's ytdec writes the film's frames to /dev/shm/mgu-video-ridetube
+# owned by nobody, mode 0600 (open 0600 + fchown nobody + fchmod 0600 in ytdec).
+# The renderer runs as root and draws the centre picture from it; g21_airplay
+# runs as its own OAP uid and cannot open it, so a film never reached the
+# cluster or the HUD. Give that one regular file a read bit for others: owner
+# and contents stay as ytdec made them, nothing else in /dev/shm is touched.
+# A new film makes a new file; the 1 s loop opens it within a second.
+share_youtube_frames() {
+    f=/dev/shm/mgu-video-ridetube
+    if [ -L "$f" ] || [ ! -f "$f" ]; then
+        return 0
+    fi
+    case $(ls -l "$f" 2>/dev/null | cut -c1-10) in
+        -rw-------)
+            if chmod 0644 "$f" 2>/dev/null; then
+                echo "$(date +%T) share ridetube frames 0644" >>/tmp/g21-airplay-start.log
+            fi
+            ;;
+    esac
+    return 0
+}
+
+apply() {
+    ensure_dirs
+    share_youtube_frames
+    mode=$(mode_of)
+    case $mode in
+        airplay)
+            stop_rdp
+            clear_mice_if_needed
+            # central = g21-present (BGRA window); cluster/hud = cluster-render.
+            # output may list several: central,cluster,hud
+            out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
+            case ",$out," in
+                *,central,*) start_present ;;
+                *) stop_present ;;
+            esac
+            apply_airplay
+            ;;
+        windows)
+            apply_windows
+            ;;
+        vnc)
+            stop_ux
+            stop_rdp
+            clear_mice_if_needed
+            if apply_uplink_desktop; then
+                start_present
+                desk "running|vnc|"
+                report "idle|session-vnc|"
+            fi
+            ;;
+        rdp)
+            stop_ux
+            clear_mice_if_needed
+            if apply_uplink_desktop; then
+                # central = g21-present on Wayland; cluster/hud = app listens on frame.sock
+                out=$(tr -d '\r\n' < "$SESSION_DIR/output" 2>/dev/null || true)
+                if [ "$out" = "cluster" ] || [ "$out" = "hud" ]; then
+                    stop_present
+                    # Wait until present is gone so bridge bind does not hit EADDRINUSE.
+                    n=0
+                    while [ "$n" -lt 30 ] && ! frame_sock_free; do
+                        sleep 0.1
+                        n=$((n + 1))
+                    done
+                else
+                    start_present
+                fi
+                start_rdp
+                report "idle|session-rdp|"
+            fi
+            ;;
+        *)
+            stop_ux
+            stop_present
+            stop_rdp
+            clear_mice_if_needed
+            stop_bundled_avahi
+            if keep_config_ports; then
+                report "idle|session-off|"
+            else
+                clear_table
+                rm -f "$STAMP"
+                report "idle|session-off|"
+            fi
+            ;;
+    esac
 }
 
 stop() {
     stop_ux
+    stop_present
+    stop_rdp
+    stop_mice
+    clear_mice_service
+    stop_bundled_avahi
     clear_table
     rm -f "$STAMP"
     report "idle|stopped|"
@@ -156,5 +1553,6 @@ stop() {
 trap stop TERM INT
 while true; do
     apply
-    sleep 5
+    # 1s so allow=stop → cluster bridge wins frame.sock before the next rdp start.
+    sleep 1
 done

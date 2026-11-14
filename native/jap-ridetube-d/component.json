@@ -1,0 +1,40 @@
+{
+  "id": "jap-ridetube-d",
+  "kind": "tool",
+  "version": "0.3.9",
+  "license": "GPL-3.0-or-later",
+  "title": "YouTube",
+  "description": "Pobieranie i dekodowanie filmu YouTube dla THEiPlay. yt-dlp sciaga film, ytdec sklada obraz do warstwy wideo. Sterowanie przez /run/jap-ridetube-d/ctl.sock.",
+  "requires": {
+    "mgu-deploy": "0.7.0",
+    "mgu-python": "1.0.2",
+    "jap-node22": "22.23.4",
+    "mgu-render": "0.6.11"
+  },
+  "uninstallable": true,
+  "internet": true,
+  "uids": "state/internet-uids",
+  "mguHmi": ["ID7"],
+  "files": [
+    { "path": "ytd.js", "mode": "0644" },
+    { "path": "ytdec", "mode": "0755" },
+    { "path": "ytfetch.py", "mode": "0644" },
+    { "path": "ytdlp.pyz", "mode": "0644" },
+    { "path": "thumb.js", "mode": "0644" },
+    { "path": "vendor/jpeg-js/decoder.js", "mode": "0644" },
+    { "path": "vendor/jpeg-js/LICENSE", "mode": "0644" },
+    { "path": "check.sh", "mode": "0755" },
+    { "path": "LICENSE", "mode": "0644" },
+    { "path": "THIRD_PARTY_LICENSES", "mode": "0644" }
+  ],
+  "check": ["check.sh"],
+  "units": [
+    { "name": "jap-ridetube-d.service", "from": "jap-ridetube-d.service" }
+  ],
+  "enable": [
+    { "unit": "jap-ridetube-d.service", "target": "multi-user.target" }
+  ],
+  "crashNames": ["ytdec"],
+  "recmgr": ["jap-ridetube-d"],
+  "restart": ["jap-ridetube-d.service"]
+}

@@ -36,7 +36,7 @@ function readUplink(paths) {
 }
 
 function readReceiverStatus(text) {
-    var parts = String(text || '').split('|');
+    var parts = String(text || '').replace(/\s+$/, '').split('|');
     return {
         mode: parts[0] || 'unknown',
         ssid: parts[1] || '',
@@ -80,10 +80,46 @@ function selectStoreWifi(status, lease) {
     };
 }
 
+function selectAirplayAnnounce(receiver, storeWifi) {
+    var mode = receiver && receiver.mode ? receiver.mode : 'unknown';
+    if (mode === 'running' && receiver.ip) {
+        return {
+            ok: true,
+            ip: receiver.ip,
+            ssid: receiver.ssid || '',
+            reason: '',
+        };
+    }
+    if (mode === 'mdns-brak' || mode === 'uxplay-exit' || mode === 'missing') {
+        return {
+            ok: false,
+            reason: mode,
+            ip: receiver.ip || '',
+            ssid: receiver.ssid || '',
+        };
+    }
+    if (storeWifi && storeWifi.ok) {
+        return {
+            ok: true,
+            ip: storeWifi.ip,
+            ssid: storeWifi.ssid,
+            iface: storeWifi.iface,
+            reason: '',
+        };
+    }
+    return {
+        ok: false,
+        reason: (storeWifi && storeWifi.reason) || 'uplink-not-wifi',
+        ip: '',
+        ssid: '',
+    };
+}
+
 module.exports = {
     STATUS_PATH: STATUS_PATH,
     LEASE_PATH: LEASE_PATH,
     readUplink: readUplink,
     selectStoreWifi: selectStoreWifi,
+    selectAirplayAnnounce: selectAirplayAnnounce,
     readReceiverStatus: readReceiverStatus,
 };

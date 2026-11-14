@@ -47,6 +47,27 @@ function walk(dir, out) {
     });
 }
 
+// The files a commit can take: tracked plus untracked that .gitignore does not
+// exclude (a local ssh/ folder with a key stays out of git, so it is not the
+// repository's). Outside a git checkout (an unpacked source tree) every file.
+function publishable(out) {
+    var listed;
+    try {
+        listed = require('child_process').execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+            cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: Object.assign({}, process.env, { GIT_OPTIONAL_LOCKS: '0' })
+        });
+    } catch (err) {
+        walk(ROOT, out);
+        return;
+    }
+    listed.split('\0').forEach(function (name) {
+        var full = path.join(ROOT, name);
+        if (name && fs.existsSync(full) && fs.statSync(full).isFile()) {
+            out.push(full);
+        }
+    });
+}
+
 function rel(file) {
     return path.relative(ROOT, file).split(path.sep).join('/');
 }
@@ -68,8 +89,26 @@ function checkTree(errors) {
     var localTools = {};
     (repo.tools || []).forEach(function (tool) {
         localTools[tool.id] = true;
+        var toolDir = path.join(ROOT, tool.path || '');
+        var componentFile = path.join(toolDir, 'component.json');
+        if (fs.existsSync(componentFile)) {
+            var toolMeta = readJson(componentFile);
+            if (toolMeta.id !== tool.id || toolMeta.kind !== 'tool' || toolMeta.version !== tool.version) {
+                fail(errors, tool.id + ' component.json must name the same id, kind tool and version as mgu-repo.json');
+            }
+            if (!Array.isArray(toolMeta.files) || !toolMeta.files.length) {
+                fail(errors, tool.id + ' component.json must list the files the unit installs');
+            }
+            toolMeta.files.forEach(function (item) {
+                var relPath = (item.from || item.path || '').split('/').join(path.sep);
+                if (!relPath || !fs.existsSync(path.join(toolDir, relPath))) {
+                    fail(errors, tool.id + ' missing file ' + (item.from || item.path));
+                }
+            });
+            return;
+        }
         if (!tool.service || tool.service.exec !== tool.id) {
-            fail(errors, tool.id + ' must run its own program as a service');
+            fail(errors, tool.id + ' must have component.json or run its own program as a service');
         }
     });
     repo.components.forEach(function (component) {
@@ -122,6 +161,24 @@ function checkTree(errors) {
                 fail(errors, component.id + ' missing module ' + mod);
             }
         });
+        meta.modules.forEach(function (mod) {
+            if (!mod.endsWith('.js')) {
+                return;
+            }
+            var text = fs.readFileSync(path.join(appDir, mod), 'utf8');
+            var re = /require\('\.\/([^']+)'\)/g;
+            var match;
+            while ((match = re.exec(text))) {
+                var target = match[1];
+                if (target.slice(-3) !== '.js') {
+                    target += '.js';
+                }
+                var listed = 'src/' + target;
+                if (meta.modules.indexOf(listed) === -1) {
+                    fail(errors, component.id + ' ' + mod + ' requires ./' + match[1] + ' but mgu-app.json does not list ' + listed);
+                }
+            }
+        });
         meta.sdk.forEach(function (mod) {
             if (mod.indexOf('oap-sdk/') !== 0) {
                 fail(errors, component.id + ' sdk entry must be an oap-sdk path: ' + mod);
@@ -145,7 +202,7 @@ function checkTree(errors) {
 
 function checkSources(errors) {
     var files = [];
-    walk(ROOT, files);
+    publishable(files);
     var markers = privateKeyMarkers().concat(tokenMarkers());
     var textExt = {
         '.js': true, '.json': true, '.md': true, '.yml': true, '.yaml': true,

@@ -9,6 +9,7 @@ Read `AGENTS.md` before editing apps, scripts, or `docs/`.
 
 - Apps target the infotainment head unit only. Do not change DSC, DME, DDE, VTG, or safety configuration, and do not add write flags for those interfaces.
 - Do not run SSH, installers, or publish scripts unless the current user message explicitly approves that exact command.
+- Host `100.125.63.29` is read-only even when SSH is approved. Do not write, delete, chmod, install, or restart anything there.
 - Never commit `oap-sdk/`, `*.mgu`, private keys, VIN files, or head-unit logs.
 - App JavaScript under `apps/` and `lib/` must run on Node 8: no optional chaining, nullish coalescing, or later standard-library APIs.
 - A behavior change updates `docs/` in the same change and labels unconfirmed G21 behavior as a hypothesis.

@@ -76,9 +76,268 @@ function atlasFromI420(i420, sw, sh, dw, dh) {
     return toAtlas(scaleI420(i420, sw, sh, dw, dh));
 }
 
+function i420IntoAtlas(i420, w, h, dst) {
+    var ySize = w * h;
+    var uvW = w >> 1;
+    var uvH = h >> 1;
+    var need = ySize + (uvW * uvH * 2);
+    var srcU = ySize;
+    var srcV = ySize + uvW * uvH;
+    var offset = ySize;
+    var row;
+    if (!dst || dst.length !== need) {
+        dst = Buffer.alloc(need);
+    }
+    i420.copy(dst, 0, 0, ySize);
+    for (row = 0; row < uvH; row += 1) {
+        i420.copy(dst, offset, srcU + row * uvW, srcU + row * uvW + uvW);
+        offset += uvW;
+        i420.copy(dst, offset, srcV + row * uvW, srcV + row * uvW + uvW);
+        offset += uvW;
+    }
+    return dst;
+}
+
+function i420ToAtlas(i420, w, h) {
+    return i420IntoAtlas(i420, w, h, null);
+}
+
+function i420ToBgra(i420, w, h) {
+    var ySize = w * h;
+    var uvW = w >> 1;
+    var uvH = h >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * uvH;
+    var bgra = Buffer.alloc(w * h * 4);
+    var row;
+    var col;
+    var y;
+    var u;
+    var v;
+    var c;
+    var d;
+    var e;
+    var r;
+    var g;
+    var b;
+    var i;
+    for (row = 0; row < h; row++) {
+        for (col = 0; col < w; col++) {
+            y = i420[row * w + col];
+            u = i420[uOff + (row >> 1) * uvW + (col >> 1)];
+            v = i420[vOff + (row >> 1) * uvW + (col >> 1)];
+            c = y - 16;
+            d = u - 128;
+            e = v - 128;
+            r = (298 * c + 409 * e + 128) >> 8;
+            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            b = (298 * c + 516 * d + 128) >> 8;
+            i = (row * w + col) * 4;
+            bgra[i] = b < 0 ? 0 : (b > 255 ? 255 : b);
+            bgra[i + 1] = g < 0 ? 0 : (g > 255 ? 255 : g);
+            bgra[i + 2] = r < 0 ? 0 : (r > 255 ? 255 : r);
+            bgra[i + 3] = 255;
+        }
+    }
+    return bgra;
+}
+
+function bgraFromI420(i420, sw, sh, dw, dh) {
+    var scaled = scaleI420(i420, sw, sh, dw, dh);
+    var packed = Buffer.alloc(dw * dh + (dw * dh) / 2);
+    scaled.y.copy(packed, 0);
+    scaled.u.copy(packed, dw * dh);
+    scaled.v.copy(packed, dw * dh + (dw * dh) / 4);
+    return { w: dw, h: dh, bgra: i420ToBgra(packed, dw, dh) };
+}
+
+function placeBgra(src, sw, sh, dw, dh, box) {
+    var canvas = Buffer.alloc(dw * dh * 4);
+    var x0 = box && box.x ? box.x : 0;
+    var y0 = box && box.y ? box.y : 0;
+    var row;
+    var copyW;
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (y0 < 0) {
+        y0 = 0;
+    }
+    copyW = Math.min(sw, dw - x0) * 4;
+    if (copyW < 4) {
+        return { w: dw, h: dh, bgra: canvas };
+    }
+    for (row = 0; row < sh && (y0 + row) < dh; row += 1) {
+        src.copy(
+            canvas,
+            ((y0 + row) * dw + x0) * 4,
+            row * sw * 4,
+            row * sw * 4 + copyW
+        );
+    }
+    return { w: dw, h: dh, bgra: canvas };
+}
+
+var YR = new Int16Array(256);
+var RV = new Int16Array(256);
+var GU = new Int16Array(256);
+var GV = new Int16Array(256);
+var BU = new Int16Array(256);
+var CLAMP_OFF = 1024;
+var CLAMP = new Uint8Array(3072);
+var lutI;
+var lutV;
+for (lutI = 0; lutI < 256; lutI += 1) {
+    lutV = lutI - 128;
+    YR[lutI] = 298 * (lutI - 16);
+    RV[lutI] = 409 * lutV;
+    GU[lutI] = -100 * lutV;
+    GV[lutI] = -208 * lutV;
+    BU[lutI] = 516 * lutV;
+}
+for (lutI = 0; lutI < 3072; lutI += 1) {
+    lutV = lutI - CLAMP_OFF;
+    if (lutV < 0) {
+        lutV = 0;
+    } else if (lutV > 255) {
+        lutV = 255;
+    }
+    CLAMP[lutI] = lutV;
+}
+
+function yuvSat(sum) {
+    return CLAMP[(sum >> 8) + CLAMP_OFF];
+}
+
+function i420IntoRgbaContain(i420, sw, sh, dst, dw, dh) {
+    var scale = Math.min(dw / sw, dh / sh);
+    var tw = Math.round(sw * scale);
+    var th = Math.round(sh * scale);
+    var x0;
+    var y0;
+    var ySize = sw * sh;
+    var uvW = sw >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * (sh >> 1);
+    var row;
+    var col;
+    var sy;
+    var sx;
+    var yy;
+    var u;
+    var v;
+    var o;
+    tw -= tw % 2;
+    th -= th % 2;
+    if (tw < 2) {
+        tw = 2;
+    }
+    if (th < 2) {
+        th = 2;
+    }
+    if (tw > dw) {
+        tw = dw - (dw % 2);
+    }
+    if (th > dh) {
+        th = dh - (dh % 2);
+    }
+    x0 = Math.floor((dw - tw) / 2);
+    y0 = Math.floor((dh - th) / 2);
+    dst.fill(0);
+    for (row = 0; row < th; row += 1) {
+        sy = (row * sh / th) | 0;
+        if (sy >= sh) {
+            sy = sh - 1;
+        }
+        for (col = 0; col < tw; col += 1) {
+            sx = (col * sw / tw) | 0;
+            if (sx >= sw) {
+                sx = sw - 1;
+            }
+            yy = i420[sy * sw + sx];
+            u = i420[uOff + (sy >> 1) * uvW + (sx >> 1)];
+            v = i420[vOff + (sy >> 1) * uvW + (sx >> 1)];
+            o = ((y0 + row) * dw + (x0 + col)) << 2;
+            dst[o] = yuvSat(YR[yy] + RV[v] + 128);
+            dst[o + 1] = yuvSat(YR[yy] + GU[u] + GV[v] + 128);
+            dst[o + 2] = yuvSat(YR[yy] + BU[u] + 128);
+            dst[o + 3] = 255;
+        }
+    }
+}
+
+function i420IntoRgba(i420, sw, sh, dst, dw, dh) {
+    var ySize = sw * sh;
+    var uvW = sw >> 1;
+    var uOff = ySize;
+    var vOff = ySize + uvW * (sh >> 1);
+    var row;
+    var col;
+    var sy;
+    var sx;
+    var yy;
+    var u;
+    var v;
+    var c;
+    var d;
+    var e;
+    var r;
+    var g;
+    var b;
+    var o;
+    for (row = 0; row < dh; row += 1) {
+        sy = (row * sh / dh) | 0;
+        if (sy >= sh) {
+            sy = sh - 1;
+        }
+        for (col = 0; col < dw; col += 1) {
+            sx = (col * sw / dw) | 0;
+            if (sx >= sw) {
+                sx = sw - 1;
+            }
+            yy = i420[sy * sw + sx];
+            u = i420[uOff + (sy >> 1) * uvW + (sx >> 1)];
+            v = i420[vOff + (sy >> 1) * uvW + (sx >> 1)];
+            c = yy - 16;
+            d = u - 128;
+            e = v - 128;
+            r = (298 * c + 409 * e + 128) >> 8;
+            g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+            b = (298 * c + 516 * d + 128) >> 8;
+            if (r < 0) {
+                r = 0;
+            } else if (r > 255) {
+                r = 255;
+            }
+            if (g < 0) {
+                g = 0;
+            } else if (g > 255) {
+                g = 255;
+            }
+            if (b < 0) {
+                b = 0;
+            } else if (b > 255) {
+                b = 255;
+            }
+            o = (row * dw + col) << 2;
+            dst[o] = r;
+            dst[o + 1] = g;
+            dst[o + 2] = b;
+            dst[o + 3] = 255;
+        }
+    }
+}
+
 module.exports = {
     parseI420: parseI420,
     scaleI420: scaleI420,
     toAtlas: toAtlas,
     atlasFromI420: atlasFromI420,
+    i420ToAtlas: i420ToAtlas,
+    i420IntoAtlas: i420IntoAtlas,
+    i420ToBgra: i420ToBgra,
+    bgraFromI420: bgraFromI420,
+    placeBgra: placeBgra,
+    i420IntoRgba: i420IntoRgba,
+    i420IntoRgbaContain: i420IntoRgbaContain,
 };

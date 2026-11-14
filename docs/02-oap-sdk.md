@@ -21,7 +21,7 @@ Przykładowy dawca z firmware, podany w `extract_sdk.js`:
 
 Store nie wymaga SDK w repozytorium. Gdy JavaScript woła `require('oap-sdk')` i paczka tego modułu nie wiezie, jednostka generuje go z dawcy: najpierw paczki fabryczne, potem aplikacje BMW, nigdy paczka zainstalowana przez Store. Dla pakietu źródłowego dawcą jest `MGU_SDK_DONOR`. Źródło: `mgu-store` `docs/PUBLISHING.md`, „Rules for every layout” i „Build scripts”.
 
-Budowa na jednostce dla skryptu: Node 8.16.2 albo Python 3.12 (`mgu-python`), bez sieci, limit 10 minut i 200 MB, katalog roboczy jest kopią repozytorium. Pakiet źródłowy `"build": "unit"` nie uruchamia skryptu: jednostka linkuje moduły z `mgu-app.json` narzędziem `oap_link.js`.
+Budowa na jednostce dla skryptu: Node 8.16.2 albo Python 3.12 (`mgu-python`), bez sieci, limit 10 minut i 200 MB, katalog roboczy jest kopią repozytorium. Pakiet źródłowy `"build": "unit"` nie uruchamia skryptu: jednostka linkuje moduły z `mgu-app.json` narzędziem `oap_link.js`. Plik, którego nie ma na tej liście, nie jest modułem aplikacji. Store na tym G21 przerwał budowę AirPlay 0.1.12 właśnie tym komunikatem: `requires "./menu_draw.js": not an app module`.
 
 ## Zasada tego repozytorium
 

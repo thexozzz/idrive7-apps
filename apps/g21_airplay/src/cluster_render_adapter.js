@@ -5,12 +5,14 @@
  * Target names and frame layout are protocol version 1, idrive-apps
  * native/cluster-render/PROTOCOL.md at a559f69ebc8c.
  * On iDrive 7 the hello targets are map 1088x480, panel 1920x720, hud 800x480.
- * The instrument-cluster centre used by the map apps is the target "map".
- * HUD is the target "hud". They are not the same size.
+ * AirPlay on the cluster uses "map" (0x103, 1088x480), the nav pocket.
+ * "panel" (0x203, 1920x720) covers the gauges and hides factory BC.
+ * HUD is the target "hud" (0x323, 800x480).
  */
 
 var TARGETS = {
-    cluster: { protocol: 'map', w: 1088, h: 480 },
+    map: { protocol: 'map', w: 1088, h: 480 },
+    cluster: { protocol: 'panel', w: 1920, h: 720 },
     hud: { protocol: 'hud', w: 800, h: 480 },
 };
 
@@ -19,12 +21,21 @@ function yuvBytes(w, h) {
 }
 
 function createClusterRenderAdapter(client) {
-    var layer = 0;
-    var placed = null;
-    var frameId = 0;
+    var layers = {};
 
     function fail(reason) {
         return { ok: false, reason: reason };
+    }
+
+    function evenSize(value, fallback, limit) {
+        var n = value || fallback || limit;
+        if (n > limit) {
+            n = limit;
+        }
+        if (n < 2) {
+            n = 2;
+        }
+        return n - (n % 2);
     }
 
     return {
@@ -46,56 +57,101 @@ function createClusterRenderAdapter(client) {
         },
         createLayer: function (name, geometry) {
             var known = this.knownTarget(name);
+            var box;
+            var fw;
+            var fh;
+            var ref;
             if (!known.ok) {
                 return known;
             }
-            if (layer) {
-                this.destroyLayer();
+            if (layers[name]) {
+                this.destroyLayer(name);
             }
-            var box = geometry || {};
-            var ref = client.video({
+            box = geometry || {};
+            fw = evenSize(box.w, known.w, known.w);
+            fh = evenSize(box.h, known.h, known.h);
+            fw -= fw % 4;
+            if (fw < 16) {
+                fw = 16;
+            }
+            var vw = box.vw || fw;
+            var vh = box.vh || fh;
+            if (vw > 1920) {
+                vw = 1920;
+            }
+            if (vh > 720) {
+                vh = 720;
+            }
+            vw -= vw % 4;
+            vh -= vh % 2;
+            if (vw < 64) {
+                vw = 64;
+            }
+            if (vh < 32) {
+                vh = 32;
+            }
+            ref = client.video({
                 target: known.protocol,
-                vw: known.w,
-                vh: known.h,
+                vw: vw,
+                vh: vh,
                 fps: box.fps || 30,
                 x: box.x || 0,
                 y: box.y || 0,
-                w: box.w || known.w,
-                h: box.h || known.h,
+                w: fw,
+                h: fh,
                 rotate: box.rotate || 0,
-                klass: 'content',
+                klass: box.klass || 'content',
+                z: box.z || 0,
                 yield: 1,
                 exclusive: 0,
                 guide_hold: 0,
-                contend: 0,
+                contend: box.contend === undefined ? (known.protocol === 'panel' ? 1 : 0) : box.contend,
+                prewarm: 1,
+                level_bits: box.level_bits,
+                dirty_threshold: box.dirty_threshold,
+                pan_blocks: box.pan_blocks,
+                stall_ms: box.stall_ms,
             });
             if (!ref) {
                 return fail('layer-refused');
             }
-            layer = ref;
-            placed = { name: name, w: known.w, h: known.h };
-            frameId = 0;
-            return { ok: true, ref: ref, w: known.w, h: known.h };
+            layers[name] = { ref: ref, w: vw, h: vh, frameId: 0 };
+            return { ok: true, ref: ref, w: vw, h: vh, dw: fw, dh: fh };
         },
-        updateFrame: function (atlas) {
-            if (!layer || !placed) {
+        updateFrame: function (name, atlas) {
+            var slot;
+            var keys;
+            var need;
+            if (Buffer.isBuffer(name)) {
+                atlas = name;
+                name = null;
+            }
+            slot = name ? layers[name] : null;
+            if (!slot && !name) {
+                keys = Object.keys(layers);
+                if (keys.length === 1) {
+                    slot = layers[keys[0]];
+                }
+            }
+            if (!slot) {
                 return fail('no-layer');
             }
-            var need = yuvBytes(placed.w, placed.h);
+            need = yuvBytes(slot.w, slot.h);
             if (!atlas || atlas.length !== need) {
                 return fail('bad-frame');
             }
-            frameId += 1;
-            if (!client.frame(layer, atlas, frameId)) {
+            slot.frameId += 1;
+            if (!client.frame(slot.ref, atlas, slot.frameId)) {
                 return fail('frame-not-sent');
             }
-            return { ok: true, id: frameId };
+            return { ok: true, id: slot.frameId };
         },
-        place: function (geometry) {
-            if (!layer) {
+        place: function (name, geometry) {
+            var slot = layers[name];
+            if (!slot) {
                 return fail('no-layer');
             }
-            client.set(layer, {
+            client.set(slot.ref, {
                 x: geometry.x,
                 y: geometry.y,
                 w: geometry.w,
@@ -105,13 +161,21 @@ function createClusterRenderAdapter(client) {
             });
             return { ok: true };
         },
-        destroyLayer: function () {
-            if (!layer) {
+        destroyLayer: function (name) {
+            var slot;
+            if (!name) {
+                Object.keys(layers).forEach(function (key) {
+                    client.drop(layers[key].ref);
+                });
+                layers = {};
                 return { ok: true };
             }
-            client.drop(layer);
-            layer = 0;
-            placed = null;
+            slot = layers[name];
+            if (!slot) {
+                return { ok: true };
+            }
+            client.drop(slot.ref);
+            delete layers[name];
             return { ok: true };
         },
         stop: function () {
