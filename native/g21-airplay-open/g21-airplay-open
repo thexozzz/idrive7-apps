@@ -121,15 +121,38 @@ clear_table() {
 }
 
 # Path-qualified stops only — never killall / bare pkill names.
+# This MGU's BusyBox has no pgrep/pkill (0.1.50 car logs: "pgrep: not found"), so every
+# lookup reads /proc/*/cmdline. $1 is a shell glob matched against the whole command line
+# (NUL bytes as spaces). Our own shell is never listed.
+procs_matching() {
+    for f in /proc/[0-9]*/cmdline; do
+        p=${f#/proc/}
+        p=${p%/cmdline}
+        [ "$p" = "$$" ] && continue
+        c=$(tr '\000' ' ' < "$f" 2>/dev/null) || continue
+        case "$c" in
+            $1) printf '%s\n' "$p" ;;
+        esac
+    done
+}
+
+# Signal (default TERM) every process procs_matching finds.
+kill_matching() {
+    sig=${2:-TERM}
+    for p in $(procs_matching "$1"); do
+        kill "-$sig" "$p" 2>/dev/null || true
+    done
+}
+
 our_uxplay_pids() {
-    pgrep -f '/var/opt/g21-airplay-open/.*/uxplay.bin' 2>/dev/null || true
+    procs_matching '*/var/opt/g21-airplay-open/*/uxplay.bin*'
 }
 
 our_avahi_pids() {
     # run-elf keeps the path in argv; after ready, avahi rewrites cmdline to
     # "avahi-daemon: running […]". Match both, then confirm our private libs.
-    pids=$(pgrep -f '/var/opt/g21-airplay-open/.*/avahi-daemon' 2>/dev/null || true)
-    pids="$pids $(pgrep -f 'avahi-daemon: running' 2>/dev/null || true)"
+    pids=$(procs_matching '*/var/opt/g21-airplay-open/*/avahi-daemon*')
+    pids="$pids $(procs_matching '*avahi-daemon: running*')"
     for p in $pids; do
         [ -r "/proc/$p/maps" ] || continue
         if grep -q '/var/opt/g21-airplay-open/.*/libavahi' "/proc/$p/maps" 2>/dev/null; then
@@ -229,8 +252,12 @@ watch_ux_pin() {
 # to the centre profile (airplay-size), as ytdec does for YouTube: no frame passes
 # through the app's Node for the centre screen. Only with the picture (not AirPlay Sound).
 RINGSTATUS=/run/g21-airplay/ring
+# This MGU's BusyBox has no pgrep (seen 0.1.48/0.1.49: ring_pids found nothing and a new ring
+# started every second, hundreds of them). /proc is read directly; g21-yuvring also refuses to run
+# twice (a lock), so a second start ends at once.
+RINGPID=
 ring_pids() {
-    pgrep -f '/var/opt/g21-airplay-open/.*/g21-yuvring' 2>/dev/null || true
+    procs_matching '*/var/opt/g21-airplay-open/*/g21-yuvring *'
 }
 
 start_ring() {
@@ -242,14 +269,23 @@ start_ring() {
     if [ ! -x "$rbin" ]; then
         return 0
     fi
+    if [ -n "$RINGPID" ] && kill -0 "$RINGPID" 2>/dev/null; then
+        return 0
+    fi
     for p in $(ring_pids); do
+        RINGPID=$p
         return 0
     done
     # kombi-size (the app: KOMBI profile or "off") -> kombi.yuv for the cluster/HUD, <= 24 fps
     "$rbin" /run/g21-airplay/latest.yuv /dev/shm/mgu-video-g21airplay "$RINGSTATUS" "$SESSION_DIR/airplay-size" "$SESSION_DIR/kombi-size" /run/g21-airplay/kombi.yuv >>/var/log/g21-yuvring.log 2>&1 &
+    RINGPID=$!
 }
 
 stop_ring() {
+    if [ -n "$RINGPID" ]; then
+        kill "$RINGPID" 2>/dev/null || true
+        RINGPID=
+    fi
     for p in $(ring_pids); do
         kill "$p" 2>/dev/null || true
     done
@@ -260,8 +296,25 @@ stop_ring() {
     fi
 }
 
+# AirPlay sound route (g21-audio-route.js, /usr/bin/node as root like jap-ridetube-d).
+AUDIOLOG=/var/log/g21-audio-route.log
+audio_route_connect() {
+    js=$(tool_dir)/g21-audio-route.js
+    [ -f "$js" ] && [ -x /usr/bin/node ] || return 0
+    mkdir -p /run/g21-airplay
+    /usr/bin/node "$js" connect 2>>"$AUDIOLOG" | tail -n 1
+}
+
+audio_route_disconnect() {
+    [ -f /run/g21-airplay/audio-route ] || return 0
+    js=$(tool_dir)/g21-audio-route.js
+    [ -f "$js" ] && [ -x /usr/bin/node ] || return 0
+    /usr/bin/node "$js" disconnect 2>>"$AUDIOLOG" || true
+}
+
 stop_ux() {
     stop_ring
+    audio_route_disconnect
     clear_pin
     if [ -n "$UXPID" ]; then
         kill "$UXPID" 2>/dev/null || true
@@ -544,7 +597,7 @@ wait_pid_gone() {
 # True when nothing is bound to frame.sock (stale file alone is OK after unlink).
 frame_sock_free() {
     # If a live g21-present still holds the bind, bridge gets EADDRINUSE.
-    if pgrep -f '/g21-present' >/dev/null 2>&1; then
+    if [ -n "$(procs_matching '*/g21-present*')" ]; then
         return 1
     fi
     return 0
@@ -871,14 +924,14 @@ stop_present() {
     stop_pid "$PREPID"
     wait_pid_gone "$PREPID"
     PREPID=
-    pkill -f '/g21-present' 2>/dev/null || true
+    kill_matching '*/g21-present*'
     n=0
-    while [ "$n" -lt 20 ] && pgrep -f '/g21-present' >/dev/null 2>&1; do
+    while [ "$n" -lt 20 ] && [ -n "$(procs_matching '*/g21-present*')" ]; do
         sleep 0.1
         n=$((n + 1))
     done
-    if pgrep -f '/g21-present' >/dev/null 2>&1; then
-        pkill -9 -f '/g21-present' 2>/dev/null || true
+    if [ -n "$(procs_matching '*/g21-present*')" ]; then
+        kill_matching '*/g21-present*' KILL
         sleep 0.2
     fi
     # Free the bind so app frame_bridge can listen for cluster/HUD.
@@ -889,13 +942,13 @@ stop_rdp() {
     stop_pid "$RDPID"
     wait_pid_gone "$RDPID"
     RDPID=
-    pkill -f '/g21-rdp' 2>/dev/null || true
+    kill_matching '*/g21-rdp*'
 }
 
 stop_mice() {
     stop_pid "$MICEPID"
     MICEPID=
-    pkill -f '/g21-mice' 2>/dev/null || true
+    kill_matching '*/g21-mice*'
 }
 
 ensure_avahi_services_dir() {
@@ -1142,11 +1195,17 @@ start_ux() {
     # -p 7400 avoids CarPlay TCP 7000 / airplay-rx 7101 (errno 98 on this unit).
     # With -p 7400 the RAOP/AirPlay httpd listens on TCP 7401 (see ux_port_listening).
     # Cabin speakers are not card 0. That card is only Bluetooth handsfree.
-    # Front media is the SmartX ALSA plugin (aplay -Dsmartx:NAME). CarPlayMain
-    # is the 48 kHz stereo source the audio manager already routes.
+    # Front media is the SmartX ALSA plugin (aplay -Dsmartx:NAME).
     # A sink with no device opens "default", which this unit does not have,
     # and that GStreamer error stops the whole AirPlay server.
-    audio_sink='alsasink device=smartx:CarPlayMain'
+    # Car 2026-11-14: smartx:CarPlayMain is held by BMW's carplay daemon ("Could not open
+    # audio device"), and a SmartX device is only heard while the audio manager connects its
+    # source to a sink. g21-audio-route.js makes that connection (as RideTube does) and names a
+    # free device; without one, CarPlayMain as before.
+    audio_dev=$(audio_route_connect)
+    [ -n "$audio_dev" ] || audio_dev=CarPlayMain
+    audio_sink="alsasink device=smartx:$audio_dev"
+    printf '%s\n' "$audio_dev" > /run/g21-airplay/audio-device 2>/dev/null || true
     export ALSA_PLUGIN_DIR="${ALSA_PLUGIN_DIR:-/usr/lib/alsa-lib}"
     # Auth: menu writes /run/g21-session/airplay-auth (pin|open).
     # -pin NNNN = PAIR-PIN-START on iPhone. open = jak kkds, bez kodu.
@@ -1189,6 +1248,11 @@ start_ux() {
     {
         printf '%s\n' '#!/bin/sh'
         printf '%s\n' 'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"'
+        # The car's own libasound (2023): the SmartX plugin and /usr/share/alsa are built for it.
+        # The bundled one (Ubuntu 18.04) is only a fallback for hosts without it.
+        if [ -f /usr/lib/libasound.so.2 ]; then
+            printf '%s\n' 'export LD_PRELOAD=/usr/lib/libasound.so.2${LD_PRELOAD:+:$LD_PRELOAD}'
+        fi
         printf '%s\n' 'bin="$1"; shift'
         printf '%s\n' 'if command -v stdbuf >/dev/null 2>&1; then'
         printf '%s\n' '  exec stdbuf -oL -eL "$bin" "$@"'

@@ -1,7 +1,7 @@
 {
   "id": "g21-airplay-open",
   "kind": "tool",
-  "version": "0.1.49",
+  "version": "0.1.51",
   "title": "THEiPlay",
   "description": "Backend AirPlay (UxPlay+avahi) dla THEiPlay — lustro iPhone na MGU.",
   "uninstallable": true,
@@ -24,6 +24,10 @@
     {
       "path": "g21-yuvring",
       "mode": "0755"
+    },
+    {
+      "path": "g21-audio-route.js",
+      "mode": "0644"
     },
     {
       "path": "g21-bind-wlan.so",

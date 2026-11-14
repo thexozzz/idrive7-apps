@@ -18,6 +18,7 @@ var tools = [
     path.join(__dirname, 'test_ridetube_host.js'),
     path.join(__dirname, 'test_airplay_turn.js'),
     path.join(__dirname, 'test_airplay_ring.js'),
+    path.join(__dirname, 'test_airplay_audio.js'),
     path.join(__dirname, 'test_vnc.js'),
     path.join(__dirname, 'test_socks5.js'),
     path.join(__dirname, 'test_session.js'),

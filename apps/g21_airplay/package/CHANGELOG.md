@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.1.132
+
+- Dźwięk AirPlay (narzędzie 0.1.51). Log z auta: iPhone wysyła dźwięk (AAC-ELD), ale UxPlay nie mógł otworzyć urządzenia smartx:CarPlayMain ("Could not open audio device"): trzyma je fabryczny demon CarPlay. Do tego samo urządzenie SmartX gra dopiero, gdy menedżer audio połączy jego źródło z głośnikami. Nowy g21-audio-route.js robi to tak jak RideTube (CommandControl.connect, przy końcu disconnect): wolne źródło CarLifeMedia (287), potem AndroidAutoMedia (273), do wyjścia 1024. Log: /var/log/g21-audio-route.log.
+- UxPlay używa systemowej libasound auta (/usr/lib/libasound.so.2), dla której zbudowano wtyczkę SmartX, a nie dołączonej z Ubuntu 18.04.
+- Narzędzie nie używa już pgrep/pkill (ten BusyBox ich nie ma): UxPlay, avahi, g21-present, g21-rdp i g21-mice są szukane i zatrzymywane przez /proc. Wcześniej stare procesy zostawały i obciążały system.
+
+## 0.1.131
+
+- Naprawa migania wszystkich ekranów przy AirPlay (narzędzie 0.1.50). Na aucie widać było setki procesów g21-yuvring: ten BusyBox nie ma pgrep, więc narzędzie nie widziało już działającego i co sekundę uruchamiało nowy. Każdy nowy podmieniał plik obrazu (miganie) i dokładał pracę procesorowi (obciążenie ~48). Teraz narzędzie pamięta PID i szuka po /proc, a g21-yuvring nie uruchomi się drugi raz (blokada pliku).
+
 ## 0.1.130
 
 - Zegary i HUD przy AirPlay: najwyżej 24 klatki na sekundę. Klatkę w rozmiarze profilu Zegary i HUD robi g21-yuvring (narzędzie 0.1.49) prosto z dekodera, raz na klatkę; aplikacja czyta już tylko tę małą klatkę (np. 240x108 zamiast 1080x498) i wysyła ją bez skalowania. Bez zegarów i HUD g21-yuvring tej klatki nie robi.

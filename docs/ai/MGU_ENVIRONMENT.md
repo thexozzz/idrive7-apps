@@ -64,7 +64,8 @@ Nie podajemy VIN, kluczy, haseł. Adres SSH i ścieżka klucza są w `scripts/de
 | `cluster-render` (Store, R. Nisipeanu) | VERIFIED (log `cluster-ready`, warstwy `shown`) | `dev-logs/…170432` |
 | `mgu-uplink` (Store) — Wi-Fi klient `wlan0`, tabela `inet mgu_uplink` | VERIFIED (status/lease json czytane przez narzędzie; nazwa tabeli) | `g21-airplay-open:find_uplink_wifi` |
 | `iteriodev-tailscale` (userspace, SOCKS5 127.0.0.2:1055) | VERIFIED wg kodu/komentarzy | `g21-airplay-open:ensure_tailscale_socks5` |
-| Audio: brak `default` ALSA; karta 0 = BT handsfree; media przez plugin `smartx:CarPlayMain` | ASSUMPTION (komentarz w kodzie, „Play AirPlay audio through SmartX”) | `g21-airplay-open:start_ux` |
+| Audio: brak `default` ALSA; karta 0 = BT handsfree; media przez plugin SmartX (`/run/smartx/smartx_NAME_CF_48_STEREO_p`, `.lock` = urządzenie zajęte). `smartx:CarPlayMain` trzyma fabryczny demon `carplay` (UxPlay: „Could not open audio device”) | VERIFIED 2026-11-14 (log UxPlay, `ls /run/smartx`) | `g21-airplay-open:start_ux` |
+| Menedżer audio: źródła w `/usr/share/audiomanager/DOMAIN_MGU.bin` (protobuf): CarPlayMedia 266, AndroidAutoMedia 273, CarLifeMedia 287, CarPlayMain 385, MediaSink_AudioOut_Front 386; RideTube: źródło 1046 → wyjście 1024 | VERIFIED (dekodowany plik); trasa 287/273→1024 NIESPRAWDZONA na aucie | `g21-audio-route.js` |
 
 ## Czego nie wiemy (do bezpiecznego odczytu, po zgodzie)
 

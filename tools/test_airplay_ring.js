@@ -22,6 +22,8 @@ assert.ok(fs.existsSync(path.join(tooldir, 'g21-yuvring.c')) && fs.existsSync(pa
 assert.ok(/stop_ux\(\) \{\n    stop_ring\n/.test(tool.replace(/\r\n/g, '\n')), 'ring stops with UxPlay');
 assert.strictEqual((tool.match(/start_ring\n\s*report "running\|\$label\|\$ip"/g) || []).length, 2, 'ring starts with UxPlay');
 assert.ok(tool.indexOf('if [ "$(airplay_mode_of)" = "audio" ]; then\n        stop_ring') !== -1, 'no ring for AirPlay Sound');
+assert.ok(!/pgrep[^\n]*g21-yuvring/.test(tool), 'no pgrep for the ring (this BusyBox has none: hundreds of rings)');
+assert.ok(tool.indexOf('RINGPID=$!') !== -1 && tool.indexOf('for f in /proc/[0-9]*/cmdline; do') !== -1, 'the ring is found by its PID and /proc');
 // the app leaves the centre screen to the ring
 assert.ok(main.indexOf("var RING_STATUS = process.env.G21_AIRPLAY_RING || '/run/g21-airplay/ring';") !== -1);
 assert.ok(/if \(selfRouter\._ringActive\) \{\s*return;\s*\}/.test(main), 'no Node copy of the frame while the ring runs');
@@ -51,6 +53,10 @@ if (bin) {
     fs.writeFileSync(ksize, 'off\n');
     var child = cp.spawn(bin, [inp, out, st, size, ksize, kout], { stdio: 'ignore' });
     sleep(300);
+    // a second one (the tool could not see the first) ends at once: one writer only
+    var second = cp.spawnSync(bin, [inp, out, st, size, ksize, kout], { timeout: 3000 });
+    assert.strictEqual(second.status, 0, 'a second ring ends at once (lock)');
+    assert.ok(String(second.stderr).indexOf('already running') !== -1);
     var put = function (w, h, y) { fs.writeFileSync(inp + '.tmp', frame(w, h, y)); fs.renameSync(inp + '.tmp', inp); sleep(40); };
     for (var i = 0; i < 20; i += 1) put(1080, 498, i);
     sleep(200);

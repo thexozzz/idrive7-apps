@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/inotify.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -288,6 +289,17 @@ int main(int argc, char **argv)
     if (argc > 5) kombi_size_path = argv[5];
     if (argc > 6) kombi_path = argv[6];
     signal(SIGTERM, on_term); signal(SIGINT, on_term); signal(SIGPIPE, SIG_IGN);
+    /* one at a time: a second start (the tool could not see the first one) ends at once */
+    {
+        char lockp[256];
+        int lk;
+        snprintf(lockp, sizeof lockp, "%s.lock", status_path);
+        lk = open(lockp, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+        if (lk >= 0 && flock(lk, LOCK_EX | LOCK_NB) != 0) {
+            fprintf(stderr, "g21-yuvring: already running (%s)\n", lockp);
+            return 0;
+        }
+    }
     slash = strrchr(in_path, '/');
     if (!slash) { snprintf(dir, sizeof dir, "."); snprintf(name, sizeof name, "%s", in_path); }
     else { snprintf(dir, sizeof dir, "%.*s", (int)(slash - in_path), in_path); snprintf(name, sizeof name, "%s", slash + 1); }

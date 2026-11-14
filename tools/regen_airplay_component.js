@@ -15,7 +15,8 @@ var skip = {
     'g21-present.c': true,
     'g21-rdp.c': true,
     'g21-mice.c': true,
-    'g21-yuvring.c': true
+    'g21-yuvring.c': true,
+    'g21-audio-route.js': true
 };
 var execNames = {
     'g21-airplay-open': true,
