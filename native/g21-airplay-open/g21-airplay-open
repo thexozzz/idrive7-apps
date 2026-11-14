@@ -947,11 +947,11 @@ start_mice() {
     fi
     clear_mice_offers
     publish_mice_service
-    : >>/var/log/g21-mice.log
+    : >>/tmp/g21-airplay-start.log
     if [ -x "$dir/run-elf" ]; then
-        "$dir/run-elf" "$bin" >>/var/log/g21-mice.log 2>&1 &
+        "$dir/run-elf" "$bin" >>/tmp/g21-airplay-start.log 2>&1 &
     else
-        "$bin" >>/var/log/g21-mice.log 2>&1 &
+        "$bin" >>/tmp/g21-airplay-start.log 2>&1 &
     fi
     MICEPID=$!
     sleep 1
@@ -1305,8 +1305,31 @@ keep_config_ports() {
     return 0
 }
 
+# jap-ridetube-d's ytdec writes the film's frames to /dev/shm/mgu-video-ridetube
+# owned by nobody, mode 0600 (open 0600 + fchown nobody + fchmod 0600 in ytdec).
+# The renderer runs as root and draws the centre picture from it; g21_airplay
+# runs as its own OAP uid and cannot open it, so a film never reached the
+# cluster or the HUD. Give that one regular file a read bit for others: owner
+# and contents stay as ytdec made them, nothing else in /dev/shm is touched.
+# A new film makes a new file; the 1 s loop opens it within a second.
+share_youtube_frames() {
+    f=/dev/shm/mgu-video-ridetube
+    if [ -L "$f" ] || [ ! -f "$f" ]; then
+        return 0
+    fi
+    case $(ls -l "$f" 2>/dev/null | cut -c1-10) in
+        -rw-------)
+            if chmod 0644 "$f" 2>/dev/null; then
+                echo "$(date +%T) share ridetube frames 0644" >>/tmp/g21-airplay-start.log
+            fi
+            ;;
+    esac
+    return 0
+}
+
 apply() {
     ensure_dirs
+    share_youtube_frames
     mode=$(mode_of)
     case $mode in
         airplay)

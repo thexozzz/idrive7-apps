@@ -213,6 +213,12 @@ function createDesktopSettings(stored) {
     // the KOMBI starts at its own default.
     var qualityCentral = qualityValue('central', data.qualityCentral);
     var qualityKombi = qualityValue('kombi', data.qualityKombi);
+    // YouTube screens (centre / cluster / HUD), kept across films and restarts.
+    var ytScreens = {
+        central: !(data.ytScreens && data.ytScreens.central === false),
+        cluster: !!(data.ytScreens && data.ytScreens.cluster === true),
+        hud: !!(data.ytScreens && data.ytScreens.hud === true)
+    };
     var airDisplay = data.airDisplay === 'cluster' || data.airDisplay === 'both' || data.airDisplay === 'off'
         ? data.airDisplay
         : 'central';
@@ -340,6 +346,15 @@ function createDesktopSettings(stored) {
                 qualityCentral = value;
             }
             return { ok: true, kind: kind, quality: value };
+        },
+        ytScreens: function () { return { central: ytScreens.central, cluster: ytScreens.cluster, hud: ytScreens.hud }; },
+        setYtScreens: function (next) {
+            ytScreens = {
+                central: !!(next && next.central),
+                cluster: !!(next && next.cluster),
+                hud: !!(next && next.hud)
+            };
+            return { ok: true };
         },
         airDisplay: function () { return airDisplay; },
         setAirDisplay: function (next) {
@@ -609,6 +624,7 @@ function createDesktopSettings(stored) {
                 airQuality: airQuality,
                 qualityCentral: qualityCentral,
                 qualityKombi: qualityKombi,
+                ytScreens: { central: ytScreens.central, cluster: ytScreens.cluster, hud: ytScreens.hud },
                 airDisplay: airDisplay,
                 uiLang: uiLang,
                 uiRender: uiRender,

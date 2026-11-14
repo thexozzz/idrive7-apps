@@ -55,6 +55,13 @@ assert.strictEqual(desk.createDesktopSettings({ qualityKombi: '9999x9', qualityC
 assert.strictEqual(desk.createDesktopSettings({ qualityKombi: '9999x9', qualityCentral: 'x' }).qualityCentral(), '600x400');
 assert.deepStrictEqual(desk.qualitySize('400x240'), { w: 400, h: 240 });
 
+// YouTube screens are a setting: saved, read back, default centre only.
+assert.deepStrictEqual(desk.createDesktopSettings({}).ytScreens(), { central: true, cluster: false, hud: false });
+var yt = desk.createDesktopSettings({});
+yt.setYtScreens({ central: false, cluster: true, hud: true });
+var ytBack = desk.createDesktopSettings(JSON.parse(JSON.stringify(yt.snapshot())));
+assert.deepStrictEqual(ytBack.ytScreens(), { central: false, cluster: true, hud: true }, 'YouTube screens survive a restart');
+
 // KOMBI frame sizes: aspect kept, legal, never the centre size, never enlarged.
 function legal(d, label) {
     assert.ok(d.w % 4 === 0 && d.h % 2 === 0, label + ' legal ' + d.w + 'x' + d.h);

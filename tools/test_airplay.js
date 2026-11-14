@@ -101,7 +101,13 @@ assert.ok(script.indexOf('socnet') === -1);
 assert.ok(script.indexOf('\r') === -1);
 
 var component = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'component.json'), 'utf8'));
-assert.strictEqual(component.version, '0.1.45');
+assert.strictEqual(component.version, '0.1.46');
+// YouTube frames for the cluster/HUD: the tool makes ytdec's 0600 file readable,
+// only that file, never through a link, every loop.
+assert.ok(script.indexOf('share_youtube_frames') !== -1);
+assert.ok(script.indexOf('chmod 0644 "$f"') !== -1);
+assert.ok(script.indexOf('[ -L "$f" ]') !== -1);
+assert.ok(/apply\(\) \{\n    ensure_dirs\n    share_youtube_frames/.test(script));
 assert.ok(script.indexOf('-s "$vsize"') !== -1);
 assert.ok(script.indexOf('vsize=600x400') !== -1);
 assert.ok(script.indexOf('1920x1080') === -1);

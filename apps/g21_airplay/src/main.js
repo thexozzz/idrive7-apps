@@ -417,9 +417,11 @@ function AirPlayApp() {
             return self._adjustMenu(name, delta);
         },
     });
-    this._ytCentral = true;
-    this._ytCluster = false;
-    this._ytHud = false;
+    // YouTube screens come back as they were left (saved in the settings).
+    var ytScreens = this._desk.ytScreens ? this._desk.ytScreens() : { central: true, cluster: false, hud: false };
+    this._ytCentral = ytScreens.central !== false;
+    this._ytCluster = !!ytScreens.cluster;
+    this._ytHud = !!ytScreens.hud;
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
     this._bindYoutube();
@@ -1762,17 +1764,10 @@ AirPlayApp.prototype._stopYoutube = function () {
         this._ytModel.setWantVideo(false);
         this._ytModel.stop();
     }
-    this._ytCentral = false;
-    this._ytCluster = false;
-    this._ytHud = false;
-    this._ytGaugeFrame = null;
+    // The chosen screens stay for the next film (they are a setting, not
+    // part of one film); only this film's pictures leave the cluster and HUD.
     this._ytGaugeOuts = '';
-    if (!this._settings || this._settings.outputs().indexOf('cluster') === -1) {
-        this._dropMirrorFace('cluster');
-    }
-    if (!this._settings || this._settings.outputs().indexOf('hud') === -1) {
-        this._dropMirrorFace('hud');
-    }
+    this._dropYoutubeFaces();
     this._paintYoutube();
 };
 
@@ -2458,6 +2453,17 @@ AirPlayApp.prototype._takeYoutube = function () {
     }
     this._ytPolledAt = now;
     frame = this._ytFile.pull();
+    if (frame === null && gauges && this._ytFile.lastError) {
+        // Logged once per change: EACCES means the film is there but this
+        // app's uid cannot read it (the tool makes it readable, 0.1.46+).
+        var readErr = this._ytFile.lastError();
+        if (readErr !== (this._ytReadErr || '')) {
+            this._ytReadErr = readErr;
+            if (readErr && readErr !== 'ENOENT') {
+                noteStart('yt-frames ' + readErr + ' ' + this._ytFile.path);
+            }
+        }
+    }
     if (frame === null) {
         if (this._ytLive) {
             this._ytLive = false;
@@ -2473,6 +2479,10 @@ AirPlayApp.prototype._takeYoutube = function () {
             this._paintYoutube();
         }
         this._ytFrame = frame;
+        if (this._ytReadErr) {
+            this._ytReadErr = '';
+            noteStart('yt-frames ok ' + frame.w + 'x' + frame.h);
+        }
     }
     outs = [];
     if (this._ytCluster) {
@@ -2841,6 +2851,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         }
         if (ytOn) {
             this._useYoutube();
+        }
+        if (this._desk.setYtScreens) {
+            this._desk.setYtScreens({ central: this._ytCentral !== false, cluster: !!this._ytCluster, hud: !!this._ytHud });
+            this._saveDesk();
         }
         this._ytGaugeOuts = '';
         if (!this._ytCluster && this._settings.outputs().indexOf('cluster') === -1) {

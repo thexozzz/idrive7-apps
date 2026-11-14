@@ -18,8 +18,9 @@ assert.strictEqual(menu.ROOT_ITEMS[1].hint, '');
 assert.strictEqual(menu.ROOT_ITEMS[2].name, 'label-toggle');
 assert.strictEqual(menu.ROOT_ITEMS[3].name, 'lang-toggle');
 assert.strictEqual(menu.ROOT_ITEMS[4].name, 'settings');
-assert.strictEqual(menu.SCREENS.youtube[0].name, 'yt-search');
-assert.strictEqual(menu.SCREENS.youtube[2].name, 'yt-where');
+assert.strictEqual(menu.SCREENS.youtube[0].name, 'yt-where');
+assert.strictEqual(menu.SCREENS.youtube[1].name, 'yt-login');
+assert.strictEqual(menu.SCREENS.youtube[2].name, 'yt-browse');
 assert.strictEqual(menu.SCREENS.settings[0].name, 'set-render');
 assert.strictEqual(menu.SCREENS.settings[0].hint, 'GPU');
 assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
@@ -82,6 +83,38 @@ assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
 assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.SCREENS['air-out']);
 assert.strictEqual(menu.positionOptions().filter(function (item) { return item.adjust; }).map(function (item) { return item.name; }).join(','), 'pos-x,pos-y,pos-size');
+assert.strictEqual(menu.positionOptions()[2].title, 'Rozciągnięcie');
+assert.ok(!menu.positionOptions().some(function (item) { return item.name.indexOf('res') === 0 || /rozdzielczo/i.test(item.title); }));
+assert.strictEqual(menu.positionPage('shared').filter(function (item) { return item.on; }).map(function (item) { return item.name; }).join(','), 'pos-shared');
+assert.strictEqual(menu.positionPage('each', 'hud').filter(function (item) { return item.on; }).map(function (item) { return item.name; }).join(','), 'pos-each,pos-out-hud');
+assert.ok(menu.positionPage('shared').some(function (item) { return item.name === 'pos-size'; }));
+assert.ok(!menu.positionPage('shared').some(function (item) { return item.name === 'pos-out-central'; }));
+assert.ok(menu.positionPage('each', 'central').some(function (item) { return item.name === 'pos-out-central' && item.on; }));
+assert.strictEqual(menu.SCREENS['pos-out'][0].name, 'pos-shared');
+assert.strictEqual(menu.SCREENS['pos-out'][0].on, true);
+assert.strictEqual(menu.SCREENS['pos-out'][1].on, false);
+var pinned = menu.buildFrame(menu.positionPage('each', 'hud'), menu.positionPage('each', 'hud').length - 1, 1920, 720, '', 'Pozycja');
+assert.strictEqual(pinned.layout.bubbles[0].index, 0);
+assert.strictEqual(pinned.layout.bubbles[1].index, 1);
+assert.ok(pinned.layout.bubbles[pinned.layout.bubbles.length - 1].index > 1);
+var sharedPreview = menu.buildFrame(menu.positionOptions(), 2, 1920, 720, '', 'Wspólne', '', null, {
+    frames: [
+        { label: 'Środek', limitW: 1920, limitH: 720, x: 200, y: 80, w: 600, h: 400, focus: false },
+        { label: 'Zegary', limitW: 1088, limitH: 480, x: 80, y: 40, w: 320, h: 200, focus: false },
+        { label: 'HUD', limitW: 800, limitH: 480, x: 40, y: 30, w: 240, h: 160, focus: false }
+    ]
+});
+assert.ok(sharedPreview.layout.nav.ok.y < sharedPreview.layout.oy + sharedPreview.layout.headerH + 40);
+assert.ok(sharedPreview.layout.nav.ok.y + sharedPreview.layout.nav.ok.h < sharedPreview.layout.oy + sharedPreview.layout.boxH / 2);
+assert.ok(sharedPreview.layout.nav.left.x >= sharedPreview.layout.bubbles[0].x + sharedPreview.layout.bubbles[0].w);
+var onePreview = menu.buildFrame(menu.positionOptions(), 0, 1920, 720, '', 'HUD', '', null, {
+    frames: [
+        { label: 'HUD', limitW: 800, limitH: 480, x: 40, y: 30, w: 240, h: 160, focus: true }
+    ]
+});
+assert.strictEqual(onePreview.layout.nav.ok.y, sharedPreview.layout.nav.ok.y);
+var plainNav = menu.buildFrame(menu.SCREENS['pos-each'], 0, 1920, 720, '', 'Pozycja');
+assert.ok(plainNav.layout.nav.ok.y > plainNav.layout.oy + plainNav.layout.boxH - 120);
 assert.strictEqual(menu.SCREENS['air-box'][0].name, 'air-box-power');
 assert.ok(!menu.screenOptions('central').some(function (item) { return item.name === 'air-box-x'; }));
 assert.strictEqual(menu.SCREENS.label.filter(function (item) { return item.name === 'label-font' || item.name === 'label-size' || item.name === 'label-color'; }).length, 3);

@@ -13,6 +13,7 @@ var MAGIC = 0x4656474d;
 
 function createYoutubeFile() {
     var seq = -1;
+    var lastError = '';
 
     function pull() {
         var fd = -1;
@@ -28,8 +29,12 @@ function createYoutubeFile() {
             fd = fs.openSync(PATH, 'r');
         } catch (err) {
             seq = -1;
+            // ENOENT: no film. EACCES: the file is there but not readable for
+            // this app's uid (ytdec makes it 0600 for nobody).
+            lastError = (err && err.code) || 'open';
             return null;
         }
+        lastError = '';
         try {
             head = Buffer.alloc(64);
             if (fs.readSync(fd, head, 0, 64, 0) !== 64 || head.readUInt32LE(0) !== MAGIC) {
@@ -69,7 +74,7 @@ function createYoutubeFile() {
         }
     }
 
-    return { pull: pull, path: PATH };
+    return { pull: pull, path: PATH, lastError: function () { return lastError; } };
 }
 
 module.exports = {
