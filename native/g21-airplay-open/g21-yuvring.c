@@ -11,7 +11,11 @@
  * down under it; /run/g21-airplay/ring says "w h seq ino" for the app (it names the file to the
  * renderer again when ino changes).
  *
- * Usage: g21-yuvring [in] [out] [status] [size-file]
+ * The cluster/HUD frame too, when kombi-size says a size ("400x240", "off" = none): scaled once
+ * from the decoded frame to the KOMBI profile, at most 24 a second, to kombi.yuv (G21Y, rename),
+ * which the app sends to cluster-render without touching the pixels.
+ *
+ * Usage: g21-yuvring [in] [out] [status] [size-file] [kombi-size-file] [kombi-out]
  * No root actions beyond writing those files. Ends on SIGTERM.
  */
 #define _GNU_SOURCE
@@ -41,6 +45,9 @@ static const char *in_path = "/run/g21-airplay/latest.yuv";
 static const char *out_path = "/dev/shm/mgu-video-g21airplay";
 static const char *status_path = "/run/g21-airplay/ring";
 static const char *size_path = "/run/g21-session/airplay-size";
+static const char *kombi_size_path = "/run/g21-session/kombi-size";
+static const char *kombi_path = "/run/g21-airplay/kombi.yuv";
+#define KOMBI_GAP_NS 41000000LL     /* at most 24 cluster/HUD frames a second */
 
 static int out_fd = -1;
 static int out_w = 0, out_h = 0;
@@ -48,6 +55,22 @@ static uint32_t seq = 0, slot = 0;
 static ino_t out_ino = 0;
 
 static void put32(unsigned char *b, uint32_t v) { b[0] = v & 255; b[1] = (v >> 8) & 255; b[2] = (v >> 16) & 255; b[3] = (v >> 24) & 255; }
+
+/* "WxH" from file; 0 when absent, "off" or bad (for the KOMBI) */
+static int read_size(const char *file, int *pw, int *ph)
+{
+    char buf[64];
+    int fd = open(file, O_RDONLY), a, b;
+    ssize_t n;
+    if (fd < 0) return 0;
+    n = read(fd, buf, sizeof buf - 1);
+    close(fd);
+    if (n <= 0) return 0;
+    buf[n] = 0;
+    if (sscanf(buf, "%dx%d", &a, &b) != 2 || a < 64 || b < 32 || a > MAX_W || b > MAX_H) return 0;
+    *pw = a; *ph = b;
+    return 1;
+}
 
 static void profile(int *pw, int *ph)
 {
@@ -155,6 +178,46 @@ static int open_ring(int w, int h)
     return 0;
 }
 
+static unsigned char *kbuf = NULL;
+static size_t kcap = 0;
+static long long kombi_last = 0;
+
+static long long now_ns(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (long long)t.tv_sec * 1000000000LL + t.tv_nsec;
+}
+
+/* the cluster/HUD frame: KOMBI profile size, <= 24 a second, G21Y by rename */
+static void kombi_frame(const unsigned char *y, int sw, int sh)
+{
+    int pw, ph, dw, dh, fd;
+    size_t frame;
+    long long t = now_ns();
+    char tmp[256];
+    if (t - kombi_last < KOMBI_GAP_NS) return;
+    if (!read_size(kombi_size_path, &pw, &ph)) return;
+    kombi_last = t;
+    fit_dims(sw, sh, pw, ph, &dw, &dh);
+    frame = (size_t)dw * dh * 3 / 2;
+    if (kcap < 8 + frame) { free(kbuf); kcap = 8 + frame; kbuf = malloc(kcap); if (!kbuf) { kcap = 0; return; } }
+    memcpy(kbuf, "G21Y", 4);
+    kbuf[4] = dw & 255; kbuf[5] = (dw >> 8) & 255; kbuf[6] = dh & 255; kbuf[7] = (dh >> 8) & 255;
+    {
+        const unsigned char *u = y + (size_t)sw * sh, *v = u + (size_t)(sw / 2) * (sh / 2);
+        unsigned char *oy = kbuf + 8, *ou = oy + (size_t)dw * dh, *ov = ou + (size_t)(dw / 2) * (dh / 2);
+        scale_plane(y, sw, sh, oy, dw, dh);
+        scale_plane(u, sw / 2, sh / 2, ou, dw / 2, dh / 2);
+        scale_plane(v, sw / 2, sh / 2, ov, dw / 2, dh / 2);
+    }
+    snprintf(tmp, sizeof tmp, "%s.tmp", kombi_path);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return;
+    if (write_all(fd, kbuf, 8 + frame, 0) == 0) { fchmod(fd, 0644); close(fd); rename(tmp, kombi_path); }
+    else { close(fd); unlink(tmp); }
+}
+
 static unsigned char *inbuf = NULL, *outbuf = NULL;
 static size_t incap = 0, outcap = 0;
 
@@ -207,6 +270,7 @@ static int one_frame(void)
     seq++;
     put32(word, seq);
     write_all(out_fd, word, 4, 16);
+    kombi_frame(inbuf + 8, sw, sh);
     return 1;
 }
 
@@ -221,6 +285,8 @@ int main(int argc, char **argv)
     if (argc > 2) out_path = argv[2];
     if (argc > 3) status_path = argv[3];
     if (argc > 4) size_path = argv[4];
+    if (argc > 5) kombi_size_path = argv[5];
+    if (argc > 6) kombi_path = argv[6];
     signal(SIGTERM, on_term); signal(SIGINT, on_term); signal(SIGPIPE, SIG_IGN);
     slash = strrchr(in_path, '/');
     if (!slash) { snprintf(dir, sizeof dir, "."); snprintf(name, sizeof name, "%s", in_path); }
@@ -254,5 +320,6 @@ int main(int argc, char **argv)
     }
     if (out_fd >= 0) close(out_fd);
     unlink(status_path);
+    unlink(kombi_path);
     return 0;
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.130
+
+- Zegary i HUD przy AirPlay: najwyżej 24 klatki na sekundę. Klatkę w rozmiarze profilu Zegary i HUD robi g21-yuvring (narzędzie 0.1.49) prosto z dekodera, raz na klatkę; aplikacja czyta już tylko tę małą klatkę (np. 240x108 zamiast 1080x498) i wysyła ją bez skalowania. Bez zegarów i HUD g21-yuvring tej klatki nie robi.
+
 ## 0.1.129
 
 - AirPlay płynnie jak RideTube: nowy program g21-yuvring w narzędziu (0.1.48) wkłada każdą klatkę z AirPlay, zmniejszoną do profilu Ekran centralny, prosto do pliku, z którego rysuje ekran środkowy — tak jak dekoder YouTube. Na środek żadna klatka nie przechodzi już przez aplikację. Zegary i HUD dostają klatki jak dotąd.

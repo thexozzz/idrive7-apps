@@ -25,7 +25,8 @@ assert.ok(tool.indexOf('if [ "$(airplay_mode_of)" = "audio" ]; then\n        sto
 // the app leaves the centre screen to the ring
 assert.ok(main.indexOf("var RING_STATUS = process.env.G21_AIRPLAY_RING || '/run/g21-airplay/ring';") !== -1);
 assert.ok(/if \(selfRouter\._ringActive\) \{\s*return;\s*\}/.test(main), 'no Node copy of the frame while the ring runs');
-assert.ok(main.indexOf("only the cluster/HUD still need the frame here") !== -1);
+assert.ok(main.indexOf('src = KOMBI_YUV;') !== -1 && /var KOMBI_GAP_MS = 41;/.test(main), 'with the ring the app reads the small cluster/HUD frame, <= 24 a second');
+assert.ok(tool.indexOf('"$SESSION_DIR/kombi-size" /run/g21-airplay/kombi.yuv') !== -1, 'the tool hands the ring the KOMBI size');
 
 // the ring itself (Linux x86-64: the built binary; with gcc: built from the source again)
 function ringBinary() {
@@ -46,7 +47,9 @@ if (bin) {
     var d = fs.mkdtempSync(path.join(os.tmpdir(), 'ring-'));
     var inp = path.join(d, 'latest.yuv'), out = path.join(d, 'video'), st = path.join(d, 'ring'), size = path.join(d, 'size');
     fs.writeFileSync(size, '600x400\n');
-    var child = cp.spawn(bin, [inp, out, st, size], { stdio: 'ignore' });
+    var ksize = path.join(d, 'kombi-size'), kout = path.join(d, 'kombi.yuv');
+    fs.writeFileSync(ksize, 'off\n');
+    var child = cp.spawn(bin, [inp, out, st, size, ksize, kout], { stdio: 'ignore' });
     sleep(300);
     var put = function (w, h, y) { fs.writeFileSync(inp + '.tmp', frame(w, h, y)); fs.renameSync(inp + '.tmp', inp); sleep(40); };
     for (var i = 0; i < 20; i += 1) put(1080, 498, i);
@@ -66,6 +69,22 @@ if (bin) {
     var status = fs.readFileSync(st, 'utf8').trim().split(' ');
     assert.deepStrictEqual(status.slice(0, 2), ['276', '600']);
     assert.strictEqual(status[3], String(fs.statSync(out).ino), 'status names the file');
+    assert.ok(!fs.existsSync(kout), 'no cluster/HUD frame while kombi-size is off');
+    // the cluster/HUD frame: KOMBI profile size, at most 24 a second
+    fs.writeFileSync(ksize, '240x180\n');
+    var t0 = Date.now(), seen = {}, n = 0;
+    while (Date.now() - t0 < 1000) {
+        fs.writeFileSync(inp + '.tmp', frame(1080, 498, n & 255)); fs.renameSync(inp + '.tmp', inp); n += 1;
+        sleep(10);
+        try { seen[fs.statSync(kout).mtimeMs] = true; } catch (e) { /* not yet */ }
+    }
+    var kh = fs.readFileSync(kout);
+    assert.strictEqual(kh.toString('latin1', 0, 4), 'G21Y');
+    assert.deepStrictEqual([kh.readUInt16LE(4), kh.readUInt16LE(6)], [240, 108], 'KOMBI profile 240x180 -> 240x108');
+    assert.strictEqual(kh.length, 8 + 240 * 108 * 3 / 2);
+    var kfps = Object.keys(seen).length;
+    assert.ok(n > 40 && kfps <= 25 && kfps >= 10, 'cluster/HUD frames per second: ' + kfps + ' of ' + n + ' in');
+    fs.writeFileSync(ksize, 'off\n');
     fs.writeFileSync(size, '240x144\n');
     put(1080, 498, 1);
     sleep(150);
@@ -74,6 +93,7 @@ if (bin) {
     child.kill('SIGTERM');
     sleep(200);
     assert.ok(!fs.existsSync(st), 'status gone when it ends');
+    assert.ok(!fs.existsSync(kout), 'cluster/HUD frame gone when it ends');
     fs.rmSync(d, { recursive: true, force: true });
 }
 

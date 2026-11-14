@@ -401,7 +401,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.129',
+        version: (this._packageJson && this._packageJson.version) || '0.1.130',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -533,7 +533,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.129') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.130') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -4854,6 +4854,25 @@ AirPlayApp.prototype._ringState = function (now) {
     return this._ring;
 };
 
+// The cluster/HUD frame from the ring: the KOMBI profile ("400x240") while a
+// gauge screen shows AirPlay, "off" otherwise (the ring then spends nothing on it).
+var KOMBI_YUV = process.env.G21_AIRPLAY_KOMBI || '/run/g21-airplay/kombi.yuv';
+var KOMBI_GAP_MS = 41;
+AirPlayApp.prototype._writeKombiSize = function (on) {
+    var q = this._quality('kombi');
+    var text = on ? (q.w + 'x' + q.h) : 'off';
+    if (text === this._kombiSizeText) {
+        return;
+    }
+    try {
+        fs.writeFileSync(this._paths.kombiSize, text + '\n');
+        this._kombiSizeText = text;
+        noteStart('air-kombi ' + text);
+    } catch (err) {
+        noteStart('kombi-size ' + (err && err.message));
+    }
+};
+
 // The ring has the centre screen: stop writing the video file here, name the
 // file to the renderer again when the ring made a new one (a new size).
 AirPlayApp.prototype._useRing = function (ring) {
@@ -4891,24 +4910,31 @@ AirPlayApp.prototype._takeFrame = function () {
     if (this._frameBusy) {
         return;
     }
+    var src = '/run/g21-airplay/latest.yuv';
+    var gap = this._ingestGap || 16;
     ring = this._ringState(now);
+    picked = this._settings.outputs();
+    var gauges = picked.indexOf('cluster') !== -1 || picked.indexOf('hud') !== -1;
     if (ring) {
         this._useRing(ring);
-        picked = this._settings.outputs();
-        // only the cluster/HUD still need the frame here
-        if (picked.indexOf('cluster') === -1 && picked.indexOf('hud') === -1) {
+        // The ring also makes the cluster/HUD frame: already the KOMBI profile's
+        // size, at most 24 a second (kombi.yuv). This app only sends it on.
+        this._writeKombiSize(gauges);
+        if (!gauges) {
             return;
         }
+        src = KOMBI_YUV;
+        gap = KOMBI_GAP_MS;
     } else if (this._ringActive) {
         this._ringActive = false;
         this._ringIno = '';
         noteStart('air-ring off');
     }
-    if (this._ingestAt && (now - this._ingestAt) < (this._ingestGap || 16)) {
+    if (this._ingestAt && (now - this._ingestAt) < gap) {
         return;
     }
     try {
-        st = fs.statSync('/run/g21-airplay/latest.yuv');
+        st = fs.statSync(src);
     } catch (err) {
         return;
     }
@@ -4936,7 +4962,7 @@ AirPlayApp.prototype._takeFrame = function () {
     this._frameBusy = true;
     started = Date.now();
     try {
-        parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
+        parsed = videoDecoder.parseI420(fs.readFileSync(src));
     } catch (err) {
         parsed = null;
     }

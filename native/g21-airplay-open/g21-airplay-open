@@ -245,14 +245,15 @@ start_ring() {
     for p in $(ring_pids); do
         return 0
     done
-    "$rbin" /run/g21-airplay/latest.yuv /dev/shm/mgu-video-g21airplay "$RINGSTATUS" "$SESSION_DIR/airplay-size" >>/var/log/g21-yuvring.log 2>&1 &
+    # kombi-size (the app: KOMBI profile or "off") -> kombi.yuv for the cluster/HUD, <= 24 fps
+    "$rbin" /run/g21-airplay/latest.yuv /dev/shm/mgu-video-g21airplay "$RINGSTATUS" "$SESSION_DIR/airplay-size" "$SESSION_DIR/kombi-size" /run/g21-airplay/kombi.yuv >>/var/log/g21-yuvring.log 2>&1 &
 }
 
 stop_ring() {
     for p in $(ring_pids); do
         kill "$p" 2>/dev/null || true
     done
-    rm -f "$RINGSTATUS"
+    rm -f "$RINGSTATUS" /run/g21-airplay/kombi.yuv
     # the app writes this file itself without the ring (a root file in sticky /dev/shm would block it)
     if [ -f /dev/shm/mgu-video-g21airplay ] && [ "$(stat -c %u /dev/shm/mgu-video-g21airplay 2>/dev/null)" = "0" ]; then
         rm -f /dev/shm/mgu-video-g21airplay
