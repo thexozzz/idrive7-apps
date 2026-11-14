@@ -298,18 +298,34 @@ stop_ring() {
 
 # AirPlay sound route (g21-audio-route.js, /usr/bin/node as root like jap-ridetube-d).
 AUDIOLOG=/var/log/g21-audio-route.log
+# node in a clean environment, as jap-ridetube-d.service runs it. start_ux has by then exported
+# UxPlay's: LD_LIBRARY_PATH (the bundled Ubuntu 18.04 libstdc++/libssl/libz in front of the car's
+# own) and LD_PRELOAD=g21-bind-wlan.so with G21_BIND_IP (every socket pinned to the iPhone hotspot
+# address), so the SOME/IP connection to the audio manager could not work and the sound went to
+# the busy CarPlayMain: silence (0.1.132).
+audio_node() {
+    (
+        unset LD_LIBRARY_PATH LD_PRELOAD G21_BIND_IP G21_YUV GST_PLUGIN_PATH GST_PLUGIN_SYSTEM_PATH \
+            GST_PLUGIN_SYSTEM_PATH_1_0 GST_PLUGIN_SCANNER GST_REGISTRY ALSA_PLUGIN_DIR
+        exec /usr/bin/node "$@"
+    )
+}
+
 audio_route_connect() {
     js=$(tool_dir)/g21-audio-route.js
-    [ -f "$js" ] && [ -x /usr/bin/node ] || return 0
+    if [ ! -f "$js" ] || [ ! -x /usr/bin/node ]; then
+        printf '%s g21-audio-route: missing (%s or /usr/bin/node)\n' "$(date '+%F %T')" "$js" >>"$AUDIOLOG"
+        return 0
+    fi
     mkdir -p /run/g21-airplay
-    /usr/bin/node "$js" connect 2>>"$AUDIOLOG" | tail -n 1
+    audio_node "$js" connect 2>>"$AUDIOLOG" | tail -n 1
 }
 
 audio_route_disconnect() {
     [ -f /run/g21-airplay/audio-route ] || return 0
     js=$(tool_dir)/g21-audio-route.js
     [ -f "$js" ] && [ -x /usr/bin/node ] || return 0
-    /usr/bin/node "$js" disconnect 2>>"$AUDIOLOG" || true
+    audio_node "$js" disconnect 2>>"$AUDIOLOG" || true
 }
 
 stop_ux() {

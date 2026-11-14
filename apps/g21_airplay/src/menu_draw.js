@@ -1901,6 +1901,20 @@ function appendStreamChrome(draw, lay, page, info, win) {
     drawTunePanel(draw, hits, { x: page.ox + 20, y: barY - 276, w: 1120, h: 260 }, tune);
 }
 
+// "Wyłącz aplikację" on the Stream screen too (Miracast, RDP, VNC): the header's right side, left of
+// the version. A tap on it is the menu pages' exit button (nav.ok with exit).
+function drawStreamExit(draw, lay, page) {
+    var label = tr('Wyłącz aplikację');
+    var tw = draw.textWidth(label, 3);
+    var w = tw + 40;
+    var h = 48;
+    var x = page.ox + page.boxW - w - 190;
+    var y = page.oy + 8;
+    draw.pill(x, y, w, h, CARD_HI);
+    draw.text(label, x + 20, y + 15, 3, INK);
+    lay.nav = { left: null, right: null, ok: { x: x, y: y, w: w, h: h, exit: true } };
+}
+
 function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air) {
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
@@ -2030,6 +2044,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     titleW = draw.textWidth(title, 4);
     draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 18, 4, INK);
     appendStreamChrome(draw, lay, page, info, placedWin);
+    drawStreamExit(draw, lay, page);
     applyAirOverlay(draw, lay, air, version);
     if (caption && caption.on && caption.text) {
         draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
@@ -2634,8 +2649,12 @@ function createMenuSurface(opts) {
     // One frame in flight, like the other apps: the renderer sends TICK when the
     // screen has drawn it (up to 60 fps). A second frame waits. Sending faster
     // than that drops the client and the picture goes.
-    function flushFrame() {
+    var sentFrame = null;
+    function flushFrame(force) {
         if (!lastFrame || !sock || !shown) {
+            return;
+        }
+        if (!force && !frameQueued && sentFrame && sentFrame.equals(lastFrame)) {
             return;
         }
         if (frameHold) {
@@ -2651,12 +2670,13 @@ function createMenuSurface(opts) {
             frameHoldTimer = null;
             frameHold = false;
             if (frameQueued && shown && ready) {
-                flushFrame();
+                flushFrame(true);
             }
         }, 250);
         if (frameHoldTimer.unref) {
             frameHoldTimer.unref();
         }
+        sentFrame = lastFrame;
         write(lastFrame);
     }
 
@@ -2722,15 +2742,36 @@ function createMenuSurface(opts) {
         }
     }
 
+    // A new video file (the ring made one for a new size): name it to the renderer again.
+    // paint() decides whether video shows on this screen; the old code asked only
+    // streamInfo.video, so off the Stream screen a rebind left the centre black.
     function rebindVideo() {
         if (mirrorSent) {
             write(message(DROP_VIDEO, u32(1)));
             mirrorSent = false;
         }
-        sendMirror(!!(streamInfo && streamInfo.video));
+        paint();
+    }
+
+    // AirPlay menu (car 2026-11-14): its 1 s status loop sets ~12 hints/titles/states, and each
+    // used to build and send a whole menu frame, so the renderer redrew the layer over the video
+    // several times a second and the device stuttered. Setters now paint once per turn of the event
+    // loop, only when something changed, and an identical frame is not sent again (the 1 s pulse
+    // still re-sends it).
+    var paintPending = false;
+    function paintSoon() {
+        if (paintPending) {
+            return;
+        }
+        paintPending = true;
+        setImmediate(function () {
+            paintPending = false;
+            paint();
+        });
     }
 
     function paint() {
+        paintPending = false;
         if (!ready || !shown) {
             return;
         }
@@ -3054,9 +3095,12 @@ function createMenuSurface(opts) {
         var i;
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
+                if (items[i].hint === String(text || '')) {
+                    return true;
+                }
                 items[i].hint = String(text || '');
                 if (!edit && !quiet) {
-                    paint();
+                    paintSoon();
                 }
                 return true;
             }
@@ -3068,9 +3112,12 @@ function createMenuSurface(opts) {
         var i;
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
+                if (items[i].title === String(text || '')) {
+                    return true;
+                }
                 items[i].title = String(text || '');
                 if (!edit && !quiet) {
-                    paint();
+                    paintSoon();
                 }
                 return true;
             }
@@ -3082,9 +3129,12 @@ function createMenuSurface(opts) {
         var i;
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
+                if (items[i].icon === String(icon || 'play')) {
+                    return true;
+                }
                 items[i].icon = String(icon || 'play');
                 if (!edit) {
-                    paint();
+                    paintSoon();
                 }
                 return true;
             }
@@ -3846,6 +3896,7 @@ function createMenuSurface(opts) {
             ready = false;
             native = false;
             mirrorSent = false;
+            sentFrame = null;
             clearFrameHold();
             incoming = Buffer.alloc(0);
             write(message(HELLO, Buffer.concat([
@@ -3890,7 +3941,7 @@ function createMenuSurface(opts) {
             sendGrab(true);
             pulseBeat += 1;
             if (lastFrame && (pulseBeat % 2) === 0) {
-                flushFrame();
+                flushFrame(true);
             }
         }, 500);
         if (pulse.unref) {
@@ -3957,7 +4008,7 @@ function createMenuSurface(opts) {
             }
             detail = next;
             if (!edit) {
-                paint();
+                paintSoon();
             }
         },
         setCaption: function (info) {
@@ -4060,9 +4111,12 @@ function createMenuSurface(opts) {
                     } : null
                 } : null
             } : null;
+            if (streamInfo && next && JSON.stringify(streamInfo) === JSON.stringify(next)) {
+                return;
+            }
             streamInfo = next;
             if (!edit) {
-                paint();
+                paintSoon();
             }
         },
         setAirWindow: function (win) {
@@ -4155,7 +4209,7 @@ function createMenuSurface(opts) {
             airState = next;
             airKey = key;
             if (!edit) {
-                paint();
+                paintSoon();
             }
         },
         rebindVideo: rebindVideo,

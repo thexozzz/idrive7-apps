@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.133
+
+- Dźwięk AirPlay, ciąg dalszy (narzędzie 0.1.52). Skrypt połączenia dźwięku (g21-audio-route.js) startował w środowisku przygotowanym dla UxPlay: z dołączonymi bibliotekami Ubuntu 18.04 przed systemowymi (LD_LIBRARY_PATH) i z g21-bind-wlan.so, który przypina każde gniazdo do adresu hotspotu iPhone'a (LD_PRELOAD, G21_BIND_IP). Przez to SOME/IP do menedżera audio BMW nie mogło działać, a dźwięk szedł do zajętego CarPlayMain, czyli była cisza. Teraz node startuje w czystym środowisku, jak usługa jap-ridetube-d. Brak skryptu albo node jest zapisywany w /var/log/g21-audio-route.log.
+- Menu AirPlay już nie zacina urządzenia. Pętla stanu (co 1 s) ustawiała około 12 podpowiedzi, tytułów i stanów, a każda zmiana budowała i wysyłała całą klatkę menu. Renderer kilka razy na sekundę przerysowywał warstwę nad obrazem AirPlay. Teraz menu maluje się raz na obrót pętli zdarzeń, tylko gdy coś się zmieniło, a identycznej klatki nie wysyła drugi raz (podtrzymanie co sekundę zostaje).
+- Czarny środkowy ekran po zminimalizowaniu THEiPlay i powrocie (narzędzie 0.1.52). iPhone wysyła klatkę tylko przy zmianie obrazu, a renderer po ponownym podłączeniu czekał na następną. g21-yuvring pokazuje ostatnią klatkę ponownie dwa razy na sekundę, gdy telefon stoi. Do tego rebindVideo poza ekranem Stream nie wyłącza już obrazu.
+- „Wyłącz aplikację” także w YouTube (ostatnia pozycja paska po lewej, „Wyłącz”) i na ekranie Stream (Miracast, RDP, VNC; nagłówek po prawej).
+
 ## 0.1.132
 
 - Dźwięk AirPlay (narzędzie 0.1.51). Log z auta: iPhone wysyła dźwięk (AAC-ELD), ale UxPlay nie mógł otworzyć urządzenia smartx:CarPlayMain ("Could not open audio device"): trzyma je fabryczny demon CarPlay. Do tego samo urządzenie SmartX gra dopiero, gdy menedżer audio połączy jego źródło z głośnikami. Nowy g21-audio-route.js robi to tak jak RideTube (CommandControl.connect, przy końcu disconnect): wolne źródło CarLifeMedia (287), potem AndroidAutoMedia (273), do wyjścia 1024. Log: /var/log/g21-audio-route.log.

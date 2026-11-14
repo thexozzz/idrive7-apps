@@ -403,16 +403,18 @@ module.exports = {
         const PLAYING = ['player', 'Playing', (cv, x, y, c) => { [10, 20, 14].forEach((h, k) => cv.roundRect(x - 15 + k * 11, y + 8 - h, 8, h + 8, 2, c)); }];
         // THEiPlay: back to THEiPlay's own menu, the rail's first entry (the film plays on)
         const BACK_HOME = ['theiplay', 'THEiPlay', (cv, x, y, c) => { cv.polyline([[x + 8, y - 14], [x - 8, y], [x + 8, y + 14]], 5, c); cv.line(x - 6, y, x + 18, y, 5, c); }];
+        // THEiPlay's "Wyłącz aplikację", the rail's last entry: a power sign
+        const QUIT = ['quit', 'Wyłącz', (cv, x, y, c) => { cv.arc(x, y + 2, 12, 16, 40, 320, c, { round: true }); cv.line(x, y - 17, x, y + 1, 4, c); }];
         function drawRail(cv) {
             const sel = mode === 'results' ? 'search' : mode === 'channel' ? 'subs' : mode, bottom = H + (cv.own ? cv.extra : 0);
-            const items = (ctx.exit ? [BACK_HOME] : []).concat(cv.own && model.active() ? RAIL.concat([PLAYING]) : RAIL);   // THEiPlay first
+            const items = (ctx.exit ? [BACK_HOME] : []).concat(cv.own && model.active() ? RAIL.concat([PLAYING]) : RAIL).concat(ctx.quit ? [QUIT] : []);   // THEiPlay first, Wyłącz last
             const pitch = Math.min(100, (bottom - 156) / (items.length - 1));   // (the page down to the screen's bottom where it reaches)
             items.forEach(([m, name, glyph], i) => {
                 const cx = 62, cy = 96 + Math.round(i * pitch), on = m === sel, bg = on ? '#2c2c2c' : C.bg, c = on ? '#ffffff' : C.dim;
                 if (on) { cv.roundRect(18, cy - 38, 90, 84, 16, bg); cv.roundRect(18, cy - 14, 5, 28, 2.5, C.red); }
                 glyph(cv, cx, cy - 8, c, bg);
                 cv.text(name === 'Subscriptions' ? 'Subs' : name, cx, cy + 34, 18, c, { literal: true, align: 'center', font: on ? 'bold' : 'label' });
-                if (cv.own) cv.target(16, cy - 38, 92, 84, () => (m === 'theiplay' ? ctx.exit() : m === 'search' ? ui.open('MAIN') : show(m)), 'rail:' + m, 16);
+                if (cv.own) cv.target(16, cy - 38, 92, 84, () => (m === 'theiplay' ? ctx.exit() : m === 'quit' ? ctx.quit() : m === 'search' ? ui.open('MAIN') : show(m)), 'rail:' + m, 16);
             });
         }
 

@@ -21,6 +21,16 @@ assert.ok(component.files.some(function (f) { return f.path === 'g21-audio-route
 assert.ok(/audio_dev=\$\(audio_route_connect\)/.test(tool), 'route before UxPlay starts');
 assert.ok(/stop_ux\(\) \{\n    stop_ring\n    audio_route_disconnect/.test(tool), 'route dropped when UxPlay stops');
 assert.ok(/LD_PRELOAD=\/usr\/lib\/libasound\.so\.2/.test(tool), "UxPlay uses the car's libasound");
+// node for the route in a clean environment: not UxPlay's bundled libs, not g21-bind-wlan.so (it pinned
+// SOME/IP to the iPhone hotspot: no route, no sound in 0.1.132)
+var an = tool.slice(tool.indexOf('audio_node() {'), tool.indexOf('audio_route_connect() {'));
+['LD_LIBRARY_PATH', 'LD_PRELOAD', 'G21_BIND_IP'].forEach(function (v) { assert.ok(new RegExp('unset[^)]*' + v).test(an), 'audio_node clears ' + v); });
+assert.ok(/audio_node "\$js" connect/.test(tool) && /audio_node "\$js" disconnect/.test(tool), 'both calls go through audio_node');
+// the clean environment really drops them (run the helper as the tool has it)
+var envOut = cp.spawnSync('sh', ['-c', an.replace('exec /usr/bin/node "$@"', 'exec env') + '\naudio_node'], {
+    encoding: 'utf8', env: Object.assign({}, process.env, { LD_PRELOAD: '/x/g21-bind-wlan.so', G21_BIND_IP: '172.20.10.3', LD_LIBRARY_PATH: '/x/lib' })
+}).stdout;
+assert.ok(!/^(LD_PRELOAD|G21_BIND_IP|LD_LIBRARY_PATH)=/m.test(envOut), 'clean env: ' + envOut.split('\n').filter(function (l) { return /^(LD_|G21_)/.test(l); }).join(' '));
 assert.ok(/alsasink device=smartx:\$audio_dev/.test(tool), 'sink follows the routed device');
 
 // Fake audio manager: records calls in calls.json.

@@ -204,6 +204,7 @@ const NO_SIGNALS = { watch: () => Promise.resolve({ available: false, error: 'no
  *   version              shown at the settings' top
  *   spell(title)         -> Promise of the text typed (null: cancelled): THEiPlay's knob keyboard
  *   onExit()             the screen closed: THEiPlay's menu comes back
+ *   onQuit()             "Wyłącz aplikację" on the rail: THEiPlay closes the whole app
  *   screen(key) / setScreen(key, on)   yt_cluster / yt_hud: THEiPlay's YouTube screens
  *   kombiWanted()        the cluster or the HUD shows the film (the picture stays on while this screen is closed)
  *   videoRect()          the decoder's picture size, e.g. '848x480'
@@ -290,6 +291,8 @@ function createRideTube(opts) {
         videoRect: opts.videoRect,
         qualityText: opts.qualityText,
         exit: () => host.exit(),
+        /** THEiPlay's "Wyłącz aplikację" (null without it) */
+        quit: opts.onQuit ? () => { try { opts.onQuit(); } catch (e) { log.error('quit', e); } } : null,
         controller: { grab(on) { display.grab(on); }, onInput(fn) { display.onCcu = fn; } },
         onTab(fn) { display.onTab = fn; },
         onTap(fn) { display.onTap = fn; },

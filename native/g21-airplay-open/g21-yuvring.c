@@ -53,6 +53,7 @@ static const char *kombi_path = "/run/g21-airplay/kombi.yuv";
 static int out_fd = -1;
 static int out_w = 0, out_h = 0;
 static uint32_t seq = 0, slot = 0;
+static int have_frame = 0; /* outbuf holds the last frame (repeat_frame) */
 static ino_t out_ino = 0;
 
 static void put32(unsigned char *b, uint32_t v) { b[0] = v & 255; b[1] = (v >> 8) & 255; b[2] = (v >> 16) & 255; b[3] = (v >> 24) & 255; }
@@ -272,7 +273,27 @@ static int one_frame(void)
     put32(word, seq);
     write_all(out_fd, word, 4, 16);
     kombi_frame(inbuf + 8, sw, sh);
+    have_frame = 1;
     return 1;
+}
+
+/* The last frame again, under a new seq. The iPhone sends a frame only when its screen changes; a
+ * renderer that names the file anew (THEiPlay minimised and opened again) waited for the next one
+ * and the centre stayed black (car, 2026-11-14). Twice a second while the phone is still. */
+static void repeat_frame(void)
+{
+    size_t frame;
+    unsigned char word[4];
+    if (!have_frame || out_fd < 0 || !outbuf) return;
+    frame = (size_t)out_w * out_h * 3 / 2;
+    if (frame > outcap) return;
+    slot = (slot + 1) % NSLOT;
+    if (write_all(out_fd, outbuf, frame, 64 + (off_t)slot * frame) != 0) return;
+    put32(word, slot);
+    write_all(out_fd, word, 4, 20);
+    seq++;
+    put32(word, seq);
+    write_all(out_fd, word, 4, 16);
 }
 
 int main(int argc, char **argv)
@@ -310,9 +331,12 @@ int main(int argc, char **argv)
         int fresh = 0;
         if (wd >= 0) {
             fd_set rd;
-            struct timeval tv = {1, 0};
+            struct timeval tv = {0, 500000};
+            int ready;
             FD_ZERO(&rd); FD_SET(in, &rd);
-            if (select(in + 1, &rd, NULL, NULL, &tv) > 0) {
+            ready = select(in + 1, &rd, NULL, NULL, &tv);
+            if (ready == 0) repeat_frame();
+            if (ready > 0) {
                 ssize_t n = read(in, evbuf, sizeof evbuf), i = 0;
                 while (n > 0 && i < n) {
                     struct inotify_event *e = (struct inotify_event *)(evbuf + i);
