@@ -302,6 +302,9 @@ function AirPlayApp() {
             var firstFrame = !selfRouter._decoded;
             var wrote;
             var shown;
+            if (selfRouter._ringActive) {
+                return;
+            }
             try {
                 if (!selfRouter._mirrorVideo) {
                     selfRouter._mirrorVideo = mirrorVideo.createMirrorVideo();
@@ -398,7 +401,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.128',
+        version: (this._packageJson && this._packageJson.version) || '0.1.129',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -429,6 +432,21 @@ function AirPlayApp() {
             return self._adjustMenu(name, delta);
         },
     });
+    // Before 0.1.129 full screen was saved as a 1920x720 centre window, which
+    // came back after reopening the app as a black screen: back to a window.
+    var savedCentral = this._settings.picture('central');
+    if (savedCentral && savedCentral.w >= 1800 && savedCentral.h >= 680) {
+        this._settings.setPicture('central', {
+            x: 640, y: 180, w: 640, h: 360,
+            fps: savedCentral.fps, scale: savedCentral.scale, rotate: savedCentral.rotate
+        });
+        try {
+            this._saveWindows();
+        } catch (err) {
+            noteStart('full-migrate ' + (err && err.message));
+        }
+        noteStart('full-migrate centre window 640x360');
+    }
     // YouTube screens come back as they were left (saved in the settings).
     var ytScreens = this._desk.ytScreens ? this._desk.ytScreens() : { central: true, cluster: false, hud: false };
     this._ytCentral = ytScreens.central !== false;
@@ -515,7 +533,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.128') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.129') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2013,7 +2031,46 @@ AirPlayApp.prototype._startAirplaySelected = function () {
     this._enterStream('airplay');
 };
 
+// Full screen (AirPlay on the centre screen): black over the menu, only the
+// picture. A tap or the knob shows "Wyjdź z trybu pełnoekranowego" for 4 s.
+AirPlayApp.prototype._setAirFull = function (on) {
+    on = !!on;
+    if (this._airFullTimer) {
+        clearTimeout(this._airFullTimer);
+        this._airFullTimer = null;
+    }
+    this._airFullUiUntil = 0;
+    if (this._airFull === on) {
+        return;
+    }
+    this._airFull = on;
+    noteStart(on ? 'air-full on' : 'air-full off');
+    this._refreshAirBadge();
+};
+
+AirPlayApp.prototype._showAirFullUi = function () {
+    var self = this;
+    if (!this._airFull) {
+        return;
+    }
+    this._airFullUiUntil = Date.now() + 4000;
+    if (this._airFullTimer) {
+        clearTimeout(this._airFullTimer);
+    }
+    this._airFullTimer = setTimeout(function () {
+        self._airFullTimer = null;
+        self._airFullUiUntil = 0;
+        self._refreshAirBadge();
+    }, 4100);
+    this._refreshAirBadge();
+};
+
 AirPlayApp.prototype._endStream = function (protocol) {
+    if (protocol === 'airplay' || !protocol) {
+        this._setAirFull(false);
+        this._ringActive = false;
+        this._ringIno = '';
+    }
     var back = protocol || this._streamProtocol || 'airplay';
     this._winAutoAccepting = false;
     this._stopVideoTimer();
@@ -3137,31 +3194,13 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         return;
     }
     if (name === 'air-full') {
-        var fullBox = this._settings.picture('central');
-        if (fullBox.w >= 1800 && fullBox.h >= 680) {
-            this._settings.setPicture('central', this._centralRest || { x: 640, y: 180, w: 640, h: 360 });
-        } else {
-            this._centralRest = {
-                x: fullBox.x,
-                y: fullBox.y,
-                w: fullBox.w,
-                h: fullBox.h,
-                fps: fullBox.fps,
-                scale: fullBox.scale,
-                rotate: fullBox.rotate
-            };
-            this._settings.setPicture('central', {
-                x: 0,
-                y: 0,
-                w: 1920,
-                h: 720,
-                fps: fullBox.fps,
-                scale: fullBox.scale,
-                rotate: fullBox.rotate
-            });
-        }
-        this._saveWindows();
-        this._refreshAirBadge();
+        // Full screen is a state of this visit, not a saved window: the saved
+        // 1920x720 came back after reopening as a black screen with no way out.
+        this._setAirFull(!this._airFull);
+        return;
+    }
+    if (name === 'air-full-tap') {
+        this._showAirFullUi();
         return;
     }
     if (name === 'air-badge') {
@@ -3489,6 +3528,8 @@ AirPlayApp.prototype._refreshAirBadge = function () {
         ],
         mirrored: online,
         window: picture,
+        full: !!(this._airFull && online && picture),
+        fullUi: !!(this._airFull && Date.now() < (this._airFullUiUntil || 0)),
         tune: live.on ? this._tuneView() : null
     });
 };
@@ -4790,6 +4831,54 @@ AirPlayApp.prototype._dropClusterMirror = function (reason) {
     }
 };
 
+// g21-yuvring (tool 0.1.48+) puts the AirPlay picture into the renderer's
+// video file itself, scaled to the centre profile, as ytdec does for YouTube:
+// no frame passes through this app for the centre screen. /run/g21-airplay/ring
+// is "w h seq ino" while it runs.
+var RING_STATUS = process.env.G21_AIRPLAY_RING || '/run/g21-airplay/ring';
+AirPlayApp.prototype._ringState = function (now) {
+    var text;
+    var m;
+    if (this._ringAt && (now - this._ringAt) < 200) {
+        return this._ring;
+    }
+    this._ringAt = now;
+    try {
+        text = fs.readFileSync(RING_STATUS, 'utf8');
+    } catch (err) {
+        this._ring = null;
+        return null;
+    }
+    m = /^(\d+) (\d+) (\d+) (\d+)/.exec(text);
+    this._ring = m ? { w: Number(m[1]), h: Number(m[2]), seq: Number(m[3]), ino: m[4] } : null;
+    return this._ring;
+};
+
+// The ring has the centre screen: stop writing the video file here, name the
+// file to the renderer again when the ring made a new one (a new size).
+AirPlayApp.prototype._useRing = function (ring) {
+    var first = !this._decoded;
+    if (this._mirrorVideo) {
+        this._mirrorVideo.close();
+        this._mirrorVideo = null;
+    }
+    this._ringActive = true;
+    this._decoded = { w: ring.w, h: ring.h };
+    if (ring.ino !== this._ringIno) {
+        if (this._ringIno) {
+            noteStart('air-ring ' + ring.w + 'x' + ring.h);
+        }
+        this._ringIno = ring.ino;
+        if (this._menu && typeof this._menu.rebindVideo === 'function') {
+            this._menu.rebindVideo();
+        }
+    }
+    if (first) {
+        noteStart('air-ring on ' + ring.w + 'x' + ring.h);
+        this._refreshAirBadge();
+    }
+};
+
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
     var st;
@@ -4797,8 +4886,23 @@ AirPlayApp.prototype._takeFrame = function () {
     var outs;
     var now = Date.now();
     var started;
+    var ring;
+    var picked;
     if (this._frameBusy) {
         return;
+    }
+    ring = this._ringState(now);
+    if (ring) {
+        this._useRing(ring);
+        picked = this._settings.outputs();
+        // only the cluster/HUD still need the frame here
+        if (picked.indexOf('cluster') === -1 && picked.indexOf('hud') === -1) {
+            return;
+        }
+    } else if (this._ringActive) {
+        this._ringActive = false;
+        this._ringIno = '';
+        noteStart('air-ring off');
     }
     if (this._ingestAt && (now - this._ingestAt) < (this._ingestGap || 16)) {
         return;
@@ -4916,6 +5020,9 @@ AirPlayApp.prototype._setVisible = function (visible) {
     }
     this._visible = visible;
     noteStart(visible ? 'visible' : 'hidden');
+    if (!visible) {
+        this._setAirFull(false);
+    }
     if (!visible && this._rt) {
         this._rt.pause();
     }

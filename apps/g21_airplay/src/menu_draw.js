@@ -168,6 +168,8 @@ var EN = {
     'wlaczone': 'on',
     'wylaczone': 'off',
     'Gotowe': 'Done',
+    'Pełny ekran': 'Full screen',
+    'Wyjdź z trybu pełnoekranowego': 'Exit full screen',
     'Otwórz YouTube': 'Open YouTube',
     'Pozycja': 'Position',
     'Start': 'Start',
@@ -1717,10 +1719,33 @@ function drawWhereSheet(draw, lay, air) {
     lay.airHits.push(close);
 }
 
+// Full screen: black over the whole menu, only the picture; a tap shows the way out.
+var FULL_EXIT = { name: 'air-full', x: 560, y: 590, w: 800, h: 72 };
+function drawFullScreen(draw, lay, air) {
+    draw.rect(0, 0, 1920, 720, 0x000000FF);
+    draw.video(0, 0, 1920, 720, 1);
+    lay.airWindow = { x: 0, y: 0, w: 1920, h: 720 };
+    lay.airHits = [];
+    lay.hits = [];
+    lay.airBadge = null;
+    lay.airStrip = null;
+    if (air.fullUi) {
+        draw.rect(0, 560, 1920, 160, 0x000000B0);
+        draw.rect(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, CARD_HI);
+        draw.rect(FULL_EXIT.x, FULL_EXIT.y + FULL_EXIT.h - 4, FULL_EXIT.w, 4, ACCENT);
+        var label = tr('Wyjdź z trybu pełnoekranowego');
+        draw.text(label, FULL_EXIT.x + Math.floor((FULL_EXIT.w - draw.textWidth(label, 4)) / 2), FULL_EXIT.y + 20, 4, INK);
+    }
+}
+
 function applyAirOverlay(draw, lay, air, versionText) {
     var hits = lay.hits || [];
     var win;
     lay.hits = hits;
+    if (air && air.full && air.mirrored && air.window) {
+        drawFullScreen(draw, lay, air);
+        return;
+    }
     lay.airBadge = drawAirBadge(draw, lay, air, versionText);
     lay.airWindow = null;
     if (air && !lay.stream && air.mirrored && air.window && air.window.w > 80 && air.window.h > 80) {
@@ -1781,20 +1806,32 @@ function drawYtBar(draw, lay) {
     lay.airHits.push(where);
 }
 
+var CHIP_W = 200;
+var CHIP_H = 40;
+var CHIP_GAP = 12;
 function drawCenterChrome(draw, lay, win, full, moving) {
-    var y = win.y + 10;
-    var x = win.x + 10;
+    // two chips of one size, side by side, at the window's top right inside it
+    // (moved in when the window reaches past the menu page)
+    var row = CHIP_W * 2 + CHIP_GAP;
+    var x = win.x + win.w - 12 - row;
+    var y = win.y + 12;
     var fullBtn;
     var posBtn;
+    if (x < lay.ox + 12) {
+        x = lay.ox + 12;
+    }
+    if (x + row > lay.ox + lay.boxW - 12) {
+        x = lay.ox + lay.boxW - 12 - row;
+    }
     if (y < lay.oy + 58) {
         y = lay.oy + 58;
     }
-    if (x + 292 > lay.ox + lay.boxW) {
-        x = lay.ox + lay.boxW - 302;
+    if (y + CHIP_H > lay.oy + lay.boxH - 12) {
+        y = lay.oy + lay.boxH - 12 - CHIP_H;
     }
-    fullBtn = { name: 'air-full', x: x, y: y, w: 150, h: 36 };
-    posBtn = { name: 'air-pos', x: x + 158, y: y, w: 132, h: 36 };
-    drawChip(draw, fullBtn, full, 'Full screen');
+    fullBtn = { name: 'air-full', x: x, y: y, w: CHIP_W, h: CHIP_H };
+    posBtn = { name: 'air-pos', x: x + CHIP_W + CHIP_GAP, y: y, w: CHIP_W, h: CHIP_H };
+    drawChip(draw, fullBtn, full, tr('Pełny ekran'));
     if (!full) {
         drawChip(draw, posBtn, moving, tr('Pozycja'));
     }
@@ -2728,7 +2765,9 @@ function createMenuSurface(opts) {
             airState.whereOpen = whereOpen;
             airState.whereCursor = whereCursor;
             airState.movePos = movePos;
-            airState.full = !!(airState.window && airState.window.w >= 1800 && airState.window.h >= 680);
+            // full screen: the app's flag (no longer a saved 1920x720 window, which came back
+            // after reopening the app as a black screen with no way out)
+            airState.full = !!(airState.full && airState.mirrored && airState.window);
             if (airState.full) {
                 movePos = false;
                 airState.movePos = false;
@@ -3191,6 +3230,16 @@ function createMenuSurface(opts) {
         var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
         lastTilt = tilt;
+        if (airState && airState.full && !edit) {
+            // full screen: the knob shows the way out; pressed while shown, it leaves
+            if (push === 1 && lastPush !== 1) {
+                choose(airState.fullUi ? 'air-full' : 'air-full-tap');
+            } else if (step || tilted) {
+                choose('air-full-tap');
+            }
+            lastPush = push;
+            return;
+        }
         if (movePos && !edit && airState && airState.window && !airState.full) {
             if (step) {
                 nudgeCentral(step * 48, 0);
@@ -3590,6 +3639,14 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if (airState && airState.full && !edit) {
+                    // full screen: a tap shows "Wyjdź z trybu pełnoekranowego"; on it, it leaves
+                    if (phase === 3) {
+                        choose(airState.fullUi && pointIn(FULL_EXIT, tx, ty) ? 'air-full' : 'air-full-tap');
+                    }
+                    touchDown = null;
+                    return;
+                }
                 if ((screenName === 'yt-login' || screenName === 'yt-browse') && rideHits && rideHits.length) {
                     var rideName = '';
                     var rideI;
@@ -4051,6 +4108,8 @@ function createMenuSurface(opts) {
                     };
                 }) : [],
                 mirrored: !!(info && info.mirrored),
+                full: !!(info && info.full),
+                fullUi: !!(info && info.fullUi),
                 window: win ? {
                     x: win.x | 0,
                     y: win.y | 0,
@@ -4086,6 +4145,7 @@ function createMenuSurface(opts) {
                 next.status,
                 next.screens.map(function (row) { return row.key + (row.on ? '1' : '0'); }).join(','),
                 next.mirrored ? 1 : 0,
+                (next.full ? 1 : 0) + '/' + (next.fullUi ? 1 : 0),
                 next.window ? (next.window.x + ',' + next.window.y + ',' + next.window.w + ',' + next.window.h) : '',
                 next.tune ? (next.tune.name + '/' + next.tune.tool + '/' + next.tune.axis + '/' + next.tune.x + '/' + next.tune.y + '/' + next.tune.w + '/' + next.tune.h + '/' + (next.tune.saved ? 1 : 0)) : ''
             ].join('|');

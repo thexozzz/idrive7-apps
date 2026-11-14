@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.129
+
+- AirPlay płynnie jak RideTube: nowy program g21-yuvring w narzędziu (0.1.48) wkłada każdą klatkę z AirPlay, zmniejszoną do profilu Ekran centralny, prosto do pliku, z którego rysuje ekran środkowy — tak jak dekoder YouTube. Na środek żadna klatka nie przechodzi już przez aplikację. Zegary i HUD dostają klatki jak dotąd.
+- Pełny ekran AirPlay: całe menu przykryte czarnym tłem, widać tylko obraz. Dotknięcie ekranu (albo pokrętło) pokazuje na 4 s przycisk Wyjdź z trybu pełnoekranowego. Pełny ekran nie zapisuje się już jako okno 1920x720 — po wyjściu z aplikacji i powrocie był tylko czarny ekran; zapisane tak okno wraca do 640x360.
+- Przyciski Pełny ekran i Pozycja nad oknem AirPlay: jeden rozmiar, w jednym rzędzie, wyrównane do prawej krawędzi okna.
+
 ## 0.1.128
 
 - Bezpieczeństwo: hasło RDP nie jest już zapisane w kodzie aplikacji (repozytorium jest publiczne). Hasło zapisane wcześniej w aucie zostaje; nowe wpisuje się raz w menu (Hasło RDP) albo w panelu konfiguracji.

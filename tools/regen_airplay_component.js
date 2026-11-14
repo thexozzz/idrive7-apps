@@ -14,11 +14,13 @@ var skip = {
     'g21-airplay-open.service': true,
     'g21-present.c': true,
     'g21-rdp.c': true,
-    'g21-mice.c': true
+    'g21-mice.c': true,
+    'g21-yuvring.c': true
 };
 var execNames = {
     'g21-airplay-open': true,
     'g21-detach': true,
+    'g21-yuvring': true,
     'g21-present': true,
     'g21-rdp': true,
     'g21-mice': true,

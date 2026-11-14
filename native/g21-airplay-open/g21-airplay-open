@@ -225,7 +225,42 @@ watch_ux_pin() {
     done
 }
 
+# g21-yuvring: the AirPlay picture straight into mgu-render's video file, scaled
+# to the centre profile (airplay-size), as ytdec does for YouTube: no frame passes
+# through the app's Node for the centre screen. Only with the picture (not AirPlay Sound).
+RINGSTATUS=/run/g21-airplay/ring
+ring_pids() {
+    pgrep -f '/var/opt/g21-airplay-open/.*/g21-yuvring' 2>/dev/null || true
+}
+
+start_ring() {
+    if [ "$(airplay_mode_of)" = "audio" ]; then
+        stop_ring
+        return 0
+    fi
+    rbin=$(tool_dir)/g21-yuvring
+    if [ ! -x "$rbin" ]; then
+        return 0
+    fi
+    for p in $(ring_pids); do
+        return 0
+    done
+    "$rbin" /run/g21-airplay/latest.yuv /dev/shm/mgu-video-g21airplay "$RINGSTATUS" "$SESSION_DIR/airplay-size" >>/var/log/g21-yuvring.log 2>&1 &
+}
+
+stop_ring() {
+    for p in $(ring_pids); do
+        kill "$p" 2>/dev/null || true
+    done
+    rm -f "$RINGSTATUS"
+    # the app writes this file itself without the ring (a root file in sticky /dev/shm would block it)
+    if [ -f /dev/shm/mgu-video-g21airplay ] && [ "$(stat -c %u /dev/shm/mgu-video-g21airplay 2>/dev/null)" = "0" ]; then
+        rm -f /dev/shm/mgu-video-g21airplay
+    fi
+}
+
 stop_ux() {
+    stop_ring
     clear_pin
     if [ -n "$UXPID" ]; then
         kill "$UXPID" 2>/dev/null || true
@@ -1055,6 +1090,7 @@ start_ux() {
             stop_ux
             # Fall through and start a fresh UxPlay so register_dnssd runs again.
         else
+            start_ring
             report "running|$label|$ip"
             return 0
         fi
@@ -1211,6 +1247,7 @@ start_ux() {
     fi
     watch_ux_pin "$UXPID" &
     PINWATCH=$!
+    start_ring
     report "running|$label|$ip"
 }
 
