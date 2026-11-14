@@ -83,8 +83,16 @@ function createFrameBridge(opts) {
     }
 
     function emitSized(bgra, w, h) {
-        var dw = scaleEven(targetW);
-        var dh = scaleEven(targetH);
+        // targetW x targetH is a quality profile (the KOMBI one for cluster
+        // and HUD): fit the desktop into it with its own aspect, never
+        // stretched, width a multiple of 4 for a cluster-render video.
+        var portrait = h > w;
+        var boxW = portrait ? targetH : targetW;
+        var boxH = portrait ? targetW : targetH;
+        var fitScale = Math.min(boxW / w, boxH / h, 1);
+        var dw = Math.max(64, Math.round(w * fitScale));
+        var dh = scaleEven(Math.max(32, Math.round(h * fitScale)));
+        dw -= dw % 4;
         var i420;
         var atlas;
         var scaled;

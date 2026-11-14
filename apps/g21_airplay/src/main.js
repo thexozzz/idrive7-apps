@@ -294,7 +294,7 @@ function AirPlayApp() {
                 if (!selfRouter._mirrorVideo) {
                     selfRouter._mirrorVideo = mirrorVideo.createMirrorVideo();
                 }
-                shown = selfRouter._turnedFrame(frame, 'central');
+                shown = selfRouter._centralFrame(selfRouter._turnedFrame(frame, 'central'));
                 wrote = selfRouter._mirrorVideo.push(shown.i420, shown.w, shown.h);
                 selfRouter._decoded = { w: shown.w, h: shown.h };
                 if (firstFrame || wrote === 'new') {
@@ -423,9 +423,11 @@ function AirPlayApp() {
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
     this._bindYoutube();
+    // 40 ms: a 24 fps film on the cluster/HUD. Without gauges _takeYoutube
+    // itself keeps to one look every 200 ms.
     this._ytTimer = setInterval(function () {
         self._takeYoutube();
-    }, 200);
+    }, 40);
     if (this._ytTimer.unref) {
         this._ytTimer.unref();
     }
@@ -558,6 +560,11 @@ AirPlayApp.prototype._setupRhmi = function () {
 
 AirPlayApp.prototype._showMenu = function () {
     noteStart('menu-on-bar');
+    if (this._clusterClosed && this._client) {
+        // Closed by "Wyłącz aplikację": connect again; the label comes back on ready.
+        this._clusterClosed = false;
+        this._client.connect();
+    }
     if (this._menu) {
         this._menu.open();
         if (this._sessions && this._sessions.active() === 'airplay') {
@@ -861,6 +868,18 @@ AirPlayApp.prototype._adjustMenu = function (name, delta) {
         return false;
     }
     focus = name.indexOf('pos-') === 0 ? (this._posFocus || 'central') : (this._boxFocus || 'central');
+    if (name.indexOf('pos-') === 0 && this._posFocus === 'shared') {
+        this._settings.slide('central', key, delta);
+        this._mirrorSharedWindow();
+        this._nudgeMirror('central');
+        this._nudgeMirror('cluster');
+        this._nudgeMirror('hud');
+        this._refreshLabel();
+        this._paintYoutube();
+        this._paintPosition();
+        this._queueWindowSave();
+        return true;
+    }
     this._settings.slide(focus, key, delta);
     this._nudgeMirror(focus);
     this._refreshLabel();
@@ -937,6 +956,10 @@ AirPlayApp.prototype._applyFieldEdit = function (field, mode, text) {
     if (field === 'yt-search') {
         if (this._ytModel) {
             this._ytModel.search(String(text || '').trim());
+        }
+        this._ytBrowse = 'results';
+        if (this._menu && this._menuScreen() !== 'yt-browse' && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('yt-browse');
         }
         this._syncYoutubeList();
         return;
@@ -1050,13 +1073,108 @@ AirPlayApp.prototype._toggleItem = function (protocol) {
     return 'air-toggle';
 };
 
+AirPlayApp.prototype._quality = function (kind) {
+    var value = kind === 'kombi'
+        ? (this._desk.qualityKombi ? this._desk.qualityKombi() : desktopSettings.QUALITY_DEFAULT.kombi)
+        : (this._desk.qualityCentral ? this._desk.qualityCentral() : desktopSettings.QUALITY_DEFAULT.central);
+    return desktopSettings.qualitySize(value) || desktopSettings.qualitySize(desktopSettings.QUALITY_DEFAULT[kind === 'kombi' ? 'kombi' : 'central']);
+};
+
+// The centre profile is what UxPlay asks the iPhone for (-s WxH). It is the
+// one decode; the KOMBI frames are scaled from it in _placeMirrorFaces.
 AirPlayApp.prototype._writeAirplaySize = function () {
+    var q = this._quality('central');
+    var text = q.w + 'x' + q.h;
     try {
-        fs.writeFileSync(this._paths.airplaySize, '600x400\n');
+        fs.writeFileSync(this._paths.airplaySize, text + '\n');
     } catch (err) {
         noteStart('airplay-size ' + (err && err.message));
     }
-    return '600x400';
+    return text;
+};
+
+AirPlayApp.prototype._qualityHint = function () {
+    return this._desk.qualityCentral() + ', ' + this._desk.qualityKombi();
+};
+
+AirPlayApp.prototype._showQuality = function (screenName) {
+    var next = screenName || 'quality';
+    var items;
+    if (!this._menu || typeof this._menu.setScreen !== 'function') {
+        return;
+    }
+    this._menu.setScreen(next);
+    if (next === 'quality-central') {
+        items = menuDraw.qualityOptions('central', desktopSettings.QUALITY_CENTRAL, this._desk.qualityCentral(), desktopSettings.QUALITY_NAMES);
+    } else if (next === 'quality-kombi') {
+        items = menuDraw.qualityOptions('kombi', desktopSettings.QUALITY_KOMBI, this._desk.qualityKombi(), desktopSettings.QUALITY_NAMES);
+    } else {
+        items = menuDraw.qualityItems(this._desk.qualityCentral(), this._desk.qualityKombi());
+    }
+    if (typeof this._menu.setItems === 'function') {
+        this._menu.setItems(items, 'Jakość obrazu');
+    }
+};
+
+AirPlayApp.prototype._setQuality = function (kind, value) {
+    var set = this._desk.setQuality(kind, value);
+    if (!set.ok) {
+        noteStart('quality-refused ' + kind + ' ' + value);
+        return false;
+    }
+    this._saveDesk();
+    noteStart('quality ' + kind + ' ' + value);
+    if (kind === 'central') {
+        // UxPlay reads this file when it starts; a running mirror keeps its
+        // size until the next Start, as before.
+        this._writeAirplaySize();
+        return true;
+    }
+    // KOMBI: the next frame is cut to the new size; the layers are made again
+    // because the frame size (vw x vh) is part of the layer.
+    this._ytGaugeOuts = '';
+    this._faceAt = 0;
+    if (this._lastFrame && this._streamProtocol === 'airplay') {
+        this._placeMirrorFaces(this._lastFrame.i420, this._lastFrame.w, this._lastFrame.h);
+    }
+    return true;
+};
+
+AirPlayApp.prototype._onQualityChoice = function (name) {
+    if (name === 'air-quality') {
+        this._showQuality('quality');
+        return true;
+    }
+    if (name === 'q-central') {
+        this._showQuality('quality-central');
+        return true;
+    }
+    if (name === 'q-kombi') {
+        this._showQuality('quality-kombi');
+        return true;
+    }
+    if (name === 'qc-back' || name === 'qk-back') {
+        this._showQuality('quality');
+        return true;
+    }
+    if (name === 'q-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('airplay');
+        }
+        this._sync();
+        return true;
+    }
+    if (name.indexOf('qc-') === 0) {
+        this._setQuality('central', name.slice(3));
+        this._showQuality('quality-central');
+        return true;
+    }
+    if (name.indexOf('qk-') === 0) {
+        this._setQuality('kombi', name.slice(3));
+        this._showQuality('quality-kombi');
+        return true;
+    }
+    return false;
 };
 
 AirPlayApp.prototype._writeSessionOutput = function (name) {
@@ -1116,7 +1234,8 @@ AirPlayApp.prototype._startRdpToOutput = function (outputName) {
         this._sync();
         return;
     }
-    limits = settingsFactory.LIMITS[out];
+    // cluster-render frames use the KOMBI profile, whatever the target size.
+    limits = this._quality('kombi');
     // Drop present's hold on frame.sock, then listen before g21-rdp connects.
     // Tool apply() used to run only every 5s — wait/retry until bridge can bind.
     try {
@@ -1224,6 +1343,26 @@ AirPlayApp.prototype._startVideoTimer = function () {
     }, 16);
 };
 
+// mgu-render frame: the decoded frame as it is when it fits the centre
+// profile (the iPhone is asked for that size), else scaled down to it.
+AirPlayApp.prototype._centralFrame = function (frame) {
+    var q = this._quality('central');
+    if (!frame || frameFit.fitsProfile(frame.w, frame.h, q.w, q.h)) {
+        return frame;
+    }
+    return frameFit.scaleToProfile(frame.i420, frame.w, frame.h, q.w, q.h);
+};
+
+// cluster-render frame size for a source frame and a screen's turn. Same
+// numbers _placeMirrorFaces sends; no pixels touched.
+AirPlayApp.prototype._kombiDims = function (sw, sh, name) {
+    var q = this._quality('kombi');
+    var box = this._settings.picture(name);
+    var quarters = (((box && box.rotate) || 0) / 90) % 2;
+    var dims = frameFit.profileDims(sw, sh, q.w, q.h);
+    return quarters ? { w: dims.h, h: dims.w } : dims;
+};
+
 AirPlayApp.prototype._turnedFrame = function (frame, name) {
     var box = this._settings.picture(name);
     var quarters = ((box && box.rotate) || 0) / 90;
@@ -1284,6 +1423,10 @@ AirPlayApp.prototype._bindYoutube = function () {
     });
     this._ytCtl.on('msg', function (msg) {
         self._ytModel.onMsg(msg);
+        if (self._menuScreen() === 'yt-login' && self._ytLoginWaiting && self._ytModel.auth && self._ytModel.auth.state === 'signed_out') {
+            self._ytLoginWaiting = false;
+            self._ytModel.authStart(true);
+        }
         if (msg && msg.ev === 'time') {
             self._paintYoutube();
             return;
@@ -1293,46 +1436,321 @@ AirPlayApp.prototype._bindYoutube = function () {
     this._ytCtl.connect();
 };
 
+AirPlayApp.prototype._ytSignedIn = function () {
+    return !!(this._ytModel && this._ytModel.auth && this._ytModel.auth.state === 'signed_in');
+};
+
+AirPlayApp.prototype._ytScreenHint = function () {
+    var parts = [];
+    if (this._ytCentral !== false) {
+        parts.push('Środek');
+    }
+    if (this._ytCluster) {
+        parts.push('Zegary');
+    }
+    if (this._ytHud) {
+        parts.push('HUD');
+    }
+    return parts.length ? parts.join(', ') : 'wyłączone';
+};
+
 AirPlayApp.prototype._syncYoutubeList = function () {
+    var screen;
+    if (!this._menu || !this._ytModel) {
+        return;
+    }
+    screen = this._menuScreen();
+    if (screen === 'yt-login') {
+        this._syncYoutubeLogin();
+        return;
+    }
+    if (screen === 'yt-browse') {
+        this._syncYoutubeBrowse();
+        return;
+    }
+    if (screen === 'youtube') {
+        this._syncYoutubeGate();
+    }
+};
+
+AirPlayApp.prototype._syncYoutubeGate = function () {
+    var signed;
+    var items;
+    if (!this._menu || !this._ytModel || typeof this._menu.setItems !== 'function') {
+        return;
+    }
+    signed = this._ytSignedIn();
+    items = [
+        { name: 'yt-where', title: 'Ekrany', hint: this._ytScreenHint(), icon: 'desktop' },
+        {
+            name: 'yt-login',
+            title: signed ? 'Zalogowano' : 'Zaloguj się do YouTube',
+            hint: signed ? (this._ytSignOutArmed ? 'naciśnij jeszcze raz, żeby wylogować' : 'konto w aucie') : 'kod na telefonie',
+            icon: 'tag',
+            on: signed
+        }
+    ];
+    if (signed) {
+        items.push({ name: 'yt-browse', title: 'Przeglądaj', hint: 'Home, subskrypcje, do obejrzenia', icon: 'play' });
+    }
+    items.push({ name: 'yt-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' });
+    this._menu.setItems(items, 'YouTube');
+    if (typeof this._menu.setRideView === 'function') {
+        this._menu.setRideView(null);
+    }
+    this._paintYoutube();
+};
+
+AirPlayApp.prototype._beginYoutubeLogin = function () {
+    var state;
+    if (!this._ytModel) {
+        return;
+    }
+    if (this._menu && typeof this._menu.setScreen === 'function' && this._menuScreen() !== 'yt-login') {
+        this._menu.setScreen('yt-login');
+    }
+    state = this._ytModel.auth ? this._ytModel.auth.state : 'unknown';
+    if (state === 'signed_in') {
+        this._syncYoutubeGate();
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeGate();
+        return;
+    }
+    this._ytLoginWaiting = state === 'unknown' || state === 'asking';
+    if (state === 'signed_out' || state === 'error') {
+        this._ytModel.authStart(true);
+    }
+    this._syncYoutubeLogin();
+};
+
+AirPlayApp.prototype._syncYoutubeLogin = function () {
+    var auth;
+    var items;
+    var url;
+    if (!this._menu || !this._ytModel || this._menuScreen() !== 'yt-login' || typeof this._menu.setItems !== 'function') {
+        return;
+    }
+    auth = this._ytModel.auth || { state: 'unknown' };
+    url = auth.url || 'https://www.google.com/device';
+    if (auth.state === 'signed_in') {
+        if (this._menu.setScreen) {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeGate();
+        return;
+    }
+    if (auth.state === 'code' && auth.code) {
+        items = [
+            { name: 'yt-login-code', title: String(auth.code), hint: url, icon: 'tag', on: true },
+            { name: 'yt-login-retry', title: 'Nowy kod', hint: 'jeszcze raz', icon: 'play' },
+            { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
+        ];
+    } else if (auth.state === 'error') {
+        items = [
+            { name: 'yt-login-code', title: 'Logowanie niedostępne', hint: auth.msg || 'błąd', icon: 'tag' },
+            { name: 'yt-login-retry', title: 'Nowy kod', hint: 'jeszcze raz', icon: 'play' },
+            { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
+        ];
+    } else if (auth.state === 'unsupported') {
+        items = [
+            { name: 'yt-login-code', title: 'Potrzebny nowszy jap-ridetube-d', hint: 'usługa w aucie', icon: 'tag' },
+            { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
+        ];
+    } else {
+        items = [
+            { name: 'yt-login-code', title: 'Pobieram kod logowania', hint: 'google.com/device', icon: 'tag' },
+            { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
+        ];
+    }
+    this._menu.setItems(items, 'Zaloguj się do YouTube');
+    if (typeof this._menu.setRideView === 'function') {
+        this._menu.setRideView({
+            on: true,
+            mode: 'signin',
+            auth: {
+                state: auth.state,
+                code: auth.code || '',
+                url: url,
+                msg: auth.msg || ''
+            }
+        });
+    }
+};
+
+AirPlayApp.prototype._ytBrowseSections = function () {
+    var model = this._ytModel;
+    var which = this._ytBrowse || 'home';
+    var feed;
+    var sections = [];
+    var titles = { home: 'Recommended', subs: 'Subscriptions', wl: 'Watch later' };
+    var i;
+    if (!model || which === 'player') {
+        return sections;
+    }
+    if (which === 'results') {
+        if (model.results && model.results.length) {
+            sections.push({ title: 'Results', items: model.results.slice(0, 4) });
+        }
+        return sections;
+    }
+    if (which === 'home' && model.resume && model.resume.length) {
+        sections.push({ title: 'Continue watching', items: model.resume.slice(0, 4) });
+    }
+    feed = model.feeds ? model.feeds[which] : null;
+    if (feed && feed.shelves && feed.shelves.length) {
+        for (i = 0; i < feed.shelves.length && sections.length < 2; i += 1) {
+            if (feed.shelves[i].items && feed.shelves[i].items.length) {
+                sections.push({ title: feed.shelves[i].title || titles[which] || 'Home', items: feed.shelves[i].items.slice(0, 4) });
+            }
+        }
+    } else if (feed && feed.items && feed.items.length) {
+        sections.push({ title: titles[which] || 'Home', items: feed.items.slice(0, 4) });
+    }
+    return sections;
+};
+
+AirPlayApp.prototype._ytBrowseRows = function () {
+    var sections = this._ytBrowseSections();
+    var rows = [];
+    var i;
+    var j;
+    for (i = 0; i < sections.length; i += 1) {
+        for (j = 0; j < sections[i].items.length; j += 1) {
+            rows.push(sections[i].items[j]);
+        }
+    }
+    return rows;
+};
+
+AirPlayApp.prototype._openYtFeed = function (which) {
+    this._ytBrowse = which;
+    if (!this._ytModel || !this._ytSignedIn()) {
+        return;
+    }
+    if (which === 'home' || which === 'subs' || which === 'wl') {
+        this._ytModel.feed(which);
+        if (which === 'home') {
+            this._ytModel.feed('wl');
+        }
+        if (which === 'subs' && typeof this._ytModel.loadChannels === 'function') {
+            this._ytModel.loadChannels();
+        }
+    }
+};
+
+AirPlayApp.prototype._syncYoutubeBrowse = function () {
     var model;
+    var which;
+    var rows;
     var items;
     var i;
     var row;
-    var stateName;
-    if (!this._menu || !this._ytModel || this._menuScreen() !== 'youtube') {
+    var hint;
+    var names = { home: 'Home', subs: 'Subskrypcje', wl: 'Do obejrzenia', results: 'Wyniki' };
+    if (!this._menu || !this._ytModel || this._menuScreen() !== 'yt-browse' || typeof this._menu.setItems !== 'function') {
         return;
     }
     model = this._ytModel;
-    items = [];
-    for (i = 0; i < model.results.length && i < 8; i += 1) {
-        row = model.results[i];
+    which = this._ytBrowse || 'home';
+    rows = this._ytBrowseRows();
+    this._ytRows = rows;
+    items = [
+        { name: 'yt-feed-home', title: 'Home', hint: 'RideTube', icon: 'grid', on: which === 'home' },
+        { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'RideTube', icon: 'grid', on: which === 'subs' },
+        { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'RideTube', icon: 'tag', on: which === 'wl' },
+        { name: 'yt-search', title: 'Szukaj', hint: model.q || 'tytuł filmu', icon: 'tag', on: which === 'results' }
+    ];
+    if (model.state === 'playing' || model.state === 'paused' || model.state === 'preparing') {
         items.push({
-            name: 'yt-res-' + i,
-            title: String(row.title || row.id).slice(0, 32),
-            hint: String(row.channel || ''),
+            name: 'yt-play',
+            title: model.state === 'playing' ? 'Pauza' : 'Play',
+            hint: (model.title || names[which] || 'Teraz').slice(0, 28),
+            icon: 'play',
+            on: true
+        });
+        items.push({ name: 'yt-back10', title: '-10 s', hint: 'cofnij', icon: 'back' });
+        items.push({ name: 'yt-fwd10', title: '+10 s', hint: 'do przodu', icon: 'play' });
+        items.push({ name: 'yt-stop', title: 'Stop', hint: 'koniec filmu', icon: 'stop' });
+    }
+    for (i = 0; i < rows.length; i += 1) {
+        row = rows[i];
+        hint = String(row.channel || '');
+        if (row.duration_s > 0 && youtubeClient.clock) {
+            hint = (hint ? hint + ' · ' : '') + youtubeClient.clock(row.duration_s * 1000);
+        }
+        items.push({
+            name: 'yt-vid-' + i,
+            title: String(row.title || row.id).slice(0, 36),
+            hint: hint.slice(0, 40),
             icon: 'play'
         });
     }
-    stateName = model.connected ? (model.state || 'idle') : 'brak usługi';
-    if (model.title) {
-        stateName = model.title.slice(0, 24);
+    if (!rows.length) {
+        items.push({
+            name: 'yt-browse-empty',
+            title: model.connected ? (which === 'results' ? 'Nic nie znaleziono' : 'Ładuję') : 'Brak usługi',
+            hint: names[which] || '',
+            icon: 'tag'
+        });
     }
-    items.push({ name: 'yt-search', title: 'Szukaj', hint: model.q || 'tytuł filmu', icon: 'tag' });
-    items.push({ name: 'yt-play', title: model.state === 'playing' ? 'Pauza' : 'Play', hint: stateName, icon: 'play' });
-    items.push({ name: 'yt-where', title: 'Ekrany', hint: 'środek, zegary, HUD', icon: 'desktop' });
-    items.push({ name: 'yt-back10', title: '-10 s', hint: 'cofnij', icon: 'back' });
-    items.push({ name: 'yt-fwd10', title: '+10 s', hint: 'do przodu', icon: 'play' });
-    items.push({ name: 'yt-stop', title: 'Stop', hint: 'koniec filmu', icon: 'stop' });
-    items.push({ name: 'yt-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' });
-    this._menu.setItems(items, 'YouTube');
+    items.push({ name: 'yt-browse-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' });
+    this._menu.setItems(items, 'Przeglądaj');
+    if (typeof this._menu.setRideView === 'function') {
+        this._menu.setRideView({
+            on: true,
+            mode: which === 'player' ? 'player' : which,
+            sections: this._ytTileSections(rows),
+            status: model.connected ? (which === 'results' ? 'Nothing found' : 'Loading...') : 'The RideTube service is not running',
+            playing: {
+                title: model.title || '',
+                channel: model.channel || '',
+                state: model.state || '',
+                elapsed: model.elapsed || 0,
+                total: model.total || 0
+            }
+        });
+    }
     this._paintYoutube();
+};
+
+AirPlayApp.prototype._ytTileSections = function (rows) {
+    var sections = this._ytBrowseSections();
+    var out = [];
+    var i;
+    var j;
+    var item;
+    var hint;
+    for (i = 0; i < sections.length; i += 1) {
+        out.push({ title: sections[i].title, items: [] });
+        for (j = 0; j < sections[i].items.length; j += 1) {
+            item = sections[i].items[j];
+            hint = String(item.channel || '');
+            if (item.duration_s > 0 && youtubeClient.clock) {
+                hint = (hint ? hint + ' · ' : '') + youtubeClient.clock(item.duration_s * 1000);
+            }
+            out[i].items.push({
+                title: String(item.title || item.id || ''),
+                hint: hint,
+                duration: item.duration_s > 0 && youtubeClient.clock ? youtubeClient.clock(item.duration_s * 1000) : ''
+            });
+        }
+    }
+    return out;
 };
 
 AirPlayApp.prototype._playYoutube = function (row) {
     if (!this._ytModel || !row) {
         return;
     }
-    this._ytCentral = true;
+    if (this._ytCentral === false && !this._ytCluster && !this._ytHud) {
+        this._ytCentral = true;
+    }
+    if (this._menuScreen() === 'yt-browse' && this._ytBrowse !== 'player') {
+        this._ytListMode = this._ytBrowse || 'home';
+        this._ytBrowse = 'player';
+    }
     this._useYoutube();
     this._ytModel.setWantVideo(true);
     this._ytModel.play(row.id, '1280x720', false, row, { quality: 'auto' });
@@ -1347,6 +1765,8 @@ AirPlayApp.prototype._stopYoutube = function () {
     this._ytCentral = false;
     this._ytCluster = false;
     this._ytHud = false;
+    this._ytGaugeFrame = null;
+    this._ytGaugeOuts = '';
     if (!this._settings || this._settings.outputs().indexOf('cluster') === -1) {
         this._dropMirrorFace('cluster');
     }
@@ -1614,13 +2034,7 @@ AirPlayApp.prototype._onAirAction = function (name) {
         return;
     }
     if (name === 'air-quality') {
-        this._writeAirplaySize();
-        if (typeof this._menu.setItemTitle === 'function') {
-            this._menu.setItemTitle('air-quality', '600x400');
-        }
-        if (typeof this._menu.setItemHint === 'function') {
-            this._menu.setItemHint('air-quality', 'zablokowane, 24 kl/s');
-        }
+        this._onQualityChoice(name);
         return;
     }
     if (name === 'air-screen') {
@@ -2011,21 +2425,44 @@ AirPlayApp.prototype._paintYoutube = function () {
     }
 };
 
+AirPlayApp.prototype._dropYoutubeFaces = function () {
+    // Faces are shared with AirPlay; only drop the ones AirPlay is not using.
+    var airplay = this._sessions && this._sessions.active() === 'airplay';
+    this._ytGaugeFrame = null;
+    if (airplay) {
+        return;
+    }
+    if (this._mirrorFaces && this._mirrorFaces.cluster) {
+        this._dropMirrorFace('cluster');
+    }
+    if (this._mirrorFaces && this._mirrorFaces.hud) {
+        this._dropMirrorFace('hud');
+    }
+};
+
 AirPlayApp.prototype._takeYoutube = function () {
     var frame;
+    var now = Date.now();
+    var gauges = !!this._ytCluster || !!this._ytHud;
     if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay')) {
         return;
     }
     var outs;
-    var fitted;
     if (!this._ytFile) {
         return;
     }
+    // The centre screen reads the film file itself; this loop only needs a
+    // film frame rate when the cluster or the HUD shows it.
+    if (!gauges && this._ytPolledAt && (now - this._ytPolledAt) < 200) {
+        return;
+    }
+    this._ytPolledAt = now;
     frame = this._ytFile.pull();
     if (frame === null) {
         if (this._ytLive) {
             this._ytLive = false;
             this._ytFrame = null;
+            this._dropYoutubeFaces();
             this._paintYoutube();
         }
         return;
@@ -2044,15 +2481,27 @@ AirPlayApp.prototype._takeYoutube = function () {
     if (this._ytHud) {
         outs.push('hud');
     }
-    if (!outs.length || !this._ytFrame) {
+    if (!outs.length) {
+        if (this._ytGaugeFrame) {
+            this._dropYoutubeFaces();
+        }
         return;
     }
-    frame = this._ytFrame;
-    if (frame.w > 960 || frame.h > 640) {
-        fitted = frameFit.fitI420(frame.i420, frame.w, frame.h, 640, 360, 'contain');
-        frame = { i420: fitted.i420, w: fitted.w, h: fitted.h };
+    if (!this._ytFrame) {
+        return;
     }
-    this._placeMirrorFaces(frame.i420, frame.w, frame.h, outs);
+    // Same frame as last time: the layers keep it (stall_ms is long), and a
+    // moved window is placed by _nudgeMirror. Sending it again only spends
+    // the cluster's upload budget.
+    if (!frame && this._ytGaugeFrame && this._ytGaugeOuts === outs.join(',')) {
+        return;
+    }
+    // The film is scaled once, straight to the KOMBI profile, in
+    // _placeMirrorFaces. The centre screen reads the film file itself.
+    frame = this._ytFrame;
+    this._ytGaugeFrame = frame;
+    // A throttled call sent nothing: try the same frame on the next tick.
+    this._ytGaugeOuts = this._placeMirrorFaces(frame.i420, frame.w, frame.h, outs) ? outs.join(',') : '';
 };
 
 AirPlayApp.prototype._paintRender = function () {
@@ -2110,6 +2559,13 @@ AirPlayApp.prototype._toggleClusterLabel = function () {
 
 AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
+    if (name === 'app-exit') {
+        this._exitApp();
+        return;
+    }
+    if (this._onQualityChoice(name)) {
+        return;
+    }
     if (name === 'label-toggle') {
         this._labelMove = false;
         if (this._menu && typeof this._menu.setScreen === 'function') {
@@ -2164,50 +2620,170 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._saveDesk();
         return;
     }
-    if (name === 'position') {
-        this._posFocus = '';
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('pos-out');
-        }
-        this._fillPositionPreview(false);
+    if (name === 'position' || name === 'pos-back' || name === 'pos-each-back') {
+        this._showPositionList();
         return;
     }
     if (name === 'pos-out-back') {
+        this._posFocus = '';
+        if (this._menu && typeof this._menu.setBoxPreview === 'function') {
+            this._menu.setBoxPreview(null);
+        }
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('root');
         }
         return;
     }
-    if (name === 'pos-back') {
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('pos-out');
+    if (name === 'pos-shared') {
+        this._posMode = 'shared';
+        this._posFocus = 'shared';
+        this._mirrorSharedWindow();
+        this._nudgeMirror('central');
+        this._nudgeMirror('cluster');
+        this._nudgeMirror('hud');
+        this._refreshLabel();
+        this._paintYoutube();
+        this._queueWindowSave();
+        this._showPositionList();
+        return;
+    }
+    if (name === 'pos-each') {
+        this._posMode = 'each';
+        if (this._posScreen !== 'cluster' && this._posScreen !== 'hud') {
+            this._posScreen = 'central';
         }
+        this._posFocus = this._posScreen;
+        this._showPositionList();
         return;
     }
     if (name === 'pos-out-central' || name === 'pos-out-cluster' || name === 'pos-out-hud') {
-        this._openPosition(name.replace('pos-out-', ''));
+        this._posMode = 'each';
+        this._posScreen = name.replace('pos-out-', '');
+        this._posFocus = this._posScreen;
+        this._showPositionList();
         return;
     }
     if (name === 'pos-center') {
-        this._settings.center(this._posFocus || 'central');
+        if (this._posFocus === 'shared') {
+            this._settings.center('central');
+            this._mirrorSharedWindow();
+            this._liveApply('central');
+            this._liveApply('cluster');
+            this._liveApply('hud');
+        } else {
+            this._settings.center(this._posFocus || 'central');
+            this._liveApply(this._posFocus || 'central');
+        }
         this._saveWindows();
-        this._liveApply(this._posFocus || 'central');
         this._refreshLabel();
         this._paintYoutube();
         this._paintPosition();
         return;
     }
-    if (name === 'youtube' || name === 'yt-play') {
-        this._ytCentral = true;
-        this._useYoutube();
+    if (name === 'youtube') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('youtube');
         }
+        this._syncYoutubeGate();
+        return;
+    }
+    if (name === 'yt-login') {
+        if (this._ytSignedIn()) {
+            if (!this._ytSignOutArmed) {
+                var ytApp = this;
+                this._ytSignOutArmed = true;
+                if (this._ytSignOutTimer) {
+                    clearTimeout(this._ytSignOutTimer);
+                }
+                this._ytSignOutTimer = setTimeout(function () {
+                    ytApp._ytSignOutArmed = false;
+                    ytApp._ytSignOutTimer = null;
+                    ytApp._syncYoutubeGate();
+                }, 5000);
+                this._syncYoutubeGate();
+                return;
+            }
+            this._ytSignOutArmed = false;
+            if (this._ytSignOutTimer) {
+                clearTimeout(this._ytSignOutTimer);
+                this._ytSignOutTimer = null;
+            }
+            this._ytModel.signOut();
+            this._syncYoutubeGate();
+            return;
+        }
+        this._ytSignOutArmed = false;
+        this._beginYoutubeLogin();
+        return;
+    }
+    if (name === 'yt-login-retry') {
+        if (this._ytModel) {
+            this._ytModel.authStart(true);
+        }
+        this._syncYoutubeLogin();
+        return;
+    }
+    if (name === 'yt-login-code') {
+        return;
+    }
+    if (name === 'yt-login-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeGate();
+        return;
+    }
+    if (name === 'yt-browse') {
+        if (!this._ytSignedIn()) {
+            this._beginYoutubeLogin();
+            return;
+        }
+        this._ytBrowse = this._ytBrowse && this._ytBrowse !== 'results' ? this._ytBrowse : 'home';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('yt-browse');
+        }
+        this._openYtFeed(this._ytBrowse);
+        this._syncYoutubeBrowse();
+        return;
+    }
+    if (name === 'yt-feed-home' || name === 'yt-feed-subs' || name === 'yt-feed-wl') {
+        this._openYtFeed(name === 'yt-feed-home' ? 'home' : (name === 'yt-feed-subs' ? 'subs' : 'wl'));
+        this._syncYoutubeBrowse();
+        return;
+    }
+    if (name === 'yt-ride-back') {
+        if (this._menuScreen() === 'yt-login') {
+            if (this._menu && typeof this._menu.setScreen === 'function') {
+                this._menu.setScreen('youtube');
+            }
+            this._syncYoutubeGate();
+            return;
+        }
+        if (this._ytBrowse === 'player') {
+            this._ytBrowse = this._ytListMode || 'home';
+            this._syncYoutubeBrowse();
+            return;
+        }
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeGate();
+        return;
+    }
+    if (name === 'yt-browse-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeGate();
+        return;
+    }
+    if (name === 'yt-browse-empty') {
+        return;
+    }
+    if (name === 'youtube' || name === 'yt-play') {
         if (name === 'yt-play' && this._ytModel) {
             if (this._ytModel.state === 'playing' || this._ytModel.state === 'paused') {
                 this._ytModel.toggle();
-            } else if (this._ytModel.results && this._ytModel.results[0]) {
-                this._playYoutube(this._ytModel.results[0]);
             }
         }
         this._syncYoutubeList();
@@ -2215,6 +2791,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-search') {
         this._startFieldEdit('yt-search', 'search', this._ytModel && this._ytModel.q ? this._ytModel.q : '', 'Szukaj');
+        return;
+    }
+    if (name.indexOf('yt-vid-') === 0 && this._ytRows) {
+        this._playYoutube(this._ytRows[Number(name.slice(7))]);
         return;
     }
     if (name.indexOf('yt-res-') === 0 && this._ytModel) {
@@ -2231,7 +2811,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-stop') {
         this._stopYoutube();
-        if (this._menu && typeof this._menu.setScreen === 'function') {
+        if (this._menuScreen() !== 'yt-browse' && this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('youtube');
         }
         this._syncYoutubeList();
@@ -2262,6 +2842,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         if (ytOn) {
             this._useYoutube();
         }
+        this._ytGaugeOuts = '';
         if (!this._ytCluster && this._settings.outputs().indexOf('cluster') === -1) {
             this._dropMirrorFace('cluster');
         }
@@ -2829,7 +3410,7 @@ AirPlayApp.prototype._nudgeMirror = function (name) {
     if (name !== 'hud' && name !== 'cluster') {
         return;
     }
-    if (!this._mirrorFaces || !this._adapter || !this._lastFrame) {
+    if (!this._mirrorFaces || !this._adapter || !this._gaugeFrame()) {
         return;
     }
     face = this._mirrorFaces[name];
@@ -2856,27 +3437,56 @@ AirPlayApp.prototype._nudgeMirror = function (name) {
     face.key = face.layer + '@' + view.x + ',' + view.y + ' ' + view.w + 'x' + view.h + (slash === -1 ? '' : face.key.slice(slash));
 };
 
+AirPlayApp.prototype._gaugeFrame = function () {
+    // YouTube and AirPlay never run together; the faces show whichever is live.
+    if (this._ytGaugeFrame && !(this._sessions && this._sessions.active() === 'airplay')) {
+        return this._ytGaugeFrame;
+    }
+    return this._lastFrame || null;
+};
+
 AirPlayApp.prototype._gaugeView = function (name) {
     var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
     var maxW = name === 'hud' ? 800 : (panel ? 1920 : 1088);
     var maxH = name === 'hud' ? 480 : (panel ? 720 : 480);
+    var source = this._gaugeFrame();
     var turned;
     var legal;
     var box;
-    if (!this._lastFrame) {
+    if (!source) {
         return null;
     }
-    turned = this._turnedFrame(this._lastFrame, name);
-    legal = frameForVideo(turned.i420, turned.w, turned.h);
-    if (!legal) {
-        return null;
-    }
+    turned = null;
+    legal = this._kombiDims(source.w, source.h, name);
     if (name === 'cluster') {
         box = this._mapBox(this._settings.picture('cluster'), maxW, maxH);
     } else {
         box = this._settings.picture(name);
     }
     return frameFit.containPlace(legal.w, legal.h, box, maxW, maxH);
+};
+
+AirPlayApp.prototype._mirrorSharedWindow = function () {
+    var src = this._settings.picture('central');
+    var hud = this._mapBox(src, 800, 480);
+    this._settings.setPicture('cluster', {
+        x: src.x,
+        y: src.y,
+        w: src.w,
+        h: src.h,
+        fps: src.fps,
+        scale: src.scale,
+        rotate: src.rotate
+    });
+    this._settings.setPicture('hud', {
+        x: hud.x,
+        y: hud.y,
+        w: hud.w,
+        h: hud.h,
+        fps: src.fps,
+        scale: src.scale,
+        rotate: src.rotate
+    });
 };
 
 AirPlayApp.prototype._screenFrame = function (name) {
@@ -2899,7 +3509,7 @@ AirPlayApp.prototype._screenFrame = function (name) {
         y: shown.y | 0,
         w: shown.w | 0,
         h: shown.h | 0,
-        focus: this._posFocus === name
+        focus: this._posFocus === name || this._posFocus === 'shared'
     };
 };
 
@@ -2918,16 +3528,20 @@ AirPlayApp.prototype._fillPositionPreview = function (withSliders) {
     if (this._menuScreen() !== 'pos-out' && this._menuScreen() !== 'pos-box') {
         return;
     }
-    preview = {
-        frames: [
-            this._screenFrame('central'),
-            this._screenFrame('cluster'),
-            this._screenFrame('hud')
-        ],
-        sliders: []
-    };
-    if (withSliders && this._menuScreen() === 'pos-box') {
-        name = this._posFocus || 'central';
+    if (this._posMode === 'each' && this._posFocus && this._posFocus !== 'shared') {
+        preview = { frames: [this._screenFrame(this._posFocus)], sliders: [] };
+    } else {
+        preview = {
+            frames: [
+                this._screenFrame('central'),
+                this._screenFrame('cluster'),
+                this._screenFrame('hud')
+            ],
+            sliders: []
+        };
+    }
+    if (withSliders && (this._menuScreen() === 'pos-out' || this._menuScreen() === 'pos-box')) {
+        name = this._posFocus === 'shared' ? 'central' : (this._posFocus || 'central');
         box = this._settings.picture(name);
         designW = name === 'hud' ? 800 : 1920;
         designH = name === 'hud' ? 480 : 720;
@@ -2937,36 +3551,49 @@ AirPlayApp.prototype._fillPositionPreview = function (withSliders) {
         preview.sliders = [
             { key: 'pos-x', label: 'Poziomo', value: box.x, min: 0, max: xMax, on: sel === 'pos-x' },
             { key: 'pos-y', label: 'Pionowo', value: box.y, min: 0, max: yMax, on: sel === 'pos-y' },
-            { key: 'pos-size', label: 'Rozmiar', value: box.w, min: 160, max: designW, on: sel === 'pos-size' }
+            { key: 'pos-size', label: 'Rozciągnięcie', value: box.w, min: 160, max: designW, on: sel === 'pos-size' }
         ];
     }
     this._menu.setBoxPreview(preview);
 };
 
-AirPlayApp.prototype._openPosition = function (name) {
-    var titles = { central: 'Środek', cluster: 'Zegary', hud: 'HUD' };
-    this._posFocus = name;
-    if (this._menu && typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('pos-box');
+AirPlayApp.prototype._showPositionList = function () {
+    var mode = this._posMode === 'each' ? 'each' : 'shared';
+    var screen = this._posScreen === 'cluster' || this._posScreen === 'hud' ? this._posScreen : 'central';
+    this._posMode = mode;
+    this._posScreen = screen;
+    this._posFocus = mode === 'each' ? screen : 'shared';
+    if (!this._menu) {
+        return;
     }
-    if (this._menu && typeof this._menu.setItems === 'function') {
-        this._menu.setItems(menuDraw.positionOptions(), titles[name] || 'Pozycja');
+    if (this._menuScreen() !== 'pos-out' && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('pos-out');
+    }
+    if (typeof this._menu.setItems === 'function') {
+        this._menu.setItems(menuDraw.positionPage(mode, screen), 'Pozycja');
     }
     this._paintPosition();
 };
 
+AirPlayApp.prototype._openPosition = function (name) {
+    this._posMode = 'each';
+    this._posScreen = name;
+    this._posFocus = name;
+    this._showPositionList();
+};
+
 AirPlayApp.prototype._paintPosition = function () {
-    var name = this._posFocus || 'central';
+    var name = this._posFocus === 'shared' ? 'central' : (this._posFocus || 'central');
     var box;
     var shown;
-    if (!this._menu || this._menuScreen() !== 'pos-box') {
+    if (!this._menu || (this._menuScreen() !== 'pos-out' && this._menuScreen() !== 'pos-box')) {
         return;
     }
     box = this._settings.picture(name);
     shown = this._screenFrame(name);
     this._menu.setItemHint('pos-x', String(box.x), true);
     this._menu.setItemHint('pos-y', String(box.y), true);
-    this._menu.setItemHint('pos-size', 'okno ' + box.w + 'x' + box.h, true);
+    this._menu.setItemHint('pos-size', 'rozciągnięcie ' + box.w + 'x' + box.h, true);
     this._menu.setItemHint('pos-center', shown.x + ',' + shown.y, true);
     this._fillPositionPreview(true);
     if (name === 'central' && typeof this._menu.setAirWindow === 'function') {
@@ -3058,9 +3685,9 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     );
     this._menu.setItemHint('air-name', name);
     if (typeof this._menu.setItemTitle === 'function') {
-        this._menu.setItemTitle('air-quality', '600x400');
+        this._menu.setItemTitle('air-quality', 'Jakość obrazu');
     }
-    this._menu.setItemHint('air-quality', 'zablokowane, 24 kl/s');
+    this._menu.setItemHint('air-quality', this._qualityHint());
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
@@ -3681,19 +4308,6 @@ AirPlayApp.prototype._dropMirrorFaces = function () {
     });
 };
 
-function frameForVideo(i420, w, h) {
-    var dw = w - (w % 4);
-    var dh = h - (h % 2);
-    // A movie-sized frame is scaled by the centre GPU. Doing that in JS stalls the head unit.
-    if (w > 960 || h > 640 || dw < 64 || dh < 32) {
-        return null;
-    }
-    if (dw === w && dh === h) {
-        return { i420: i420, w: w, h: h };
-    }
-    return frameFit.fitI420(i420, w, h, dw, dh, 'contain');
-}
-
 AirPlayApp.prototype._armFace = function (delay) {
     var self = this;
     if (this._faceWait || !this._lastFrame) {
@@ -3736,7 +4350,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
     }
     if (this._faceAt && (now - this._faceAt) < 30) {
         this._armFace(30 - (now - this._faceAt));
-        return;
+        return false;
     }
     if (this._faceWait) {
         clearTimeout(this._faceWait);
@@ -3744,7 +4358,25 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
     }
     this._faceAt = now;
     if (!Object.keys(faces).length) {
-        return;
+        return true;
+    }
+    // KOMBI profile: the decoded frame is scaled once to the cluster/HUD size
+    // (aspect kept, never the centre-screen size) and turned per screen. The
+    // window drawn on the cluster or HUD can be any size; the renderer
+    // stretches this frame into it on the GPU.
+    var kq = this._quality('kombi');
+    var kombiBase = null;
+    var kombiTurned = {};
+    function kombiFrame(name) {
+        var box = self._settings.picture(name);
+        var quarters = ((box && box.rotate) || 0) / 90;
+        if (!kombiTurned[quarters]) {
+            if (!kombiBase) {
+                kombiBase = frameFit.scaleToProfile(i420, sw, sh, kq.w, kq.h);
+            }
+            kombiTurned[quarters] = frameFit.rotateI420(kombiBase.i420, kombiBase.w, kombiBase.h, quarters);
+        }
+        return kombiTurned[quarters];
     }
     Object.keys(faces).forEach(function (name) {
         var spec = faces[name];
@@ -3760,9 +4392,9 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
         if (!self._client.ready) {
             return;
         }
-        turned = self._turnedFrame({ i420: i420, w: sw, h: sh }, name);
-        legal = frameForVideo(turned.i420, turned.w, turned.h);
-        if (!legal) {
+        turned = null;
+        legal = kombiFrame(name);
+        if (!legal || legal.w > 1920 || legal.h > 720 || (legal.w % 4) !== 0 || (legal.h % 2) !== 0) {
             return;
         }
         if (name === 'cluster') {
@@ -3804,7 +4436,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
                 fail: ''
             };
             self._mirrorFaces[name] = face;
-            noteStart('mirror-face ' + name + ' ' + legal.w + 'x' + legal.h + ' -> ' + view.w + 'x' + view.h);
+            noteStart('mirror-face ' + name + ' ' + sw + 'x' + sh + ' frame ' + legal.w + 'x' + legal.h + ' (kombi ' + kq.w + 'x' + kq.h + ') -> ' + view.w + 'x' + view.h);
         }
         src = legal;
         if (face.vw !== legal.w || face.vh !== legal.h) {
@@ -3819,51 +4451,15 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
             face.fail = '';
         }
     });
+    return true;
 };
 
 AirPlayApp.prototype._mapBox = function (box, limitW, limitH) {
-    var scale = Math.min(limitW / 1920, limitH / 720);
-    var designW = Math.round(1920 * scale);
-    var designH = Math.round(720 * scale);
-    var w = Math.round((box.w || 640) * scale);
-    var h = Math.round((box.h || 360) * scale);
-    var x = Math.round((box.x || 0) * scale) + Math.floor((limitW - designW) / 2);
-    var y = Math.round((box.y || 0) * scale) + Math.floor((limitH - designH) / 2);
-    w -= w % 4;
-    h -= h % 2;
-    x -= x % 2;
-    y -= y % 2;
-    if (w < 16) {
-        w = 16;
-    }
-    if (h < 16) {
-        h = 16;
-    }
-    if (w > limitW) {
-        w = limitW - (limitW % 4);
-    }
-    if (h > limitH) {
-        h = limitH - (limitH % 2);
-    }
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 0) {
-        y = 0;
-    }
-    if (x + w > limitW) {
-        x = limitW - w;
-    }
-    if (y + h > limitH) {
-        y = limitH - h;
-    }
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 0) {
-        y = 0;
-    }
-    return { x: x, y: y, w: w, h: h };
+    // Window boxes for the cluster (and the shared window) are kept in the
+    // 1920x720 design space of the centre screen. The target can be the map
+    // pocket (1088x480), the whole panel (1920x720) or the HUD (800x480).
+    // Corners and centre stay where they were set; the size keeps its shape.
+    return frameFit.projectBox(box, 1920, 720, limitW, limitH);
 };
 
 AirPlayApp.prototype._presentCluster = function (frame) {
@@ -4071,6 +4667,105 @@ AirPlayApp.prototype._setVisible = function (visible) {
             logger.warn('app status report failed: ' + (err && err.message));
         });
     });
+};
+
+// "Wyłącz aplikację": end the sessions, free everything this app holds on the
+// three screens, then leave the page so the iDrive is in front again.
+// The Node process is NOT ended here: the SDK has no call for an app to stop
+// itself, and MainApp counts an exit it did not ask for as a crash (the
+// second one uninstalls the app). MainApp ends the process itself through
+// appGetsTerminated -> _handleShutdown. Opening the app again starts clean.
+// Shared renderers (mgu-render, cluster-render) and the tool service keep
+// running for other apps; only our layers and sockets go.
+AirPlayApp.prototype._exitApp = function () {
+    var active;
+    var self = this;
+    if (this._shutdownPromise || this._exiting) {
+        return Promise.resolve();
+    }
+    this._exiting = true;
+    noteStart('app-exit');
+    // 1. Sessions: AirPlay / desktop session, YouTube film, tool back to idle.
+    try {
+        active = this._sessions && this._sessions.active ? this._sessions.active() : null;
+        if (active || this._streamProtocol || this._airStarting) {
+            this._endStream(active || this._streamProtocol || 'airplay');
+        }
+    } catch (err) {
+        noteStart('exit-session ' + (err && err.message));
+    }
+    try {
+        this._stopYoutube();
+    } catch (err) {
+        noteStart('exit-youtube ' + (err && err.message));
+    }
+    try {
+        // The tool stops UxPlay, avahi, g21-mice/present/rdp and takes its
+        // firewall rules out when it reads stop.
+        fs.writeFileSync(this._paths.allow, 'stop\n');
+    } catch (err) {
+        noteStart('exit-allow ' + (err && err.message));
+    }
+    // 2. Rendering and buffers: timers, the mirror file, the KOMBI layers.
+    this._stopVideoTimer();
+    this._dropMirror();
+    this._dropMirrorFaces();
+    this._ytFrame = null;
+    this._ytGaugeFrame = null;
+    this._ytGaugeOuts = '';
+    this._lastFrame = null;
+    this._decoded = null;
+    this._clusterLayer = '';
+    if (this._adapter) {
+        this._adapter.destroyLayer();
+    }
+    if (this._label) {
+        this._label.hide();
+    }
+    // 3. Sockets: cluster-render connection, frame bridge, config panel and
+    // the mgu-render surface (its drop takes the centre layer away).
+    if (this._client) {
+        this._client.close();
+        this._clusterClosed = true;
+    }
+    if (this._frameBridge) {
+        this._frameBridge.stop();
+    }
+    if (this._panel) {
+        this._panel.stop();
+    }
+    if (this._menu) {
+        this._menu.close();
+    }
+    // 4. Leave the page: the HMI shows the screen it showed before the app.
+    return Promise.resolve()
+        .then(function () {
+            var rhmi = self.rhmiApplication;
+            if (rhmi && typeof rhmi.closeState === 'function') {
+                return rhmi.closeState(STATE_NAME);
+            }
+            return null;
+        })
+        .then(function () {
+            noteStart('exit-page-closed');
+        }, function (err) {
+            noteStart('exit-page ' + (err && err.message));
+        })
+        .then(function () {
+            self._visible = false;
+            self._exiting = false;
+            var reports = self._initialized && self._appStatusService
+                ? [self.unregisterHmiVisible(), self.registerInactive()]
+                : [];
+            return Promise.all(reports.map(function (report) {
+                return Promise.resolve(report).catch(function (err) {
+                    logger.warn('app status report failed: ' + (err && err.message));
+                });
+            }));
+        })
+        .then(function () {
+            noteStart('exit-done');
+        });
 };
 
 AirPlayApp.prototype._handleShutdown = function () {

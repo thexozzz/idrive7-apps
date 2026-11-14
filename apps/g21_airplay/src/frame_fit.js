@@ -166,6 +166,104 @@ function containPlace(sw, sh, box, limitW, limitH) {
     return { x: x, y: y, w: dw, h: dh };
 }
 
+/*
+ * Project a window box from one screen onto another of a different size.
+ * The size scales by one factor (the window keeps its shape and fits the
+ * smaller side). The place keeps its share of the free room: a window in
+ * the top-left corner lands in the top-left corner, a centred one stays
+ * centred, one at the bottom-right edge stays there. Width is a multiple
+ * of 4 and x, y, h even, which cluster-render wants for a video layer.
+ */
+function projectBox(box, fromW, fromH, toW, toH) {
+    var src = box || {};
+    var scale = Math.min(toW / fromW, toH / fromH);
+    var bw = src.w || fromW;
+    var bh = src.h || fromH;
+    var bx = src.x || 0;
+    var by = src.y || 0;
+    var freeW = fromW - bw;
+    var freeH = fromH - bh;
+    var w = even4(Math.round(bw * scale));
+    var h = even2(Math.round(bh * scale));
+    var rx;
+    var ry;
+    var x;
+    var y;
+    if (w < 16) {
+        w = 16;
+    }
+    if (h < 16) {
+        h = 16;
+    }
+    if (w > toW) {
+        w = toW - (toW % 4);
+    }
+    if (h > toH) {
+        h = toH - (toH % 2);
+    }
+    rx = freeW > 0 ? bx / freeW : 0.5;
+    ry = freeH > 0 ? by / freeH : 0.5;
+    if (rx < 0) {
+        rx = 0;
+    } else if (rx > 1) {
+        rx = 1;
+    }
+    if (ry < 0) {
+        ry = 0;
+    } else if (ry > 1) {
+        ry = 1;
+    }
+    x = evenDown(Math.round(rx * (toW - w)));
+    y = evenDown(Math.round(ry * (toH - h)));
+    if (x + w > toW) {
+        x = evenDown(toW - w);
+    }
+    if (y + h > toH) {
+        y = evenDown(toH - h);
+    }
+    return { x: x, y: y, w: w, h: h };
+}
+
+/*
+ * Frame size for a quality profile (pw x ph, given landscape). A portrait
+ * source uses the same profile turned (ph x pw), so both get the same pixel
+ * budget. Aspect kept, never enlarged. Both sides are multiples of 4: the
+ * frame stays a legal cluster-render video (width % 4) after a 90 degree
+ * turn too.
+ */
+function profileDims(sw, sh, pw, ph) {
+    var portrait = sh > sw;
+    var bw = portrait ? ph : pw;
+    var bh = portrait ? pw : ph;
+    var scale = Math.min(bw / sw, bh / sh, 1);
+    var w = even4(Math.round(sw * scale));
+    var h = even4(Math.round(sh * scale));
+    if (w < 64) {
+        w = 64;
+    }
+    if (h < 32) {
+        h = 32;
+    }
+    return { w: w, h: h };
+}
+
+// True when the frame needs no scaling for this profile (either orientation).
+function fitsProfile(w, h, pw, ph) {
+    var portrait = h > w;
+    return w <= (portrait ? ph : pw) && h <= (portrait ? pw : ph);
+}
+
+// Scale one decoded I420 frame to a profile. One pass over the output pixels.
+function scaleToProfile(i420, sw, sh, pw, ph) {
+    var dims = profileDims(sw, sh, pw, ph);
+    var out;
+    if (dims.w === sw && dims.h === sh) {
+        return { i420: i420, w: sw, h: sh };
+    }
+    out = fitI420(i420, sw, sh, dims.w, dims.h, 'contain');
+    return { i420: out.i420, w: out.w, h: out.h };
+}
+
 function fitI420(i420, sw, sh, dw, dh, mode) {
     var rect = fitRect(sw, sh, dw, dh, mode);
     var ySize = dw * dh;
@@ -286,6 +384,10 @@ module.exports = {
     even4: even4,
     fitRect: fitRect,
     containPlace: containPlace,
+    projectBox: projectBox,
+    profileDims: profileDims,
+    fitsProfile: fitsProfile,
+    scaleToProfile: scaleToProfile,
     fitI420: fitI420,
     rotateI420: rotateI420,
 };

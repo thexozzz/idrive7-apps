@@ -10,6 +10,7 @@
 var net = require('net');
 var fs = require('fs');
 var knobKeyboard = require('./knob_keyboard.js');
+var qr = require('./qr.js');
 
 var HELLO = 1;
 var PLACE = 2;
@@ -53,6 +54,16 @@ var EN = {
     'lustro iPhone': 'iPhone mirror',
     'Napis': 'Caption',
     'Ustawienia': 'Settings',
+    'Jakość obrazu': 'Picture quality',
+    'Ekran centralny': 'Centre screen',
+    'Zegary i HUD': 'Cluster and HUD',
+    'Wyłącz aplikację': 'Close app',
+    'niska': 'low',
+    'średnia': 'medium',
+    'wysoka': 'high',
+    'bardzo wysoka': 'very high',
+    'maksymalna': 'maximum',
+    'wybrana': 'selected',
     'Renderowanie': 'Rendering',
     'Programowe': 'Software',
     'YouTube': 'YouTube',
@@ -62,7 +73,14 @@ var EN = {
     'brak filmu': 'no video',
     'Pozycja': 'Position',
     'wspólne okno': 'shared window',
-    'wspólne dla wszystkich': 'shared by all',
+    'Rozciągnięcie': 'Stretch',
+    'Wspólne': 'Shared',
+    'Indywidualnie': 'Each screen',
+    'jedna pozycja na wszystkie': 'one place for all',
+    'każdy ekran osobno': 'each screen alone',
+    'tylko ten ekran': 'this screen only',
+    'okno, nie rozdzielczość': 'window, not the stream',
+    'pozycja': 'position',
     'Czcionka': 'Font',
     'Wielkość': 'Size',
     'Kolor': 'Colour',
@@ -77,6 +95,22 @@ var EN = {
     'tekst na ekranach': 'text on the screens',
     'włącz lustro': 'start mirror',
     'Ekrany': 'Screens',
+    'Zaloguj się do YouTube': 'Sign in to YouTube',
+    'Zalogowano': 'Signed in',
+    'konto w aucie': 'account on the car',
+    'kod na telefonie': 'code on the phone',
+    'naciśnij jeszcze raz, żeby wylogować': 'press again to sign out',
+    'Przeglądaj': 'Browse',
+    'po zalogowaniu': 'after sign-in',
+    'Home, subskrypcje, do obejrzenia': 'Home, subscriptions, watch later',
+    'Subskrypcje': 'Subscriptions',
+    'Do obejrzenia': 'Watch later',
+    'Wyniki': 'Results',
+    'Teraz': 'Now playing',
+    'Pobieram kod logowania': 'Getting a sign-in code',
+    'Wpisz ten kod na telefonie': 'Enter this code on your phone',
+    'Nowy kod': 'New code',
+    'jeszcze raz': 'try again',
     'środek': 'centre',
     'zablokowane, 24 kl/s': 'locked, 24 fps',
     'Nazwa': 'Name',
@@ -523,7 +557,7 @@ var ROOT_ITEMS = [
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
     { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
-    { name: 'air-quality', title: '600x400', hint: 'zablokowane, 24 kl/s', icon: 'desktop' },
+    { name: 'air-quality', title: 'Jakość obrazu', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
     { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
@@ -560,17 +594,42 @@ function positionOptions() {
     return [
         { name: 'pos-x', title: 'Poziomo', hint: 'klik, potem pokrętło', icon: 'grid', adjust: true },
         { name: 'pos-y', title: 'Pionowo', hint: 'klik, potem pokrętło', icon: 'grid', adjust: true },
-        { name: 'pos-size', title: 'Rozmiar', hint: 'wspólne okno', icon: 'desktop', adjust: true },
+        { name: 'pos-size', title: 'Rozciągnięcie', hint: 'okno, nie rozdzielczość', icon: 'desktop', adjust: true },
         { name: 'pos-center', title: 'Wyśrodkuj', hint: 'na środek', icon: 'grid' },
         { name: 'pos-back', title: 'Wstecz', hint: 'pozycja', icon: 'back' }
     ];
 }
 
-var POS_OUT_ITEMS = [
-    { name: 'pos-out-central', title: 'Środek', hint: 'wspólne dla wszystkich', icon: 'desktop' },
-    { name: 'pos-out-cluster', title: 'Zegary', hint: 'wspólne dla wszystkich', icon: 'grid' },
-    { name: 'pos-out-hud', title: 'HUD', hint: 'wspólne dla wszystkich', icon: 'tag' },
-    { name: 'pos-out-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+function positionPage(mode, screen) {
+    var shared = mode !== 'each';
+    var focus = screen === 'cluster' || screen === 'hud' ? screen : 'central';
+    var items = [
+        { name: 'pos-shared', title: 'Wspólne', hint: 'jedna pozycja na wszystkie', icon: 'grid', on: shared },
+        { name: 'pos-each', title: 'Indywidualnie', hint: 'każdy ekran osobno', icon: 'desktop', on: !shared }
+    ];
+    if (!shared) {
+        items.push(
+            { name: 'pos-out-central', title: 'Środek', hint: 'tylko ten ekran', icon: 'desktop', on: focus === 'central' },
+            { name: 'pos-out-cluster', title: 'Zegary', hint: 'tylko ten ekran', icon: 'grid', on: focus === 'cluster' },
+            { name: 'pos-out-hud', title: 'HUD', hint: 'tylko ten ekran', icon: 'tag', on: focus === 'hud' }
+        );
+    }
+    positionOptions().forEach(function (item) {
+        if (item.name !== 'pos-back') {
+            items.push(item);
+        }
+    });
+    items.push({ name: 'pos-out-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' });
+    return items;
+}
+
+var POS_OUT_ITEMS = positionPage('shared');
+
+var POS_EACH_ITEMS = [
+    { name: 'pos-out-central', title: 'Środek', hint: 'tylko ten ekran', icon: 'desktop' },
+    { name: 'pos-out-cluster', title: 'Zegary', hint: 'tylko ten ekran', icon: 'grid' },
+    { name: 'pos-out-hud', title: 'HUD', hint: 'tylko ten ekran', icon: 'tag' },
+    { name: 'pos-each-back', title: 'Wstecz', hint: 'pozycja', icon: 'back' }
 ];
 
 var LABEL_ITEMS = [
@@ -584,13 +643,24 @@ var LABEL_ITEMS = [
 ];
 
 var YOUTUBE_ITEMS = [
-    { name: 'yt-search', title: 'Szukaj', hint: 'tytuł filmu', icon: 'tag' },
-    { name: 'yt-play', title: 'Play', hint: '', icon: 'play' },
     { name: 'yt-where', title: 'Ekrany', hint: 'środek, zegary, HUD', icon: 'desktop' },
-    { name: 'yt-back10', title: '-10 s', hint: 'cofnij', icon: 'back' },
-    { name: 'yt-fwd10', title: '+10 s', hint: 'do przodu', icon: 'play' },
-    { name: 'yt-stop', title: 'Stop', hint: 'koniec filmu', icon: 'stop' },
+    { name: 'yt-login', title: 'Zaloguj się do YouTube', hint: 'kod na telefonie', icon: 'tag' },
+    { name: 'yt-browse', title: 'Przeglądaj', hint: 'po zalogowaniu', icon: 'play' },
     { name: 'yt-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+
+var YT_LOGIN_ITEMS = [
+    { name: 'yt-login-code', title: 'Pobieram kod logowania', hint: 'google.com/device', icon: 'tag' },
+    { name: 'yt-login-retry', title: 'Nowy kod', hint: 'jeszcze raz', icon: 'play' },
+    { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
+];
+
+var YT_BROWSE_ITEMS = [
+    { name: 'yt-feed-home', title: 'Home', hint: 'RideTube', icon: 'grid', on: true },
+    { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'RideTube', icon: 'grid' },
+    { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'RideTube', icon: 'tag' },
+    { name: 'yt-search', title: 'Szukaj', hint: 'tytuł filmu', icon: 'tag' },
+    { name: 'yt-browse-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
 ];
 
 var SETTINGS_ITEMS = [
@@ -602,6 +672,34 @@ var STREAM_ITEMS = [
     { name: 'stream-end', title: 'Zakończ', hint: 'Koniec streamu', icon: 'stop' }
 ];
 
+// Picture quality: two profiles, the centre screen (mgu-render) and the
+// cluster + HUD (cluster-render). Each list item shows its current size.
+function qualityItems(central, kombi) {
+    return [
+        { name: 'q-central', title: 'Ekran centralny', hint: central || '600x400', icon: 'desktop' },
+        { name: 'q-kombi', title: 'Zegary i HUD', hint: kombi || '400x240', icon: 'grid' },
+        { name: 'q-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
+    ];
+}
+
+function qualityOptions(kind, list, current, names) {
+    var prefix = kind === 'kombi' ? 'qk-' : 'qc-';
+    var items = (list || []).map(function (value) {
+        var label = names && names[value] ? names[value] : '';
+        return {
+            name: prefix + value,
+            title: value,
+            hint: value === current ? (label ? label + ', wybrana' : 'wybrana') : label,
+            icon: kind === 'kombi' ? 'grid' : 'desktop',
+            on: value === current
+        };
+    });
+    items.push({ name: prefix + 'back', title: 'Wstecz', hint: 'Jakość obrazu', icon: 'back' });
+    return items;
+}
+
+var QUALITY_ITEMS = qualityItems('600x400', '400x240');
+
 var ITEMS = ROOT_ITEMS;
 var SCREENS = {
     root: ROOT_ITEMS,
@@ -611,8 +709,14 @@ var SCREENS = {
     label: LABEL_ITEMS,
     settings: SETTINGS_ITEMS,
     youtube: YOUTUBE_ITEMS,
+    'yt-login': YT_LOGIN_ITEMS,
+    'yt-browse': YT_BROWSE_ITEMS,
     'pos-out': POS_OUT_ITEMS,
+    'pos-each': POS_EACH_ITEMS,
     'pos-box': positionOptions(),
+    quality: QUALITY_ITEMS,
+    'quality-central': qualityOptions('central', ['600x400'], '600x400'),
+    'quality-kombi': qualityOptions('kombi', ['240x144', '320x192', '400x240', '480x288', '600x360'], '400x240'),
     stream: STREAM_ITEMS
 };
 
@@ -770,7 +874,7 @@ function pageBox(width, height) {
     return { ox: ox, oy: oy, boxW: boxW, boxH: boxH };
 }
 
-function menuLayout(items, selected, width, height, detail, heading) {
+function menuLayout(items, selected, width, height, detail, heading, previewSpace) {
     var page = pageBox(width, height);
     var count = items.length || 1;
     var headerH = 68;
@@ -810,7 +914,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
     } else {
         rowH = 92;
         rowW = Math.min(920, page.boxW - 180);
-        if (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD') {
+        if (previewSpace && (heading === 'Okno' || heading === 'Pozycja' || heading === 'Wspólne' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD')) {
             rowW = Math.min(620, page.boxW - 700);
             if (rowW < 480) {
                 rowW = 480;
@@ -818,25 +922,53 @@ function menuLayout(items, selected, width, height, detail, heading) {
         }
         x = page.ox + 48;
         y = page.oy + headerH + 12;
+        var pitch = rowH + gap;
+        var pin = 0;
+        var p;
+        if (items[0] && items[0].name === 'pos-shared' && items[1] && items[1].name === 'pos-each') {
+            pin = 2;
+        }
+        for (p = 0; p < pin; p += 1) {
+            bubbles.push({
+                x: x,
+                y: y,
+                w: rowW,
+                h: rowH,
+                hitX: x,
+                hitY: y,
+                hitW: rowW,
+                hitH: rowH,
+                scale: 4,
+                iconPx: 3,
+                home: false,
+                index: p,
+                selected: p === selected
+            });
+            y += pitch;
+        }
         var listTop = y;
         var listBottom = page.oy + page.boxH - footerH - 12;
-        var pitch = rowH + gap;
         var visible = Math.floor((listBottom - listTop) / pitch);
-        var first = 0;
+        var first = pin;
         var shown;
+        var rest = items.length - pin;
         if (visible < 1) {
             visible = 1;
         }
-        if (items.length > visible) {
-            first = selected - Math.floor((visible - 1) / 2);
-            if (first < 0) {
-                first = 0;
-            }
-            if (first > items.length - visible) {
-                first = items.length - visible;
+        if (rest > visible) {
+            if (selected < pin) {
+                first = pin;
+            } else {
+                first = selected - Math.floor((visible - 1) / 2);
+                if (first < pin) {
+                    first = pin;
+                }
+                if (first > items.length - visible) {
+                    first = items.length - visible;
+                }
             }
         } else {
-            visible = items.length;
+            visible = rest;
         }
         shown = 0;
         for (i = first; i < items.length && shown < visible; i += 1) {
@@ -872,6 +1004,7 @@ function menuLayout(items, selected, width, height, detail, heading) {
         statusY: page.oy + page.boxH - 22,
         headerH: headerH,
         first: first,
+        pinned: pin || 0,
         count: items.length
     };
 }
@@ -921,12 +1054,18 @@ function crumbFor(name, head, where) {
         base = 'Napis';
     } else if (name === 'settings') {
         base = 'Ustawienia';
-    } else if (name === 'youtube') {
-        base = 'YouTube';
-    } else if (name === 'pos-out') {
+    } else if (name === 'youtube' || name === 'yt-login' || name === 'yt-browse') {
+        base = name === 'yt-login' ? 'YouTube > Zaloguj' : (name === 'yt-browse' ? 'YouTube > Przeglądaj' : 'YouTube');
+    } else if (name === 'pos-out' || name === 'pos-each') {
         base = 'Pozycja';
     } else if (name === 'pos-box') {
         base = 'Pozycja > ' + (head && head !== 'THEiPlay' ? head : 'Środek');
+    } else if (name === 'quality') {
+        base = 'AirPlay > Jakość obrazu';
+    } else if (name === 'quality-central') {
+        base = 'Jakość obrazu > Ekran centralny';
+    } else if (name === 'quality-kombi') {
+        base = 'Jakość obrazu > Zegary i HUD';
     } else if (name === 'stream') {
         base = 'AirPlay > Lustro';
     } else if (head && head !== 'THEiPlay' && head !== 'Stream') {
@@ -1006,29 +1145,48 @@ function drawSpinner(draw, cx, cy) {
     }
 }
 
-function drawNav(draw, lay) {
-    var y = lay.oy + lay.boxH - 78;
+// exit: the right button closes the app (menu pages). Without it the
+// button is "wybierz" (the knob keyboard still needs it).
+function drawNav(draw, lay, onTop, exit) {
+    var y = onTop ? (lay.oy + lay.headerH + 10) : (lay.oy + lay.boxH - 78);
     var h = 56;
     var arrow = 76;
-    var okW = 230;
+    var label = exit ? tr('Wyłącz aplikację') : 'wybierz';
+    var textScale = exit ? 3 : 4;
+    var tw = draw.textWidth(label, textScale);
+    var okW = Math.max(230, tw + (exit ? 76 : 48));
     var gap = 14;
     var okX = lay.ox + lay.boxW - okW - 24;
     var rightX = okX - gap - arrow;
     var leftX = rightX - gap - arrow;
-    var label = 'wybierz';
-    var tw;
+    var ix;
     draw.pill(leftX, y, arrow, h, CARD_HI);
     draw.text('<', leftX + 28, y + 16, 4, INK);
     draw.pill(rightX, y, arrow, h, CARD_HI);
     draw.text('>', rightX + 28, y + 16, 4, INK);
-    draw.pill(okX, y, okW, h, ACCENT);
-    tw = draw.textWidth(label, 4);
-    draw.text(label, okX + Math.floor((okW - tw) / 2), y + 16, 4, PAGE);
+    if (exit) {
+        // Power glyph: a ring with a gap at the top and a bar through it.
+        draw.pill(okX, y, okW, h, CARD_HI);
+        ix = okX + 22;
+        draw.rect(ix, y + 18, 3, 20, INK);
+        draw.rect(ix + 21, y + 18, 3, 20, INK);
+        draw.rect(ix, y + 38, 24, 3, INK);
+        draw.rect(ix, y + 18, 6, 3, INK);
+        draw.rect(ix + 18, y + 18, 6, 3, INK);
+        draw.rect(ix + 10, y + 11, 4, 18, INK);
+        draw.text(label, okX + 56 + Math.floor((okW - 56 - tw) / 2) - 8, y + 19, textScale, INK);
+    } else {
+        draw.pill(okX, y, okW, h, ACCENT);
+        draw.text(label, okX + Math.floor((okW - tw) / 2), y + 16, textScale, PAGE);
+    }
     lay.nav = {
         left: { x: leftX, y: y, w: arrow, h: h },
         right: { x: rightX, y: y, w: arrow, h: h },
-        ok: { x: okX, y: y, w: okW, h: h }
+        ok: { x: okX, y: y, w: okW, h: h, exit: !!exit }
     };
+    if (onTop) {
+        lay.framesTop = y + h + 22;
+    }
 }
 
 function keyLabel(key) {
@@ -1831,7 +1989,197 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     };
 }
 
-function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb, air) {
+var RT_BG = 0x0B0F1EFF;
+var RT_CARD = 0x1A2038FF;
+var RT_PH = 0x232A46FF;
+var RT_TEXT = 0xF1F3FFFF;
+var RT_DIM = 0xA4ABC8FF;
+var RT_PINK = 0xFF3F8EFF;
+var RT_HEAD = 0x070A14FF;
+
+function drawQrBlock(draw, text, x, y, mod) {
+    var q;
+    var side;
+    var r;
+    var c;
+    var end;
+    try {
+        q = qr.encode(String(text || 'https://www.google.com/device'));
+    } catch (err) {
+        return 0;
+    }
+    side = (q.length + 8) * mod;
+    draw.rect(x, y, side, side, 0xFFFFFFFF);
+    for (r = 0; r < q.length; r += 1) {
+        c = 0;
+        while (c < q[r].length) {
+            if (!q[r][c]) {
+                c += 1;
+            } else {
+                end = c;
+                while (end < q[r].length && q[r][end]) {
+                    end += 1;
+                }
+                draw.rect(x + (4 + c) * mod, y + (4 + r) * mod, (end - c) * mod, mod, 0x000000FF);
+                c = end;
+            }
+        }
+    }
+    return side;
+}
+
+function drawRideFrame(items, selected, width, height, ride) {
+    var draw = new FrameBuilder();
+    var hits = [];
+    var sel = items[selected] && items[selected].name ? items[selected].name : '';
+    var rails = [
+        { name: 'yt-search', label: 'Search' },
+        { name: 'yt-feed-home', label: 'Home' },
+        { name: 'yt-feed-subs', label: 'Subs' },
+        { name: 'yt-feed-wl', label: 'Watch later' }
+    ];
+    var mode = ride.mode || 'home';
+    var i;
+    var rail;
+    var on;
+    var ry;
+    var sections;
+    var sec;
+    var itemsRow;
+    var n;
+    var col;
+    var tile;
+    var tx;
+    var ty;
+    var label;
+    var auth;
+    var url;
+    var side;
+    var cardX;
+    var cardY;
+    var play;
+    draw.rect(0, 0, width, height, RT_BG);
+    draw.rect(0, 0, width, 56, RT_HEAD);
+    draw.text('RideTube', 88, 16, 4, RT_TEXT);
+    hits.push({ name: 'yt-ride-back', x: 16, y: 8, w: 56, h: 40 });
+    draw.text('<', 24, 16, 4, RT_TEXT);
+    if (mode !== 'player' && mode !== 'signin') {
+        for (i = 0; i < rails.length; i += 1) {
+            rail = rails[i];
+            on = sel === rail.name || (rail.name === 'yt-feed-home' && mode === 'home') || (rail.name === 'yt-feed-subs' && mode === 'subs') || (rail.name === 'yt-feed-wl' && mode === 'wl') || (rail.name === 'yt-search' && mode === 'results');
+            ry = 88 + i * 110;
+            if (on) {
+                draw.pill(18, ry, 112, 92, RT_CARD);
+                draw.rect(18, ry + 30, 6, 32, RT_PINK);
+            }
+            draw.text(rail.label, 36, ry + 36, 3, on ? RT_TEXT : RT_DIM);
+            hits.push({ name: rail.name, x: 12, y: ry, w: 124, h: 96 });
+        }
+    }
+    if (mode === 'signin') {
+        auth = ride.auth || {};
+        url = auth.url || 'https://www.google.com/device';
+        cardX = 280;
+        cardY = 120;
+        draw.pill(cardX, cardY, 1400, 460, RT_CARD);
+        if (auth.state === 'code' && auth.code) {
+            side = drawQrBlock(draw, url, cardX + 48, cardY + 70, 6);
+            if (!side) {
+                side = 180;
+            }
+            draw.text('Sign in', cardX + side + 140, cardY + 90, 5, RT_TEXT);
+            draw.text('Enter this code on your phone', cardX + side + 140, cardY + 150, 3, RT_DIM);
+            draw.pill(cardX + side + 140, cardY + 190, 640, 90, RT_HEAD);
+            draw.text(String(auth.code), cardX + side + 164, cardY + 214, 6, RT_TEXT);
+            draw.text(String(url).replace(/^https:\/\/(www\.)?/, ''), cardX + side + 140, cardY + 320, 3, RT_DIM);
+            draw.text('The account stays on the car', cardX + side + 140, cardY + 370, 3, RT_DIM);
+        } else if (auth.state === 'error') {
+            draw.text('Sign-in is not available', cardX + 80, cardY + 180, 4, RT_TEXT);
+            draw.text(String(auth.msg || 'tap to try again').slice(0, 48), cardX + 80, cardY + 230, 3, RT_DIM);
+            hits.push({ name: 'yt-login-retry', x: cardX + 80, y: cardY + 280, w: 360, h: 64 });
+            draw.pill(cardX + 80, cardY + 280, 360, 64, RT_PINK);
+            draw.text('Try again', cardX + 120, cardY + 298, 4, RT_HEAD);
+        } else if (auth.state === 'unsupported') {
+            draw.text('Signing in needs a newer service', cardX + 80, cardY + 200, 4, RT_TEXT);
+        } else {
+            draw.text('Getting a sign-in code...', cardX + 80, cardY + 200, 4, RT_TEXT);
+        }
+    } else if (mode === 'player') {
+        play = ride.playing || {};
+        draw.text(String(play.title || 'RideTube').slice(0, 36), 120, 100, 5, RT_TEXT);
+        draw.text(String(play.channel || '').slice(0, 40), 120, 150, 3, RT_DIM);
+        draw.text(play.state === 'playing' ? 'Pause' : 'Play', 700, 340, 4, RT_TEXT);
+        hits.push({ name: 'yt-back10', x: 480, y: 300, w: 140, h: 80 });
+        draw.pill(480, 300, 140, 80, RT_CARD);
+        draw.text('-10', 510, 326, 4, RT_TEXT);
+        hits.push({ name: 'yt-play', x: 660, y: 280, w: 180, h: 110 });
+        draw.pill(660, 280, 180, 110, 0xFFFFFFFF);
+        draw.text(play.state === 'playing' ? 'II' : '>', 720, 314, 5, RT_HEAD);
+        hits.push({ name: 'yt-fwd10', x: 880, y: 300, w: 140, h: 80 });
+        draw.pill(880, 300, 140, 80, RT_CARD);
+        draw.text('+10', 910, 326, 4, RT_TEXT);
+        draw.rect(160, 520, 1400, 8, RT_CARD);
+        if (play.total > 0) {
+            draw.rect(160, 520, Math.max(8, Math.round(1400 * play.elapsed / play.total)), 8, RT_PINK);
+        }
+        draw.text(play.state || '', 160, 560, 3, RT_DIM);
+    } else {
+        sections = ride.sections || [];
+        ty = 88;
+        n = 0;
+        for (i = 0; i < sections.length && i < 2; i += 1) {
+            sec = sections[i];
+            draw.text(String(sec.title || '').slice(0, 28), 180, ty, 4, RT_TEXT);
+            ty += 36;
+            itemsRow = sec.items || [];
+            for (col = 0; col < itemsRow.length && col < 4; col += 1) {
+                tile = itemsRow[col];
+                tx = 180 + col * 360;
+                on = sel === 'yt-vid-' + n;
+                draw.pill(tx, ty, 340, 190, on ? RT_PINK : RT_PH);
+                draw.pill(tx + 8, ty + 8, 324, 120, RT_CARD);
+                label = String(tile.duration || '');
+                if (label) {
+                    draw.pill(tx + 220, ty + 96, 96, 28, RT_HEAD);
+                    draw.text(label, tx + 232, ty + 102, 3, RT_TEXT);
+                }
+                draw.text(String(tile.title || '').slice(0, 22), tx + 8, ty + 140, 3, RT_TEXT);
+                draw.text(String(tile.hint || '').slice(0, 28), tx + 8, ty + 164, 2, RT_DIM);
+                hits.push({ name: 'yt-vid-' + n, x: tx, y: ty, w: 340, h: 190 });
+                n += 1;
+            }
+            if (!itemsRow.length) {
+                draw.text(ride.status || 'Loading...', 180, ty + 20, 3, RT_DIM);
+            }
+            ty += 230;
+        }
+        if (!sections.length) {
+            draw.text(ride.status || 'Loading...', 200, 280, 4, RT_TEXT);
+        }
+    }
+    return {
+        frame: message(FRAME, draw.bytes()),
+        rects: draw.rects,
+        layout: {
+            hits: [],
+            rideHits: hits,
+            nav: null,
+            bubbles: [],
+            oy: 0,
+            ox: 0,
+            boxW: width,
+            boxH: height,
+            headerH: 56,
+            first: 0,
+            count: items.length
+        }
+    };
+}
+
+function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb, air, ride) {
+    if (ride && ride.on) {
+        return drawRideFrame(items, selected, width, height, ride);
+    }
     var draw = new FrameBuilder();
     var lay;
     var i;
@@ -1850,7 +2198,8 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     if (isStreamItems(items) || heading === 'Stream') {
         return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air);
     }
-    lay = menuLayout(items, selected, width, height, detail, heading);
+    var previewSpace = !!(boxPreview && ((boxPreview.frames && boxPreview.frames.length) || boxPreview.w || boxPreview.limitW));
+    lay = menuLayout(items, selected, width, height, detail, heading, previewSpace);
     draw.clear(0);
     draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
     draw.rect(lay.ox, lay.oy, 8, lay.boxH, ACCENT);
@@ -1921,15 +2270,26 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
             labelY = hint ? bubble.y + 22 : bubble.y + Math.floor((bubble.h - 28) / 2);
             draw.text(title, bubble.x + 28 + iconSide + 22, labelY, bubble.scale, focus ? INK : HINT);
             if (hint) {
-                draw.text(hint.slice(0, 36), bubble.x + 28 + iconSide + 22, labelY + 34, 3, focus ? ACCENT : MUTED);
+                draw.text(hint.slice(0, item.on ? 28 : 36), bubble.x + 28 + iconSide + 22, labelY + 34, 3, focus ? ACCENT : MUTED);
+            }
+            if (item.on) {
+                var mark = 16;
+                draw.rect(
+                    bubble.x + bubble.w - mark - 22,
+                    bubble.y + Math.floor((bubble.h - mark) / 2),
+                    mark,
+                    mark,
+                    ACCENT
+                );
             }
         }
     }
     if (lay.bubbles.length && !lay.bubbles[0].home) {
-        if (lay.first > 0) {
+        var pinN = lay.pinned || 0;
+        if (lay.first > pinN) {
             draw.text(tr('w gore'), lay.ox + lay.boxW - 280, lay.oy + 28, 3, MUTED);
         }
-        if (lay.first + lay.bubbles.length < lay.count) {
+        if (lay.first + (lay.bubbles.length - pinN) < lay.count) {
             draw.text(tr('dalej'), lay.ox + lay.boxW - 160, lay.hintY, 3, MUTED);
         }
     }
@@ -1938,7 +2298,8 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     } else {
         draw.text(tr('strzalki, potem wybierz'), lay.ox + 36, lay.oy + lay.boxH - 58, 3, MUTED);
     }
-    drawNav(draw, lay);
+    var framesOn = !!(boxPreview && boxPreview.frames && boxPreview.frames.length);
+    drawNav(draw, lay, framesOn, true);
     if (boxPreview && boxPreview.frames && boxPreview.frames.length) {
         drawScreenFrames(draw, lay, boxPreview, items[selected]);
     } else if (boxPreview && (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD')) {
@@ -1960,10 +2321,10 @@ function drawScreenFrames(draw, lay, preview, selectedItem) {
     var colW = 500;
     var gap = 14;
     var n = frames.length || 1;
-    var budget = lay.boxH - lay.headerH - 28;
+    var y = lay.framesTop || (lay.oy + lay.headerH + 12);
+    var budget = lay.oy + lay.boxH - y - 16;
     var slot = Math.floor((budget - gap * (n - 1)) / n);
     var x0 = lay.ox + lay.boxW - colW - 24;
-    var y = lay.oy + lay.headerH + 12;
     var i;
     var frame;
     var labelH = 22;
@@ -2151,6 +2512,8 @@ function createMenuSurface(opts) {
     var lastPush = 0;
     var lastTilt = '';
     var boxPreview = null;
+    var rideView = null;
+    var rideHits = [];
     var caption = null;
     var lastFrame = null;
     var noted = false;
@@ -2329,7 +2692,7 @@ function createMenuSurface(opts) {
         } else if (streamInfo) {
             streamInfo.video = false;
         }
-        if (screenName === 'youtube' && ytState && ytState.live && ytState.central !== false && native) {
+        if ((screenName === 'youtube' || screenName === 'yt-browse') && ytState && ytState.live && ytState.central !== false && native) {
             sendMirror(true, youtubeFilePath);
         } else {
             sendMirror(!!((streamInfo && streamInfo.video) || (screenName !== 'stream' && airState && airState.mirrored && airState.window && native)));
@@ -2358,12 +2721,13 @@ function createMenuSurface(opts) {
         var airArg = airState || (screenName === 'youtube' && ytState ? { yt: ytState } : null);
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb, airArg, version)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb, airArg);
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb, airArg, rideView);
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
         backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
         navBoxes = built.layout && built.layout.nav ? built.layout.nav : null;
         streamHits = (built.layout && built.layout.hits) || [];
+        rideHits = (built.layout && built.layout.rideHits) || [];
         airBadge = built.layout && built.layout.airBadge ? built.layout.airBadge : null;
         airHits = (built.layout && built.layout.airHits) || [];
         airStrip = built.layout && built.layout.airStrip ? built.layout.airStrip : null;
@@ -2506,11 +2870,17 @@ function createMenuSurface(opts) {
             applyEditResult(knobKeyboard.applyKey(edit));
             return;
         }
+        if (navBoxes && navBoxes.ok && navBoxes.ok.exit) {
+            note('menu-exit');
+            choose('app-exit');
+            return;
+        }
         press();
     }
 
     function hitRow(x, y) {
-        var lay = menuLayout(items, selected, screen.w || 1920, screen.h || 720, detail, heading);
+        var previewSpace = !!(boxPreview && ((boxPreview.frames && boxPreview.frames.length) || boxPreview.w || boxPreview.limitW));
+        var lay = menuLayout(items, selected, screen.w || 1920, screen.h || 720, detail, heading, previewSpace);
         var i;
         var bubble;
         var pts = [
@@ -2579,7 +2949,8 @@ function createMenuSurface(opts) {
                 title: item.title,
                 hint: item.hint,
                 icon: item.icon || 'play',
-                adjust: !!item.adjust
+                adjust: !!item.adjust,
+                on: !!item.on
             };
         });
     }
@@ -2604,10 +2975,12 @@ function createMenuSurface(opts) {
             if (!boxPreview) {
                 boxPreview = defaultWindowPreview();
             }
-        } else if (next === 'pos-out' || next === 'pos-box') {
+        } else if (next === 'pos-out' || next === 'pos-each' || next === 'pos-box') {
             heading = 'Pozycja';
         } else if (next === 'label') {
             heading = 'Napis';
+        } else if (next === 'quality' || next === 'quality-central' || next === 'quality-kombi') {
+            heading = 'Jakość obrazu';
         } else if (next === 'stream') {
             heading = 'Stream';
             streamInfo = null;
@@ -3195,6 +3568,27 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if ((screenName === 'yt-login' || screenName === 'yt-browse') && rideHits && rideHits.length) {
+                    var rideName = '';
+                    var rideI;
+                    for (rideI = rideHits.length - 1; rideI >= 0; rideI -= 1) {
+                        if (pointIn(rideHits[rideI], tx, ty)) {
+                            rideName = rideHits[rideI].name;
+                            break;
+                        }
+                    }
+                    if (rideName) {
+                        if (phase === 1) {
+                            touchDown = { ride: rideName, x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                        } else if (phase === 3 && touchDown && touchDown.ride === rideName) {
+                            choose(rideName);
+                            touchDown = null;
+                        } else if (phase === 3) {
+                            touchDown = null;
+                        }
+                        return;
+                    }
+                }
                 if (hitsNav(tx, ty)) {
                     if (phase === 1) {
                         touchDown = { nav: hitsNav(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
@@ -3450,7 +3844,8 @@ function createMenuSurface(opts) {
                     title: item.title,
                     hint: item.hint || '',
                     icon: item.icon || 'play',
-                    adjust: !!item.adjust
+                    adjust: !!item.adjust,
+                    on: !!item.on
                 };
             });
             armed = '';
@@ -3484,6 +3879,12 @@ function createMenuSurface(opts) {
                 x: info.x | 0,
                 y: info.y | 0
             } : null;
+            if (!edit) {
+                paint();
+            }
+        },
+        setRideView: function (info) {
+            rideView = info && info.on ? info : null;
             if (!edit) {
                 paint();
             }
@@ -3676,6 +4077,9 @@ module.exports = {
     SCREENS: SCREENS,
     screenOptions: screenOptions,
     positionOptions: positionOptions,
+    positionPage: positionPage,
+    qualityItems: qualityItems,
+    qualityOptions: qualityOptions,
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,

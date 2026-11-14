@@ -4,6 +4,36 @@ var PROTOCOLS = ['airplay', 'windows', 'rdp', 'vnc'];
 var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
 var MAX_PROFILES = 6;
 
+// Picture quality, two profiles that never share a value.
+// Centre screen (mgu-render): what the iPhone is asked for. 600x400 is the
+// only size the frame reader takes today (_takeFrame drops bigger frames).
+// Cluster and HUD (cluster-render): the frame size sent to the KOMBI, the
+// same for both, whatever the size of the window drawn there.
+var QUALITY_CENTRAL = ['600x400'];
+var QUALITY_KOMBI = ['240x144', '320x192', '400x240', '480x288', '600x360'];
+var QUALITY_DEFAULT = { central: '600x400', kombi: '400x240' };
+var QUALITY_NAMES = {
+    '240x144': 'niska',
+    '320x192': 'średnia',
+    '400x240': 'wysoka',
+    '480x288': 'bardzo wysoka',
+    '600x360': 'maksymalna',
+    '600x400': 'iPhone, 24 kl/s'
+};
+
+function qualityValue(kind, value) {
+    var list = kind === 'kombi' ? QUALITY_KOMBI : QUALITY_CENTRAL;
+    return list.indexOf(value) === -1 ? QUALITY_DEFAULT[kind === 'kombi' ? 'kombi' : 'central'] : value;
+}
+
+function qualitySize(value) {
+    var m = /^(\d+)x(\d+)$/.exec(String(value || ''));
+    if (!m) {
+        return null;
+    }
+    return { w: Number(m[1]), h: Number(m[2]) };
+}
+
 // Built-in owner RDP profile as Profil 1 / p1 (password in .secret, not here).
 var BUILTIN_RDP = {
     id: 'p1',
@@ -178,6 +208,11 @@ function createDesktopSettings(stored) {
     // false = jak na kkds (bez kodu); true = -pin na iPhonie.
     var airplayPin = data.airplayPin === true;
     var airQuality = data.airQuality === '1080' ? '1080' : '720';
+    // Older settings have no profiles. The centre screen kept running at the
+    // fixed 600x400 (airQuality is not read since 0.1.109), so that stays;
+    // the KOMBI starts at its own default.
+    var qualityCentral = qualityValue('central', data.qualityCentral);
+    var qualityKombi = qualityValue('kombi', data.qualityKombi);
     var airDisplay = data.airDisplay === 'cluster' || data.airDisplay === 'both' || data.airDisplay === 'off'
         ? data.airDisplay
         : 'central';
@@ -291,6 +326,20 @@ function createDesktopSettings(stored) {
         setAirQuality: function (next) {
             airQuality = next === '1080' ? '1080' : '720';
             return { ok: true, quality: airQuality };
+        },
+        qualityCentral: function () { return qualityCentral; },
+        qualityKombi: function () { return qualityKombi; },
+        setQuality: function (kind, value) {
+            var list = kind === 'kombi' ? QUALITY_KOMBI : (kind === 'central' ? QUALITY_CENTRAL : null);
+            if (!list || list.indexOf(value) === -1) {
+                return { ok: false, reason: 'bad-quality' };
+            }
+            if (kind === 'kombi') {
+                qualityKombi = value;
+            } else {
+                qualityCentral = value;
+            }
+            return { ok: true, kind: kind, quality: value };
         },
         airDisplay: function () { return airDisplay; },
         setAirDisplay: function (next) {
@@ -558,6 +607,8 @@ function createDesktopSettings(stored) {
                 airplayName: airplayName,
                 airplayPin: airplayPin,
                 airQuality: airQuality,
+                qualityCentral: qualityCentral,
+                qualityKombi: qualityKombi,
                 airDisplay: airDisplay,
                 uiLang: uiLang,
                 uiRender: uiRender,
@@ -616,5 +667,10 @@ module.exports = {
     MAX_PROFILES: MAX_PROFILES,
     BUILTIN_RDP: BUILTIN_RDP,
     parseIpv4: parseIpv4,
+    QUALITY_CENTRAL: QUALITY_CENTRAL,
+    QUALITY_KOMBI: QUALITY_KOMBI,
+    QUALITY_DEFAULT: QUALITY_DEFAULT,
+    QUALITY_NAMES: QUALITY_NAMES,
+    qualitySize: qualitySize,
     createDesktopSettings: createDesktopSettings,
 };
