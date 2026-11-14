@@ -30,6 +30,8 @@ var configStoreFactory = require('./config_store.js');
 var configPanelFactory = require('./config_panel.js');
 var windowsOffers = require('./windows_offers.js');
 var frameBridgeFactory = require('./frame_bridge.js');
+// RideTube's screen (GPL-3.0-or-later, JustAnotherPU/ridetube on the MGU App Kit): rt_*.js
+var rideTube = require('./rt_host.js');
 
 // YouTube load on the MGU: ytdec decodes in software at the film's own
 // frame rate, so the picture is kept small. 848x480 (16:9, width % 16)
@@ -395,7 +397,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.122',
+        version: (this._packageJson && this._packageJson.version) || '0.1.123',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -433,7 +435,7 @@ function AirPlayApp() {
     this._ytHud = !!ytScreens.hud;
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
-    this._bindYoutube();
+    this._bindRideTube();
     // 42 ms: at most 24 film frames a second for the cluster/HUD. Without
     // gauges _takeYoutube itself keeps to one look every 200 ms.
     this._ytTimer = setInterval(function () {
@@ -512,7 +514,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.122') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.123') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -571,6 +573,14 @@ AirPlayApp.prototype._setupRhmi = function () {
 
 AirPlayApp.prototype._showMenu = function () {
     noteStart('menu-on-bar');
+    if (this._rt && this._rt.isOpen()) {
+        // RideTube was open: it comes back (the menu only for its keyboard).
+        this._rt.resume();
+        if (this._rt.spelling() && this._menu) {
+            this._menu.open();
+        }
+        return this._openPage();
+    }
     if (this._clusterClosed && this._client) {
         // Closed by "Wyłącz aplikację": connect again; the label comes back on ready.
         this._clusterClosed = false;
@@ -1785,6 +1795,131 @@ AirPlayApp.prototype._ytFilm = function () {
     return { rect: d.w + 'x' + d.h, quality: YT_GAUGE_QUALITY };
 };
 
+// RideTube's screen: browse with thumbnails, the player, sign-in, channels and
+// its settings, drawn as in RideTube (rt_host.js). It owns the connection to
+// jap-ridetube-d; this._ytModel is its model, so the cluster/HUD code below
+// reads the same film. Without it (a start error) the old menu screens stay.
+AirPlayApp.prototype._bindRideTube = function () {
+    var self = this;
+    try {
+        this._rt = rideTube.createRideTube({
+            log: noteStart,
+            dataDir: this._store && this._store.dir,
+            version: (this._packageJson && this._packageJson.version) || '',
+            spell: function (title) {
+                return self._rtSpell(title);
+            },
+            onExit: function () {
+                self._rtClosed();
+            },
+            screen: function (key) {
+                if (key === 'yt_central') {
+                    return self._ytCentral !== false;
+                }
+                return key === 'yt_cluster' ? !!self._ytCluster : !!self._ytHud;
+            },
+            setScreen: function (key, on) {
+                self._setYtScreen(key.replace('yt_', ''), on);
+            },
+            kombiWanted: function () {
+                return !!(self._ytCluster || self._ytHud);
+            },
+            centralVideo: function () {
+                return self._ytCentral !== false || (!self._ytCluster && !self._ytHud);
+            },
+            videoRect: function () {
+                return self._ytFilm().rect;
+            },
+        });
+        this._ytModel = this._rt.model;
+        noteStart('rt-ready');
+    } catch (err) {
+        noteStart('rt-start ' + (err && (err.stack || err.message)));
+        this._rt = null;
+        this._bindYoutube();
+    }
+};
+
+AirPlayApp.prototype._openRideTube = function () {
+    if (!this._rt) {
+        return;
+    }
+    // as a film from the old menu did: AirPlay gives the screen to YouTube
+    this._useYoutube();
+    if (this._menu) {
+        this._menu.close();
+    }
+    this._rt.open();
+};
+
+// RideTube closed (its THEiPlay entry, Back): THEiPlay's menu again. The film
+// plays on (sound, cluster/HUD) until Stop or "Wyłącz aplikację".
+AirPlayApp.prototype._rtClosed = function () {
+    if (this._exiting || this._visible === false || !this._menu) {
+        return;
+    }
+    this._menu.open();
+    if (typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('root');
+    }
+};
+
+// RideTube's search: THEiPlay's knob keyboard (the HMI's speller screens are
+// blank on this G21). The menu has the screen while it is up.
+AirPlayApp.prototype._rtSpell = function (title) {
+    var self = this;
+    return new Promise(function (resolve) {
+        if (!self._menu || typeof self._menu.startEdit !== 'function') {
+            resolve(null);
+            return;
+        }
+        self._menu.open();
+        self._menu.startEdit({
+            field: 'rt-search',
+            mode: 'search',
+            value: '',
+            title: title === 'Find a channel' ? 'Kanał' : 'Szukaj',
+            onDone: function (text) {
+                self._menu.close();
+                resolve(String(text || ''));
+            },
+            onCancel: function () {
+                self._menu.close();
+                resolve(null);
+            }
+        });
+    });
+};
+
+// One YouTube screen on or off (central, cluster, hud), saved with the
+// desktop settings. Used by RideTube's settings.
+AirPlayApp.prototype._setYtScreen = function (kind, on) {
+    if (kind === 'central') {
+        this._ytCentral = !!on;
+    } else if (kind === 'cluster') {
+        this._ytCluster = !!on;
+    } else if (kind === 'hud') {
+        this._ytHud = !!on;
+    } else {
+        return;
+    }
+    if (on) {
+        this._useYoutube();
+    }
+    if (this._desk.setYtScreens) {
+        this._desk.setYtScreens({ central: this._ytCentral !== false, cluster: !!this._ytCluster, hud: !!this._ytHud });
+        this._saveDesk();
+    }
+    this._ytGaugeOuts = '';
+    if (!this._ytCluster && this._settings.outputs().indexOf('cluster') === -1) {
+        this._dropMirrorFace('cluster');
+    }
+    if (!this._ytHud && this._settings.outputs().indexOf('hud') === -1) {
+        this._dropMirrorFace('hud');
+    }
+    this._paintYoutube();
+};
+
 AirPlayApp.prototype._stopYoutube = function () {
     if (this._ytModel) {
         this._ytModel.setWantVideo(false);
@@ -2719,6 +2854,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         return;
     }
     if (name === 'youtube') {
+        if (this._rt) {
+            this._openRideTube();
+            return;
+        }
         if (this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('youtube');
         }
@@ -4683,6 +4822,9 @@ AirPlayApp.prototype._setVisible = function (visible) {
         return;
     }
     if (this._visible === visible) {
+        if (!visible && this._rt) {
+            this._rt.pause();
+        }
         if (!visible && this._menu) {
             this._menu.setFront(false);
         }
@@ -4693,6 +4835,9 @@ AirPlayApp.prototype._setVisible = function (visible) {
     }
     this._visible = visible;
     noteStart(visible ? 'visible' : 'hidden');
+    if (!visible && this._rt) {
+        this._rt.pause();
+    }
     if (visible) {
         this._showMenu();
     } else if (this._menu) {
@@ -4735,6 +4880,13 @@ AirPlayApp.prototype._exitApp = function () {
         }
     } catch (err) {
         noteStart('exit-session ' + (err && err.message));
+    }
+    try {
+        if (this._rt) {
+            this._rt.close();
+        }
+    } catch (err) {
+        noteStart('exit-ridetube ' + (err && err.message));
     }
     try {
         this._stopYoutube();

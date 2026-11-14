@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.122",
+  "version": "0.1.123",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -34,7 +34,20 @@
     "src/youtube_file.js",
     "src/config_store.js",
     "src/config_panel.js",
-    "src/windows_offers.js"
+    "src/windows_offers.js",
+    "src/rt_host.js",
+    "src/rt_view.js",
+    "src/rt_display.js",
+    "src/rt_renderd.js",
+    "src/rt_record.js",
+    "src/rt_canvas.js",
+    "src/rt_fonts.js",
+    "src/rt_gauges.js",
+    "src/rt_sheet.js",
+    "src/rt_themes.js",
+    "src/rt_i18n.js",
+    "src/rt_credits.js",
+    "src/rt_parked.js"
   ],
   "sdk": [
     "oap-sdk/src/core/OnlineApp.js",

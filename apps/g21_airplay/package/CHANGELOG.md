@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.123
+
+- YouTube to teraz prawdziwy ekran RideTube (kod RideTube przeniesiony do THEiPlay): przeglądanie z miniaturami, półki Home, Subskrypcje, Do obejrzenia, kanały, odtwarzacz z obrazem na całym ekranie (przewijanie, -10/+10 s, rozdziały, SponsorBlock), logowanie kodem z QR i ustawienia RideTube (jakość domyślnie 480p, Na zegarach, Na HUD, obraz na środku). Układ jak w RideTube, bez rozciągania.
+- Szukaj w RideTube otwiera klawiaturę THEiPlay (pokrętło/dotyk); po wpisaniu wracają wyniki.
+- Pierwsza pozycja z lewej w RideTube: THEiPlay — powrót do menu THEiPlay. Film gra dalej (dźwięk, zegary, HUD) do Stop albo Wyłącz aplikację. Wstecz pokrętłem na krawędzi też wraca do THEiPlay.
+- Licencja THEiPlay: GPL-3.0-or-later (kod RideTube); autorzy i licencje części w NOTICE.md.
+
 ## 0.1.122
 
 - Jakość obrazu → Zegary i HUD ma nowy profil 240x180 (niska, 4:3). Film 16:9 mieści się w nim jako 240x132, obraz 4:3 wypełnia całe 240x180. Gdy YouTube idzie tylko na zegary i/lub HUD (środek wyłączony), dekoder od razu robi obraz w rozmiarze tego profilu z filmu 360p, więc aplikacja nic już nie skaluje. Zmiana ekranów w trakcie filmu liczy się od następnego filmu.

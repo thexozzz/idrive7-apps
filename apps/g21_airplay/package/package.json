@@ -1,6 +1,6 @@
 {
   "name": "g21_airplay",
-  "version": "0.1.122",
+  "version": "0.1.123",
   "description": "THEiPlay — lustro ekranu iPhone przez AirPlay na MGU Store Wi-Fi.",
   "private": false,
   "main": "javascript/runner.js",
@@ -19,12 +19,15 @@
   "files": [
     "config",
     "rhmiData",
+    "fonts",
     "package.json",
     "npm-shrinkwrap.json",
     "permissions.json",
     "javascript",
     "manifest.json",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE.md"
   ],
   "dependencies": {
     "oap-sdk": "24.10.2"
@@ -32,7 +35,7 @@
   "engines": {
     "node": ">=8.7.0"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "mguLocalOnly": true,
   "mguInternet": true,
   "mguHmi": [

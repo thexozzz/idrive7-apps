@@ -15,7 +15,7 @@ Cel: własne aplikacje iDrive 7 (MGU) dla BMW G21 320d xDrive 2020. Główna apl
 6. Najpierw przyczyna (logi, kod), potem minimalna, odwracalna poprawka. Nie deklaruj „działa” bez testu na aucie.
 7. Kod w `apps/` i `lib/` = **Node 8.16.2** (bez `?.`, `??`, `replaceAll`, `Object.fromEntries`, `fs.rm`…).
 8. Nowy `require('./x.js')` → dopisz `src/x.js` do `modules` w `mgu-app.json` (inaczej Store nie zbuduje).
-9. Nie kopiuj kodu GPL/PolyForm do aplikacji MIT. Sprawdź licencję przed użyciem czegokolwiek z zewnątrz.
+9. Sprawdź licencję przed użyciem czegokolwiek z zewnątrz. THEiPlay (`apps/g21_airplay`) jest od 0.1.123 na **GPL-3.0-or-later** (zawiera RideTube, decyzja właściciela 2026-11-14) — autorzy i licencje części w `package/NOTICE.md`; nowe obce części dopisuj tam. Kodu PolyForm nie kopiuj. Pozostałe aplikacje zostają MIT.
 10. Nie zabijaj procesu OAP aplikacji (2 crashe = MainApp odinstalowuje aplikację).
 11. **Każda paczka zmian do pushu ma podbitą wersję** (polecenie właściciela, 2026-11-14): wpisy w `## Unreleased` w `package/CHANGELOG.md`, potem `node tools/bump_version.js g21_airplay patch` (mgu-app.json, package.json, npm-shrinkwrap.json, rhmiData/application.json, nagłówek CHANGELOG) i zapasowy numer w `src/main.js` (`|| '0.1.x'`). Pliki trafiają do folderu na dysku; commit i push robi właściciel — dostaje gotowe polecenia `git`.
 
