@@ -716,7 +716,7 @@ var SCREENS = {
     'pos-box': positionOptions(),
     quality: QUALITY_ITEMS,
     'quality-central': qualityOptions('central', ['600x400'], '600x400'),
-    'quality-kombi': qualityOptions('kombi', ['240x144', '320x192', '400x240', '480x288', '600x360'], '400x240'),
+    'quality-kombi': qualityOptions('kombi', ['240x144', '240x180', '320x192', '400x240', '480x288', '600x360'], '400x240'),
     stream: STREAM_ITEMS
 };
 

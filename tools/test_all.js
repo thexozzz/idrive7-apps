@@ -14,6 +14,7 @@ var tools = [
     path.join(__dirname, 'test_video_router.js'),
     path.join(__dirname, 'test_gauge_place.js'),
     path.join(__dirname, 'test_quality.js'),
+    path.join(__dirname, 'test_youtube_perf.js'),
     path.join(__dirname, 'test_vnc.js'),
     path.join(__dirname, 'test_socks5.js'),
     path.join(__dirname, 'test_session.js'),

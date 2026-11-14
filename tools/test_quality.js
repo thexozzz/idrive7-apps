@@ -17,7 +17,7 @@ var fit = require(path.join(src, 'frame_fit.js'));
 var menu = require(path.join(src, 'menu_draw.js'));
 
 // Defaults and lists.
-assert.deepStrictEqual(desk.QUALITY_KOMBI, ['240x144', '320x192', '400x240', '480x288', '600x360']);
+assert.deepStrictEqual(desk.QUALITY_KOMBI, ['240x144', '240x180', '320x192', '400x240', '480x288', '600x360']);
 assert.strictEqual(desk.QUALITY_DEFAULT.central, '600x400');
 assert.strictEqual(desk.QUALITY_DEFAULT.kombi, '400x240');
 assert.ok(desk.QUALITY_CENTRAL.indexOf('600x400') !== -1);
@@ -87,6 +87,10 @@ desk.QUALITY_KOMBI.forEach(function (q) {
 assert.deepStrictEqual(fit.profileDims(600, 400, 400, 240), { w: 360, h: 240 });
 assert.deepStrictEqual(fit.profileDims(400, 600, 400, 240), { w: 240, h: 360 });
 assert.deepStrictEqual(fit.profileDims(1280, 720, 400, 240), { w: 400, h: 224 });
+// 240x180 (4:3): a 4:3 picture fills it, a 16:9 film is as wide as 240x144 gives.
+assert.deepStrictEqual(fit.profileDims(640, 480, 240, 180), { w: 240, h: 180 });
+assert.deepStrictEqual(fit.profileDims(1920, 1080, 240, 180), { w: 240, h: 132 });
+assert.ok(desk.createDesktopSettings({}).setQuality('kombi', '240x180').ok);
 
 // The scaled frame really has the profile size and I420 length.
 var big = Buffer.alloc(1280 * 720 * 3 / 2, 90);
@@ -113,10 +117,11 @@ assert.strictEqual(page[0].hint, '600x400');
 assert.strictEqual(page[1].title, 'Zegary i HUD');
 assert.strictEqual(page[1].hint, '320x192');
 var kombi = menu.qualityOptions('kombi', desk.QUALITY_KOMBI, '400x240', desk.QUALITY_NAMES);
-assert.deepStrictEqual(kombi.map(function (i) { return i.title; }), ['240x144', '320x192', '400x240', '480x288', '600x360', 'Wstecz']);
+assert.deepStrictEqual(kombi.map(function (i) { return i.title; }), ['240x144', '240x180', '320x192', '400x240', '480x288', '600x360', 'Wstecz']);
 assert.deepStrictEqual(kombi.filter(function (i) { return i.on; }).map(function (i) { return i.title; }), ['400x240']);
 assert.strictEqual(kombi[0].hint, 'niska');
-assert.strictEqual(kombi[2].hint, 'wysoka, wybrana');
+assert.strictEqual(kombi[1].hint, 'niska, 4:3');
+assert.strictEqual(kombi[3].hint, 'wysoka, wybrana');
 assert.strictEqual(kombi[kombi.length - 1].name, 'qk-back');
 var central = menu.qualityOptions('central', desk.QUALITY_CENTRAL, '600x400', desk.QUALITY_NAMES);
 assert.strictEqual(central[0].name, 'qc-600x400');
