@@ -31,6 +31,15 @@ var configPanelFactory = require('./config_panel.js');
 var windowsOffers = require('./windows_offers.js');
 var frameBridgeFactory = require('./frame_bridge.js');
 
+// YouTube load on the MGU: ytdec decodes in software at the film's own
+// frame rate, so the picture is kept small. 848x480 (16:9, width % 16)
+// from a 480p download; the centre screen scales it on the GPU, the
+// cluster/HUD get at most 24 frames a second (YT_GAUGE_MS).
+var YT_RECT = '848x480';
+var YT_QUALITY = '480';
+var YT_GAUGE_QUALITY = '360';
+var YT_GAUGE_MS = 42;
+
 function noteStart(text) {
     var line = String(text) + '\n';
     ['../data/start.log', 'data/start.log', '/tmp/g21-airplay-start.log'].forEach(function (file) {
@@ -425,11 +434,11 @@ function AirPlayApp() {
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
     this._bindYoutube();
-    // 40 ms: a 24 fps film on the cluster/HUD. Without gauges _takeYoutube
-    // itself keeps to one look every 200 ms.
+    // 42 ms: at most 24 film frames a second for the cluster/HUD. Without
+    // gauges _takeYoutube itself keeps to one look every 200 ms.
     this._ytTimer = setInterval(function () {
         self._takeYoutube();
-    }, 40);
+    }, YT_GAUGE_MS);
     if (this._ytTimer.unref) {
         this._ytTimer.unref();
     }
@@ -1755,8 +1764,25 @@ AirPlayApp.prototype._playYoutube = function (row) {
     }
     this._useYoutube();
     this._ytModel.setWantVideo(true);
-    this._ytModel.play(row.id, '1280x720', false, row, { quality: 'auto' });
+    var film = this._ytFilm();
+    this._ytModel.play(row.id, film.rect, false, row, { quality: film.quality });
     this._syncYoutubeList();
+};
+
+// What ytdec is asked for when a film starts. With the centre screen on:
+// 848x480 from 480p. Only the cluster/HUD: the film comes straight in the
+// KOMBI profile (16:9 inside it, e.g. 240x134 for 240x180) from 360p, so
+// _placeMirrorFaces has nothing left to scale. The daemon cannot change
+// the size mid-film: a screen switched on later counts from the next film.
+AirPlayApp.prototype._ytFilm = function () {
+    var p;
+    var d;
+    if (this._ytCentral !== false || (!this._ytCluster && !this._ytHud)) {
+        return { rect: YT_RECT, quality: YT_QUALITY };
+    }
+    p = this._quality('kombi');
+    d = frameFit.profileDims(1920, 1080, p.w, p.h);
+    return { rect: d.w + 'x' + d.h, quality: YT_GAUGE_QUALITY };
 };
 
 AirPlayApp.prototype._stopYoutube = function () {
@@ -2452,7 +2478,8 @@ AirPlayApp.prototype._takeYoutube = function () {
         return;
     }
     this._ytPolledAt = now;
-    frame = this._ytFile.pull();
+    // Without gauges only the file's 64-byte head is read (is a film on?).
+    frame = this._ytFile.pull(!gauges);
     if (frame === null && gauges && this._ytFile.lastError) {
         // Logged once per change: EACCES means the film is there but this
         // app's uid cannot read it (the tool makes it readable, 0.1.46+).
@@ -2478,7 +2505,8 @@ AirPlayApp.prototype._takeYoutube = function () {
             this._ytLive = true;
             this._paintYoutube();
         }
-        this._ytFrame = frame;
+        // (a peek has no picture: the next full read takes the frame)
+        this._ytFrame = frame.peek ? null : frame;
         if (this._ytReadErr) {
             this._ytReadErr = '';
             noteStart('yt-frames ok ' + frame.w + 'x' + frame.h);

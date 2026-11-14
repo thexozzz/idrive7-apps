@@ -11,11 +11,14 @@ var fs = require('fs');
 var PATH = '/dev/shm/mgu-video-ridetube';
 var MAGIC = 0x4656474d;
 
-function createYoutubeFile() {
+function createYoutubeFile(file) {
+    var where = file || PATH;
     var seq = -1;
     var lastError = '';
 
-    function pull() {
+    // peek: only the head (is a film on, its size); seq is left alone so the
+    // next full read still takes this frame.
+    function pull(peek) {
         var fd = -1;
         var head;
         var w;
@@ -26,7 +29,7 @@ function createYoutubeFile() {
         var fsz;
         var buf;
         try {
-            fd = fs.openSync(PATH, 'r');
+            fd = fs.openSync(where, 'r');
         } catch (err) {
             seq = -1;
             // ENOENT: no film. EACCES: the file is there but not readable for
@@ -51,6 +54,9 @@ function createYoutubeFile() {
             if (nslot < 1 || nslot > 4 || slot >= nslot) {
                 return null;
             }
+            if (peek) {
+                return { peek: true, i420: null, w: w, h: h };
+            }
             if (now === seq) {
                 return false;
             }
@@ -74,7 +80,7 @@ function createYoutubeFile() {
         }
     }
 
-    return { pull: pull, path: PATH, lastError: function () { return lastError; } };
+    return { pull: pull, path: where, lastError: function () { return lastError; } };
 }
 
 module.exports = {

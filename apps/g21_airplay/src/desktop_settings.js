@@ -10,10 +10,11 @@ var MAX_PROFILES = 6;
 // Cluster and HUD (cluster-render): the frame size sent to the KOMBI, the
 // same for both, whatever the size of the window drawn there.
 var QUALITY_CENTRAL = ['600x400'];
-var QUALITY_KOMBI = ['240x144', '320x192', '400x240', '480x288', '600x360'];
+var QUALITY_KOMBI = ['240x144', '240x180', '320x192', '400x240', '480x288', '600x360'];
 var QUALITY_DEFAULT = { central: '600x400', kombi: '400x240' };
 var QUALITY_NAMES = {
     '240x144': 'niska',
+    '240x180': 'niska, 4:3',
     '320x192': 'średnia',
     '400x240': 'wysoka',
     '480x288': 'bardzo wysoka',
