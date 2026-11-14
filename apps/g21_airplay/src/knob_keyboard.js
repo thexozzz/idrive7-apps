@@ -6,14 +6,20 @@
  * keyboard: rotate = move, press = type / OK / DEL / ANULUJ.
  */
 
+// A phone-like layout: digits on top, the letters, Polish letters, then the action row.
 var QWERTY_ROWS = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
     ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-    ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', '_', '-', '.'],
     ['ą', 'ć', 'ę', 'ł', 'ń', 'ó', 'ś', 'ź', 'ż'],
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-    ['_', '-', '.', 'SH', 'SPC', 'DEL', 'OK', 'ANU']
+    ['SH', 'SPC', 'DEL', 'ANU', 'OK']
 ];
+
+// Key widths in key units (a letter is 1): the renderer draws them and the knob's
+// up / down finds the key under the same spot of the next row.
+var KEY_WEIGHT = { SH: 1.6, SPC: 3.6, DEL: 1.8, ANU: 1.8, OK: 2.2 };
+var KEY_GAP = 0.14;
 
 var ALTS = {
     a: ['ą'], A: ['Ą'],
@@ -102,6 +108,93 @@ function flatten(rows) {
     return keys;
 }
 
+function keyWeight(key) {
+    return KEY_WEIGHT[key] || 1;
+}
+
+// Each row's keys as spans in key units, every row centred on 0: [[{x0, x1, index}]].
+function rowSpans(rows) {
+    var out = [];
+    var index = 0;
+    var r;
+    var c;
+    var width;
+    var x;
+    var row;
+    for (r = 0; r < rows.length; r += 1) {
+        row = [];
+        width = 0;
+        for (c = 0; c < rows[r].length; c += 1) {
+            width += keyWeight(rows[r][c]) + (c ? KEY_GAP : 0);
+        }
+        x = -width / 2;
+        for (c = 0; c < rows[r].length; c += 1) {
+            row.push({ x0: x, x1: x + keyWeight(rows[r][c]), index: index });
+            x += keyWeight(rows[r][c]) + KEY_GAP;
+            index += 1;
+        }
+        out.push(row);
+    }
+    return out;
+}
+
+// The knob tilted: 'n' / 's' the key above / below (the one under the same spot, rows wrap),
+// 'e' / 'w' the next / previous key in the row (wraps in the row).
+function moveKeyDir(edit, dir) {
+    var spans;
+    var r;
+    var c;
+    var row;
+    var cur = null;
+    var mid;
+    var best;
+    var bestD;
+    var d;
+    var k;
+    if (!edit || !edit.rows || !edit.rows.length) {
+        return edit;
+    }
+    spans = rowSpans(edit.rows);
+    for (r = 0; r < spans.length && !cur; r += 1) {
+        for (c = 0; c < spans[r].length; c += 1) {
+            if (spans[r][c].index === edit.keyIndex) {
+                cur = { r: r, c: c };
+                break;
+            }
+        }
+    }
+    if (!cur) {
+        edit.keyIndex = 0;
+        return edit;
+    }
+    row = spans[cur.r];
+    if (dir === 'e' || dir === 'w') {
+        c = (cur.c + (dir === 'e' ? 1 : -1) + row.length) % row.length;
+        edit.keyIndex = row[c].index;
+        return edit;
+    }
+    if (dir !== 'n' && dir !== 's') {
+        return edit;
+    }
+    mid = (row[cur.c].x0 + row[cur.c].x1) / 2;
+    r = (cur.r + (dir === 's' ? 1 : -1) + spans.length) % spans.length;
+    best = spans[r][0];
+    bestD = Infinity;
+    for (k = 0; k < spans[r].length; k += 1) {
+        if (mid >= spans[r][k].x0 && mid <= spans[r][k].x1) {
+            best = spans[r][k];
+            break;
+        }
+        d = Math.min(Math.abs(mid - spans[r][k].x0), Math.abs(mid - spans[r][k].x1));
+        if (d < bestD) {
+            bestD = d;
+            best = spans[r][k];
+        }
+    }
+    edit.keyIndex = best.index;
+    return edit;
+}
+
 function rebuildKeys(edit) {
     var mode = MODES[edit.mode] || MODES.user;
     edit.rows = applyShiftRows(mode.rows, !!edit.shift);
@@ -134,6 +227,10 @@ function createEdit(opts) {
         onCancel: opts.onCancel
     };
     rebuildKeys(edit);
+    // letters: start on the first letter (q), not on a digit
+    if (mode.shift) {
+        edit.keyIndex = Math.max(0, edit.keys.indexOf('q'));
+    }
     return edit;
 }
 
@@ -254,6 +351,9 @@ module.exports = {
     createEdit: createEdit,
     displayValue: displayValue,
     moveKey: moveKey,
+    moveKeyDir: moveKeyDir,
+    rowSpans: rowSpans,
+    keyWeight: keyWeight,
     applyKey: applyKey,
     altsFor: altsFor,
     validate: validate

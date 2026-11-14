@@ -1201,7 +1201,7 @@ function keyLabel(key) {
         return 'anuluj';
     }
     if (key === 'DEL') {
-        return 'usun';
+        return 'usuń';
     }
     if (key === 'SH') {
         return 'Aa';
@@ -1209,102 +1209,171 @@ function keyLabel(key) {
     return key;
 }
 
+// A rounded rectangle with its own corner radius (pill() rounds to half the height).
+function roundBox(draw, x, y, w, h, r, color) {
+    var i;
+    var inset;
+    var dy;
+    r = Math.floor(Math.min(r, w / 2, h / 2));
+    if (r < 2) {
+        draw.rect(x, y, w, h, color);
+        return;
+    }
+    for (i = 0; i < r; i += 1) {
+        dy = r - i - 0.5;
+        inset = Math.round(r - Math.sqrt(Math.max(0, r * r - dy * dy)));
+        draw.rect(x + inset, y + i, w - inset * 2, 1, color);
+        draw.rect(x + inset, y + h - 1 - i, w - inset * 2, 1, color);
+    }
+    draw.rect(x, y + r, w, h - r * 2, color);
+}
+
+var KB_KEY = 0x2A2622FF;       // letter keys
+var KB_FN = 0x1E1B18FF;        // Aa, usuń, anuluj, spacja
+var KB_PANEL = 0x110F0DFF;     // the keyboard's tray
+var KB_FIELD = 0x1C1814FF;     // the text field
+
+// The text field and the keyboard (knob: turn = next key, tilt up / down / left / right =
+// the key there, press = type; touch: tap = type, hold = Polish letters).
 function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     var draw = new FrameBuilder();
     var page = pageBox(width, height);
     var rows = edit.rows || [];
-    var gap = 10;
-    var keyH = 52;
-    var maxCols = 10;
-    var unit = Math.floor((page.boxW - 80 - (maxCols - 1) * gap) / maxCols);
-    var startY = page.oy + 156;
+    var spans = knobKeyboard.rowSpans(rows);
     var hits = [];
     var popupHits = [];
-    var index = 0;
+    var head = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
+    var fieldX = page.ox + 40;
+    var fieldY = page.oy + 70;
+    var fieldW = page.boxW - 80;
+    var fieldH = 84;
+    var trayX = page.ox + 28;
+    var trayY = fieldY + fieldH + 16;
+    var trayW = page.boxW - 56;
+    var keyH = 58;
+    var rowGap = 9;
+    var trayPad = 14;
+    var trayH = rows.length * keyH + Math.max(0, rows.length - 1) * rowGap + trayPad * 2;
+    var widest = 1;
+    var unitPx;
     var r;
     var c;
-    var row;
-    var rowW;
-    var keyW;
+    var k;
+    var sp;
+    var key;
     var x;
     var y;
+    var w;
     var label;
-    var labelW;
+    var scale;
+    var lw;
     var focus;
     var held;
+    var fn;
+    var fill;
+    var ink;
+    var value = knobKeyboard.displayValue(edit);
+    var maxChars;
+    var shown;
+    var count;
+    var held2;
     var alts;
     var altW;
     var altX;
     var altY;
-    var shown = knobKeyboard.displayValue(edit) + '_';
-    var head = {
-        ox: page.ox,
-        oy: page.oy,
-        boxW: page.boxW,
-        boxH: page.boxH
-    };
     draw.clear(0);
     draw.rect(page.ox, page.oy, page.boxW, page.boxH, PAGE);
     draw.rect(page.ox, page.oy, page.boxW, 56, PAGE_TOP);
     drawMenuHeader(draw, head, crumb || edit.title || 'Wpisz', true);
-    draw.text('tap: litera   przytrzymaj: polskie', page.ox + 72, page.oy + 72, 3, MUTED);
-    draw.pill(page.ox + 48, page.oy + 100, page.boxW - 96, 44, CARD_HI);
-    draw.text(shown.slice(0, 40), page.ox + 68, page.oy + 112, 4, INK);
-    for (r = 0; r < rows.length; r += 1) {
-        row = rows[r];
-        keyW = unit;
-        if (row.length <= 5) {
-            keyW = Math.floor(unit * 1.7);
-        }
-        rowW = row.length * keyW + (row.length - 1) * gap;
-        x = page.ox + Math.floor((page.boxW - rowW) / 2);
-        y = startY + r * (keyH + gap);
-        for (c = 0; c < row.length; c += 1) {
-            focus = index === edit.keyIndex;
-            held = edit.popup && edit.popup.keyIndex === index;
-            label = keyLabel(row[c]);
-            draw.pill(x, y, keyW, keyH, (focus || held) ? ACCENT : CARD);
-            labelW = draw.textWidth(label, 3);
-            draw.text(
-                label,
-                x + Math.floor((keyW - labelW) / 2),
-                y + Math.floor((keyH - 21) / 2),
-                3,
-                (focus || held) ? INK : HINT
-            );
-            hits.push({ x: x, y: y, w: keyW, h: keyH, index: index });
-            index += 1;
-            x += keyW + gap;
+
+    // the field: its name, the text with a caret, how many characters are left
+    roundBox(draw, fieldX - 2, fieldY - 2, fieldW + 4, fieldH + 4, 18, ACCENT_DIM);
+    roundBox(draw, fieldX, fieldY, fieldW, fieldH, 16, KB_FIELD);
+    // (the field's name is the header's title)
+    count = value.length + ' z ' + (edit.max || 0);
+    draw.text(count, fieldX + fieldW - 28 - draw.textWidth(count, 3), fieldY + Math.floor((fieldH - 21) / 2), 3, MUTED);
+    maxChars = Math.max(4, Math.floor((fieldW - 200) / 30));
+    shown = value.length > maxChars ? value.slice(value.length - maxChars) : value;
+    if (shown.length) {
+        draw.text(shown, fieldX + 28, fieldY + Math.floor((fieldH - 35) / 2), 5, INK);
+    } else {
+        draw.text('wpisz tekst', fieldX + 28, fieldY + Math.floor((fieldH - 28) / 2), 4, LINE);
+    }
+    draw.rect(fieldX + 28 + draw.textWidth(shown, 5) + (shown.length ? 4 : 0), fieldY + 22, 4, 40, ACCENT);
+
+    // the tray and the keys, every row centred; widths from knob_keyboard (the knob's up / down uses them)
+    roundBox(draw, trayX, trayY, trayW, trayH, 22, KB_PANEL);
+    for (r = 0; r < spans.length; r += 1) {
+        if (spans[r].length) {
+            widest = Math.max(widest, spans[r][spans[r].length - 1].x1 - spans[r][0].x0);
         }
     }
+    unitPx = Math.min(150, (trayW - trayPad * 2) / widest);
+    for (r = 0; r < rows.length; r += 1) {
+        y = trayY + trayPad + r * (keyH + rowGap);
+        for (c = 0; c < rows[r].length; c += 1) {
+            sp = spans[r][c];
+            key = rows[r][c];
+            k = sp.index;
+            x = Math.round(trayX + trayW / 2 + sp.x0 * unitPx);
+            w = Math.round((sp.x1 - sp.x0) * unitPx);
+            focus = k === edit.keyIndex;
+            held = !!(edit.popup && edit.popup.keyIndex === k);
+            fn = key === 'SH' || key === 'SPC' || key === 'DEL' || key === 'ANU';
+            fill = fn ? KB_FN : KB_KEY;
+            ink = fn ? HINT : INK;
+            if (key === 'OK') {
+                fill = ACCENT_DIM;
+                ink = INK;
+            }
+            if (key === 'SH' && edit.shift) {
+                fill = ACCENT_GLOW;
+                ink = ACCENT;
+            }
+            if (focus || held) {
+                roundBox(draw, x - 4, y - 4, w + 8, keyH + 8, 16, ACCENT_GLOW);
+                fill = ACCENT;
+                ink = PAGE;
+            }
+            roundBox(draw, x, y, w, keyH, 12, fill);
+            label = keyLabel(key);
+            scale = label.length === 1 ? 4 : 3;
+            lw = draw.textWidth(label, scale);
+            draw.text(label, x + Math.floor((w - lw + scale) / 2), y + Math.floor((keyH - 7 * scale) / 2), scale, ink);
+            if (knobKeyboard.altsFor(key).length && !focus) {
+                // a dot: holding this key gives Polish letters
+                draw.rect(x + w - 12, y + 8, 4, 4, MUTED);
+            }
+            hits.push({ x: x, y: y, w: w, h: keyH, index: k });
+        }
+    }
+
+    // Polish letters over a held key
     if (edit.popup && edit.popup.alts && edit.popup.alts.length) {
-        held = hits[edit.popup.keyIndex];
+        held2 = hits[edit.popup.keyIndex];
         alts = edit.popup.alts;
-        altW = 72;
-        altY = held ? Math.max(page.oy + 8, held.y - keyH - 16) : page.oy + 8;
-        altX = held
-            ? held.x + Math.floor(held.w / 2) - Math.floor((alts.length * altW + (alts.length - 1) * 8) / 2)
+        altW = 76;
+        altY = held2 ? Math.max(page.oy + 8, held2.y - keyH - 20) : page.oy + 8;
+        altX = held2
+            ? held2.x + Math.floor(held2.w / 2) - Math.floor((alts.length * altW + (alts.length - 1) * 10) / 2)
             : page.ox + 80;
+        roundBox(draw, altX - 12, altY - 12, alts.length * altW + (alts.length - 1) * 10 + 24, keyH + 24, 20, ACCENT_DIM);
         for (c = 0; c < alts.length; c += 1) {
             focus = c === edit.popup.pick;
-            draw.pill(altX - 4, altY - 4, altW + 8, keyH + 8, ACCENT_GLOW);
-            draw.pill(altX, altY, altW, keyH, focus ? ACCENT : CARD_HI);
-            labelW = draw.textWidth(alts[c], 4);
-            draw.text(
-                alts[c],
-                altX + Math.floor((altW - labelW) / 2),
-                altY + 12,
-                4,
-                INK
-            );
+            roundBox(draw, altX, altY, altW, keyH, 12, focus ? ACCENT : KB_KEY);
+            lw = draw.textWidth(alts[c], 4);
+            draw.text(alts[c], altX + Math.floor((altW - lw) / 2), altY + Math.floor((keyH - 28) / 2), 4, focus ? PAGE : INK);
             popupHits.push({ x: altX - 8, y: altY - 8, w: altW + 16, h: keyH + 16, pick: c });
-            altX += altW + 8;
+            altX += altW + 10;
         }
     }
+
+    // how to use it, under the tray
+    label = 'pokrętło: obrót lub wychylenie wybiera   naciśnij: wpisz   przytrzymaj literę: polskie znaki';
+    draw.text(label, page.ox + Math.floor((page.boxW - draw.textWidth(label, 3)) / 2), trayY + trayH + 12, 3, MUTED);
+
     var board = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
-    var airBadge;
-    drawNav(draw, board);
-    airBadge = drawAirBadge(draw, board, air, versionText);
+    var airBadge = drawAirBadge(draw, board, air, versionText);
     return {
         frame: message(FRAME, draw.bytes()),
         rects: draw.rects,
@@ -1318,7 +1387,7 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
             popup: popupHits,
             crumb: head.crumb,
             backHit: head.backHit,
-            nav: board.nav,
+            nav: null,
             airBadge: airBadge
         }
     };
@@ -3360,6 +3429,11 @@ function createMenuSurface(opts) {
                 paint();
             }
             return;
+        }
+        if (tilted && edit) {
+            // keyboard: tilt up / down = the key above / below, left / right = the key beside
+            knobKeyboard.moveKeyDir(edit, tilt);
+            paint();
         }
         if (tilted && !edit) {
             if (armed && (tilt === 'n' || tilt === 's')) {
