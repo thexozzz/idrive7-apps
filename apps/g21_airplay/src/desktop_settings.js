@@ -182,6 +182,8 @@ function createDesktopSettings(stored) {
         ? data.airDisplay
         : 'central';
     var airClusterTarget = data.airClusterTarget === 'panel' ? 'panel' : 'map';
+    var uiLang = data.uiLang === 'en' ? 'en' : 'pl';
+    var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
     var airClusterFps = data.airClusterFps | 0;
     if (airClusterFps < 2 || airClusterFps > 6) {
@@ -201,6 +203,12 @@ function createDesktopSettings(stored) {
     if (!labelText.length) {
         labelText = 'THEiPlay';
     }
+    var labelFonts = { pixel: true, bold: true, tall: true };
+    var labelColors = { white: true, orange: true, red: true, yellow: true, blue: true };
+    var labelScales = { 2: true, 3: true, 4: true, 6: true, 8: true };
+    var labelFont = labelFonts[data.labelFont] ? data.labelFont : 'pixel';
+    var labelScale = labelScales[data.labelScale | 0] ? (data.labelScale | 0) : 4;
+    var labelColor = labelColors[data.labelColor] ? data.labelColor : 'white';
     var labelPos = {
         central: { x: 120, y: 48 },
         cluster: { x: 80, y: 48 },
@@ -293,6 +301,16 @@ function createDesktopSettings(stored) {
             }
             return { ok: true, mode: airDisplay };
         },
+        uiLang: function () { return uiLang; },
+        setUiLang: function (next) {
+            uiLang = next === 'en' ? 'en' : 'pl';
+            return uiLang;
+        },
+        uiRender: function () { return uiRender; },
+        setUiRender: function (next) {
+            uiRender = next === 'software' ? 'software' : 'gpu';
+            return uiRender;
+        },
         airClusterTarget: function () { return airClusterTarget; },
         setAirClusterTarget: function (next) {
             airClusterTarget = next === 'panel' ? 'panel' : 'map';
@@ -329,6 +347,21 @@ function createDesktopSettings(stored) {
         setClusterLabel: function (on) {
             clusterLabel = !!on;
             return { ok: true, on: clusterLabel };
+        },
+        labelFont: function () { return labelFont; },
+        setLabelFont: function (next) {
+            labelFont = labelFonts[next] ? next : 'pixel';
+            return labelFont;
+        },
+        labelScale: function () { return labelScale; },
+        setLabelScale: function (next) {
+            labelScale = labelScales[next | 0] ? (next | 0) : labelScale;
+            return labelScale;
+        },
+        labelColor: function () { return labelColor; },
+        setLabelColor: function (next) {
+            labelColor = labelColors[next] ? next : 'white';
+            return labelColor;
         },
         labelText: function () { return labelText; },
         setLabelText: function (next) {
@@ -526,6 +559,8 @@ function createDesktopSettings(stored) {
                 airplayPin: airplayPin,
                 airQuality: airQuality,
                 airDisplay: airDisplay,
+                uiLang: uiLang,
+                uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,
                 airClusterFps: airClusterFps,
@@ -533,6 +568,9 @@ function createDesktopSettings(stored) {
                 airWindows: airWindows,
                 clusterLabel: clusterLabel,
                 labelText: labelText,
+                labelFont: labelFont,
+                labelScale: labelScale,
+                labelColor: labelColor,
                 labelPos: labelPos,
                 rdpActive: rdpActive,
                 vncActive: vncActive,

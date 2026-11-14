@@ -9,6 +9,8 @@ var settingsFactory = require('./settings_manager.js');
 var display = require('./display_output.js');
 var videoDecoder = require('./video_decoder.js');
 var mirrorVideo = require('./mirror_video.js');
+var youtubeFile = require('./youtube_file.js');
+var youtubeClient = require('./youtube_client.js');
 var frameFit = require('./frame_fit.js');
 var videoRouter = require('./video_router.js');
 var adapterFactory = require('./cluster_render_adapter.js');
@@ -255,9 +257,12 @@ function AirPlayApp() {
         client: this._client,
         enabled: this._desk.clusterLabel(),
         text: this._desk.labelText(),
+        scale: this._desk.labelScale(),
+        font: this._desk.labelFont(),
+        color: this._desk.labelColor(),
         places: {
-            panel: this._desk.labelAt('cluster'),
-            hud: this._desk.labelAt('hud')
+            panel: { x: this._settings.picture('cluster').x, y: this._settings.picture('cluster').y },
+            hud: { x: this._settings.picture('hud').x, y: this._settings.picture('hud').y }
         },
         log: noteStart,
     });
@@ -279,8 +284,8 @@ function AirPlayApp() {
     this._clusterLayer = '';
     var selfRouter = this;
     this._router = videoRouter.createVideoRouter({
-        centralFps: 30,
-        clusterFps: 30,
+        centralFps: 60,
+        clusterFps: 24,
         onCentral: function (frame) {
             var firstFrame = !selfRouter._decoded;
             var wrote;
@@ -381,7 +386,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.105',
+        version: (this._packageJson && this._packageJson.version) || '0.1.121',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -403,13 +408,33 @@ function AirPlayApp() {
                 self._tune.saved = false;
             }
             if (done && !self._tune) {
-                self._saveWindows();
+                self._flushWindowSave();
+            } else if (!self._tune) {
+                self._queueWindowSave();
             }
         },
         adjust: function (name, delta) {
             return self._adjustMenu(name, delta);
         },
     });
+    this._ytCentral = true;
+    this._ytCluster = false;
+    this._ytHud = false;
+    this._ytLive = false;
+    this._ytFile = youtubeFile.createYoutubeFile();
+    this._bindYoutube();
+    this._ytTimer = setInterval(function () {
+        self._takeYoutube();
+    }, 200);
+    if (this._ytTimer.unref) {
+        this._ytTimer.unref();
+    }
+    if (this._desk.uiLang && this._desk.uiLang() === 'en' && this._menu.setLang) {
+        this._menu.setLang('en');
+    }
+    if (this._desk.uiRender && this._desk.uiRender() === 'software') {
+        this._paintRender();
+    }
     this.on('appStatusProxyReady', function () {
         noteStart('status-ready');
         Promise.resolve(self.registerActive()).catch(function (err) {
@@ -474,7 +499,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.105') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.121') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -801,25 +826,51 @@ AirPlayApp.prototype._panelUrl = function () {
 AirPlayApp.prototype._adjustMenu = function (name, delta) {
     var key;
     var focus;
+    var keys = {
+        'air-box-x': 'x',
+        'air-box-y': 'y',
+        'air-box-size': 'size',
+        'pos-x': 'x',
+        'pos-y': 'y',
+        'pos-size': 'size'
+    };
+    if (name === 'label-size') {
+        var scales = [2, 3, 4, 6, 8];
+        var atScale = scales.indexOf(this._desk.labelScale());
+        var nextScale = atScale + (delta > 0 ? 1 : -1);
+        if (nextScale < 0) {
+            nextScale = 0;
+        }
+        if (nextScale >= scales.length) {
+            nextScale = scales.length - 1;
+        }
+        this._desk.setLabelScale(scales[nextScale]);
+        this._saveDesk();
+        this._refreshLabel();
+        this._paintLabel();
+        return true;
+    }
     if (name === 'stream-tune') {
         return this._slideTune(delta);
     }
-    if (name === 'air-box-pos') {
-        key = this._boxAxis === 'y' ? 'y' : 'x';
-    } else if (name === 'air-box-size') {
-        key = 'size';
-    } else if (name === 'air-box-w') {
-        key = 'w';
-    } else if (name === 'air-box-h') {
-        key = 'h';
-    } else {
+    if (name === 'air-box-power' || name === 'air-box-place' || name === 'air-box-center' || name === 'air-box-back') {
+        return true;
+    }
+    key = keys[name];
+    if (!key) {
         return false;
     }
-    focus = this._boxFocus || 'central';
+    focus = name.indexOf('pos-') === 0 ? (this._posFocus || 'central') : (this._boxFocus || 'central');
     this._settings.slide(focus, key, delta);
-    this._saveWindows();
-    this._liveApply(focus);
-    this._paintAirBox();
+    this._nudgeMirror(focus);
+    this._refreshLabel();
+    this._paintYoutube();
+    if (name.indexOf('pos-') === 0) {
+        this._paintPosition();
+    } else {
+        this._paintAirBox();
+    }
+    this._queueWindowSave();
     return true;
 };
 
@@ -858,22 +909,6 @@ AirPlayApp.prototype._tiltBox = function (dir) {
         }
         return true;
     }
-    if (this._menuScreen() === 'air-box' && this._menu && this._menu.selectedName && this._menu.selectedName() === 'air-box-pos') {
-        if (dir === 'n' || dir === 's') {
-            key = 'y';
-        } else if (dir === 'e' || dir === 'w') {
-            key = 'x';
-        } else {
-            return false;
-        }
-        delta = (dir === 's' || dir === 'e') ? 1 : -1;
-        this._boxAxis = key;
-        this._settings.slide(this._boxFocus || 'central', key, delta);
-        this._saveWindows();
-        this._liveApply(this._boxFocus || 'central');
-        this._paintAirBox();
-        return true;
-    }
     return false;
 };
 
@@ -899,6 +934,13 @@ AirPlayApp.prototype._startFieldEdit = function (field, mode, value, title) {
 };
 
 AirPlayApp.prototype._applyFieldEdit = function (field, mode, text) {
+    if (field === 'yt-search') {
+        if (this._ytModel) {
+            this._ytModel.search(String(text || '').trim());
+        }
+        this._syncYoutubeList();
+        return;
+    }
     var checked = knobKeyboard.validate(mode, text);
     var set;
     if (!checked.ok) {
@@ -1165,7 +1207,7 @@ AirPlayApp.prototype._stopVideoTimer = function () {
 AirPlayApp.prototype._startVideoTimer = function () {
     var self = this;
     this._stopVideoTimer();
-    // Central follows each new file. Gauges copy that I420 into a GPU atlas at 24 fps.
+    // One look per display frame. The copy stays short; gauges wait their own turn.
     this._videoTimer = setInterval(function () {
         if (self._streamProtocol === 'airplay' && self._sessions.active() === 'airplay') {
             self._takeFrame();
@@ -1179,7 +1221,7 @@ AirPlayApp.prototype._startVideoTimer = function () {
         } else {
             self._stopVideoTimer();
         }
-    }, 25);
+    }, 16);
 };
 
 AirPlayApp.prototype._turnedFrame = function (frame, name) {
@@ -1221,8 +1263,111 @@ AirPlayApp.prototype._parkFlag = function () {
     return true;
 };
 
+AirPlayApp.prototype._bindYoutube = function () {
+    var self = this;
+    var log = {
+        info: function (msg) { noteStart(String(msg)); },
+        warn: function (msg) { noteStart(String(msg)); },
+        error: function (msg) { noteStart(String(msg)); }
+    };
+    this._ytCtl = new youtubeClient.Ctl(process.env.MGU_YT_SOCKET || youtubeClient.SOCKET, log);
+    this._ytModel = new youtubeClient.Model(function (obj) {
+        return self._ytCtl.send(obj);
+    });
+    this._ytCtl.on('up', function () {
+        self._ytModel.setConnected(true);
+        self._syncYoutubeList();
+    });
+    this._ytCtl.on('down', function () {
+        self._ytModel.setConnected(false);
+        self._syncYoutubeList();
+    });
+    this._ytCtl.on('msg', function (msg) {
+        self._ytModel.onMsg(msg);
+        if (msg && msg.ev === 'time') {
+            self._paintYoutube();
+            return;
+        }
+        self._syncYoutubeList();
+    });
+    this._ytCtl.connect();
+};
+
+AirPlayApp.prototype._syncYoutubeList = function () {
+    var model;
+    var items;
+    var i;
+    var row;
+    var stateName;
+    if (!this._menu || !this._ytModel || this._menuScreen() !== 'youtube') {
+        return;
+    }
+    model = this._ytModel;
+    items = [];
+    for (i = 0; i < model.results.length && i < 8; i += 1) {
+        row = model.results[i];
+        items.push({
+            name: 'yt-res-' + i,
+            title: String(row.title || row.id).slice(0, 32),
+            hint: String(row.channel || ''),
+            icon: 'play'
+        });
+    }
+    stateName = model.connected ? (model.state || 'idle') : 'brak usługi';
+    if (model.title) {
+        stateName = model.title.slice(0, 24);
+    }
+    items.push({ name: 'yt-search', title: 'Szukaj', hint: model.q || 'tytuł filmu', icon: 'tag' });
+    items.push({ name: 'yt-play', title: model.state === 'playing' ? 'Pauza' : 'Play', hint: stateName, icon: 'play' });
+    items.push({ name: 'yt-where', title: 'Ekrany', hint: 'środek, zegary, HUD', icon: 'desktop' });
+    items.push({ name: 'yt-back10', title: '-10 s', hint: 'cofnij', icon: 'back' });
+    items.push({ name: 'yt-fwd10', title: '+10 s', hint: 'do przodu', icon: 'play' });
+    items.push({ name: 'yt-stop', title: 'Stop', hint: 'koniec filmu', icon: 'stop' });
+    items.push({ name: 'yt-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' });
+    this._menu.setItems(items, 'YouTube');
+    this._paintYoutube();
+};
+
+AirPlayApp.prototype._playYoutube = function (row) {
+    if (!this._ytModel || !row) {
+        return;
+    }
+    this._ytCentral = true;
+    this._useYoutube();
+    this._ytModel.setWantVideo(true);
+    this._ytModel.play(row.id, '1280x720', false, row, { quality: 'auto' });
+    this._syncYoutubeList();
+};
+
+AirPlayApp.prototype._stopYoutube = function () {
+    if (this._ytModel) {
+        this._ytModel.setWantVideo(false);
+        this._ytModel.stop();
+    }
+    this._ytCentral = false;
+    this._ytCluster = false;
+    this._ytHud = false;
+    if (!this._settings || this._settings.outputs().indexOf('cluster') === -1) {
+        this._dropMirrorFace('cluster');
+    }
+    if (!this._settings || this._settings.outputs().indexOf('hud') === -1) {
+        this._dropMirrorFace('hud');
+    }
+    this._paintYoutube();
+};
+
+AirPlayApp.prototype._useYoutube = function () {
+    if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay')) {
+        this._endStream('airplay');
+    }
+    if (this._ytModel) {
+        this._ytModel.setWantVideo(true);
+    }
+};
+
 AirPlayApp.prototype._startAirplaySelected = function () {
     var names = this._settings.outputs();
+    this._stopYoutube();
     var started;
     if (!names.length) {
         this._airNeedPick = true;
@@ -1474,7 +1619,7 @@ AirPlayApp.prototype._onAirAction = function (name) {
             this._menu.setItemTitle('air-quality', '600x400');
         }
         if (typeof this._menu.setItemHint === 'function') {
-            this._menu.setItemHint('air-quality', '24 kl/s');
+            this._menu.setItemHint('air-quality', 'zablokowane, 24 kl/s');
         }
         return;
     }
@@ -1487,16 +1632,9 @@ AirPlayApp.prototype._onAirAction = function (name) {
         this._sync();
         return;
     }
-    if (name === 'air-area') {
-        var nextArea = this._desk.airClusterTarget() === 'panel' ? 'map' : 'panel';
-        this._desk.setAirClusterTarget(nextArea);
-        this._saveDesk();
-        this._clusterLayer = '';
-        this._paintAirOut();
-        return;
-    }
     if (name === 'air-out-back' || name === 'air-box-back') {
         this._boxMove = false;
+        this._flushWindowSave();
         if (name === 'air-box-back' && this._menu && typeof this._menu.setScreen === 'function') {
             this._menu.setScreen('air-out');
             this._sync();
@@ -1506,44 +1644,36 @@ AirPlayApp.prototype._onAirAction = function (name) {
         return;
     }
     if (name === 'air-out-central' || name === 'air-out-cluster' || name === 'air-out-hud') {
-        this._settings.toggleOutput(name.replace('air-out-', ''));
-        this._saveWindows();
-        if (this._router) {
-            this._router.setMode(this._routerMode());
-        }
-        this._paintAirOut();
-        return;
-    }
-    if (name === 'air-out-box') {
-        if (!this._settings.outputs().length) {
-            this._boxFocus = 'central';
-        } else if (this._settings.outputs().indexOf(this._boxFocus) === -1) {
-            this._boxFocus = this._settings.outputs()[0];
-        }
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('air-box');
-        }
-        this._paintAirBox();
+        this._openScreenOptions(name.replace('air-out-', ''));
         return;
     }
     if (name === 'air-out-start') {
         this._startAirplaySelected();
         return;
     }
-    if (name === 'air-box-target') {
-        var order = ['central', 'cluster', 'hud'];
-        var at = order.indexOf(this._boxFocus);
-        this._boxFocus = order[(at + 1) % order.length];
+    if (name === 'air-box-power') {
+        this._settings.toggleOutput(this._boxFocus || 'central');
+        this._saveWindows();
+        if (this._router) {
+            this._router.setMode(this._routerMode());
+        }
+        this._paintAirBox();
+        return;
+    }
+    if (name === 'air-box-place') {
+        var nextPlace = this._desk.airClusterTarget() === 'panel' ? 'map' : 'panel';
+        this._desk.setAirClusterTarget(nextPlace);
+        this._saveDesk();
         this._clusterLayer = '';
+        this._dropMirrorFace('cluster');
+        if (this._lastFrame) {
+            this._faceAt = 0;
+            this._placeMirrorFaces(this._lastFrame.i420, this._lastFrame.w, this._lastFrame.h);
+        }
         this._paintAirBox();
         return;
     }
-    if (name === 'air-box-pos') {
-        this._boxAxis = this._boxAxis === 'y' ? 'x' : 'y';
-        this._paintAirBox();
-        return;
-    }
-    if (name === 'air-box-size' || name === 'air-box-w' || name === 'air-box-h') {
+    if (name === 'air-box-x' || name === 'air-box-y' || name === 'air-box-size') {
         this._paintAirBox();
         return;
     }
@@ -1816,13 +1946,35 @@ AirPlayApp.prototype._onVncAction = function (name) {
     }
 };
 
+AirPlayApp.prototype._spot = function (name) {
+    var box = this._settings.picture(name || 'central');
+    return { x: box.x | 0, y: box.y | 0 };
+};
+
+AirPlayApp.prototype._captionColor = function () {
+    return {
+        white: 0xFFFFFFFF,
+        orange: 0xE6A15CFF,
+        red: 0xE23B3BFF,
+        yellow: 0xF5D76EFF,
+        blue: 0x7EB6FFFF
+    }[this._desk.labelColor()] || 0xFFFFFFFF;
+};
+
 AirPlayApp.prototype._refreshLabel = function () {
-    var at = this._desk.labelAt('central');
+    var at = this._spot('central');
     if (this._label) {
         this._label.setText(this._desk.labelText());
+        if (typeof this._label.setLook === 'function') {
+            this._label.setLook({
+                font: this._desk.labelFont(),
+                scale: this._desk.labelScale(),
+                color: this._desk.labelColor()
+            });
+        }
         this._label.setPlaces({
-            panel: this._desk.labelAt('cluster'),
-            hud: this._desk.labelAt('hud')
+            panel: this._spot('cluster'),
+            hud: this._spot('hud')
         });
         this._label.setEnabled(this._desk.clusterLabel());
     }
@@ -1831,8 +1983,101 @@ AirPlayApp.prototype._refreshLabel = function () {
             on: this._desk.clusterLabel(),
             text: this._desk.labelText(),
             x: at.x,
-            y: at.y
+            y: at.y,
+            scale: Math.max(2, Math.min(5, this._desk.labelScale())),
+            color: this._captionColor()
         });
+    }
+};
+
+AirPlayApp.prototype._paintYoutube = function () {
+    var playing = this._ytModel && (this._ytModel.state === 'preparing' || this._ytModel.state === 'playing' || this._ytModel.state === 'paused');
+    var live = !!this._ytLive || !!playing;
+    var screens = [
+        { key: 'cluster', on: !!this._ytCluster },
+        { key: 'hud', on: !!this._ytHud },
+        { key: 'central', on: this._ytCentral !== false }
+    ];
+    if (this._menu && typeof this._menu.setItemHint === 'function' && !(this._ytModel && this._ytModel.title)) {
+        this._menu.setItemHint('yt-play', live ? 'odtwarzanie' : (this._ytModel && this._ytModel.connected ? 'gotowy' : 'brak usługi'), true);
+    }
+    if (this._menu && typeof this._menu.setYtState === 'function') {
+        this._menu.setYtState({
+            live: live,
+            central: this._ytCentral !== false,
+            screens: screens,
+            window: this._settings.picture('central')
+        });
+    }
+};
+
+AirPlayApp.prototype._takeYoutube = function () {
+    var frame;
+    if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay')) {
+        return;
+    }
+    var outs;
+    var fitted;
+    if (!this._ytFile) {
+        return;
+    }
+    frame = this._ytFile.pull();
+    if (frame === null) {
+        if (this._ytLive) {
+            this._ytLive = false;
+            this._ytFrame = null;
+            this._paintYoutube();
+        }
+        return;
+    }
+    if (frame) {
+        if (!this._ytLive) {
+            this._ytLive = true;
+            this._paintYoutube();
+        }
+        this._ytFrame = frame;
+    }
+    outs = [];
+    if (this._ytCluster) {
+        outs.push('cluster');
+    }
+    if (this._ytHud) {
+        outs.push('hud');
+    }
+    if (!outs.length || !this._ytFrame) {
+        return;
+    }
+    frame = this._ytFrame;
+    if (frame.w > 960 || frame.h > 640) {
+        fitted = frameFit.fitI420(frame.i420, frame.w, frame.h, 640, 360, 'contain');
+        frame = { i420: fitted.i420, w: fitted.w, h: fitted.h };
+    }
+    this._placeMirrorFaces(frame.i420, frame.w, frame.h, outs);
+};
+
+AirPlayApp.prototype._paintRender = function () {
+    var gpu = this._desk.uiRender() !== 'software';
+    var label = gpu ? 'GPU' : 'Programowe';
+    var lists = [menuDraw.ROOT_ITEMS, menuDraw.SCREENS.settings];
+    var names = ['settings', 'set-render'];
+    var i;
+    var j;
+    for (i = 0; i < lists.length; i += 1) {
+        if (!lists[i]) {
+            continue;
+        }
+        for (j = 0; j < lists[i].length; j += 1) {
+            if (lists[i][j].name === names[i]) {
+                lists[i][j].hint = label;
+            }
+        }
+    }
+    if (this._menu && typeof this._menu.setItemHint === 'function') {
+        this._menu.setItemHint('settings', label, true);
+        this._menu.setItemHint('set-render', label, true);
+    }
+    if (this._menu && typeof this._menu.repaint === 'function') {
+        this._menu.repaint();
     }
 };
 
@@ -1842,21 +2087,16 @@ AirPlayApp.prototype._paintLabel = function () {
     if (!this._menu || this._menuScreen() !== 'label') {
         return;
     }
-    at = this._desk.labelAt(name);
+    var fontName = { pixel: 'Pixel', bold: 'Gruby', tall: 'Wysoki' }[this._desk.labelFont()] || 'Pixel';
+    var colorName = { white: 'Biały', orange: 'Pomarańcz', red: 'Czerwony', yellow: 'Żółty', blue: 'Niebieski' }[this._desk.labelColor()] || 'Biały';
     this._menu.setItemTitle('label-on', 'Napis');
     this._menu.setItemHint('label-on', this._desk.clusterLabel() ? 'widoczny' : 'ukryty');
     this._menu.setItemHint('label-text', this._desk.labelText());
     this._menu.setItemTitle('label-where', this._outputLabel(name));
-    this._menu.setItemTitle('label-pos', this._labelMove ? 'Ruszaj' : 'Pozycja');
-    this._menu.setItemHint('label-pos', this._labelMove ? ('X ' + at.x + '  Y ' + at.y + '  OK: koniec') : 'OK: przesuwaj');
-    if (typeof this._menu.setCaption === 'function') {
-        this._menu.setCaption({
-            on: this._desk.clusterLabel(),
-            text: this._desk.labelText(),
-            x: at.x,
-            y: at.y
-        });
-    }
+    this._menu.setItemHint('label-font', fontName);
+    this._menu.setItemHint('label-size', String(this._desk.labelScale()));
+    this._menu.setItemHint('label-color', colorName);
+    this._refreshLabel();
 };
 
 AirPlayApp.prototype._toggleClusterLabel = function () {
@@ -1895,8 +2135,19 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._paintLabel();
         return;
     }
-    if (name === 'label-pos') {
-        this._labelMove = !this._labelMove;
+    if (name === 'label-font') {
+        var fonts = ['pixel', 'bold', 'tall'];
+        var atFont = fonts.indexOf(this._desk.labelFont());
+        this._desk.setLabelFont(fonts[(atFont + 1) % fonts.length]);
+        this._saveDesk();
+        this._paintLabel();
+        return;
+    }
+    if (name === 'label-color') {
+        var colors = ['white', 'orange', 'red', 'yellow', 'blue'];
+        var atColor = colors.indexOf(this._desk.labelColor());
+        this._desk.setLabelColor(colors[(atColor + 1) % colors.length]);
+        this._saveDesk();
         this._paintLabel();
         return;
     }
@@ -1906,6 +2157,137 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
             this._menu.setScreen('root');
         }
         this._sync();
+        return;
+    }
+    if (name === 'lang-toggle') {
+        this._desk.setUiLang(this._menu && this._menu.lang ? this._menu.lang() : 'pl');
+        this._saveDesk();
+        return;
+    }
+    if (name === 'position') {
+        this._posFocus = '';
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('pos-out');
+        }
+        this._fillPositionPreview(false);
+        return;
+    }
+    if (name === 'pos-out-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
+        return;
+    }
+    if (name === 'pos-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('pos-out');
+        }
+        return;
+    }
+    if (name === 'pos-out-central' || name === 'pos-out-cluster' || name === 'pos-out-hud') {
+        this._openPosition(name.replace('pos-out-', ''));
+        return;
+    }
+    if (name === 'pos-center') {
+        this._settings.center(this._posFocus || 'central');
+        this._saveWindows();
+        this._liveApply(this._posFocus || 'central');
+        this._refreshLabel();
+        this._paintYoutube();
+        this._paintPosition();
+        return;
+    }
+    if (name === 'youtube' || name === 'yt-play') {
+        this._ytCentral = true;
+        this._useYoutube();
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        if (name === 'yt-play' && this._ytModel) {
+            if (this._ytModel.state === 'playing' || this._ytModel.state === 'paused') {
+                this._ytModel.toggle();
+            } else if (this._ytModel.results && this._ytModel.results[0]) {
+                this._playYoutube(this._ytModel.results[0]);
+            }
+        }
+        this._syncYoutubeList();
+        return;
+    }
+    if (name === 'yt-search') {
+        this._startFieldEdit('yt-search', 'search', this._ytModel && this._ytModel.q ? this._ytModel.q : '', 'Szukaj');
+        return;
+    }
+    if (name.indexOf('yt-res-') === 0 && this._ytModel) {
+        this._playYoutube(this._ytModel.results[Number(name.slice(7))]);
+        return;
+    }
+    if (name === 'yt-back10' && this._ytModel) {
+        this._ytModel.skip(-10000);
+        return;
+    }
+    if (name === 'yt-fwd10' && this._ytModel) {
+        this._ytModel.skip(10000);
+        return;
+    }
+    if (name === 'yt-stop') {
+        this._stopYoutube();
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('youtube');
+        }
+        this._syncYoutubeList();
+        return;
+    }
+    if (name === 'yt-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
+        return;
+    }
+    if (name === 'yt-where') {
+        return;
+    }
+    if (name === 'yt-pick-central' || name === 'yt-pick-cluster' || name === 'yt-pick-hud') {
+        var ytKey = name.replace('yt-pick-', '');
+        var ytOn = false;
+        if (ytKey === 'central') {
+            this._ytCentral = this._ytCentral === false;
+            ytOn = this._ytCentral !== false;
+        } else if (ytKey === 'cluster') {
+            this._ytCluster = !this._ytCluster;
+            ytOn = !!this._ytCluster;
+        } else if (ytKey === 'hud') {
+            this._ytHud = !this._ytHud;
+            ytOn = !!this._ytHud;
+        }
+        if (ytOn) {
+            this._useYoutube();
+        }
+        if (!this._ytCluster && this._settings.outputs().indexOf('cluster') === -1) {
+            this._dropMirrorFace('cluster');
+        }
+        if (!this._ytHud && this._settings.outputs().indexOf('hud') === -1) {
+            this._dropMirrorFace('hud');
+        }
+        this._paintYoutube();
+        return;
+    }
+    if (name === 'settings') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('settings');
+        }
+        this._paintRender();
+        return;
+    }
+    if (name === 'set-render') {
+        this._desk.setUiRender(this._desk.uiRender() === 'gpu' ? 'software' : 'gpu');
+        this._saveDesk();
+        this._paintRender();
+        return;
+    }
+    if (name === 'set-back') {
+        if (this._menu && typeof this._menu.setScreen === 'function') {
+            this._menu.setScreen('root');
+        }
         return;
     }
     if (name === 'airplay') {
@@ -1922,6 +2304,34 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         if (this._menuScreen() === 'air-out') {
             this._paintAirOut();
         }
+        this._refreshAirBadge();
+        return;
+    }
+    if (name === 'air-full') {
+        var fullBox = this._settings.picture('central');
+        if (fullBox.w >= 1800 && fullBox.h >= 680) {
+            this._settings.setPicture('central', this._centralRest || { x: 640, y: 180, w: 640, h: 360 });
+        } else {
+            this._centralRest = {
+                x: fullBox.x,
+                y: fullBox.y,
+                w: fullBox.w,
+                h: fullBox.h,
+                fps: fullBox.fps,
+                scale: fullBox.scale,
+                rotate: fullBox.rotate
+            };
+            this._settings.setPicture('central', {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 720,
+                fps: fullBox.fps,
+                scale: fullBox.scale,
+                rotate: fullBox.rotate
+            });
+        }
+        this._saveWindows();
         this._refreshAirBadge();
         return;
     }
@@ -2393,6 +2803,189 @@ AirPlayApp.prototype._paintWindowsMenu = function (air) {
     this._menu.setItemHint('win-info', net.slice(0, 28));
 };
 
+AirPlayApp.prototype._queueWindowSave = function () {
+    var self = this;
+    if (this._windowSave) {
+        clearTimeout(this._windowSave);
+    }
+    this._windowSave = setTimeout(function () {
+        self._windowSave = null;
+        self._saveWindows();
+    }, 400);
+};
+
+AirPlayApp.prototype._flushWindowSave = function () {
+    if (this._windowSave) {
+        clearTimeout(this._windowSave);
+        this._windowSave = null;
+    }
+    this._saveWindows();
+};
+
+AirPlayApp.prototype._nudgeMirror = function (name) {
+    var face;
+    var view;
+    var slash;
+    if (name !== 'hud' && name !== 'cluster') {
+        return;
+    }
+    if (!this._mirrorFaces || !this._adapter || !this._lastFrame) {
+        return;
+    }
+    face = this._mirrorFaces[name];
+    if (!face || !face.layer) {
+        return;
+    }
+    view = this._gaugeView(name);
+    if (!view) {
+        return;
+    }
+    try {
+        this._adapter.place(face.layer, {
+            x: view.x,
+            y: view.y,
+            w: view.w,
+            h: view.h,
+            fps: 30
+        });
+    } catch (err) {
+        noteStart('mirror-nudge ' + name);
+        return;
+    }
+    slash = face.key ? face.key.indexOf('/') : -1;
+    face.key = face.layer + '@' + view.x + ',' + view.y + ' ' + view.w + 'x' + view.h + (slash === -1 ? '' : face.key.slice(slash));
+};
+
+AirPlayApp.prototype._gaugeView = function (name) {
+    var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
+    var maxW = name === 'hud' ? 800 : (panel ? 1920 : 1088);
+    var maxH = name === 'hud' ? 480 : (panel ? 720 : 480);
+    var turned;
+    var legal;
+    var box;
+    if (!this._lastFrame) {
+        return null;
+    }
+    turned = this._turnedFrame(this._lastFrame, name);
+    legal = frameForVideo(turned.i420, turned.w, turned.h);
+    if (!legal) {
+        return null;
+    }
+    if (name === 'cluster') {
+        box = this._mapBox(this._settings.picture('cluster'), maxW, maxH);
+    } else {
+        box = this._settings.picture(name);
+    }
+    return frameFit.containPlace(legal.w, legal.h, box, maxW, maxH);
+};
+
+AirPlayApp.prototype._screenFrame = function (name) {
+    var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
+    var limit = { w: 1920, h: 720, label: 'Środek' };
+    var box;
+    var shown;
+    if (name === 'hud') {
+        limit = { w: 800, h: 480, label: 'HUD' };
+    } else if (name === 'cluster') {
+        limit = panel ? { w: 1920, h: 720, label: 'Zegary' } : { w: 1088, h: 480, label: 'Zegary' };
+    }
+    box = this._settings.picture(name);
+    shown = name === 'cluster' ? this._mapBox(box, limit.w, limit.h) : box;
+    return {
+        label: limit.label,
+        limitW: limit.w,
+        limitH: limit.h,
+        x: shown.x | 0,
+        y: shown.y | 0,
+        w: shown.w | 0,
+        h: shown.h | 0,
+        focus: this._posFocus === name
+    };
+};
+
+AirPlayApp.prototype._fillPositionPreview = function (withSliders) {
+    var name;
+    var box;
+    var designW;
+    var designH;
+    var xMax;
+    var yMax;
+    var sel;
+    var preview;
+    if (!this._menu || typeof this._menu.setBoxPreview !== 'function') {
+        return;
+    }
+    if (this._menuScreen() !== 'pos-out' && this._menuScreen() !== 'pos-box') {
+        return;
+    }
+    preview = {
+        frames: [
+            this._screenFrame('central'),
+            this._screenFrame('cluster'),
+            this._screenFrame('hud')
+        ],
+        sliders: []
+    };
+    if (withSliders && this._menuScreen() === 'pos-box') {
+        name = this._posFocus || 'central';
+        box = this._settings.picture(name);
+        designW = name === 'hud' ? 800 : 1920;
+        designH = name === 'hud' ? 480 : 720;
+        xMax = Math.max(0, designW - box.w);
+        yMax = Math.max(0, designH - box.h);
+        sel = this._menu.selectedName ? this._menu.selectedName() : '';
+        preview.sliders = [
+            { key: 'pos-x', label: 'Poziomo', value: box.x, min: 0, max: xMax, on: sel === 'pos-x' },
+            { key: 'pos-y', label: 'Pionowo', value: box.y, min: 0, max: yMax, on: sel === 'pos-y' },
+            { key: 'pos-size', label: 'Rozmiar', value: box.w, min: 160, max: designW, on: sel === 'pos-size' }
+        ];
+    }
+    this._menu.setBoxPreview(preview);
+};
+
+AirPlayApp.prototype._openPosition = function (name) {
+    var titles = { central: 'Środek', cluster: 'Zegary', hud: 'HUD' };
+    this._posFocus = name;
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('pos-box');
+    }
+    if (this._menu && typeof this._menu.setItems === 'function') {
+        this._menu.setItems(menuDraw.positionOptions(), titles[name] || 'Pozycja');
+    }
+    this._paintPosition();
+};
+
+AirPlayApp.prototype._paintPosition = function () {
+    var name = this._posFocus || 'central';
+    var box;
+    var shown;
+    if (!this._menu || this._menuScreen() !== 'pos-box') {
+        return;
+    }
+    box = this._settings.picture(name);
+    shown = this._screenFrame(name);
+    this._menu.setItemHint('pos-x', String(box.x), true);
+    this._menu.setItemHint('pos-y', String(box.y), true);
+    this._menu.setItemHint('pos-size', 'okno ' + box.w + 'x' + box.h, true);
+    this._menu.setItemHint('pos-center', shown.x + ',' + shown.y, true);
+    this._fillPositionPreview(true);
+    if (name === 'central' && typeof this._menu.setAirWindow === 'function') {
+        this._menu.setAirWindow(box);
+    }
+};
+
+AirPlayApp.prototype._openScreenOptions = function (name) {
+    var titles = { central: 'Środek', cluster: 'Zegary', hud: 'HUD' };
+    this._boxFocus = name;
+    if (this._menu && typeof this._menu.setScreen === 'function') {
+        this._menu.setScreen('air-box');
+    }
+    if (this._menu && typeof this._menu.setItems === 'function') {
+        this._menu.setItems(menuDraw.screenOptions(name), titles[name] || 'Opcje');
+    }
+    this._paintAirBox();
+};
+
 AirPlayApp.prototype._paintAirOut = function () {
     var names;
     var area;
@@ -2404,63 +2997,32 @@ AirPlayApp.prototype._paintAirOut = function () {
     area = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel' ? 'panel' : 'map';
     ['central', 'hud', 'cluster'].forEach(function (name) {
         var on = names.indexOf(name) !== -1;
-        self._menu.setItemHint('air-out-' + name, on ? 'włączony' : 'wyłączony');
+        var hint = on ? 'włączony' : 'wyłączony';
+        if (name === 'cluster') {
+            hint += area === 'panel' ? ', panel: całe zegary' : ', mapa: kieszeń';
+        }
+        self._menu.setItemHint('air-out-' + name, hint);
     });
-    this._menu.setItemTitle('air-area', area === 'panel' ? 'Panel' : 'Mapa');
-    this._menu.setItemHint('air-area', area === 'panel' ? 'całe zegary, zasłania BC' : 'środek zegarów');
 };
 
 AirPlayApp.prototype._paintAirBox = function () {
     var name = this._boxFocus || 'central';
-    var box;
-    var limit = { central: { w: 1920, h: 720 }, cluster: { w: 1920, h: 720 }, hud: { w: 800, h: 480 } }[name];
     if (!this._menu || this._menuScreen() !== 'air-box') {
         return;
     }
-    box = this._settings.picture(name);
-    var shown = box;
-    var limitW = limit.w;
-    var limitH = limit.h;
+    var on = this._settings.outputs().indexOf(name) !== -1;
+    var panelOn = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
+    this._menu.setItemHint('air-box-power', on ? 'włączony na Start' : 'wyłączony', true);
     if (name === 'cluster') {
-        var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
-        limitW = panel ? 1920 : 1088;
-        limitH = panel ? 720 : 480;
-        shown = this._mapBox(box, limitW, limitH);
+        this._menu.setItemTitle('air-box-place', 'Gdzie rysować', true);
+        this._menu.setItemHint(
+            'air-box-place',
+            panelOn ? 'Panel: całe zegary, zasłania BC' : 'Mapa: kieszeń, wskazówki zostają',
+            true
+        );
     }
-    var axis = this._boxAxis === 'y' ? 'y' : 'x';
-    var sel = this._menu.selectedName ? this._menu.selectedName() : '';
-    var designW = name === 'hud' ? 800 : 1920;
-    var designH = name === 'hud' ? 480 : 720;
-    var sliders = [];
-    this._menu.setItemTitle('air-box-target', this._outputLabel(name));
-    this._menu.setItemHint('air-box-target', 'klik: nastepny ekran');
-    this._menu.setItemHint('air-box-pos', (axis === 'y' ? 'Y ' : 'X ') + (axis === 'y' ? box.y : box.x) + '  klik: druga os');
-    this._menu.setItemHint('air-box-size', box.w + 'x' + box.h + '  pokretlo');
-    this._menu.setItemHint('air-box-w', String(box.w) + ' px');
-    this._menu.setItemHint('air-box-h', String(box.h) + ' px');
-    this._menu.setItemHint('air-box-center', shown.x + ',' + shown.y);
-    if (sel === 'air-box-pos') {
-        sliders = [
-            { label: 'X', value: box.x, min: 0, max: Math.max(0, designW - box.w), on: axis !== 'y' },
-            { label: 'Y', value: box.y, min: 0, max: Math.max(0, designH - box.h), on: axis === 'y' }
-        ];
-    } else if (sel === 'air-box-size' || sel === 'air-box-w') {
-        sliders = [{ label: sel === 'air-box-size' ? 'rozmiar' : 'szerokosc', value: box.w, min: 160, max: designW, on: true }];
-    } else if (sel === 'air-box-h') {
-        sliders = [{ label: 'wysokosc', value: box.h, min: 90, max: designH, on: true }];
-    }
-    if (typeof this._menu.setBoxPreview === 'function') {
-        this._menu.setBoxPreview({
-            x: shown.x,
-            y: shown.y,
-            w: shown.w,
-            h: shown.h,
-            limitW: limitW,
-            limitH: limitH,
-            rotate: box.rotate || 0,
-            label: this._outputLabel(name) + '  ' + shown.w + 'x' + shown.h,
-            sliders: sliders
-        });
+    if (name === 'central' && typeof this._menu.setAirWindow === 'function') {
+        this._menu.setAirWindow(this._settings.picture(name));
     }
 };
 
@@ -2498,7 +3060,7 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     if (typeof this._menu.setItemTitle === 'function') {
         this._menu.setItemTitle('air-quality', '600x400');
     }
-    this._menu.setItemHint('air-quality', '24 kl/s');
+    this._menu.setItemHint('air-quality', 'zablokowane, 24 kl/s');
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
@@ -3122,17 +3684,9 @@ AirPlayApp.prototype._dropMirrorFaces = function () {
 function frameForVideo(i420, w, h) {
     var dw = w - (w % 4);
     var dh = h - (h % 2);
-    if (dw > 1920) {
-        dw = 1920;
-    }
-    if (dh > 720) {
-        dh = 720;
-    }
-    if (dw < 64) {
-        dw = 64;
-    }
-    if (dh < 32) {
-        dh = 32;
+    // A movie-sized frame is scaled by the centre GPU. Doing that in JS stalls the head unit.
+    if (w > 960 || h > 640 || dw < 64 || dh < 32) {
+        return null;
     }
     if (dw === w && dh === h) {
         return { i420: i420, w: w, h: h };
@@ -3154,9 +3708,9 @@ AirPlayApp.prototype._armFace = function (delay) {
     }, delay > 0 ? delay : 1);
 };
 
-AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
+AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
     var self = this;
-    var outs = this._settings.outputs();
+    var outs = outsOverride || this._settings.outputs();
     var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
     var faces = {};
     var now = Date.now();
@@ -3180,8 +3734,8 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
     if (outs.indexOf('cluster') === -1) {
         this._dropMirrorFace('cluster');
     }
-    if (this._faceAt && (now - this._faceAt) < 42) {
-        this._armFace(42 - (now - this._faceAt));
+    if (this._faceAt && (now - this._faceAt) < 30) {
+        this._armFace(30 - (now - this._faceAt));
         return;
     }
     if (this._faceWait) {
@@ -3208,6 +3762,9 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
         }
         turned = self._turnedFrame({ i420: i420, w: sw, h: sh }, name);
         legal = frameForVideo(turned.i420, turned.w, turned.h);
+        if (!legal) {
+            return;
+        }
         if (name === 'cluster') {
             box = self._mapBox(self._settings.picture('cluster'), spec.maxW, spec.maxH);
         } else {
@@ -3225,7 +3782,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh) {
                 h: view.h,
                 vw: legal.w,
                 vh: legal.h,
-                fps: 24,
+                fps: 30,
                 level_bits: 0,
                 dirty_threshold: 0,
                 pan_blocks: 0,
@@ -3390,6 +3947,15 @@ AirPlayApp.prototype._takeFrame = function () {
     var st;
     var stamp;
     var outs;
+    var now = Date.now();
+    var started;
+    var heavy = false;
+    if (this._frameBusy) {
+        return;
+    }
+    if (this._ingestAt && (now - this._ingestAt) < (this._ingestGap || 16)) {
+        return;
+    }
     try {
         st = fs.statSync('/run/g21-airplay/latest.yuv');
     } catch (err) {
@@ -3404,53 +3970,73 @@ AirPlayApp.prototype._takeFrame = function () {
     if (stamp === this._yuvStamp) {
         return;
     }
+    // A movie-sized frame at 60 fps is read on this thread and the picture collapses.
+    // The phone is asked for 600x400. Anything past that stays on the last good frame.
+    if (st.size > 8 + (640 * 400 * 3) / 2) {
+        this._yuvStamp = stamp;
+        return;
+    }
     this._yuvStamp = stamp;
+    this._frameBusy = true;
+    started = Date.now();
     try {
         parsed = videoDecoder.parseI420(fs.readFileSync('/run/g21-airplay/latest.yuv'));
     } catch (err) {
         parsed = null;
     }
     if (!parsed) {
+        this._frameBusy = false;
+        this._ingestAt = Date.now();
+        this._ingestGap = 16;
         return;
     }
+    heavy = parsed.w * parsed.h > (640 * 400);
     this._lastFrame = { i420: parsed.i420, w: parsed.w, h: parsed.h };
     outs = this._settings.outputs();
-    if (this._router) {
-        this._router.setMode(this._routerMode());
-        this._router.setParked(this._parkFlag());
-        this._router.push({
-            i420: parsed.i420,
-            w: parsed.w,
-            h: parsed.h,
-            ts: Date.now(),
-        });
-        this._router.tick(Date.now());
-        if (outs.indexOf('hud') !== -1 || outs.indexOf('cluster') !== -1) {
-            if (this._showGauges()) {
-                this._placeMirrorFaces(parsed.i420, parsed.w, parsed.h);
-            } else {
+    try {
+        if (this._router) {
+            this._router.setMode(this._routerMode());
+            this._router.setParked(this._parkFlag());
+            this._router.push({
+                i420: parsed.i420,
+                w: parsed.w,
+                h: parsed.h,
+                ts: Date.now(),
+            });
+            this._router.tick(Date.now());
+            if (outs.indexOf('hud') === -1 && outs.indexOf('cluster') === -1) {
+                this._dropMirrorFace('hud');
+                this._dropMirrorFace('cluster');
+            } else if (!this._showGauges() || heavy) {
                 this._dropMirrorFace('hud');
                 this._dropMirrorFace('cluster');
             }
         } else {
-            this._dropMirrorFace('hud');
-            this._dropMirrorFace('cluster');
-        }
-        return;
-    }
-    this._decoded = { w: parsed.w, h: parsed.h };
-    if (outs.indexOf('central') !== -1) {
-        try {
-            if (!this._mirrorVideo) {
-                this._mirrorVideo = mirrorVideo.createMirrorVideo();
+            this._decoded = { w: parsed.w, h: parsed.h };
+            if (outs.indexOf('central') !== -1) {
+                try {
+                    if (!this._mirrorVideo) {
+                        this._mirrorVideo = mirrorVideo.createMirrorVideo();
+                    }
+                    this._mirrorVideo.push(parsed.i420, parsed.w, parsed.h);
+                } catch (mirrorErr) {
+                    noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
+                }
+            } else if (this._mirrorVideo) {
+                this._mirrorVideo.close();
+                this._mirrorVideo = null;
             }
-            this._mirrorVideo.push(parsed.i420, parsed.w, parsed.h);
-        } catch (mirrorErr) {
-            noteStart('mirror-video ' + (mirrorErr && mirrorErr.message));
         }
-    } else if (this._mirrorVideo) {
-        this._mirrorVideo.close();
-        this._mirrorVideo = null;
+    } catch (presentErr) {
+        noteStart('frame ' + (presentErr && presentErr.message));
+    }
+    this._frameBusy = false;
+    var spent = Date.now() - started;
+    // A slow copy waits one extra frame. It does not drop the picture down to a crawl.
+    this._ingestGap = spent > 12 ? 32 : 16;
+    this._ingestAt = Date.now();
+    if (!heavy && (outs.indexOf('hud') !== -1 || outs.indexOf('cluster') !== -1) && this._showGauges()) {
+        this._armFace(0);
     }
 };
 

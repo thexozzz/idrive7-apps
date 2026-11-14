@@ -127,6 +127,9 @@ bool gstreamer_init(){
 
 void audio_renderer_init(logger_t *render_logger, const char* audiosink, const bool* audio_sync, const bool* video_sync, const char *artp_pipeline) {
     GError *error = NULL;
+    /* Picture sync stays on the video sink. Cabin audio is always paced on its own clock. */
+    (void) audio_sync;
+    (void) video_sync;
     GstCaps *caps = NULL;
     GstClock *clock = gst_system_clock_obtain();
     g_object_set(clock, "clock-type", GST_CLOCK_TYPE_REALTIME, NULL);
@@ -145,7 +148,8 @@ void audio_renderer_init(logger_t *render_logger, const char* audiosink, const b
         renderer_type[i] = (audio_renderer_t *)  calloc(1,sizeof(audio_renderer_t));
         g_assert(renderer_type[i]);
         GString *launch = g_string_new("appsrc name=audio_source ! ");
-        g_string_append(launch, "queue ! ");
+        /* Drop audio that the cabin cannot play yet. A full queue must not block the AirPlay thread. */
+        g_string_append(launch, "queue max-size-buffers=8 leaky=downstream ! ");
         switch (i) {
         case 0:    /* AAC-ELD */
         case 2:    /* AAC-LC */
@@ -160,33 +164,18 @@ void audio_renderer_init(logger_t *render_logger, const char* audiosink, const b
             break;
         }
         g_string_append (launch, "audioconvert ! ");
-        g_string_append (launch, "audioresample quality=10 ! ");    /* maximum resampling quality for 44.1kHz -> 48kHz audio */
+        /* 44.1 kHz mirror audio to the 48 kHz cabin device. Quality 4 is the
+         * GStreamer default; quality 10 saturates the head unit during a movie. */
+        g_string_append (launch, "audioresample quality=4 ! ");
         g_string_append (launch, "volume name=volume ! ");
 
         if (!audio_rtp) {
-            /* Normal path: local audio output */
-            g_string_append (launch, "level ! ");
+            /* Pace the cabin sink by the frame clock. Video sync stays separate
+             * (-vsync no keeps fakesink from blocking the picture). */
             g_string_append (launch, audiosink);
-            switch(i) {
-            case 1:  /*ALAC*/
-                if (*audio_sync) {
-                    g_string_append (launch, " sync=true");
-                    async = TRUE;
-                } else {
-                    g_string_append (launch, " sync=false");
-                    async = FALSE;
-                }
-                break;
-            default:
-                if (*video_sync) {
-                    g_string_append (launch, " sync=true");
-                    vsync = TRUE;
-                } else {
-                    g_string_append (launch, " sync=false");
-                    vsync = FALSE;
-                }
-                break;
-            }
+            g_string_append (launch, " sync=true");
+            async = TRUE;
+            vsync = TRUE;
         } else {
             /* RTP path: send decoded PCM over RTP */
             /* rtpL16pay requires S16BE (big-endian) format */
@@ -399,6 +388,8 @@ void audio_renderer_destroy() {
 }
 
 static gboolean gstreamer_audio_pipeline_bus_callback(GstBus *bus, GstMessage *message, void *loop) {
+    (void) bus;
+    (void) loop;
     switch (GST_MESSAGE_TYPE(message)) {
     case GST_MESSAGE_ERROR: {
         GError *err = NULL;
@@ -407,12 +398,12 @@ static gboolean gstreamer_audio_pipeline_bus_callback(GstBus *bus, GstMessage *m
         logger_log(logger, LOGGER_INFO, "GStreamer error (audio): %s %s", GST_MESSAGE_SRC_NAME(message),err->message);
         g_error_free(err);
         g_free(debug);
-        if (renderer->appsrc) {
-            gst_app_src_end_of_stream (GST_APP_SRC(renderer->appsrc));
+        /* A cabin-sink error used to end the whole receiver, which dropped the
+         * iPhone. Silence the audio and leave the mirror running. */
+        render_audio = FALSE;
+        if (renderer && renderer->pipeline) {
+            gst_element_set_state (renderer->pipeline, GST_STATE_NULL);
         }
-        gst_bus_set_flushing(bus, TRUE);
-        gst_element_set_state (renderer->pipeline, GST_STATE_READY);
-        g_main_loop_quit( (GMainLoop *) loop);
 	break;
     }
     case GST_MESSAGE_EOS:

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "g21_airplay",
-  "version": "0.1.105",
+  "version": "0.1.121",
   "tree": "package",
   "internet": true,
   "modules": [
@@ -29,6 +29,8 @@
     "src/frame_sink.js",
     "src/menu_draw.js",
     "src/knob_keyboard.js",
+    "src/youtube_client.js",
+    "src/youtube_file.js",
     "src/config_store.js",
     "src/config_panel.js",
     "src/windows_offers.js"

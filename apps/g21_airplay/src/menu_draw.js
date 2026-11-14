@@ -18,8 +18,10 @@ var FRAME = 7;
 var VIDEO = 13;
 var DROP_VIDEO = 14;
 var MIRROR_FILE = '/dev/shm/mgu-video-g21airplay';
+var youtubeFilePath = '/dev/shm/mgu-video-ridetube';
 var GRAB = 10;
 var READY = 101;
+var TICK = 102;
 var CCU = 105;
 var X_GRAB = 0x4d520002;
 var X_READY = 0x4d520101;
@@ -41,9 +43,137 @@ var PAGE = 0x090807FF;
 var PAGE_TOP = 0x120E0BFF;
 var PAGE_BAND = 0x1A1410FF;
 var ACCENT = 0xE6A15CFF;
+var RED = 0xE23B3BFF;
+var RED_CARD = 0x4A1616FF;
 var ACCENT_DIM = 0x7A4A22FF;
 var ACCENT_GLOW = 0x3A2414FF;
 var LINE = 0x3A3026FF;
+var uiLang = 'pl';
+var EN = {
+    'lustro iPhone': 'iPhone mirror',
+    'Napis': 'Caption',
+    'Ustawienia': 'Settings',
+    'Renderowanie': 'Rendering',
+    'Programowe': 'Software',
+    'YouTube': 'YouTube',
+    'RideTube': 'RideTube',
+    'zegary i HUD': 'gauges and HUD',
+    'odtwarzanie': 'playing',
+    'brak filmu': 'no video',
+    'Pozycja': 'Position',
+    'wspólne okno': 'shared window',
+    'wspólne dla wszystkich': 'shared by all',
+    'Czcionka': 'Font',
+    'Wielkość': 'Size',
+    'Kolor': 'Colour',
+    'Pixel': 'Pixel',
+    'Gruby': 'Bold',
+    'Wysoki': 'Tall',
+    'Biały': 'White',
+    'Pomarańcz': 'Orange',
+    'Czerwony': 'Red',
+    'Żółty': 'Yellow',
+    'Niebieski': 'Blue',
+    'tekst na ekranach': 'text on the screens',
+    'włącz lustro': 'start mirror',
+    'Ekrany': 'Screens',
+    'środek': 'centre',
+    'zablokowane, 24 kl/s': 'locked, 24 fps',
+    'Nazwa': 'Name',
+    'Kod': 'Code',
+    'bez kodu': 'no code',
+    'Wstecz': 'Back',
+    'strona główna': 'home',
+    'Środek': 'Centre',
+    'opcje tego ekranu': 'this screen',
+    'Zegary': 'Gauges',
+    'mapa albo cały panel': 'map or full panel',
+    'Włącz': 'On',
+    'wyłączony': 'off',
+    'wylaczony': 'off',
+    'włączony': 'on',
+    'włączony na Start': 'on when you press Start',
+    'Gdzie rysować': 'Where to draw',
+    'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
+    'Poziomo': 'Across',
+    'Pionowo': 'Down',
+    'klik, potem pokrętło': 'tap, then turn the knob',
+    'Rozmiar': 'Size',
+    'klik, rozciąga 600x400': 'tap, scales 600x400',
+    'Wyśrodkuj': 'Centre it',
+    'na środek': 'to the middle',
+    'na srodek': 'to the middle',
+    'ekrany': 'screens',
+    'Tekst': 'Text',
+    'własny napis': 'your own text',
+    'OK: następny ekran': 'OK: next screen',
+    'ukryty': 'hidden',
+    'Zakończ': 'Stop',
+    'Koniec streamu': 'end the stream',
+    'Mapa: kieszeń, wskazówki zostają': 'Map: pocket, gauges stay',
+    'Panel: całe zegary, zasłania BC': 'Panel: full gauges, hides the dials',
+    'włączony, mapa: kieszeń': 'on, map: pocket',
+    'wyłączony, mapa: kieszeń': 'off, map: pocket',
+    'włączony, panel: całe zegary': 'on, full gauges',
+    'wyłączony, panel: całe zegary': 'off, full gauges',
+    'wybierz ekran': 'pick a screen',
+    'sukces': 'ok',
+    'iPhone laczy': 'iPhone connecting',
+    'brak odbiornika': 'no receiver',
+    'brak dns': 'no dns',
+    'odbiornik spadl': 'receiver stopped',
+    'brak wifi': 'no wifi',
+    'czekam na iPhone': 'waiting for iPhone',
+    'blad lustra': 'mirror error',
+    'wstecz': 'back',
+    'w gore': 'up',
+    'dalej': 'more',
+    'strzalki, potem wybierz': 'arrows, then select',
+    'Gdzie pokazać': 'Where to show',
+    'kliknij kafelek': 'tap a tile',
+    'wlaczone': 'on',
+    'wylaczone': 'off',
+    'Gotowe': 'Done',
+    'Pozycja': 'Position',
+    'Start': 'Start',
+    'Stop': 'Stop',
+    'AirPlay > Ekrany': 'AirPlay > Screens',
+    'AirPlay > Ekrany > Środek': 'AirPlay > Screens > Centre',
+    'AirPlay > Ekrany > Zegary': 'AirPlay > Screens > Gauges',
+    'AirPlay > Ekrany > HUD': 'AirPlay > Screens > HUD',
+    'AirPlay > Ekrany > Opcje': 'AirPlay > Screens > Options',
+    'AirPlay > Ekrany > Okno': 'AirPlay > Screens > Window',
+    'AirPlay > Lustro': 'AirPlay > Mirror',
+    'Dodaj': 'Add',
+    'Edytuj': 'Edit',
+    'Usun': 'Delete',
+    'Nowy profil': 'New profile',
+    'Skasuj profil': 'Delete profile',
+    'Koniec sesji': 'End session',
+    'Menu glowne': 'Main menu',
+    'Polacz': 'Connect',
+    'wybierz ekran': 'pick a screen'
+};
+
+function tr(text) {
+    var s = text == null ? '' : String(text);
+    if (uiLang !== 'en' || !s) {
+        return s;
+    }
+    if (EN[s]) {
+        return EN[s];
+    }
+    if (s.indexOf('okno ') === 0) {
+        return 'window ' + s.slice(5);
+    }
+    if (s.indexOf('blad ') === 0) {
+        return 'error ' + s.slice(5);
+    }
+    if (s.indexOf('kod ') === 0) {
+        return 'code ' + s.slice(4);
+    }
+    return s;
+}
 var CHIP = 0x100D0AFF;
 var ICON_FG = 0xE7D7C4FF;
 var ICON_ACCENT = 0xF0C48AFF;
@@ -383,43 +513,89 @@ var FONT = {
 
 var ROOT_ITEMS = [
     { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
-    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' }
+    { name: 'youtube', title: 'YouTube', hint: '', icon: 'play' },
+    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
+    { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
+    { name: 'settings', title: 'Ustawienia', hint: 'GPU', icon: 'gear' },
+    { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' }
 ];
 
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
     { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
-    { name: 'air-quality', title: '600x400', hint: '24 kl/s', icon: 'desktop' },
+    { name: 'air-quality', title: '600x400', hint: 'zablokowane, 24 kl/s', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
     { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
 var AIR_OUT_ITEMS = [
-    { name: 'air-out-central', title: 'Środek', hint: 'wyłączony', icon: 'desktop' },
-    { name: 'air-out-hud', title: 'HUD', hint: 'wyłączony', icon: 'tag' },
-    { name: 'air-out-cluster', title: 'Zegary', hint: 'wyłączony', icon: 'grid' },
-    { name: 'air-area', title: 'Mapa', hint: 'miejsce na zegarach', icon: 'grid' },
-    { name: 'air-out-box', title: 'Pozycja', hint: 'srodek ekranu', icon: 'desktop' },
+    { name: 'air-out-central', title: 'Środek', hint: 'opcje tego ekranu', icon: 'desktop' },
+    { name: 'air-out-cluster', title: 'Zegary', hint: 'mapa albo cały panel', icon: 'grid' },
+    { name: 'air-out-hud', title: 'HUD', hint: 'opcje tego ekranu', icon: 'tag' },
     { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
 
-var AIR_BOX_ITEMS = [
-    { name: 'air-box-target', title: 'Ekran', hint: 'klik: nastepny', icon: 'desktop' },
-    { name: 'air-box-pos', title: 'Pozycja', hint: 'pokretlo, klik: os', icon: 'grid' },
-    { name: 'air-box-size', title: 'Rozmiar', hint: 'proporcje, suwak', icon: 'desktop' },
-    { name: 'air-box-h', title: 'Wysokość', hint: 'suwak', icon: 'desktop' },
-    { name: 'air-box-w', title: 'Szerokość', hint: 'suwak', icon: 'desktop' },
-    { name: 'air-box-center', title: 'Wyśrodkuj', hint: 'na srodek ekranu', icon: 'grid' },
-    { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
+function screenOptions(name) {
+    var items = [
+        { name: 'air-box-power', title: 'Włącz', hint: 'wyłączony', icon: 'play' }
+    ];
+    if (name === 'cluster') {
+        items.push({
+            name: 'air-box-place',
+            title: 'Gdzie rysować',
+            hint: 'mapa: kieszeń, wskazówki zostają',
+            icon: 'grid'
+        });
+    }
+    items.push(
+        { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
+    );
+    return items;
+}
+
+var AIR_BOX_ITEMS = screenOptions('central');
+
+function positionOptions() {
+    return [
+        { name: 'pos-x', title: 'Poziomo', hint: 'klik, potem pokrętło', icon: 'grid', adjust: true },
+        { name: 'pos-y', title: 'Pionowo', hint: 'klik, potem pokrętło', icon: 'grid', adjust: true },
+        { name: 'pos-size', title: 'Rozmiar', hint: 'wspólne okno', icon: 'desktop', adjust: true },
+        { name: 'pos-center', title: 'Wyśrodkuj', hint: 'na środek', icon: 'grid' },
+        { name: 'pos-back', title: 'Wstecz', hint: 'pozycja', icon: 'back' }
+    ];
+}
+
+var POS_OUT_ITEMS = [
+    { name: 'pos-out-central', title: 'Środek', hint: 'wspólne dla wszystkich', icon: 'desktop' },
+    { name: 'pos-out-cluster', title: 'Zegary', hint: 'wspólne dla wszystkich', icon: 'grid' },
+    { name: 'pos-out-hud', title: 'HUD', hint: 'wspólne dla wszystkich', icon: 'tag' },
+    { name: 'pos-out-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
 var LABEL_ITEMS = [
     { name: 'label-on', title: 'Napis', hint: 'ukryty', icon: 'tag' },
     { name: 'label-text', title: 'Tekst', hint: 'własny napis', icon: 'tag' },
     { name: 'label-where', title: 'Środek', hint: 'OK: następny ekran', icon: 'desktop' },
-    { name: 'label-pos', title: 'Pozycja', hint: 'OK: przesuwaj', icon: 'grid' },
+    { name: 'label-font', title: 'Czcionka', hint: 'Pixel', icon: 'tag' },
+    { name: 'label-size', title: 'Wielkość', hint: '4', icon: 'desktop', adjust: true },
+    { name: 'label-color', title: 'Kolor', hint: 'Biały', icon: 'tag' },
     { name: 'label-back', title: 'Wstecz', hint: 'THEiPlay', icon: 'back' }
+];
+
+var YOUTUBE_ITEMS = [
+    { name: 'yt-search', title: 'Szukaj', hint: 'tytuł filmu', icon: 'tag' },
+    { name: 'yt-play', title: 'Play', hint: '', icon: 'play' },
+    { name: 'yt-where', title: 'Ekrany', hint: 'środek, zegary, HUD', icon: 'desktop' },
+    { name: 'yt-back10', title: '-10 s', hint: 'cofnij', icon: 'back' },
+    { name: 'yt-fwd10', title: '+10 s', hint: 'do przodu', icon: 'play' },
+    { name: 'yt-stop', title: 'Stop', hint: 'koniec filmu', icon: 'stop' },
+    { name: 'yt-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+
+var SETTINGS_ITEMS = [
+    { name: 'set-render', title: 'Renderowanie', hint: 'GPU', icon: 'desktop' },
+    { name: 'set-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
 var STREAM_ITEMS = [
@@ -433,6 +609,10 @@ var SCREENS = {
     'air-out': AIR_OUT_ITEMS,
     'air-box': AIR_BOX_ITEMS,
     label: LABEL_ITEMS,
+    settings: SETTINGS_ITEMS,
+    youtube: YOUTUBE_ITEMS,
+    'pos-out': POS_OUT_ITEMS,
+    'pos-box': positionOptions(),
     stream: STREAM_ITEMS
 };
 
@@ -628,12 +808,12 @@ function menuLayout(items, selected, width, height, detail, heading) {
             x += rowW + gap;
         }
     } else {
-        rowH = 84;
+        rowH = 92;
         rowW = Math.min(920, page.boxW - 180);
-        if (heading === 'Okno') {
-            rowW = Math.min(rowW, page.boxW - 680);
-            if (rowW < 560) {
-                rowW = 560;
+        if (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD') {
+            rowW = Math.min(620, page.boxW - 700);
+            if (rowW < 480) {
+                rowW = 480;
             }
         }
         x = page.ox + 48;
@@ -696,6 +876,23 @@ function menuLayout(items, selected, width, height, detail, heading) {
     };
 }
 
+function defaultWindowPreview() {
+    return {
+        x: 640,
+        y: 180,
+        w: 640,
+        h: 360,
+        limitW: 1920,
+        limitH: 720,
+        label: 'Okno',
+        sliders: [
+            { key: 'air-box-x', label: 'Poziomo', value: 640, min: 0, max: 1280, on: false },
+            { key: 'air-box-y', label: 'Pionowo', value: 180, min: 0, max: 360, on: false },
+            { key: 'air-box-size', label: 'Rozmiar', value: 640, min: 160, max: 1920, on: false }
+        ]
+    };
+}
+
 function findBack(list) {
     var i;
     var name;
@@ -719,9 +916,17 @@ function crumbFor(name, head, where) {
     } else if (name === 'air-out') {
         base = 'AirPlay > Ekrany';
     } else if (name === 'air-box') {
-        base = 'AirPlay > Ekrany > Okno';
+        base = 'AirPlay > Ekrany > ' + (head && head !== 'THEiPlay' ? head : 'Opcje');
     } else if (name === 'label') {
         base = 'Napis';
+    } else if (name === 'settings') {
+        base = 'Ustawienia';
+    } else if (name === 'youtube') {
+        base = 'YouTube';
+    } else if (name === 'pos-out') {
+        base = 'Pozycja';
+    } else if (name === 'pos-box') {
+        base = 'Pozycja > ' + (head && head !== 'THEiPlay' ? head : 'Środek');
     } else if (name === 'stream') {
         base = 'AirPlay > Lustro';
     } else if (head && head !== 'THEiPlay' && head !== 'Stream') {
@@ -772,11 +977,11 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
     var textX = lay.ox + 36;
     var scale = 4;
     var label;
-    lay.crumb = crumb || 'THEiPlay';
+    lay.crumb = tr(crumb || 'THEiPlay');
     lay.backHit = null;
     if (showBack) {
         draw.pill(lay.ox + 20, lay.oy + 14, 150, 40, CARD);
-        draw.text('wstecz', lay.ox + 40, lay.oy + 24, 3, ACCENT);
+        draw.text(tr('wstecz'), lay.ox + 40, lay.oy + 24, 3, ACCENT);
         lay.backHit = { x: lay.ox + 20, y: lay.oy + 14, w: 150, h: 40 };
         textX = lay.ox + 188;
         scale = 4;
@@ -1056,7 +1261,7 @@ function drawChip(draw, box, on, label) {
     draw.text(text, box.x + Math.floor((box.w - tw) / 2), box.y + Math.floor((box.h - 21) / 2), scale, on ? PAGE : INK);
 }
 
-function drawSlider(draw, x, y, w, value, min, max) {
+function drawSlider(draw, x, y, w, value, min, max, hot) {
     var span = (max | 0) - (min | 0);
     var t = span > 0 ? ((value | 0) - (min | 0)) / span : 0;
     var fill;
@@ -1072,7 +1277,7 @@ function drawSlider(draw, x, y, w, value, min, max) {
     fill = Math.round((w - 4) * t);
     draw.rect(x, y, w, 16, PAGE);
     if (fill > 0) {
-        draw.rect(x + 2, y + 2, fill, 12, ACCENT);
+        draw.rect(x + 2, y + 2, fill, 12, hot ? RED : ACCENT);
     }
     draw.rect(x + 2 + fill - 5, y - 4, 10, 24, INK);
 }
@@ -1117,9 +1322,8 @@ function drawAirBadge(draw, lay, air, versionText) {
     var label;
     var tone;
     var tw;
-    var chips;
-    var chipW;
     var total;
+    var anyOn;
     var x;
     var y;
     var h;
@@ -1143,22 +1347,12 @@ function drawAirBadge(draw, lay, air, versionText) {
     }
     label = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 16);
     tw = draw.textWidth(label, 3);
-    chips = [];
-    total = 36 + tw + 12;
     for (i = 0; i < picks.length; i += 1) {
-        chipW = draw.textWidth(picks[i].title, 3) + 22;
-        if (chipW < 72) {
-            chipW = 72;
+        if (chosen[picks[i].key]) {
+            anyOn = true;
         }
-        chips.push({
-            name: picks[i].name,
-            title: picks[i].title,
-            on: !!chosen[picks[i].key],
-            w: chipW
-        });
-        total += chipW + 8;
     }
-    total += 112 + 16;
+    total = 36 + tw + 12 + 132 + 8 + 112 + 16;
     h = 40;
     x = lay.ox + lay.boxW - total - 16;
     y = lay.oy + 14;
@@ -1170,17 +1364,14 @@ function drawAirBadge(draw, lay, air, versionText) {
         draw.rect(x + 16, y + 16, 8, 8, PAGE_TOP);
     }
     tone = air.online ? ACCENT : (air.bad ? INK : HINT);
-    draw.text(label, x + 36, y + 10, 3, tone);
+    draw.text(tr(label), x + 36, y + 10, 3, tone);
     cx = x + 36 + tw + 12;
     lay.airHits = [];
-    for (i = 0; i < chips.length; i += 1) {
-        btn = { name: chips[i].name, x: cx, y: y + 6, w: chips[i].w, h: 28 };
-        drawChip(draw, btn, chips[i].on, chips[i].title);
-        lay.airHits.push(btn);
-        cx += chips[i].w + 8;
-    }
+    btn = { name: 'air-where', x: cx, y: y + 6, w: 132, h: 28 };
+    drawChip(draw, btn, !!(air.whereOpen || anyOn), tr('Ekrany'));
+    lay.airHits.push(btn);
     btn = { name: 'air-badge', x: x + total - 128, y: y + 6, w: 112, h: 28 };
-    drawChip(draw, btn, !!air.on, air.on ? 'Stop' : 'Start');
+    drawChip(draw, btn, !!air.on, tr(air.on ? 'Stop' : 'Start'));
     lay.airHits.push(btn);
     lay.airStrip = { x: x, y: y, w: total, h: h };
     if (versionText) {
@@ -1262,26 +1453,185 @@ function drawTunePanel(draw, hits, panel, tune) {
     draw.text('na zywo', panel.x + panel.w - 250, panel.y + 186, 3, MUTED);
 }
 
+function drawWhereGlyph(draw, kind, x, y) {
+    if (kind === 'cluster') {
+        draw.pill(x + 18, y + 28, 78, 78, ACCENT_DIM);
+        draw.pill(x + 114, y + 28, 78, 78, ACCENT_DIM);
+        draw.pill(x + 40, y + 50, 34, 34, PAGE);
+        draw.pill(x + 136, y + 50, 34, 34, PAGE);
+        return;
+    }
+    if (kind === 'hud') {
+        draw.rect(x + 24, y + 36, 162, 22, ACCENT_DIM);
+        draw.rect(x + 48, y + 70, 114, 8, MUTED);
+        draw.rect(x + 70, y + 88, 70, 6, LINE);
+        return;
+    }
+    draw.rect(x + 8, y + 22, 194, 110, ACCENT_DIM);
+    draw.rect(x + 20, y + 34, 170, 86, PAGE);
+    draw.rect(x + 36, y + 48, 138, 58, CARD_HI);
+}
+
+function drawWhereSheet(draw, lay, air) {
+    var tiles;
+    var chosen;
+    var screens;
+    var i;
+    var row;
+    var panelW;
+    var panelH;
+    var x;
+    var y;
+    var tileW;
+    var gap;
+    var tx;
+    var tile;
+    var on;
+    var cursor;
+    var close;
+    if (!air || !lay) {
+        return;
+    }
+    var pick = (air && air.pickPrefix) || 'air-pick-';
+    var shut = (air && air.pickClose) || 'air-where-close';
+    tiles = [
+        { name: pick + 'cluster', key: 'cluster', title: 'Zegary', kind: 'cluster' },
+        { name: pick + 'hud', key: 'hud', title: 'HUD', kind: 'hud' },
+        { name: pick + 'central', key: 'central', title: 'Środek', kind: 'central' }
+    ];
+    chosen = {};
+    screens = air.screens || [];
+    for (i = 0; i < screens.length; i += 1) {
+        row = screens[i];
+        if (row && row.on) {
+            chosen[row.key || row.name] = true;
+        }
+    }
+    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
+    panelW = 900;
+    panelH = 460;
+    if (panelW > lay.boxW - 40) {
+        panelW = lay.boxW - 40;
+    }
+    if (panelH > lay.boxH - 40) {
+        panelH = lay.boxH - 40;
+    }
+    x = lay.ox + Math.floor((lay.boxW - panelW) / 2);
+    y = lay.oy + Math.floor((lay.boxH - panelH) / 2);
+    draw.rect(x, y, panelW, panelH, PAGE_TOP);
+    draw.rect(x, y, panelW, 6, ACCENT);
+    draw.text(tr('Gdzie pokazać'), x + 28, y + 22, 4, INK);
+    draw.text(tr('kliknij kafelek'), x + 320, y + 28, 3, MUTED);
+    tileW = Math.floor((panelW - 56 - 32) / 3);
+    gap = 16;
+    tx = x + 28;
+    cursor = air.whereCursor | 0;
+    if (!lay.airHits) {
+        lay.airHits = [];
+    }
+    lay.airHits.push({ name: shut, x: lay.ox, y: lay.oy, w: lay.boxW, h: lay.boxH });
+    for (i = 0; i < tiles.length; i += 1) {
+        tile = tiles[i];
+        on = !!chosen[tile.key];
+        draw.rect(tx, y + 78, tileW, 280, (cursor === i || on) ? CARD_HI : CARD);
+        draw.rect(tx, y + 78, tileW, cursor === i ? 6 : 3, on ? RED : (cursor === i ? ACCENT : LINE));
+        drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), y + 100);
+        draw.text(tr(tile.title), tx + 16, y + 250, 3, on ? RED : INK);
+        draw.text(tr(on ? 'wlaczone' : 'wylaczone'), tx + 16, y + 282, 3, on ? ACCENT : MUTED);
+        lay.airHits.push({ name: tile.name, x: tx, y: y + 78, w: tileW, h: 280 });
+        tx += tileW + gap;
+    }
+    close = { name: shut, x: x + panelW - 180, y: y + panelH - 64, w: 148, h: 40 };
+    drawChip(draw, close, cursor === 3, tr('Gotowe'));
+    lay.airHits.push(close);
+}
+
 function applyAirOverlay(draw, lay, air, versionText) {
     var hits = lay.hits || [];
     var win;
     lay.hits = hits;
     lay.airBadge = drawAirBadge(draw, lay, air, versionText);
     lay.airWindow = null;
-    if (!air || lay.stream) {
-        return;
+    if (air && !lay.stream && air.mirrored && air.window && air.window.w > 80 && air.window.h > 80) {
+        win = {
+            x: air.window.x | 0,
+            y: air.window.y | 0,
+            w: air.window.w | 0,
+            h: air.window.h | 0
+        };
+        draw.video(win.x, win.y, win.w, win.h, 1);
+        lay.airWindow = win;
     }
-    if (!(air.mirrored && air.window && air.window.w > 80 && air.window.h > 80)) {
-        return;
+    if (air && air.yt && air.yt.live && air.yt.central !== false && !air.yt.whereOpen && air.yt.window) {
+        draw.video(air.yt.window.x | 0, air.yt.window.y | 0, air.yt.window.w | 0, air.yt.window.h | 0, 1);
+    } else if (air && air.yt && air.yt.live && air.yt.central !== false && !air.yt.whereOpen) {
+        var vx = lay.ox + Math.floor(lay.boxW * 0.42);
+        var vy = lay.oy + 110;
+        var vw = lay.ox + lay.boxW - vx - 36;
+        var vh = Math.floor(vw * 9 / 16);
+        if (vh > lay.boxH - 180) {
+            vh = lay.boxH - 180;
+            vw = Math.floor(vh * 16 / 9);
+        }
+        draw.video(vx, vy, vw, vh, 1);
     }
-    win = {
-        x: air.window.x | 0,
-        y: air.window.y | 0,
-        w: air.window.w | 0,
-        h: air.window.h | 0
-    };
-    draw.video(win.x, win.y, win.w, win.h, 1);
-    lay.airWindow = win;
+    if (air && air.yt && air.yt.live && !air.yt.whereOpen) {
+        drawYtBar(draw, lay);
+    }
+    if (air && air.yt && air.yt.whereOpen) {
+        drawWhereSheet(draw, lay, {
+            screens: air.yt.screens,
+            whereCursor: air.yt.whereCursor,
+            pickPrefix: 'yt-pick-',
+            pickClose: 'yt-where-close'
+        });
+    }
+    if (air && air.whereOpen) {
+        drawWhereSheet(draw, lay, air);
+    }
+    if (lay.airWindow && !air.whereOpen) {
+        drawCenterChrome(draw, lay, lay.airWindow, !!air.full, !!air.movePos);
+    }
+}
+
+function drawYtBar(draw, lay) {
+    var play;
+    var where;
+    if (!lay.airHits) {
+        lay.airHits = [];
+    }
+    play = { name: 'yt-play', x: lay.ox + lay.boxW - 420, y: lay.oy + 18, w: 112, h: 28 };
+    where = { name: 'yt-where', x: play.x + 120, y: play.y, w: 132, h: 28 };
+    drawChip(draw, play, true, 'Play');
+    drawChip(draw, where, true, tr('Ekrany'));
+    lay.airHits.push(play);
+    lay.airHits.push(where);
+}
+
+function drawCenterChrome(draw, lay, win, full, moving) {
+    var y = win.y + 10;
+    var x = win.x + 10;
+    var fullBtn;
+    var posBtn;
+    if (y < lay.oy + 58) {
+        y = lay.oy + 58;
+    }
+    if (x + 292 > lay.ox + lay.boxW) {
+        x = lay.ox + lay.boxW - 302;
+    }
+    fullBtn = { name: 'air-full', x: x, y: y, w: 150, h: 36 };
+    posBtn = { name: 'air-pos', x: x + 158, y: y, w: 132, h: 36 };
+    drawChip(draw, fullBtn, full, 'Full screen');
+    if (!full) {
+        drawChip(draw, posBtn, moving, tr('Pozycja'));
+    }
+    if (!lay.airHits) {
+        lay.airHits = [];
+    }
+    lay.airHits.push(fullBtn);
+    if (!full) {
+        lay.airHits.push(posBtn);
+    }
 }
 
 function appendStreamChrome(draw, lay, page, info, win) {
@@ -1472,7 +1822,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     appendStreamChrome(draw, lay, page, info, placedWin);
     applyAirOverlay(draw, lay, air, version);
     if (caption && caption.on && caption.text) {
-        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
+        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     return {
         frame: message(FRAME, draw.bytes()),
@@ -1522,16 +1872,25 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
         var item = items[itemIndex];
         title = String(item.title || '');
         hint = item.hint ? String(item.hint) : '';
+        if (item.name === 'lang-toggle') {
+            title = uiLang === 'en' ? 'Language' : 'Język';
+            hint = uiLang === 'en' ? 'English' : 'polski';
+        } else {
+            title = tr(title);
+            hint = tr(hint);
+        }
         iconName = item.icon || 'play';
         iconPx = bubble.iconPx;
         iconSide = draw.iconSize(iconPx);
         focus = itemIndex === selected;
-        draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, focus ? CARD_HI : CARD);
-        if (focus) {
-            draw.rect(bubble.x, bubble.y, bubble.w, 4, ACCENT);
-            draw.rect(bubble.x, bubble.y + bubble.h - 4, bubble.w, 4, ACCENT);
-            draw.rect(bubble.x, bubble.y, 4, bubble.h, ACCENT);
-            draw.rect(bubble.x + bubble.w - 4, bubble.y, 4, bubble.h, ACCENT);
+        var hot = !!item.armed;
+        var edge = hot ? RED : ACCENT;
+        draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, hot ? RED_CARD : (focus ? CARD_HI : CARD));
+        if (hot || focus) {
+            draw.rect(bubble.x, bubble.y, bubble.w, 4, edge);
+            draw.rect(bubble.x, bubble.y + bubble.h - 4, bubble.w, 4, edge);
+            draw.rect(bubble.x, bubble.y, 4, bubble.h, edge);
+            draw.rect(bubble.x + bubble.w - 4, bubble.y, 4, bubble.h, edge);
         }
         if (bubble.home) {
             iconX = bubble.x + Math.floor((bubble.w - iconSide) / 2);
@@ -1568,23 +1927,25 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     }
     if (lay.bubbles.length && !lay.bubbles[0].home) {
         if (lay.first > 0) {
-            draw.text('w gore', lay.ox + lay.boxW - 280, lay.oy + 28, 3, MUTED);
+            draw.text(tr('w gore'), lay.ox + lay.boxW - 280, lay.oy + 28, 3, MUTED);
         }
         if (lay.first + lay.bubbles.length < lay.count) {
-            draw.text('dalej', lay.ox + lay.boxW - 160, lay.hintY, 3, MUTED);
+            draw.text(tr('dalej'), lay.ox + lay.boxW - 160, lay.hintY, 3, MUTED);
         }
     }
     if (detail) {
         draw.text(detail.slice(0, 28), lay.ox + 36, lay.oy + lay.boxH - 58, 3, INK);
     } else {
-        draw.text('strzalki, potem wybierz', lay.ox + 36, lay.oy + lay.boxH - 58, 3, MUTED);
+        draw.text(tr('strzalki, potem wybierz'), lay.ox + 36, lay.oy + lay.boxH - 58, 3, MUTED);
     }
     drawNav(draw, lay);
-    if (boxPreview && heading === 'Okno') {
+    if (boxPreview && boxPreview.frames && boxPreview.frames.length) {
+        drawScreenFrames(draw, lay, boxPreview, items[selected]);
+    } else if (boxPreview && (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD')) {
         drawBoxPreview(draw, lay, boxPreview, items[selected]);
     }
     if (caption && caption.on && caption.text) {
-        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, 4, ACCENT);
+        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     applyAirOverlay(draw, lay, air, version);
     return {
@@ -1592,6 +1953,79 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
         rects: draw.rects,
         layout: lay
     };
+}
+
+function drawScreenFrames(draw, lay, preview, selectedItem) {
+    var frames = preview.frames || [];
+    var colW = 500;
+    var gap = 14;
+    var n = frames.length || 1;
+    var budget = lay.boxH - lay.headerH - 28;
+    var slot = Math.floor((budget - gap * (n - 1)) / n);
+    var x0 = lay.ox + lay.boxW - colW - 24;
+    var y = lay.oy + lay.headerH + 12;
+    var i;
+    var frame;
+    var labelH = 22;
+    var innerH;
+    var scale;
+    var stageW;
+    var stageH;
+    var sx;
+    var sy;
+    var wx;
+    var wy;
+    var ww;
+    var wh;
+    var edge;
+    if (x0 < lay.ox + 520) {
+        x0 = lay.ox + 520;
+        colW = lay.ox + lay.boxW - x0 - 24;
+    }
+    for (i = 0; i < frames.length; i += 1) {
+        frame = frames[i];
+        innerH = slot - labelH - 8;
+        if (innerH < 36) {
+            innerH = 36;
+        }
+        scale = Math.min(colW / (frame.limitW || 1), innerH / (frame.limitH || 1));
+        stageW = Math.max(48, Math.round((frame.limitW || 1) * scale));
+        stageH = Math.max(28, Math.round((frame.limitH || 1) * scale));
+        sx = x0 + Math.floor((colW - stageW) / 2);
+        sy = y + labelH;
+        wx = sx + Math.round((frame.x || 0) * scale);
+        wy = sy + Math.round((frame.y || 0) * scale);
+        ww = Math.max(8, Math.round((frame.w || 0) * scale));
+        wh = Math.max(8, Math.round((frame.h || 0) * scale));
+        if (ww > stageW) {
+            ww = stageW;
+        }
+        if (wh > stageH) {
+            wh = stageH;
+        }
+        if (wx < sx) {
+            wx = sx;
+        }
+        if (wy < sy) {
+            wy = sy;
+        }
+        if (wx + ww > sx + stageW) {
+            wx = sx + stageW - ww;
+        }
+        if (wy + wh > sy + stageH) {
+            wy = sy + stageH - wh;
+        }
+        edge = frame.focus ? ACCENT : LINE;
+        draw.text(tr(String(frame.label || '')), sx, y, 3, frame.focus ? ACCENT : MUTED);
+        draw.rect(sx - 3, sy - 3, stageW + 6, stageH + 6, edge);
+        draw.rect(sx, sy, stageW, stageH, PAGE_TOP);
+        draw.rect(wx, wy, ww, wh, frame.focus ? ACCENT_DIM : CARD_HI);
+        draw.rect(wx, wy, ww, 3, frame.focus ? ACCENT : LINE);
+        draw.rect(wx, wy + wh - 3, ww, 3, frame.focus ? ACCENT : LINE);
+        draw.rect(wx, wy, 3, wh, frame.focus ? ACCENT : LINE);
+        draw.rect(wx + ww - 3, wy, 3, wh, frame.focus ? ACCENT : LINE);
+        y += slot + gap;
+    }
 }
 
 function drawBoxPreview(draw, lay, preview, selectedItem) {
@@ -1614,10 +2048,10 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     var row;
     var sy;
     var lab;
-    if (selectedItem && (selectedItem.name === 'air-box-size' || selectedItem.name === 'air-box-w' || selectedItem.name === 'air-box-h')) {
+    if (selectedItem && selectedItem.name === 'air-box-size') {
         mode = 'size';
     }
-    if (selectedItem && selectedItem.name === 'air-box-pos') {
+    if (selectedItem && (selectedItem.name === 'air-box-x' || selectedItem.name === 'air-box-y')) {
         mode = 'move';
     }
     if (ww > stageW) {
@@ -1646,9 +2080,13 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
         sy = y + stageH + 78;
         for (si = 0; si < preview.sliders.length; si += 1) {
             row = preview.sliders[si];
-            lab = String(row.label || '');
-            draw.text(lab, x, sy, 3, row.on ? ACCENT : MUTED);
-            drawSlider(draw, x + 130, sy, Math.max(80, stageW - 220), row.value | 0, row.min | 0, row.max | 0);
+            if (selectedItem && row.key) {
+                row.on = selectedItem.name === row.key;
+            }
+            var hotSlider = !!(selectedItem && selectedItem.armed && row.key === selectedItem.name);
+            lab = tr(String(row.label || ''));
+            draw.text(lab, x, sy, 3, hotSlider ? RED : (row.on ? ACCENT : MUTED));
+            drawSlider(draw, x + 130, sy, Math.max(80, stageW - 220), row.value | 0, row.min | 0, row.max | 0, hotSlider);
             draw.text(String(row.value | 0), x + stageW - 72, sy, 3, INK);
             sy += 36;
         }
@@ -1691,6 +2129,13 @@ function createMenuSurface(opts) {
     var version = String((opts && opts.version) || '');
     var paths = opts.sockets || ['/run/mgu-renderd/renderd.sock', '/run/mgu-render/render.sock'];
     var selected = 0;
+    var armed = '';
+    var whereOpen = false;
+    var ytOpen = false;
+    var ytCursor = 0;
+    var ytState = null;
+    var whereCursor = 0;
+    var movePos = false;
     var shown = false;
     var front = false;
     var ready = false;
@@ -1728,7 +2173,11 @@ function createMenuSurface(opts) {
     var airWindow = null;
     var airKey = '';
     var mirrorSent = false;
+    var mirrorPath = '';
     var pulseBeat = 0;
+    var frameHold = false;
+    var frameQueued = false;
+    var frameHoldTimer = null;
     var backBox = null;
     var backAction = '';
     var navBoxes = null;
@@ -1756,6 +2205,55 @@ function createMenuSurface(opts) {
         }
     }
 
+    function clearFrameHold() {
+        frameHold = false;
+        frameQueued = false;
+        if (frameHoldTimer) {
+            clearTimeout(frameHoldTimer);
+            frameHoldTimer = null;
+        }
+    }
+
+    // One frame in flight, like the other apps: the renderer sends TICK when the
+    // screen has drawn it (up to 60 fps). A second frame waits. Sending faster
+    // than that drops the client and the picture goes.
+    function flushFrame() {
+        if (!lastFrame || !sock || !shown) {
+            return;
+        }
+        if (frameHold) {
+            frameQueued = true;
+            return;
+        }
+        frameQueued = false;
+        frameHold = true;
+        if (frameHoldTimer) {
+            clearTimeout(frameHoldTimer);
+        }
+        frameHoldTimer = setTimeout(function () {
+            frameHoldTimer = null;
+            frameHold = false;
+            if (frameQueued && shown && ready) {
+                flushFrame();
+            }
+        }, 250);
+        if (frameHoldTimer.unref) {
+            frameHoldTimer.unref();
+        }
+        write(lastFrame);
+    }
+
+    function releaseFrame() {
+        frameHold = false;
+        if (frameHoldTimer) {
+            clearTimeout(frameHoldTimer);
+            frameHoldTimer = null;
+        }
+        if (frameQueued && shown && ready) {
+            flushFrame();
+        }
+    }
+
     function sendPlace() {
         var w = screen.w || 1920;
         var h = screen.h || 720;
@@ -1778,25 +2276,32 @@ function createMenuSurface(opts) {
         write(message(native ? X_GRAB : GRAB, u32(on ? 1 : 0)));
     }
 
-    function sendMirror(on) {
+    function sendMirror(on, path) {
+        var file = path || MIRROR_FILE;
         var body;
         if (!native) {
             return;
         }
         if (on) {
-            if (mirrorSent) {
+            if (mirrorSent && mirrorPath === file) {
                 return;
             }
-            body = Buffer.alloc(4 + MIRROR_FILE.length + 1);
+            if (mirrorSent) {
+                write(message(DROP_VIDEO, u32(1)));
+                mirrorSent = false;
+            }
+            body = Buffer.alloc(4 + file.length + 1);
             body.writeUInt32LE(1, 0);
-            body.write(MIRROR_FILE, 4);
+            body.write(file, 4);
             write(message(VIDEO, body));
             mirrorSent = true;
+            mirrorPath = file;
             return;
         }
         if (mirrorSent) {
             write(message(DROP_VIDEO, u32(1)));
             mirrorSent = false;
+            mirrorPath = '';
         }
     }
 
@@ -1824,12 +2329,36 @@ function createMenuSurface(opts) {
         } else if (streamInfo) {
             streamInfo.video = false;
         }
-        sendMirror(!!((streamInfo && streamInfo.video) || (screenName !== 'stream' && airState && airState.mirrored && airState.window && native)));
+        if (screenName === 'youtube' && ytState && ytState.live && ytState.central !== false && native) {
+            sendMirror(true, youtubeFilePath);
+        } else {
+            sendMirror(!!((streamInfo && streamInfo.video) || (screenName !== 'stream' && airState && airState.mirrored && airState.window && native)));
+        }
+        var armI;
+        for (armI = 0; armI < items.length; armI += 1) {
+            items[armI].armed = !!(armed && items[armI].adjust && items[armI].name === armed);
+        }
+        if (ytState) {
+            ytState.whereOpen = ytOpen;
+            ytState.whereCursor = ytCursor;
+        }
+        if (airState) {
+            airState.yt = screenName === 'youtube' ? ytState : null;
+            airState.whereOpen = whereOpen;
+            airState.whereCursor = whereCursor;
+            airState.movePos = movePos;
+            airState.full = !!(airState.window && airState.window.w >= 1800 && airState.window.h >= 680);
+            if (airState.full) {
+                movePos = false;
+                airState.movePos = false;
+            }
+        }
         var place = edit ? placeName(edit.field, edit.title) : '';
         var crumb = crumbFor(screenName, heading, place);
+        var airArg = airState || (screenName === 'youtube' && ytState ? { yt: ytState } : null);
         var built = edit
-            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb, airState, version)
-            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb, airState);
+            ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb, airArg, version)
+            : buildFrame(items, selected, screen.w || 1920, screen.h || 720, detail, heading, version, streamInfo, boxPreview, caption, crumb, airArg);
         keyHits = (built.layout && built.layout.keys) || [];
         popupHits = (built.layout && built.layout.popup) || [];
         backBox = built.layout && built.layout.backHit ? built.layout.backHit : null;
@@ -1840,8 +2369,8 @@ function createMenuSurface(opts) {
         airStrip = built.layout && built.layout.airStrip ? built.layout.airStrip : null;
         airWindow = built.layout && built.layout.airWindow ? built.layout.airWindow : null;
         backAction = edit ? '' : findBack(items);
-        write(built.frame);
         lastFrame = built.frame;
+        flushFrame();
         if (!noted) {
             noted = true;
             note('menu-frame ' + built.rects);
@@ -1861,6 +2390,7 @@ function createMenuSurface(opts) {
             clearInterval(pulse);
             pulse = null;
         }
+        clearFrameHold();
         surfaced = false;
         if (retry) {
             clearTimeout(retry);
@@ -2048,7 +2578,8 @@ function createMenuSurface(opts) {
                 name: item.name,
                 title: item.title,
                 hint: item.hint,
-                icon: item.icon || 'play'
+                icon: item.icon || 'play',
+                adjust: !!item.adjust
             };
         });
     }
@@ -2061,6 +2592,7 @@ function createMenuSurface(opts) {
         screenName = next;
         items = cloneScreen(next);
         selected = 0;
+        armed = '';
         clearHold();
         edit = null;
         if (next === 'airplay') {
@@ -2069,6 +2601,11 @@ function createMenuSurface(opts) {
             heading = 'Gdzie pokazać';
         } else if (next === 'air-box') {
             heading = 'Okno';
+            if (!boxPreview) {
+                boxPreview = defaultWindowPreview();
+            }
+        } else if (next === 'pos-out' || next === 'pos-box') {
+            heading = 'Pozycja';
         } else if (next === 'label') {
             heading = 'Napis';
         } else if (next === 'stream') {
@@ -2083,12 +2620,12 @@ function createMenuSurface(opts) {
         return screenName;
     }
 
-    function setItemHint(name, text) {
+    function setItemHint(name, text, quiet) {
         var i;
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
                 items[i].hint = String(text || '');
-                if (!edit) {
+                if (!edit && !quiet) {
                     paint();
                 }
                 return true;
@@ -2097,12 +2634,12 @@ function createMenuSurface(opts) {
         return false;
     }
 
-    function setItemTitle(name, text) {
+    function setItemTitle(name, text, quiet) {
         var i;
         for (i = 0; i < items.length; i += 1) {
             if (items[i].name === name) {
                 items[i].title = String(text || '');
-                if (!edit) {
+                if (!edit && !quiet) {
                     paint();
                 }
                 return true;
@@ -2138,6 +2675,7 @@ function createMenuSurface(opts) {
         if (selected < 0) {
             selected += items.length;
         }
+        armed = '';
         paint();
     }
 
@@ -2177,6 +2715,24 @@ function createMenuSurface(opts) {
             return;
         }
         item = items[selected];
+        if (item && (item.name === 'yt-where')) {
+            ytOpen = !ytOpen;
+            ytCursor = 0;
+            paint();
+            return;
+        }
+        if (item && item.name === 'lang-toggle') {
+            uiLang = uiLang === 'en' ? 'pl' : 'en';
+            paint();
+            choose('lang-toggle');
+            return;
+        }
+        if (item && item.adjust) {
+            armed = armed === item.name ? '' : item.name;
+            paint();
+            return;
+        }
+        armed = '';
         if (item) {
             choose(item.name);
         }
@@ -2198,6 +2754,44 @@ function createMenuSurface(opts) {
         return '';
     }
 
+    function nudgeCentral(dx, dy) {
+        var win;
+        var maxX;
+        var maxY;
+        if (!airState || !airState.window || airState.full) {
+            return;
+        }
+        win = airState.window;
+        maxX = (screen.w || 1920) - win.w;
+        maxY = (screen.h || 720) - win.h;
+        if (maxX < 0) {
+            maxX = 0;
+        }
+        if (maxY < 0) {
+            maxY = 0;
+        }
+        win.x += dx;
+        win.y += dy;
+        if (win.x < 0) {
+            win.x = 0;
+        }
+        if (win.y < 0) {
+            win.y = 0;
+        }
+        if (win.x > maxX) {
+            win.x = maxX;
+        }
+        if (win.y > maxY) {
+            win.y = maxY;
+        }
+        win.x = win.x | 0;
+        win.y = win.y | 0;
+        if (typeof opts.onWindowMove === 'function') {
+            opts.onWindowMove(win.x, win.y, true);
+        }
+        paint();
+    }
+
     function onControl(operation, push, df) {
         var step = encoderStep(lastOp, operation);
         var item = items[selected];
@@ -2206,22 +2800,93 @@ function createMenuSurface(opts) {
         var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
         lastTilt = tilt;
+        if (movePos && !edit && airState && airState.window && !airState.full) {
+            if (step) {
+                nudgeCentral(step * 48, 0);
+            } else if (tilted && (tilt === 'n' || tilt === 's')) {
+                nudgeCentral(0, tilt === 's' ? 48 : -48);
+            }
+            if (push === 1 && lastPush !== 1) {
+                movePos = false;
+                paint();
+            }
+            lastPush = push;
+            return;
+        }
+        if (ytOpen && !edit) {
+            if (step) {
+                ytCursor += step > 0 ? 1 : -1;
+                if (ytCursor < 0) {
+                    ytCursor = 3;
+                }
+                if (ytCursor > 3) {
+                    ytCursor = 0;
+                }
+            }
+            if (push === 1 && lastPush !== 1) {
+                if (ytCursor >= 3) {
+                    ytOpen = false;
+                } else if (ytCursor === 0) {
+                    choose('yt-pick-cluster');
+                } else if (ytCursor === 1) {
+                    choose('yt-pick-hud');
+                } else {
+                    choose('yt-pick-central');
+                }
+            }
+            lastPush = push;
+            if (step || push === 1) {
+                paint();
+            }
+            return;
+        }
+        if (whereOpen && !edit) {
+            if (step) {
+                whereCursor += step > 0 ? 1 : -1;
+                if (whereCursor < 0) {
+                    whereCursor = 3;
+                }
+                if (whereCursor > 3) {
+                    whereCursor = 0;
+                }
+            }
+            if (push === 1 && lastPush !== 1) {
+                if (whereCursor >= 3) {
+                    whereOpen = false;
+                } else if (whereCursor === 0) {
+                    choose('air-pick-cluster');
+                } else if (whereCursor === 1) {
+                    choose('air-pick-hud');
+                } else {
+                    choose('air-pick-central');
+                }
+            }
+            lastPush = push;
+            if (step || push === 1) {
+                paint();
+            }
+            return;
+        }
         if (tilted && !edit) {
+            if (armed && (tilt === 'n' || tilt === 's')) {
+                armed = '';
+            }
             adjusted = typeof opts.onTilt === 'function' && !!opts.onTilt(tilt);
-            if (!adjusted && (tilt === 'n' || tilt === 's') && !(streamInfo && streamInfo.tune)) {
+            if (!adjusted && (tilt === 'n' || tilt === 's') && !(streamInfo && streamInfo.tune && streamInfo.tune.tool)) {
                 move(tilt === 's' ? 1 : -1);
             }
         }
-        if (step && !edit && streamInfo && streamInfo.tune) {
-            if (streamInfo.tune.tool && typeof opts.adjust === 'function') {
+        if (step && !edit && streamInfo && streamInfo.tune && streamInfo.tune.tool) {
+            if (typeof opts.adjust === 'function') {
                 opts.adjust('stream-tune', step);
             }
             adjusted = true;
         }
-        if (step && !edit && !adjusted && item && typeof opts.adjust === 'function') {
+        if (step && !edit && !adjusted && armed && item && item.adjust && item.name === armed && typeof opts.adjust === 'function') {
             adjusted = !!opts.adjust(item.name, step);
         }
         if (step && !adjusted) {
+            armed = '';
             move(step > 0 ? 1 : -1);
         }
         if (push === 1 && lastPush !== 1) {
@@ -2383,8 +3048,11 @@ function createMenuSurface(opts) {
         } else {
             return false;
         }
+        if (airState && airState.full) {
+            return false;
+        }
         if (phase === 1) {
-            if (tx >= win.x && tx < win.x + win.w && ty >= win.y && ty < win.y + 48) {
+            if (tx >= win.x && tx < win.x + win.w && ty >= win.y && ty < win.y + win.h) {
                 dragWin = { x: tx, y: ty, ox: win.x, oy: win.y };
                 return true;
             }
@@ -2500,6 +3168,8 @@ function createMenuSurface(opts) {
                     touchOn = !!(body.readUInt32LE(8) & 1);
                 }
                 write(message(X_MODE, u32(X_MODE_LAYER)));
+            } else if (type === TICK) {
+                releaseFrame();
             } else if (type === READY) {
                 ready = true;
                 if (body.length >= 12) {
@@ -2552,7 +3222,31 @@ function createMenuSurface(opts) {
                     if (phase === 1 && hitAir(tx, ty)) {
                         touchDown = { stream: hitAir(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
                     } else if (phase === 3 && touchDown && touchDown.stream && hitAir(tx, ty) === touchDown.stream) {
-                        choose(touchDown.stream);
+                        if (touchDown.stream === 'yt-where') {
+                            ytOpen = !ytOpen;
+                            ytCursor = 0;
+                            paint();
+                        } else if (touchDown.stream === 'yt-where-close') {
+                            ytOpen = false;
+                            paint();
+                        } else if (touchDown.stream === 'yt-play') {
+                            choose('yt-play');
+                        } else if (touchDown.stream === 'air-where') {
+                            whereOpen = !whereOpen;
+                            whereCursor = 0;
+                            paint();
+                        } else if (touchDown.stream === 'air-where-close') {
+                            whereOpen = false;
+                            paint();
+                        } else if (touchDown.stream === 'air-pos') {
+                            movePos = !movePos;
+                            paint();
+                        } else if (touchDown.stream === 'air-full') {
+                            movePos = false;
+                            choose('air-full');
+                        } else {
+                            choose(touchDown.stream);
+                        }
                         touchDown = null;
                     } else if (phase === 3) {
                         touchDown = null;
@@ -2560,8 +3254,13 @@ function createMenuSurface(opts) {
                     return;
                 }
                 if (airWindow && pointIn(airWindow, tx, ty)) {
-                    touchDown = null;
-                    return;
+                    if (airState && airState.full) {
+                        touchDown = null;
+                        return;
+                    }
+                    if (!edit && onWindowDrag(phase, tx, ty)) {
+                        return;
+                    }
                 }
                 if (screenName === 'stream' || (airState && (airState.window || airState.tune || airState.on))) {
                     if (touchDown && touchDown.stream) {
@@ -2665,6 +3364,7 @@ function createMenuSurface(opts) {
             ready = false;
             native = false;
             mirrorSent = false;
+            clearFrameHold();
             incoming = Buffer.alloc(0);
             write(message(HELLO, Buffer.concat([
                 Buffer.from('g21_airplay'),
@@ -2708,7 +3408,7 @@ function createMenuSurface(opts) {
             sendGrab(true);
             pulseBeat += 1;
             if (lastFrame && (pulseBeat % 2) === 0) {
-                write(lastFrame);
+                flushFrame();
             }
         }, 500);
         if (pulse.unref) {
@@ -2733,6 +3433,12 @@ function createMenuSurface(opts) {
         },
         move: move,
         press: press,
+        lang: function () { return uiLang; },
+        setLang: function (next) {
+            uiLang = next === 'en' ? 'en' : 'pl';
+            paint();
+            return uiLang;
+        },
         repaint: function () {
             paint();
         },
@@ -2743,9 +3449,11 @@ function createMenuSurface(opts) {
                     name: item.name,
                     title: item.title,
                     hint: item.hint || '',
-                    icon: item.icon || 'play'
+                    icon: item.icon || 'play',
+                    adjust: !!item.adjust
                 };
             });
+            armed = '';
             if (typeof nextHeading === 'string') {
                 heading = nextHeading;
             }
@@ -2791,8 +3499,21 @@ function createMenuSurface(opts) {
                 mode: info.mode ? String(info.mode) : '',
                 rotate: info.rotate | 0,
                 label: info.label ? String(info.label) : '',
+                frames: Array.isArray(info.frames) ? info.frames.map(function (frame) {
+                    return {
+                        label: frame && frame.label ? String(frame.label) : '',
+                        limitW: frame && frame.limitW ? (frame.limitW | 0) : 1,
+                        limitH: frame && frame.limitH ? (frame.limitH | 0) : 1,
+                        x: frame && frame.x ? (frame.x | 0) : 0,
+                        y: frame && frame.y ? (frame.y | 0) : 0,
+                        w: frame && frame.w ? (frame.w | 0) : 0,
+                        h: frame && frame.h ? (frame.h | 0) : 0,
+                        focus: !!(frame && frame.focus)
+                    };
+                }) : [],
                 sliders: Array.isArray(info.sliders) ? info.sliders.map(function (row) {
                     return {
+                        key: row && row.key ? String(row.key) : '',
                         label: row && row.label ? String(row.label) : '',
                         value: row && row.value ? (row.value | 0) : 0,
                         min: row && row.min ? (row.min | 0) : 0,
@@ -2854,6 +3575,24 @@ function createMenuSurface(opts) {
             if (!edit) {
                 paint();
             }
+        },
+        setAirWindow: function (win) {
+            if (!airState || !win) {
+                return;
+            }
+            airState.window = {
+                x: win.x | 0,
+                y: win.y | 0,
+                w: win.w | 0,
+                h: win.h | 0
+            };
+        },
+        setYtState: function (info) {
+            ytState = info || null;
+            if (ytState && !ytState.live) {
+                ytOpen = false;
+            }
+            paint();
         },
         setAirState: function (info) {
             var tune = info && info.tune && typeof info.tune === 'object' ? info.tune : null;
@@ -2935,6 +3674,8 @@ module.exports = {
     AIR_OUT_ITEMS: AIR_OUT_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,
     SCREENS: SCREENS,
+    screenOptions: screenOptions,
+    positionOptions: positionOptions,
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,

@@ -14,13 +14,25 @@ var TARGETS = {
     hud: { w: 800, h: 480, contend: 0 }
 };
 
-function renderTextRgba(text, scale) {
+var LABEL_COLORS = {
+    white: [255, 255, 255],
+    orange: [230, 161, 92],
+    red: [226, 59, 59],
+    yellow: [245, 215, 110],
+    blue: [126, 182, 255]
+};
+
+function renderTextRgba(text, scale, color, font) {
     var chars = String(text || '').split('');
     var cellW = 6;
     var cellH = 7;
     var pad = 12;
-    var w = pad * 2 + chars.length * cellW * scale;
-    var h = pad * 2 + cellH * scale;
+    var rgb = LABEL_COLORS[color] || LABEL_COLORS.white;
+    var tall = font === 'tall';
+    var bold = font === 'bold';
+    var sy = tall ? scale * 2 : scale;
+    var w = pad * 2 + chars.length * cellW * scale + (bold ? scale : 0);
+    var h = pad * 2 + cellH * sy;
     var rgba = Buffer.alloc(w * h * 4);
     var i;
     var row;
@@ -52,15 +64,22 @@ function renderTextRgba(text, scale) {
                 if (!bit) {
                     continue;
                 }
-                for (gy = 0; gy < scale; gy += 1) {
+                for (gy = 0; gy < sy; gy += 1) {
                     for (gx = 0; gx < scale; gx += 1) {
                         px = ox + col * scale + gx;
-                        py = pad + row * scale + gy;
+                        py = pad + row * sy + gy;
                         o = (py * w + px) * 4;
-                        rgba[o] = 255;
-                        rgba[o + 1] = 255;
-                        rgba[o + 2] = 255;
+                        rgba[o] = rgb[0];
+                        rgba[o + 1] = rgb[1];
+                        rgba[o + 2] = rgb[2];
                         rgba[o + 3] = 255;
+                        if (bold && px + scale < w) {
+                            o = (py * w + px + scale) * 4;
+                            rgba[o] = rgb[0];
+                            rgba[o + 1] = rgb[1];
+                            rgba[o + 2] = rgb[2];
+                            rgba[o + 3] = 255;
+                        }
                     }
                 }
             }
@@ -82,10 +101,12 @@ function createClusterLabel(opts) {
     var client = opts.client;
     var log = opts.log || function () {};
     var enabled = opts.enabled !== false;
-    var scale = opts.scale || 6;
+    var scale = opts.scale || 4;
+    var font = opts.font || 'pixel';
+    var color = opts.color || 'white';
     var text = opts.text || LABEL;
     var places = opts.places || {};
-    var bitmap = renderTextRgba(text, scale);
+    var bitmap = renderTextRgba(text, scale, color, font);
     var layers = { panel: 0, hud: 0 };
 
     function dropOne(name) {
@@ -175,7 +196,24 @@ function createClusterLabel(opts) {
         text: function () { return text; },
         setText: function (next) {
             text = String(next || LABEL);
-            bitmap = renderTextRgba(text, scale);
+            bitmap = renderTextRgba(text, scale, color, font);
+            if (enabled) {
+                return show();
+            }
+            return { ok: true, enabled: false };
+        },
+        setLook: function (next) {
+            var look = next || {};
+            if (look.scale) {
+                scale = look.scale;
+            }
+            if (look.font) {
+                font = look.font;
+            }
+            if (look.color) {
+                color = look.color;
+            }
+            bitmap = renderTextRgba(text, scale, color, font);
             if (enabled) {
                 return show();
             }
@@ -195,5 +233,6 @@ module.exports = {
     LABEL: LABEL,
     TARGETS: TARGETS,
     renderTextRgba: renderTextRgba,
+    LABEL_COLORS: LABEL_COLORS,
     createClusterLabel: createClusterLabel
 };

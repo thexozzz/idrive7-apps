@@ -59,10 +59,17 @@ function createVideoRouter(opts) {
     }
 
     function due(last, fps, now) {
+        var gap;
         if (fps < 1) {
             fps = 1;
         }
-        return !last || (now - last) >= (1000 / fps);
+        gap = 1000 / fps;
+        // A 16 ms poll is a hair under 1000/60, so a strict 60 fps clock skips
+        // every other frame and the picture judders.
+        if (fps >= 60 && gap > 12) {
+            gap -= 4;
+        }
+        return !last || (now - last) >= gap;
     }
 
     return {

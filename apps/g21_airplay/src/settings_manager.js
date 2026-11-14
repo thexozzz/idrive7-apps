@@ -285,7 +285,8 @@ function createSettings(stored) {
                     next.y = Math.round(cy - next.h / 2);
                 }
             } else if (key === 'size') {
-                ratio = box.h ? (box.w / box.h) : (16 / 9);
+                // Window scale of the fixed 600x400 stream. This does not change what the phone sends.
+                ratio = 3 / 2;
                 step = Math.round(box.w * 0.08);
                 if (step < 32) {
                     step = 32;

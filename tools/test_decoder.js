@@ -70,5 +70,12 @@ assert.ok(renderer.indexOf('avdec_h264') === -1 || renderer.indexOf('decoder') !
 assert.ok(renderer.indexOf('tee name=g21tee') !== -1);
 assert.ok(renderer.indexOf('format=I420') !== -1);
 assert.ok(renderer.indexOf('g21_new_sample') !== -1);
+assert.ok(renderer.indexOf('fwrite(blob, 1, need, out)') !== -1);
+assert.ok(renderer.indexOf('now - last_us') !== -1);
+var audioSrc = fs.readFileSync(path.join(__dirname, '..', 'third_party', 'UxPlay', 'renderers', 'audio_renderer.c'), 'utf8');
+assert.ok(audioSrc.indexOf('audioresample quality=4') !== -1);
+assert.ok(audioSrc.indexOf('quality=10') === -1);
+assert.ok(audioSrc.indexOf('leaky=downstream') !== -1);
+assert.ok(audioSrc.indexOf('g_main_loop_quit') === -1);
 
 console.log('decoder: one UxPlay decode, I420 to atlas/BGRA for present/cluster');

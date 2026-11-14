@@ -10,7 +10,10 @@
 var fs = require('fs');
 
 var PATH = '/dev/shm/mgu-video-g21airplay';
-var NSLOT = 2;
+// 4 slots: the renderer polls every 5 ms (display rate, up to 60 fps) and
+// reads one slot while the next frames are written. 2 slots wrap onto the
+// slot still being read and the picture tears.
+var NSLOT = 4;
 
 function createMirrorVideo() {
     var fd = -1;

@@ -25,7 +25,7 @@ var kept = settingsFactory.createSettings({});
 var baseBox = kept.picture('central');
 var grown = kept.slide('central', 'size', 1);
 assert.ok(grown.w > baseBox.w);
-assert.ok(Math.abs((grown.w / grown.h) - (baseBox.w / baseBox.h)) < 0.05);
+assert.ok(Math.abs((grown.w / grown.h) - (3 / 2)) < 0.08);
 var xBefore = sized.x;
 slidSettings.slide('central', 'x', 1);
 assert.ok(slidSettings.picture('central').x >= xBefore + 32);

@@ -254,7 +254,9 @@ g_string_replace (GString     *string,
 }
 #endif
 
-/* One decode in UxPlay, then a second branch of the same I420 image for cluster-render. */
+/* One decode in UxPlay, then a second branch of the same I420 image for cluster-render.
+ * The picture is packed and written once. A duplicate inside 15 ms is dropped.
+ * A 60 fps frame is about 16.7 ms apart, and a 24 fps film about 42 ms, so both are kept. */
 static GstFlowReturn g21_new_sample(GstAppSink *sink, gpointer unused) {
     GstSample *sample = gst_app_sink_pull_sample(sink);
     GstVideoInfo info;
@@ -265,7 +267,14 @@ static GstFlowReturn g21_new_sample(GstAppSink *sink, gpointer unused) {
     int w;
     int h;
     int row;
-    unsigned char head[8];
+    size_t y_bytes;
+    size_t uv_bytes;
+    size_t need;
+    unsigned char *dst;
+    static unsigned char *blob = NULL;
+    static size_t blob_cap = 0;
+    static gint64 last_us = 0;
+    gint64 now;
     (void) unused;
     if (!sample) {
         return GST_FLOW_OK;
@@ -280,32 +289,66 @@ static GstFlowReturn g21_new_sample(GstAppSink *sink, gpointer unused) {
     }
     w = GST_VIDEO_FRAME_WIDTH(&frame);
     h = GST_VIDEO_FRAME_HEIGHT(&frame);
+    now = g_get_monotonic_time();
+    if (w < 2 || h < 2 || (w % 2) != 0 || (h % 2) != 0 || w > 1920 || h > 1080) {
+        gst_video_frame_unmap(&frame);
+        gst_sample_unref(sample);
+        return GST_FLOW_OK;
+    }
+    if (last_us && (now - last_us) < 15000) {
+        gst_video_frame_unmap(&frame);
+        gst_sample_unref(sample);
+        return GST_FLOW_OK;
+    }
+    y_bytes = (size_t) w * (size_t) h;
+    uv_bytes = y_bytes / 4;
+    need = 8 + y_bytes + uv_bytes + uv_bytes;
+    if (blob_cap < need) {
+        unsigned char *grown = (unsigned char *) realloc(blob, need);
+        if (!grown) {
+            gst_video_frame_unmap(&frame);
+            gst_sample_unref(sample);
+            return GST_FLOW_OK;
+        }
+        blob = grown;
+        blob_cap = need;
+    }
+    blob[0] = 'G';
+    blob[1] = '2';
+    blob[2] = '1';
+    blob[3] = 'Y';
+    blob[4] = (unsigned char) (w & 255);
+    blob[5] = (unsigned char) ((w >> 8) & 255);
+    blob[6] = (unsigned char) (h & 255);
+    blob[7] = (unsigned char) ((h >> 8) & 255);
+    dst = blob + 8;
+    for (row = 0; row < h; row++) {
+        memcpy(dst, (char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 0) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 0), (size_t) w);
+        dst += w;
+    }
+    for (row = 0; row < h / 2; row++) {
+        memcpy(dst, (char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 1) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 1), (size_t) (w / 2));
+        dst += w / 2;
+    }
+    for (row = 0; row < h / 2; row++) {
+        memcpy(dst, (char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 2) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 2), (size_t) (w / 2));
+        dst += w / 2;
+    }
     path = getenv("G21_YUV");
     if (!path || !path[0] || !strcmp(path, "1")) {
         path = "/run/g21-airplay/latest.yuv";
     }
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     out = fopen(tmp, "wb");
-    if (out && w > 0 && h > 0 && (w % 2) == 0 && (h % 2) == 0) {
-        head[0] = 'G'; head[1] = '2'; head[2] = '1'; head[3] = 'Y';
-        head[4] = (unsigned char) (w & 255);
-        head[5] = (unsigned char) ((w >> 8) & 255);
-        head[6] = (unsigned char) (h & 255);
-        head[7] = (unsigned char) ((h >> 8) & 255);
-        fwrite(head, 1, 8, out);
-        for (row = 0; row < h; row++) {
-            fwrite((char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 0) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 0), 1, w, out);
-        }
-        for (row = 0; row < h / 2; row++) {
-            fwrite((char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 1) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 1), 1, w / 2, out);
-        }
-        for (row = 0; row < h / 2; row++) {
-            fwrite((char *) GST_VIDEO_FRAME_PLANE_DATA(&frame, 2) + row * GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 2), 1, w / 2, out);
-        }
+    if (out) {
+        size_t wrote = fwrite(blob, 1, need, out);
         fclose(out);
-        rename(tmp, path);
-    } else if (out) {
-        fclose(out);
+        if (wrote == need) {
+            rename(tmp, path);
+            last_us = now;
+        } else {
+            remove(tmp);
+        }
     }
     gst_video_frame_unmap(&frame);
     gst_sample_unref(sample);

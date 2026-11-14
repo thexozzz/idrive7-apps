@@ -9,13 +9,24 @@ assert.strictEqual(built.frame.length, 8 + built.frame.readUInt32LE(4));
 assert.strictEqual(built.frame.readUInt32LE(8), 1);
 assert.ok(built.rects > 40);
 assert.ok(built.layout);
-assert.strictEqual(built.layout.bubbles.length, menu.ROOT_ITEMS.length);
-assert.strictEqual(menu.ROOT_ITEMS.length, 2);
+assert.ok(built.layout.bubbles.length <= menu.ROOT_ITEMS.length);
+assert.strictEqual(built.layout.count, menu.ROOT_ITEMS.length);
+assert.strictEqual(menu.ROOT_ITEMS.length, 6);
+assert.strictEqual(menu.ROOT_ITEMS[5].name, 'position');
+assert.strictEqual(menu.ROOT_ITEMS[1].name, 'youtube');
+assert.strictEqual(menu.ROOT_ITEMS[1].hint, '');
+assert.strictEqual(menu.ROOT_ITEMS[2].name, 'label-toggle');
+assert.strictEqual(menu.ROOT_ITEMS[3].name, 'lang-toggle');
+assert.strictEqual(menu.ROOT_ITEMS[4].name, 'settings');
+assert.strictEqual(menu.SCREENS.youtube[0].name, 'yt-search');
+assert.strictEqual(menu.SCREENS.youtube[2].name, 'yt-where');
+assert.strictEqual(menu.SCREENS.settings[0].name, 'set-render');
+assert.strictEqual(menu.SCREENS.settings[0].hint, 'GPU');
 assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
 assert.strictEqual(menu.ROOT_ITEMS[0].hint, 'lustro iPhone');
-assert.strictEqual(menu.ROOT_ITEMS[1].name, 'label-toggle');
+assert.strictEqual(menu.ROOT_ITEMS[2].name, 'label-toggle');
 assert.strictEqual(menu.ROOT_ITEMS[0].icon, 'airplay');
-assert.strictEqual(menu.ROOT_ITEMS[1].icon, 'tag');
+assert.strictEqual(menu.ROOT_ITEMS[2].icon, 'tag');
 assert.notStrictEqual(menu.ROOT_ITEMS[0].title, menu.ROOT_ITEMS[1].title);
 assert.ok(menu.ICONS.airplay);
 assert.ok(menu.ICONS.play);
@@ -33,7 +44,7 @@ assert.ok(built.rects > blank.rects);
 
 var withStatus = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start');
 assert.ok(withStatus.rects > 40);
-assert.ok(withStatus.layout.bubbles.length === menu.ROOT_ITEMS.length);
+assert.ok(withStatus.layout.bubbles.length <= menu.ROOT_ITEMS.length);
 var withVer = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start', 'G21', '0.1.70');
 assert.ok(withVer.rects > withStatus.rects);
 
@@ -70,15 +81,19 @@ assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {
 }));
 assert.ok(menu.SCREENS.airplay);
 assert.ok(menu.SCREENS['air-out']);
-assert.strictEqual(menu.SCREENS['air-box'][1].name, 'air-box-pos');
-assert.strictEqual(menu.SCREENS['air-box'][2].name, 'air-box-size');
-assert.strictEqual(menu.SCREENS['air-box'][3].name, 'air-box-h');
-assert.strictEqual(menu.SCREENS['air-box'][4].name, 'air-box-w');
+assert.strictEqual(menu.positionOptions().filter(function (item) { return item.adjust; }).map(function (item) { return item.name; }).join(','), 'pos-x,pos-y,pos-size');
+assert.strictEqual(menu.SCREENS['air-box'][0].name, 'air-box-power');
+assert.ok(!menu.screenOptions('central').some(function (item) { return item.name === 'air-box-x'; }));
+assert.strictEqual(menu.SCREENS.label.filter(function (item) { return item.name === 'label-font' || item.name === 'label-size' || item.name === 'label-color'; }).length, 3);
+assert.strictEqual(menu.screenOptions('cluster')[1].name, 'air-box-place');
+assert.ok(!menu.screenOptions('central').some(function (item) { return item.name === 'air-box-place'; }));
+assert.ok(!menu.screenOptions('hud').some(function (item) { return item.name === 'air-box-place'; }));
+assert.strictEqual(menu.SCREENS['air-box'][menu.SCREENS['air-box'].length - 1].name, 'air-box-back');
 assert.ok(!menu.SCREENS['air-box'].some(function (item) { return item.name === 'air-box-up' || item.name === 'air-box-s'; }));
 assert.strictEqual(menu.AIR_OUT_ITEMS[0].name, 'air-out-central');
-assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-out-hud');
-assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-out-cluster');
-assert.strictEqual(menu.AIR_OUT_ITEMS[3].name, 'air-area');
+assert.strictEqual(menu.AIR_OUT_ITEMS[1].name, 'air-out-cluster');
+assert.strictEqual(menu.AIR_OUT_ITEMS[2].name, 'air-out-hud');
+assert.ok(!menu.AIR_OUT_ITEMS.some(function (item) { return item.name === 'air-area' || item.name === 'air-out-box'; }));
 assert.ok(menu.SCREENS.label);
 assert.ok(menu.STREAM_ITEMS);
 assert.strictEqual(menu.STREAM_ITEMS[0].name, 'stream-end');
@@ -96,7 +111,7 @@ assert.strictEqual(menu.encoderStep(65535, 0), 1);
 assert.strictEqual(menu.encoderStep(3, 1), -2);
 assert.strictEqual(menu.crumbFor('airplay'), 'AirPlay');
 assert.strictEqual(menu.crumbFor('air-out'), 'AirPlay > Ekrany');
-assert.strictEqual(menu.crumbFor('air-box'), 'AirPlay > Ekrany > Okno');
+assert.strictEqual(menu.crumbFor('air-box', 'Zegary'), 'AirPlay > Ekrany > Zegary');
 assert.strictEqual(menu.crumbFor('airplay', '', 'Nazwa'), 'AirPlay > Nazwa');
 var located = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, '', 'THEiPlay', '', null, null, null, 'AirPlay');
 assert.strictEqual(located.layout.crumb, 'AirPlay');
@@ -159,8 +174,25 @@ assert.ok(badged.layout.airBadge);
 assert.strictEqual(badged.layout.airBadge.name, 'air-badge');
 assert.ok(badged.layout.airBadge.w > 80);
 assert.ok(badged.layout.airBadge.h < 56);
-assert.ok(badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-central'; }));
-assert.ok(badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-hud'; }));
+assert.ok(badged.layout.airHits.some(function (hit) { return hit.name === 'air-where'; }));
+assert.ok(!badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-central'; }));
+var picked = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', {
+    on: true,
+    whereOpen: true,
+    whereCursor: 0,
+    screens: [{ key: 'cluster', on: true }]
+});
+assert.ok(picked.layout.airHits.some(function (hit) { return hit.name === 'air-pick-cluster'; }));
+assert.ok(picked.layout.airHits.some(function (hit) { return hit.name === 'air-pick-hud'; }));
+assert.ok(picked.layout.airHits.some(function (hit) { return hit.name === 'air-pick-central'; }));
+var framed = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', {
+    on: true,
+    online: true,
+    mirrored: true,
+    window: { x: 200, y: 120, w: 640, h: 360 }
+});
+assert.ok(framed.layout.airHits.some(function (hit) { return hit.name === 'air-full'; }));
+assert.ok(framed.layout.airHits.some(function (hit) { return hit.name === 'air-pos'; }));
 assert.ok(!hitNamed(badged, 'stream-central'));
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
