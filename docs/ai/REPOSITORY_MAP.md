@@ -26,7 +26,7 @@
 | Moduł | Odpowiedzialność |
 |---|---|
 | `main.js` (157 KB) | klasa `AirPlayApp` (OnlineApp): cykl życia OAP, sesje, ekrany, wideo, YouTube, sygnały SOME/IP, seed profilu RDP |
-| `menu_draw.js` (141 KB) | klient renderera `mgu-render/1`: HELLO/PLACE/SHOW/FRAME/VIDEO/CLAIM, rysowanie menu prostokątami, dotyk, CCU, klawiatura |
+| `menu_draw.js` (141 KB) | klient renderera `mgu-render/1`: HELLO/PLACE/SHOW/FRAME/VIDEO/CLAIM, rysowanie menu (od 0.1.135 przez `rt_record.js`: RRECT, CARD, GLYPHS + atlasy czcionek wysyłane raz na połączenie), dotyk, CCU, klawiatura |
 | `knob_keyboard.js`, `qr.js` | klawiatura pokrętłem; kod QR (nowy, niezatwierdzony) |
 | `mirror_video.js` | zapis klatek I420 do `/dev/shm/mgu-video-g21airplay` (MGVF, 4 sloty) |
 | `video_decoder.js` | parsowanie `G21Y`, skalowanie I420 i atlas YUV dla cluster-render (CPU, JS) |

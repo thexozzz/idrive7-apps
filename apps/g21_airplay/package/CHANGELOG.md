@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.1.135
+
+- Ostatnia klatka nie zostaje już na ekranach. AirPlay: gdy iPhone się rozłączy, a AirPlay w aucie dalej czeka na następne połączenie, obraz znika ze środka, z zegarów i z HUD (wcześniej zostawał do wyłączenia AirPlay w menu). Narzędzie 0.1.53 kończy wtedy g21-yuvring i usuwa klatki, a aplikacja patrzy też na stan klienta (`mirroring` → cokolwiek innego). YouTube: film zatrzymany, zakończony albo z błędem znika z zegarów i HUD (plik dekodera zostaje z ostatnią klatką, więc o tym, czy film gra, mówi teraz odtwarzacz); wyłączony ekran YouTube znika od razu, także gdy AirPlay ma ten sam ekran zapisany w ustawieniach.
+- Narzędzie 0.1.53 nie obciąża już systemu szukaniem procesów. Wersje 0.1.51 i 0.1.52 uruchamiały `tr` dla każdego procesu przy każdym szukaniu (kilkaset procesów, kilka szukań na sekundę, także przy wyłączonym AirPlay). Teraz wiersz poleceń czyta wbudowane `read` powłoki, a sprzątanie osieroconych procesów jest raz na 20 obrotów pętli albo wtedy, gdy narzędzie samo coś zatrzymuje.
+- Nowy wygląd całego menu. Menu rysuje teraz tymi samymi poleceniami renderera i tą samą czcionką Ubuntu co ekran YouTube: zaokrąglone karty z cieniowaniem, ikony z linii, prawdziwe litery z polskimi znakami. Klatka menu ma około 100 poleceń i 5 kB zamiast około 2000 prostokątów i 50 kB. Opcje i ich kolejność są bez zmian. Napis na ekranie („Czcionka: Pixel”) zostaje czcionką pikselową.
+- Ekran YouTube ma kolory THEiPlay (ciepła czerń, kremowy tekst, bursztynowy akcent zamiast różu i niebieskiego), mówi po polsku (albo po angielsku, gdy THEiPlay jest ustawiony na angielski) i wszędzie nazywa się YouTube, nie RideTube. Arkusz ustawień YouTube też.
+- Poprawki logiki interfejsu:
+  - Okienko „Gdzie pokazać” jest modalne: dotknięcie miejsca, gdzie pod nim leży „Wyłącz aplikację”, strzałki albo „wstecz”, zamyka okienko, a nie aplikację.
+  - Suwaki (Poziomo, Pionowo, Rozciągnięcie, Wielkość) da się ustawić samym palcem: po uzbrojeniu suwaka dwa przyciski w stopce stają się – i +, a przytrzymane powtarzają krok. Wcześniej strzałki wychodziły z suwaka.
+  - Kod AirPlay jest duży, na karcie po prawej stronie strony AirPlay (był tylko mały „PIN 1234” w stopce). Gdy AirPlay czeka na iPhone'a, w tym miejscu jest krótka instrukcja połączenia z nazwą auta.
+  - Strzałki w stopce pokazują górę i dół (lista biegnie w dół), na stronach z dwoma kaflami lewo i prawo. Obok listy jest pasek przewijania zamiast napisów „w gore” i „dalej”.
+  - Przyciski Ekrany i Start/Stop w nagłówku mają 44 px wysokości (było 28). Ekrany pokazuje trzema kropkami, które ekrany są wybrane.
+  - Podpowiedź przy „Zakończ” mówi, co się dzieje („iPhone połączony”, „czeka na iPhone”, kod), a nie „bez kodu / czekaj iPhone” także w trakcie lustra. Stany mają polskie znaki („błąd lustra”, „iPhone łączy”, „AirPlay działa”); „sukces” to teraz „połączono”, „offline” to „wyłączony”.
+  - W okienkach „Gdzie pokazać” pokrętło działa też wychyleniem: lewo i prawo po kaflach, w dół na przycisk.
+  - Okno ekranu Stream nie nachodzi już na nagłówek.
+- Podglądy ekranów bez auta: `node tools/preview_ui.js` zapisuje PNG każdego ekranu do `dev-logs/preview`.
+
 ## 0.1.134
 
 - Nowa klawiatura: układ jak w telefonie (cyfry na górze, litery, polskie litery, na dole Aa, szeroka spacja, usuń, anuluj, OK), zaokrąglone klawisze na ciemnej tacy, większe litery, pole tekstu z kursorem i licznikiem znaków („7 z 16”), kropka na klawiszach z polskimi odpowiednikami. Zaczyna od litery q, nie od cyfry. Pod klawiaturą nie ma już paska ze strzałkami.

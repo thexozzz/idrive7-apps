@@ -8,6 +8,15 @@
  * from the theme colour to red at the dial's limit (redline, max boost, ...).
  */
 const THEMES = {
+    // THEiPlay (menu_draw.js): warm black, cream text, amber accent. onSel: text on the accent.
+    theiplay: {
+        name: 'THEiPlay',
+        bg: '#090807', panelTop: '#1c1612', panelBottom: '#110e0b', panelEdge: '#3a3026',
+        tab: '#f7f2ea', track: '#2b231b', tick: '#8c7d6c', text: '#f7f2ea', dim: '#c4b5a4',
+        accent: '#e6a15c', accent2: '#f0c48a', ok: '#e6a15c', warn: '#ffd27a', crit: '#e23b3b', cold: '#7fb7ff',
+        glow: '#e6a15c50', stripes: ['#e6a15c'], oil: '#e6a15c', bar: '#e6a15c', sel: '#e6a15c', selText: '#f7f2ea', onSel: '#090807', marker: '#f7f2ea',
+        ramp: ['#7a4a22', '#e6a15c', '#f0c48a'], hotRamp: ['#7a4a22', '#e6a15c', '#e6a15c', '#e2703b', '#e23b3b'],
+    },
     m_red: {
         name: 'M Red',
         bg: '#050506', panelTop: '#17181c', panelBottom: '#0d0d10', panelEdge: '#2a2b31',

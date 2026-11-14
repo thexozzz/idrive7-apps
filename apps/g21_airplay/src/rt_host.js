@@ -256,11 +256,11 @@ function createRideTube(opts) {
         },
     });
     const SPEC = {
-        id: 'g21_airplay', title: 'RideTube', version: opts.version || '', suspended: true, neverBlock: true,
-        screens: [{ name: 'VIEW', kind: 'canvas', title: 'RideTube', hmi: false, bg: '#0f0f0f', buttons: BUTTONS }],
+        id: 'g21_airplay', title: 'YouTube', version: opts.version || '', suspended: true, neverBlock: true,
+        screens: [{ name: 'VIEW', kind: 'canvas', title: 'YouTube', hmi: false, bg: '#090807', buttons: BUTTONS }],
         settings: SCHEMA,
     };
-    const theme = () => themes.theme(settings.get('theme'));
+    const theme = () => themes.theme('theiplay');     // THEiPlay's own colours (the settings sheet, the kit's chrome)
     const display = new Display(ui, log, SPEC, settings, theme);
     ui.display = display;
     // the kit's Settings tab: RideTube's settings drawn over the page

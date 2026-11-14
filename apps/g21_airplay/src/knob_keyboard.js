@@ -59,7 +59,7 @@ var MODES = {
         shift: true
     },
     pass: {
-        title: 'Haslo',
+        title: 'Hasło',
         rows: QWERTY_ROWS,
         max: 64,
         mask: true,

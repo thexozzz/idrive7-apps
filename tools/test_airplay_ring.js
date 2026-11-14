@@ -19,7 +19,7 @@ var component = JSON.parse(fs.readFileSync(path.join(tooldir, 'component.json'),
 // the tool ships and runs the ring with UxPlay (not for AirPlay Sound)
 assert.ok(component.files.some(function (f) { return f.path === 'g21-yuvring' && f.mode === '0755'; }), 'component ships g21-yuvring');
 assert.ok(fs.existsSync(path.join(tooldir, 'g21-yuvring.c')) && fs.existsSync(path.join(tooldir, 'g21-yuvring')), 'source and binary');
-assert.ok(/stop_ux\(\) \{\n    stop_ring\n/.test(tool.replace(/\r\n/g, '\n')), 'ring stops with UxPlay');
+assert.ok(/stop_ux\(\) \{\n    had_ux=\$UXPID\n    stop_ring\n/.test(tool.replace(/\r\n/g, '\n')), 'ring stops with UxPlay');
 assert.strictEqual((tool.match(/start_ring\n\s*report "running\|\$label\|\$ip"/g) || []).length, 2, 'ring starts with UxPlay');
 assert.ok(tool.indexOf('if [ "$(airplay_mode_of)" = "audio" ]; then\n        stop_ring') !== -1, 'no ring for AirPlay Sound');
 assert.ok(!/pgrep[^\n]*g21-yuvring/.test(tool), 'no pgrep for the ring (this BusyBox has none: hundreds of rings)');

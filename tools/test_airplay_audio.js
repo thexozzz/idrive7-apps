@@ -19,7 +19,7 @@ assert.ok(!/^\s*[^#\n]*\bpkill\b/m.test(tool), 'no pkill call in the tool');
 assert.ok(/procs_matching\(\)/.test(tool) && /kill_matching\(\)/.test(tool), '/proc helpers');
 assert.ok(component.files.some(function (f) { return f.path === 'g21-audio-route.js'; }), 'component ships the route helper');
 assert.ok(/audio_dev=\$\(audio_route_connect\)/.test(tool), 'route before UxPlay starts');
-assert.ok(/stop_ux\(\) \{\n    stop_ring\n    audio_route_disconnect/.test(tool), 'route dropped when UxPlay stops');
+assert.ok(/stop_ux\(\) \{\n    had_ux=\$UXPID\n    stop_ring\n    audio_route_disconnect/.test(tool), 'route dropped when UxPlay stops');
 assert.ok(/LD_PRELOAD=\/usr\/lib\/libasound\.so\.2/.test(tool), "UxPlay uses the car's libasound");
 // node for the route in a clean environment: not UxPlay's bundled libs, not g21-bind-wlan.so (it pinned
 // SOME/IP to the iPhone hotspot: no route, no sound in 0.1.132)
@@ -74,7 +74,7 @@ assert.strictEqual(JSON.parse(fs.readFileSync(calls, 'utf8')).length, 2, 'no sta
 // procs_matching from the tool itself finds a sleeping process by its command line.
 var helper = tool.slice(tool.indexOf('procs_matching() {'), tool.indexOf('our_uxplay_pids() {'));
 var sl = cp.spawn('sleep', ['30']);
-var out = cp.spawnSync('sh', ['-c', helper + "\nprocs_matching '*sleep 30*'"], { encoding: 'utf8' }).stdout;
+var out = cp.spawnSync('sh', ['-c', helper + "\nprocs_matching '*sleep*30*'"], { encoding: 'utf8' }).stdout;
 sl.kill();
 assert.ok(out.split('\n').indexOf(String(sl.pid)) >= 0, 'procs_matching finds the pid: ' + out);
 

@@ -46,8 +46,10 @@ assert.ok(built.rects > blank.rects);
 var withStatus = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start');
 assert.ok(withStatus.rects > 40);
 assert.ok(withStatus.layout.bubbles.length <= menu.ROOT_ITEMS.length);
+// the version mark is one more drawing (same heading with and without it)
 var withVer = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start', 'G21', '0.1.70');
-assert.ok(withVer.rects > withStatus.rects);
+var noVer = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'UxPlay start', 'G21');
+assert.ok(withVer.rects > noVer.rects);
 
 var selected = menu.buildFrame(menu.AIRPLAY_ITEMS, 2, 1920, 720, '', 'Menu');
 var focusRow = selected.layout.bubbles.filter(function (bubble) { return bubble.index === 2; })[0];

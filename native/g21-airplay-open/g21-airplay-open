@@ -122,18 +122,32 @@ clear_table() {
 
 # Path-qualified stops only — never killall / bare pkill names.
 # This MGU's BusyBox has no pgrep/pkill (0.1.50 car logs: "pgrep: not found"), so every
-# lookup reads /proc/*/cmdline. $1 is a shell glob matched against the whole command line
-# (NUL bytes as spaces). Our own shell is never listed.
+# lookup reads /proc/*/cmdline. $1 is a shell glob matched against the whole command line.
+# The line is read with the shell's own `read` (no process per look: 0.1.51/0.1.52 ran `tr` for
+# every process, a few hundred forks per look, several looks a second). `read` drops the NUL
+# bytes between the arguments, so they come joined ("g21-yuvring/run/g21-airplay/latest.yuv"):
+# a glob must not count on a space between two arguments. Our own shell is never listed.
 procs_matching() {
     for f in /proc/[0-9]*/cmdline; do
-        p=${f#/proc/}
-        p=${p%/cmdline}
-        [ "$p" = "$$" ] && continue
-        c=$(tr '\000' ' ' < "$f" 2>/dev/null) || continue
+        c=
+        { IFS= read -r c < "$f"; } 2>/dev/null || true
         case "$c" in
-            $1) printf '%s\n' "$p" ;;
+            $1)
+                p=${f#/proc/}
+                p=${p%/cmdline}
+                [ "$p" = "$$" ] || printf '%s\n' "$p"
+                ;;
         esac
     done
+}
+
+# The stops below run on every round of the main loop (1 s), mostly with nothing of ours running.
+# A process this instance started is stopped by its PID at once; the look through /proc for
+# orphans (left by a former instance of this tool) is made on the first round and then every
+# 20th, or when the caller had a PID to stop (its children may linger).
+SWEEP_N=0
+sweep_due() {
+    [ "$SWEEP_N" -eq 0 ]
 }
 
 # Signal (default TERM) every process procs_matching finds.
@@ -231,6 +245,10 @@ watch_ux_pin() {
                 case $last_log in
                     *"Connection closed"*|*"Removing connection"*|*"Stopping RAOP"*|*"tcp socket is closed"*)
                         client_state "idle|disconnected"
+                        # (the last frame must not stay on the screens)
+                        if [ "$saw_mirror" = "1" ]; then
+                            drop_picture
+                        fi
                         # After a real mirror session, recycle UxPlay: next iPhone
                         # connect otherwise hits sticky tcp[0]=7400 (kkds proof).
                         if [ "$saw_mirror" = "1" ]; then
@@ -257,7 +275,19 @@ RINGSTATUS=/run/g21-airplay/ring
 # twice (a lock), so a second start ends at once.
 RINGPID=
 ring_pids() {
-    procs_matching '*/var/opt/g21-airplay-open/*/g21-yuvring *'
+    procs_matching '*/var/opt/g21-airplay-open/*/g21-yuvring*'
+}
+
+# The remembered ring still runs (its command line is looked at: no process, and a PID number
+# given to something else since does not count).
+ring_alive() {
+    [ -n "$RINGPID" ] || return 1
+    c=
+    { IFS= read -r c < "/proc/$RINGPID/cmdline"; } 2>/dev/null || true
+    case "$c" in
+        */g21-yuvring*) return 0 ;;
+    esac
+    return 1
 }
 
 start_ring() {
@@ -269,7 +299,7 @@ start_ring() {
     if [ ! -x "$rbin" ]; then
         return 0
     fi
-    if [ -n "$RINGPID" ] && kill -0 "$RINGPID" 2>/dev/null; then
+    if ring_alive; then
         return 0
     fi
     for p in $(ring_pids); do
@@ -282,15 +312,31 @@ start_ring() {
 }
 
 stop_ring() {
-    if [ -n "$RINGPID" ]; then
-        kill "$RINGPID" 2>/dev/null || true
-        RINGPID=
+    # By its command line only (never a bare remembered PID: the watcher may have ended the ring
+    # since, and the number could by now be another process).
+    if [ -n "$RINGPID" ] || sweep_due; then
+        for p in $(ring_pids); do
+            kill "$p" 2>/dev/null || true
+        done
     fi
+    RINGPID=
+    rm -f "$RINGSTATUS" /run/g21-airplay/kombi.yuv
+    # the app writes this file itself without the ring (a root file in sticky /dev/shm would block it)
+    if [ -f /dev/shm/mgu-video-g21airplay ] && [ "$(stat -c %u /dev/shm/mgu-video-g21airplay 2>/dev/null)" = "0" ]; then
+        rm -f /dev/shm/mgu-video-g21airplay
+    fi
+}
+
+# The iPhone left (it stopped mirroring, or the link dropped) while AirPlay stays on for the next
+# connection: nothing of its last frame may stay on the screens. The ring is ended by its command
+# line (this runs in the watcher's subshell) and the frames are removed; the app sees the ring's
+# status gone and clears the centre, the cluster and the HUD. The next UxPlay start makes a new ring.
+drop_picture() {
     for p in $(ring_pids); do
         kill "$p" 2>/dev/null || true
     done
-    rm -f "$RINGSTATUS" /run/g21-airplay/kombi.yuv
-    # the app writes this file itself without the ring (a root file in sticky /dev/shm would block it)
+    RINGPID=
+    rm -f "$RINGSTATUS" /run/g21-airplay/kombi.yuv /run/g21-airplay/latest.yuv
     if [ -f /dev/shm/mgu-video-g21airplay ] && [ "$(stat -c %u /dev/shm/mgu-video-g21airplay 2>/dev/null)" = "0" ]; then
         rm -f /dev/shm/mgu-video-g21airplay
     fi
@@ -329,6 +375,7 @@ audio_route_disconnect() {
 }
 
 stop_ux() {
+    had_ux=$UXPID
     stop_ring
     audio_route_disconnect
     clear_pin
@@ -337,9 +384,11 @@ stop_ux() {
         UXPID=
     fi
     # Orphans keep AirPlay TCP/UDP ports (errno 98) and block the next start.
-    for p in $(our_uxplay_pids); do
-        kill "$p" 2>/dev/null || true
-    done
+    if [ -n "$had_ux" ] || sweep_due; then
+        for p in $(our_uxplay_pids); do
+            kill "$p" 2>/dev/null || true
+        done
+    fi
 }
 
 stop_avahi_local() {
@@ -350,10 +399,13 @@ stop_avahi_local() {
 }
 
 stop_bundled_avahi() {
+    had_avahi=$AVAHIPID
     stop_avahi_local
-    for p in $(our_avahi_pids); do
-        kill "$p" 2>/dev/null || true
-    done
+    if [ -n "$had_avahi" ] || sweep_due; then
+        for p in $(our_avahi_pids); do
+            kill "$p" 2>/dev/null || true
+        done
+    fi
     AVAHIPID=
 }
 
@@ -937,18 +989,21 @@ start_rdp() {
 }
 
 stop_present() {
+    had_present=$PREPID
     stop_pid "$PREPID"
     wait_pid_gone "$PREPID"
     PREPID=
-    kill_matching '*/g21-present*'
-    n=0
-    while [ "$n" -lt 20 ] && [ -n "$(procs_matching '*/g21-present*')" ]; do
-        sleep 0.1
-        n=$((n + 1))
-    done
-    if [ -n "$(procs_matching '*/g21-present*')" ]; then
-        kill_matching '*/g21-present*' KILL
-        sleep 0.2
+    if [ -n "$had_present" ] || sweep_due; then
+        kill_matching '*/g21-present*'
+        n=0
+        while [ "$n" -lt 20 ] && [ -n "$(procs_matching '*/g21-present*')" ]; do
+            sleep 0.1
+            n=$((n + 1))
+        done
+        if [ -n "$(procs_matching '*/g21-present*')" ]; then
+            kill_matching '*/g21-present*' KILL
+            sleep 0.2
+        fi
     fi
     # Free the bind so app frame_bridge can listen for cluster/HUD.
     rm -f /run/g21-desktop/frame.sock 2>/dev/null || true
@@ -957,14 +1012,20 @@ stop_present() {
 stop_rdp() {
     stop_pid "$RDPID"
     wait_pid_gone "$RDPID"
+    had_rdp=$RDPID
     RDPID=
-    kill_matching '*/g21-rdp*'
+    if [ -n "$had_rdp" ] || sweep_due; then
+        kill_matching '*/g21-rdp*'
+    fi
 }
 
 stop_mice() {
     stop_pid "$MICEPID"
+    had_mice=$MICEPID
     MICEPID=
-    kill_matching '*/g21-mice*'
+    if [ -n "$had_mice" ] || sweep_due; then
+        kill_matching '*/g21-mice*'
+    fi
 }
 
 ensure_avahi_services_dir() {
@@ -1202,6 +1263,8 @@ start_ux() {
         mac_args="-m $mac"
     fi
     : > "$UXLOG"
+    # A new UxPlay has no iPhone yet: what the last one left is not a picture to show.
+    drop_picture
     # Do not pass -fs: MGU waylandsink has no "fullscreen" property and UxPlay
     # aborts the RAOP server, so the iPhone never sees G21 in AirPlay.
     # -vs fakesink with async=false: decode + G21_YUV tee only. async=false lets the
@@ -1553,6 +1616,7 @@ stop() {
 trap stop TERM INT
 while true; do
     apply
+    SWEEP_N=$(( (SWEEP_N + 1) % 20 ))
     # 1s so allow=stop → cluster bridge wins frame.sock before the next rdp start.
     sleep 1
 done

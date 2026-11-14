@@ -43,6 +43,7 @@ const path = require('path');
 const G = require('./rt_gauges.js');
 const QR = require('./qr.js');
 const { setImage } = require('./rt_record.js');
+const { ui: uiText } = require('./rt_i18n.js');
 const { HMI } = require('./rt_display.js');
 const Parked = require('./rt_parked.js');
 const { Ctl, Model, clock, SOCKET, FEEDS, SHELF_MAX } = require('./youtube_client.js');
@@ -328,14 +329,15 @@ module.exports = {
 
         /* ---------- drawing ---------- */
         const fit = (cv, s, size, w, opts) => {
-            s = String(s || '');
+            s = uiText(String(s || ''));        // (THEiPlay's language first: the cut is made on what is shown)
             if (cv.textWidth(s, size, opts) <= w) return s;
             let lo = 0, hi = s.length;
             while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cv.textWidth(s.slice(0, m) + '…', size, opts) <= w) lo = m; else hi = m - 1; }
             return s.slice(0, lo).replace(/\s+$/, '') + '…';     // (no trimEnd on the unit's Node 8)
         };
         const LIT = { literal: true }, LITB = { literal: true, font: 'bold' };
-        const C = { bg: '#0b0f1e', card: '#1a2038', ph: '#232a46', text: '#f1f3ff', dim: '#a4abc8', red: '#ff3f8e', cyan: '#3ad6ff', amber: '#ffd36b' };   // red: the accent (neon pink)
+        // THEiPlay's colours (menu_draw.js): warm black, cream text, the amber accent. (red: the accent's old name.)
+        const C = { bg: '#090807', card: '#1c1713', ph: '#2b231b', text: '#f7f2ea', dim: '#c4b5a4', red: '#e6a15c', cyan: '#f7f2ea', amber: '#f0c48a' };
         const browsing = () => mode !== 'player';
 
         // thumbs: a pool of picture ids by video, least recently drawn reused (the renderer holds 64 pictures an app)
@@ -410,7 +412,7 @@ module.exports = {
             const items = (ctx.exit ? [BACK_HOME] : []).concat(cv.own && model.active() ? RAIL.concat([PLAYING]) : RAIL).concat(ctx.quit ? [QUIT] : []);   // THEiPlay first, Wyłącz last
             const pitch = Math.min(100, (bottom - 156) / (items.length - 1));   // (the page down to the screen's bottom where it reaches)
             items.forEach(([m, name, glyph], i) => {
-                const cx = 62, cy = 96 + Math.round(i * pitch), on = m === sel, bg = on ? '#2c2c2c' : C.bg, c = on ? '#ffffff' : C.dim;
+                const cx = 62, cy = 96 + Math.round(i * pitch), on = m === sel, bg = on ? '#2c241c' : C.bg, c = on ? '#f7f2ea' : C.dim;
                 if (on) { cv.roundRect(18, cy - 38, 90, 84, 16, bg); cv.roundRect(18, cy - 14, 5, 28, 2.5, C.red); }
                 glyph(cv, cx, cy - 8, c, bg);
                 cv.text(name === 'Subscriptions' ? 'Subs' : name, cx, cy + 34, 18, c, { literal: true, align: 'center', font: on ? 'bold' : 'label' });
@@ -437,13 +439,13 @@ module.exports = {
             if (r.duration_s > 0) {
                 const d = clock(r.duration_s * 1000), dw = cv.textWidth(d, 20, LITB) + 16;
                 cv.roundRect(x + TW - 8 - dw, y + TH - 36, dw, 28, 6, '#000000cc');
-                cv.text(d, x + TW - 16, y + TH - 15, 20, '#ffffff', { literal: true, font: 'bold', align: 'right' });
+                cv.text(d, x + TW - 16, y + TH - 15, 20, '#f7f2ea', { literal: true, font: 'bold', align: 'right' });
             }
             if (cur) {
                 cv.strokeRoundRect(x - 2, y - 2, TW + 4, TH + 4, 14, 3, C.red);
                 const pw = cv.textWidth('NOW PLAYING', 16, { literal: true, font: 'bold', spacing: 1 }) + 20;
                 cv.roundRect(x + 10, y + 10, pw, 28, 6, C.red);
-                cv.text('NOW PLAYING', x + 20, y + 30, 16, '#ffffff', { literal: true, font: 'bold', spacing: 1 });
+                cv.text('NOW PLAYING', x + 20, y + 30, 16, C.bg, { literal: true, font: 'bold', spacing: 1 });
             }
             const lines = wrap(cv, String(r.title || r.id));
             lines.forEach((l, k) => cv.text(l, x, y + TH + 32 + k * 30, 24, C.text, LITB));
@@ -461,11 +463,11 @@ module.exports = {
             for (const ch of r.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
             if (r.act) {
                 cv.roundRect(x, y, TW, TH, 12, C.ph);
-                r.glyph(cv, cx, cy, '#ffffff');
+                r.glyph(cv, cx, cy, '#f7f2ea');
             } else {
                 cv.circle(cx, cy, 78, HUES[h % HUES.length]);
                 const ini = (Array.from(name).find((ch) => /[0-9]/.test(ch) || ch.toLowerCase() !== ch.toUpperCase()) || name.charAt(0) || '?').toUpperCase();   // (Node 8: no \p{L})
-                cv.text(ini, cx, cy + 26, 72, '#ffffff', { literal: true, font: 'bold', align: 'center' });
+                cv.text(ini, cx, cy + 26, 72, '#f7f2ea', { literal: true, font: 'bold', align: 'center' });
             }
             cv.text(fit(cv, name, 24, TW, LITB), cx, y + TH + 36, 24, C.text, { literal: true, font: 'bold', align: 'center' });
             if (r.sub || r.handle) cv.text(fit(cv, r.sub || r.handle, 20, TW, LIT), cx, y + TH + 66, 20, C.dim, { literal: true, align: 'center' });
@@ -517,8 +519,8 @@ module.exports = {
         function chevron(cv, cx, cy, dir, run, key) {
             cv.target(cx - 32, cy - 32, 64, 64, run, key, 32);
             return () => {
-                cv.circle(cx, cy, 32, '#00000099'); cv.circle(cx, cy, 29, key === focusKey ? '#ffffff' : '#303030');
-                cv.polyline([[cx - 5 * dir, cy - 11], [cx + 6 * dir, cy], [cx - 5 * dir, cy + 11]], 4.5, key === focusKey ? '#0f0f0f' : '#ffffff');
+                cv.circle(cx, cy, 32, '#00000099'); cv.circle(cx, cy, 29, key === focusKey ? '#f7f2ea' : '#3a3026');
+                cv.polyline([[cx - 5 * dir, cy - 11], [cx + 6 * dir, cy], [cx - 5 * dir, cy + 11]], 4.5, key === focusKey ? '#090807' : '#f7f2ea');
             };
         }
 
@@ -558,7 +560,7 @@ module.exports = {
                 if (ri < first - 1 || ri > lastV + 1) return;
                 const y = ys[ri], shown = vis[ri], n = row.items.length, ty = y + (row.title ? HEAD_H : 0);
                 if (row.title && shown) {
-                    const tw = cv.text(fit(cv, row.title, 30, 1100, LITB), X0, y + 34, 30, '#ffffff', LITB);
+                    const tw = cv.text(fit(cv, row.title, 30, 1100, LITB), X0, y + 34, 30, '#f7f2ea', LITB);
                     if (row.sub) cv.text(row.sub, X0 + tw + 18, y + 34, 22, C.dim, LIT);
                 }
                 const max = row.hs ? n - PER_ROW : 0, off = Math.max(0, Math.min(max, st.off[ri] || 0));
@@ -615,7 +617,7 @@ module.exports = {
         const MID = (RAIL_W + W) / 2;
         function say(cv, msg, sub) {
             if (browsing()) logo(cv, MID, 200, 76);
-            cv.text(fit(cv, msg, 34, 1360, LIT), browsing() ? MID : W / 2, 290, 34, '#ffffff', { literal: true, align: 'center' });
+            cv.text(fit(cv, msg, 34, 1360, LIT), browsing() ? MID : W / 2, 290, 34, '#f7f2ea', { literal: true, align: 'center' });
             if (sub) cv.text(fit(cv, sub, 24, 1360, LIT), browsing() ? MID : W / 2, 336, 24, C.dim, { literal: true, align: 'center' });
         }
         const OFF = 'The RideTube service (jap-ridetube-d) is not running';
@@ -666,16 +668,16 @@ module.exports = {
             const cw = Math.min(1400, 44 + side + 80 + textW + 64), ch = 444, cx = Math.round(MID - cw / 2), cy = TOP + Math.max(14, Math.round((H + (cv.own ? cv.extra : 0) - TOP - ch) / 2)), dy = cy - 58;
             cv.roundRect(cx, cy, cw, ch, 24, C.card);
             const qx = cx + 44, qy = cy + Math.round((ch - side) / 2);
-            cv.roundRect(qx - 6, qy - 6, side + 12, side + 12, 18, '#ffffff');
+            cv.roundRect(qx - 6, qy - 6, side + 12, side + 12, 18, '#f7f2ea');
             QR.draw(cv, url, qx, qy, 8);
             const tx = qx + side + 80;
             logo(cv, tx + 34, 128 + dy, 68);
-            cv.text('Sign in', tx + 88, 144 + dy, 44, '#ffffff', LITB);
+            cv.text('Sign in', tx + 88, 144 + dy, 44, '#f7f2ea', LITB);
             cv.text('Enter this code on your phone', tx, 214 + dy, 30, C.dim, LIT);
             cv.roundRect(tx, 238 + dy, cwid + 56, 96, 16, C.bg);
-            cv.text(a.code, tx + 28, 308 + dy, 54, '#ffffff', code);
+            cv.text(a.code, tx + 28, 308 + dy, 54, '#f7f2ea', code);
             cv.text(hint, tx, 392 + dy, 26, C.dim, LIT);
-            cv.text('The account stays on the car; this app never sees a password', tx, 440 + dy, 20, '#717171', LIT);
+            cv.text('The account stays on the car; this app never sees a password', tx, 440 + dy, 20, '#8c7d6c', LIT);
         }
         function drawPlayer(cv) {
             cv.fillRect(0, TOP, W, H - TOP, '#000000');
@@ -686,8 +688,8 @@ module.exports = {
             if (model.title) {
                 cv.gradientRect(BOX.x, BOX.y, BOX.w, 130, [[0, '#000000d0'], [1, '#00000000']]);
                 const it = model.item(model.id);
-                cv.text(fit(cv, model.title, 30, BOX.w - 60, LITB), BOX.x + 30, BOX.y + 48, 30, '#ffffff', LITB);
-                if (it && it.channel) cv.text(fit(cv, it.channel, 22, BOX.w - 60, LIT), BOX.x + 30, BOX.y + 82, 22, '#cccccc', LIT);
+                cv.text(fit(cv, model.title, 30, BOX.w - 60, LITB), BOX.x + 30, BOX.y + 48, 30, '#f7f2ea', LITB);
+                if (it && it.channel) cv.text(fit(cv, it.channel, 22, BOX.w - 60, LIT), BOX.x + 30, BOX.y + 82, 22, '#c4b5a4', LIT);
             }
             let mid = null;
             if (!model.connected) mid = 'The RideTube service (jap-ridetube-d) is not running';
@@ -696,17 +698,17 @@ module.exports = {
                 cv.circle(cx, cy - 20, 54, '#00000099');
                 cv.arc(cx, cy - 20, 44, 52, 0, 360, '#ffffff26');
                 if (p > 0) cv.arc(cx, cy - 20, 44, 52, 0, p * 3.6, C.red, { round: true });
-                cv.text(Math.round(p) + '%', cx, cy - 10, 30, '#ffffff', { literal: true, font: 'bold', align: 'center' });
-                cv.text(prepText(), cx, cy + 82, 26, '#dddddd', { literal: true, align: 'center' });
+                cv.text(Math.round(p) + '%', cx, cy - 10, 30, '#f7f2ea', { literal: true, font: 'bold', align: 'center' });
+                cv.text(prepText(), cx, cy + 82, 26, '#e9dfd2', { literal: true, align: 'center' });
             } else if (model.state === 'error') mid = 'Error: ' + (model.error || 'playback stopped');
             else if (!model.active()) mid = model.state === 'ended' ? 'Finished' : 'Pick a video on Home or Search';
             else if (noVideo()) mid = 'Video stops while driving - the sound plays on';
             else if (!cv.place || !gpu()) mid = 'The picture needs the GPU renderer (mgu-render) - the sound plays';
             else if (!videoShown) mid = 'Starting the picture...';
-            if (model.state === 'paused' && !mid) { cv.circle(cx, cy, 60, '#000000a0'); cv.arc(cx, cy, 57, 60, 0, 360, '#ffffff50'); tri(cv, cx + 5, cy, 46, '#ffffff'); }
+            if (model.state === 'paused' && !mid) { cv.circle(cx, cy, 60, '#000000a0'); cv.arc(cx, cy, 57, 60, 0, 360, '#ffffff50'); tri(cv, cx + 5, cy, 46, '#f7f2ea'); }
             if (mid) {
-                if (model.state === 'paused') { cv.circle(cx, cy - 40, 46, '#000000a0'); tri(cv, cx + 4, cy - 40, 36, '#ffffff'); }
-                cv.text(fit(cv, mid, 34, 1500, LIT), W / 2, BOX.y + BOX.h / 2 + (model.state === 'paused' ? 50 : 12), 34, '#ffffff', { literal: true, align: 'center' });
+                if (model.state === 'paused') { cv.circle(cx, cy - 40, 46, '#000000a0'); tri(cv, cx + 4, cy - 40, 36, '#f7f2ea'); }
+                cv.text(fit(cv, mid, 34, 1500, LIT), W / 2, BOX.y + BOX.h / 2 + (model.state === 'paused' ? 50 : 12), 34, '#f7f2ea', { literal: true, align: 'center' });
             }
             // the progress bar at the bottom: the track, the part played, the scrubber; the times under it
             if (model.total > 0 && model.active() && model.state !== 'preparing') {
@@ -715,8 +717,8 @@ module.exports = {
                 cv.roundRect(tx, ty, tw, 6, 3, '#ffffff55');
                 cv.roundRect(tx, ty, fx - tx, 6, 3, C.red);
                 cv.circle(fx, ty + 3, 9, C.red);
-                cv.text(clock(model.elapsed), tx, bot - 20, 24, '#ffffff', LITB);
-                cv.text(clock(model.total), tx + tw, bot - 20, 24, '#dddddd', { literal: true, font: 'bold', align: 'right' });
+                cv.text(clock(model.elapsed), tx, bot - 20, 24, '#f7f2ea', LITB);
+                cv.text(clock(model.total), tx + tw, bot - 20, 24, '#e9dfd2', { literal: true, font: 'bold', align: 'right' });
             }
         }
         /*
@@ -731,11 +733,11 @@ module.exports = {
         function drawPodcast(cv, SW, SH, LX, tg, run, live) {
             cv.fillRect(0, 0, SW, SH, C.bg);
             const x0 = LX + 46, top = 40, ch = model.channel || (model.item(model.id) || {}).channel;
-            cv.text('RideTube', x0, top + 30, 34, '#ffffff', LITB);
+            cv.text('YouTube', x0, top + 30, 34, '#f7f2ea', LITB);
             const chip = 'Podcast mode · driving', cw = cv.textWidth(chip, 22, LIT) + 40;
             cv.roundRect(x0 + 170, top, cw, 40, 20, C.ph);
             cv.text(chip, x0 + 170 + cw / 2, top + 28, 22, C.dim, { literal: true, align: 'center' });
-            cv.text('Video returns when parked', SW - 60, top + 28, 22, '#717171', { literal: true, align: 'right' });
+            cv.text('Video returns when parked', SW - 60, top + 28, 22, '#8c7d6c', { literal: true, align: 'right' });
             // laid out from the bottom: the notice / up-next row, the controls, the bar; the artwork takes what is left
             const cy = SH - 178, by = cy - 128, ay = top + 72, ah = Math.max(120, by - 56 - ay), aw = Math.round(ah * 16 / 9), ax = x0;
             const th = model.thumbs[model.id];
@@ -748,19 +750,19 @@ module.exports = {
             const words = String(model.title || model.id || '').split(/\s+/).filter(Boolean);
             let l1 = '', i = 0;
             for (; i < words.length; i++) { const t = l1 ? l1 + ' ' + words[i] : words[i]; if (l1 && cv.textWidth(t, 44, LITB) > tw) break; l1 = t; }
-            [fit(cv, l1, 44, tw, LITB), fit(cv, words.slice(i).join(' '), 44, tw, LITB)].filter(Boolean).forEach((l, k) => cv.text(l, tx, ay + 84 + k * 52, 44, '#ffffff', LITB));
+            [fit(cv, l1, 44, tw, LITB), fit(cv, words.slice(i).join(' '), 44, tw, LITB)].filter(Boolean).forEach((l, k) => cv.text(l, tx, ay + 84 + k * 52, 44, '#f7f2ea', LITB));
             const chap = model.chapter();
-            if (chap) cv.text(fit(cv, chap, 28, tw, LIT), tx, ay + ah - 6, 28, '#3ea6ff', LIT);
+            if (chap) cv.text(fit(cv, chap, 28, tw, LIT), tx, ay + ah - 6, 28, '#e6a15c', LIT);
             // the bar
             const bw = SW - x0 - 60, tot = model.total, ex = model.extras && model.extras.id === model.id ? model.extras : null;
             const at = (ms) => x0 + Math.round(bw * Math.min(1, tot ? ms / tot : 0));
-            cv.roundRect(x0, by, bw, 10, 5, '#3f3f3f');
+            cv.roundRect(x0, by, bw, 10, 5, '#3a3026');
             if (tot > 0) {
                 const el = shownAt(), bf = focusKey === 'ov:bar';
                 cv.roundRect(x0, by, Math.max(10, at(el) - x0), 10, 5, C.red);
                 if (ex) sbSegs(ex).forEach((g) => cv.fillRect(at(g[0]), by, Math.max(4, at(g[1]) - at(g[0])), 10, sbColor(g)));
                 if (ex) ex.chapters.forEach((k) => { if (k[0] > 0) cv.fillRect(at(k[0]) - 2, by, 4, 10, C.bg); });
-                if (bf) cv.circle(at(el), by + 5, 24, '#3ea6ff');
+                if (bf) cv.circle(at(el), by + 5, 24, '#f7f2ea');
                 cv.circle(at(el), by + 5, bf ? 18 : 14, C.red);
                 tg(x0 - 10, by - 36, bw + 20, 80, run(() => model.toggle()), 'ov:bar', 0, turnSeek);
                 cv.text(clock(el), x0, by + 50, 26, C.dim, LIT);
@@ -770,8 +772,8 @@ module.exports = {
             const mid = x0 + bw / 2 + (queue.length ? 0 : 100);   // with Next: four buttons; without: three, centred
             const big = (key, x, r, light, fn, glyph) => {
                 const f = focusKey === key;
-                cv.circle(x, cy, r, f ? '#3ea6ff' : light ? '#ffffff' : C.ph);
-                glyph(light && !f ? C.bg : '#ffffff');
+                cv.circle(x, cy, r, f ? '#e6a15c' : light ? '#f7f2ea' : C.ph);
+                glyph(light || f ? C.bg : '#f7f2ea');     // (dark on the cream and on the accent)
                 tg(x - r - 10, cy - r - 10, 2 * r + 20, 2 * r + 20, run(fn), key, r + 10);
             };
             const num = (t, x) => (c) => cv.text(t, x, cy + 14, 38, c, { literal: true, font: 'bold', align: 'center' });
@@ -790,14 +792,14 @@ module.exports = {
                     cv.quad([[nx - 22, cy - 26], [nx - 22, cy + 26], [nx + 12, cy], [nx - 22, cy - 26]], c); cv.fillRect(nx + 14, cy - 26, 9, 52, c);
                 });
                 const up = 'Up next  ·  ' + String(queue[0].title || queue[0].id), uw = Math.min(700, cv.textWidth(up, 26, LIT) + 50);
-                cv.roundRect(SW - 60 - uw, SH - 96, uw, 64, 16, '#1c1c1c');
-                cv.text(fit(cv, up, 26, uw - 50, LIT), SW - 60 - uw + 25, SH - 54, 26, '#dddddd', LIT);
+                cv.roundRect(SW - 60 - uw, SH - 96, uw, 64, 16, '#1c1713');
+                cv.text(fit(cv, up, 26, uw - 50, LIT), SW - 60 - uw + 25, SH - 54, 26, '#e9dfd2', LIT);
             }
             const ask = askSeg();
             if (ask) {
                 const tt = 'Skip ' + sbName(ask[2]), w2 = cv.textWidth(tt, 30, LITB) + 80, f = focusKey === 'ov:sbskip';
-                cv.roundRect(x0, SH - 100, w2, 72, 36, f ? '#3ea6ff' : '#ffffff');
-                cv.text(tt, x0 + 40, SH - 52, 30, f ? '#ffffff' : C.bg, LITB);
+                cv.roundRect(x0, SH - 100, w2, 72, 36, f ? '#e6a15c' : '#f7f2ea');
+                cv.text(tt, x0 + 40, SH - 52, 30, C.bg, LITB);
                 tg(x0, SH - 100, w2, 72, run(sbJump(ask)), 'ov:sbskip', 36);
             } else if (model.toast && Date.now() < model.toast.until) {
                 const tt = model.toast.text, w2 = cv.textWidth(tt, 26, LIT) + 60, wn = model.toast.warn;
@@ -823,8 +825,8 @@ module.exports = {
             // a round control: dark, white when the controller is on it (its glyph dark then)
             const ctl = (key, x, y, r, fn, glyph) => {
                 const f = focusKey === key;
-                cv.circle(x, y, r, f ? '#ffffff' : '#00000099');
-                glyph(f ? '#0f0f0f' : '#ffffff');
+                cv.circle(x, y, r, f ? '#e6a15c' : '#00000099');      // the controller's place: THEiPlay's accent
+                glyph(f ? '#090807' : '#f7f2ea');
                 tg(x - r - 6, y - r - 6, 2 * r + 12, 2 * r + 12, run(fn), key, r + 6);
             };
             // top: back to the list, the title and channel over a scrim
@@ -832,24 +834,24 @@ module.exports = {
             const bx = LX + 44, by = 52;
             ctl('ov:back', bx, by, 30, () => goBack(browse), (c) => cv.polyline([[bx + 5, by - 12], [bx - 7, by], [bx + 5, by + 12]], 5, c));
             const ch = model.channel || (model.item(model.id) || {}).channel;
-            if (model.title) cv.text(fit(cv, model.title, 30, SW - LX - 160, LITB), LX + 96, by - 4, 30, '#ffffff', LITB);
-            if (ch) cv.text(fit(cv, ch, 22, SW - LX - 300, LIT), LX + 96, by + 30, 22, '#cccccc', LIT);
+            if (model.title) cv.text(fit(cv, model.title, 30, SW - LX - 160, LITB), LX + 96, by - 4, 30, '#f7f2ea', LITB);
+            if (ch) cv.text(fit(cv, ch, 22, SW - LX - 300, LIT), LX + 96, by + 30, 22, '#c4b5a4', LIT);
             // top right, On phone: a QR code of the video's public link at this second (nothing is kept on the car)
             if (model.id) {
                 const px = SW - 150;
                 ctl('ov:qr', px, by, 30, () => { qrUntil = qrUntil > Date.now() ? 0 : Date.now() + 30000; }, (c) => {
                     cv.strokeRoundRect(px - 10, by - 17, 20, 34, 4, 3, c); cv.fillRect(px - 4, by + 10, 8, 3, c);
                 });
-                cv.text('On phone', px - 42, by + 9, 24, '#ffffff', Object.assign({}, LIT, { align: 'right' }));
+                cv.text('On phone', px - 42, by + 9, 24, '#f7f2ea', Object.assign({}, LIT, { align: 'right' }));
             }
             if (model.id && qrUntil > Date.now()) {
                 const url = 'https://youtu.be/' + model.id + (model.elapsed > 5000 ? '?t=' + Math.floor(model.elapsed / 1000) : ''), mod = 8;
                 const n = QR.encode(url).length, side = (n + 8) * mod, cw = side + 520, chh = side + 60, qx0 = cx - cw / 2, qy0 = cy - chh / 2;
-                cv.roundRect(qx0, qy0, cw, chh, 24, '#212121f2');
-                cv.roundRect(qx0 + 30 - 6, qy0 + 30 - 6, side + 12, side + 12, 18, '#ffffff');
+                cv.roundRect(qx0, qy0, cw, chh, 24, '#1c1612f2');
+                cv.roundRect(qx0 + 30 - 6, qy0 + 30 - 6, side + 12, side + 12, 18, '#f7f2ea');
                 QR.draw(cv, url, qx0 + 30, qy0 + 30, mod);
-                cv.text('Continue on your phone', qx0 + side + 80, qy0 + chh / 2 - 20, 34, '#ffffff', LITB);
-                cv.text('Scan with the camera to go on from ' + clock(model.elapsed), qx0 + side + 80, qy0 + chh / 2 + 24, 22, '#cccccc', LIT);
+                cv.text('Continue on your phone', qx0 + side + 80, qy0 + chh / 2 - 20, 34, '#f7f2ea', LITB);
+                cv.text('Scan with the camera to go on from ' + clock(model.elapsed), qx0 + side + 80, qy0 + chh / 2 + 24, 22, '#c4b5a4', LIT);
                 tg(qx0, qy0, cw, chh, () => { qrUntil = 0; wake(); }, 'ov:qrcard', 24);
                 cv.xf();
                 return;
@@ -871,8 +873,8 @@ module.exports = {
                 cv.circle(cx, cy, 56, '#00000099');
                 cv.arc(cx, cy, 44, 52, 0, 360, '#ffffff26');
                 if (p > 0) cv.arc(cx, cy, 44, 52, 0, p * 3.6, C.red, { round: true });
-                cv.text(Math.round(p) + '%', cx, cy + 10, 30, '#ffffff', { literal: true, font: 'bold', align: 'center' });
-                cv.text(prepText(), cx, cy + 100, 26, '#dddddd', { literal: true, align: 'center' });
+                cv.text(Math.round(p) + '%', cx, cy + 10, 30, '#f7f2ea', { literal: true, font: 'bold', align: 'center' });
+                cv.text(prepText(), cx, cy + 100, 26, '#e9dfd2', { literal: true, align: 'center' });
             } else if (live) {
                 const skip = (key, x, dir, ms) => ctl(key, x, cy, 42, () => model.skip(ms), (c) => {
                     cv.arc(x, cy, 19, 23.5, dir < 0 ? 0 : 60, dir < 0 ? 300 : 360, c);
@@ -889,39 +891,39 @@ module.exports = {
                 const screenToggle = (key, sk, x, label, glyph) => {
                     const on = !!settings.get(sk);
                     ctl(key, x, cy, 42, () => settings.set(sk, !on), (c) => { if (on) cv.arc(x, cy, 37, 42, 0, 360, C.red); glyph(x, c); });
-                    cv.text(label, x, cy + 76, 20, on ? C.red : '#dddddd', { literal: true, font: on ? 'bold' : 'label', align: 'center' });
-                    cv.text(on ? 'włączone' : 'wyłączone', x, cy + 102, 18, on ? C.red : '#999999', { literal: true, align: 'center' });
+                    cv.text(label, x, cy + 76, 20, on ? C.red : '#e9dfd2', { literal: true, font: on ? 'bold' : 'label', align: 'center' });
+                    cv.text(on ? 'włączone' : 'wyłączone', x, cy + 102, 18, on ? C.red : '#8c7d6c', { literal: true, align: 'center' });
                 };
                 screenToggle('ov:kombi', 'yt_cluster', LX + 140, 'Wyświetl na zegarach', (x, c) => {
                     cv.arc(x, cy + 6, 15, 19, -135, 135, c); cv.line(x, cy + 6, x + 9, cy - 4, 4, c);
                 });
                 screenToggle('ov:hud', 'yt_hud', LX + 380, 'Wyświetl na HUD', (x, c) => {
                     cv.quad([[x - 20, cy + 12], [x - 12, cy - 14], [x + 12, cy - 14], [x + 20, cy + 12]], c);
-                    cv.text('HUD', x, cy + 5, 13, '#0f0f0f', { literal: true, font: 'bold', align: 'center' });
+                    cv.text('HUD', x, cy + 5, 13, '#090807', { literal: true, font: 'bold', align: 'center' });
                 });
                 // right: Video quality (a press takes the next one; the video starts again there) and zoom (fill crops)
                 const qv = String(settings.get('quality') || 'auto'), fl = settings.get('fill') !== false, qx = SW - 330, zx = SW - 150;
                 if (ctx.qualityText) {
                     // THEiPlay: the quality is set in THEiPlay's "Jakość obrazu" menu; shown here, no button
                     cv.circle(qx, cy, 42, '#00000099');
-                    cv.text(qv + 'p', qx, cy + 8, 22, '#ffffff', { literal: true, font: 'bold', align: 'center' });
-                    cv.text(fit(cv, ctx.qualityText(), 18, 260, LIT), qx, cy + 76, 18, '#dddddd', { literal: true, align: 'center' });
-                    cv.text('Jakość: menu THEiPlay', qx, cy + 100, 16, '#999999', { literal: true, align: 'center' });
+                    cv.text(qv + 'p', qx, cy + 8, 22, '#f7f2ea', { literal: true, font: 'bold', align: 'center' });
+                    cv.text(fit(cv, ctx.qualityText(), 18, 260, LIT), qx, cy + 76, 18, '#e9dfd2', { literal: true, align: 'center' });
+                    cv.text('Jakość: menu THEiPlay', qx, cy + 100, 16, '#8c7d6c', { literal: true, align: 'center' });
                 } else {
                     ctl('ov:q', qx, cy, 42, () => { const q = QUALITIES[(QUALITIES.indexOf(qv) + 1) % QUALITIES.length]; settings.set('quality', q); model.quality(q); },
                         (c) => cv.text(qv === 'auto' ? 'Auto' : qv + 'p', qx, cy + 8, 22, c, { literal: true, font: 'bold', align: 'center' }));
-                    cv.text('Quality', qx, cy + 76, 22, '#dddddd', { literal: true, align: 'center' });
+                    cv.text('Quality', qx, cy + 76, 22, '#e9dfd2', { literal: true, align: 'center' });
                 }
                 ctl('ov:zoom', zx, cy, 42, () => { settings.set('fill', !fl); model.fill(!fl); }, (c) => {
                     cv.strokeRoundRect(zx - 22, cy - 15, 44, 30, 4, 3, c);
                     if (fl) cv.fillRect(zx - 22, cy - 15, 44, 30, c); else cv.fillRect(zx - 12, cy - 15, 24, 30, c);
                 });
-                cv.text(fl ? 'Unzoom' : 'Zoom', zx, cy + 76, 22, '#dddddd', { literal: true, align: 'center' });
+                cv.text(fl ? 'Unzoom' : 'Zoom', zx, cy + 76, 22, '#e9dfd2', { literal: true, align: 'center' });
             } else if (model.state === 'error' && model.id && model.connected) {
                 ctl('ov:play', cx, cy, 58, again, (c) => retryGlyph(cv, cx, cy, 26, c));
-                cv.text('Try again', cx, cy + 100, 26, '#dddddd', { literal: true, align: 'center' });
+                cv.text('Try again', cx, cy + 100, 26, '#e9dfd2', { literal: true, align: 'center' });
             }
-            if (mid) cv.text(fit(cv, mid, 30, SW - 2 * LX, LIT), cx, model.state === 'preparing' || live || up || (model.state === 'error' && model.id) ? cy + 150 : cy + 10, 30, '#ffffff', { literal: true, align: 'center' });
+            if (mid) cv.text(fit(cv, mid, 30, SW - 2 * LX, LIT), cx, model.state === 'preparing' || live || up || (model.state === 'error' && model.id) ? cy + 150 : cy + 10, 30, '#f7f2ea', { literal: true, align: 'center' });
             // bottom: the progress bar (the track, the part played, the scrubber) and the times
             if (model.total > 0 && live) {
                 cv.gradientRect(0, SH - 150, SW, 150, [[0, '#00000000'], [1, '#000000d8']]);
@@ -931,12 +933,12 @@ module.exports = {
                 cv.roundRect(x0, y, fx - x0, 6, 3, C.red);
                 if (ex) sbSegs(ex).forEach((g) => cv.fillRect(at(g[0]), y, Math.max(3, at(g[1]) - at(g[0])), 6, sbColor(g)));   // SponsorBlock: skipped green, asked yellow
                 if (ex) ex.chapters.forEach((c) => { if (c[0] > 0) cv.fillRect(at(c[0]) - 2, y, 4, 6, '#000000'); });
-                if (bf) cv.circle(fx, y + 3, 18, '#ffffff');
+                if (bf) cv.circle(fx, y + 3, 18, '#f7f2ea');
                 cv.circle(fx, y + 3, bf ? 14 : 10, C.red);
                 tg(x0 - 10, y - 34, w + 20, 70, run(() => model.toggle()), 'ov:bar', 0, turnSeek);
                 const tt0 = clock(el) + ' / ' + clock(model.total), tw = cv.textWidth(tt0, 24, LITB), chap = model.chapter();
-                cv.text(tt0, x0, SH - 22, 24, '#ffffff', LITB);
-                if (chap) cv.text(fit(cv, '·  ' + chap, 24, w - tw - 20, LIT), x0 + tw + 14, SH - 22, 24, '#dddddd', LIT);
+                cv.text(tt0, x0, SH - 22, 24, '#f7f2ea', LITB);
+                if (chap) cv.text(fit(cv, '·  ' + chap, 24, w - tw - 20, LIT), x0 + tw + 14, SH - 22, 24, '#e9dfd2', LIT);
             }
             if (model.toast && Date.now() < model.toast.until && live) {
                 const tt = model.toast.text, tw2 = cv.textWidth(tt, 24, LIT) + 48, wn = model.toast.warn;
@@ -946,8 +948,8 @@ module.exports = {
             const ask = live && askSeg();
             if (ask) {
                 const tt = 'Skip ' + sbName(ask[2]), w2 = cv.textWidth(tt, 28, LITB) + 70, sx = SW - 60 - w2, sy = SH - 168, f = focusKey === 'ov:sbskip';
-                cv.roundRect(sx, sy, w2, 60, 30, f ? '#ffffff' : '#3a3a3ae6');
-                cv.text(tt, sx + 35, sy + 40, 28, f ? '#0f0f0f' : '#ffffff', LITB);
+                cv.roundRect(sx, sy, w2, 60, 30, f ? '#e6a15c' : '#2c241ce6');
+                cv.text(tt, sx + 35, sy + 40, 28, f ? '#090807' : '#f7f2ea', LITB);
                 tg(sx, sy, w2, 60, run(sbJump(ask)), 'ov:sbskip', 30);
             }
             hmiIcons(cv);
@@ -957,9 +959,9 @@ module.exports = {
         function hmiIcons(cv) {
             cv.xf(1, 0, 0);
             cv.circle(44, 42, 30, '#00000099');
-            RAIL[1][2](cv, 44, 44, '#ffffff', '#1a1a1a');
+            RAIL[1][2](cv, 44, 44, '#f7f2ea', '#16120e');
             cv.circle(52, 398, 30, '#00000099');
-            cv.polyline([[60, 384], [46, 398], [60, 412]], 5, '#ffffff');
+            cv.polyline([[60, 384], [46, 398], [60, 412]], 5, '#f7f2ea');
             cv.xf();
         }
         let last = null, lastRev = -1, lastT = 0, upNext = null;

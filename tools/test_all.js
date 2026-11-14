@@ -20,6 +20,8 @@ var tools = [
     path.join(__dirname, 'test_airplay_ring.js'),
     path.join(__dirname, 'test_airplay_audio.js'),
     path.join(__dirname, 'test_airplay_repeat.js'),
+    path.join(__dirname, 'test_last_frame.js'),
+    path.join(__dirname, 'test_ui_look.js'),
     path.join(__dirname, 'test_vnc.js'),
     path.join(__dirname, 'test_socks5.js'),
     path.join(__dirname, 'test_session.js'),

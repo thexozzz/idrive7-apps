@@ -13,7 +13,7 @@
  */
 const { Canvas, rgba } = require('./rt_canvas.js');
 const fonts = require('./rt_fonts.js');
-const { t } = require('./rt_i18n.js');
+const { t, ui } = require('./rt_i18n.js');
 
 const OP = {
     CLEAR: 1, RECT: 2, GRAD: 3, RRECT: 4, RSTROKE: 5, CARD: 6, RAMPRECT: 7, ARC: 8, LINE: 9,
@@ -246,7 +246,8 @@ class Recorder {
     /** Text; y is the baseline. Returns the width in logical px (as canvas.js). */
     text(str, x, y, size, c, opts) {
         opts = opts || {};
-        const s = opts.literal ? String(str) : t(str), family = opts.font || 'label';
+        // literal: not the kit's catalog; raw: not THEiPlay's YouTube phrases either (typed text, the menu's own words)
+        const s = opts.raw ? String(str) : (opts.literal ? ui(String(str)) : t(str)), family = opts.font || 'label';
         const f = fonts.get(family, size * this.textScale, s);
         if (!f) return 0;
         const sc = size / f.size, sp = opts.spacing || 0;
@@ -276,7 +277,7 @@ class Recorder {
         return w;
     }
     textWidth(str, size, opts) {
-        const s = opts && opts.literal ? String(str) : t(str), f = fonts.get((opts && opts.font) || 'label', size * this.textScale, s);
+        const s = opts && opts.raw ? String(str) : (opts && opts.literal ? ui(String(str)) : t(str)), f = fonts.get((opts && opts.font) || 'label', size * this.textScale, s);
         return f ? fonts.measure(f, s) * (size / f.size) + ((opts && opts.spacing) || 0) * Math.max(0, s.length - 1) : 0;
     }
 

@@ -28,7 +28,7 @@ function pill(r, t, x, y, w, h, label, on, opts) {
     const c = o.color || S;
     r.roundRect(x, y, w, h, h / 2, on ? withAlpha(c, 0.9) : withAlpha('#ffffff', 0.08));
     if (!on) r.strokeRoundRect(x, y, w, h, h / 2, 1.5, withAlpha(o.color || '#ffffff', o.color ? 0.7 : 0.22));
-    r.text(label, x + w / 2, y + h / 2 + 9, 24, on ? '#ffffff' : o.color || t.text, { align: 'center', font: 'bold', spacing: 1 });
+    r.text(label, x + w / 2, y + h / 2 + 9, 24, on ? (t.onSel || '#ffffff') : o.color || t.text, { align: 'center', font: 'bold', spacing: 1 });
 }
 function toggle(r, t, x, y, on) {
     const S = t.sel || t.accent, w = 76, h = 38;
@@ -78,7 +78,7 @@ function list(r, t, key, rows, focus, y0, controller) {
         let right = x + w - 28;
         if (row.kind === 'toggle') { toggle(r, t, right - 76, cy - 19, row.on); right -= 100; } else if (row.kind === 'more') { chevron(r, t, right - 9, cy, t.dim); right -= 34; } else if (row.kind === 'radio') {
             r.circle(right - 15, cy, 15, row.on ? S : withAlpha('#ffffff', 0.25));
-            r.circle(right - 15, cy, row.on ? 6 : 12, row.on ? '#ffffff' : t.bg);
+            r.circle(right - 15, cy, row.on ? 6 : 12, row.on ? (t.onSel || '#ffffff') : t.bg);
             right -= 44;
         }
         const vw = row.value != null ? Math.min(560, r.textWidth(String(row.value), 26)) : 0;

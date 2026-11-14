@@ -14,7 +14,7 @@ Cykl życia (log `start`): `load → construct → constructed → start-called 
 
 | Funkcja | Status | Dowód / uwagi |
 |---|---|---|
-| Menu na rendererze (prostokąty, czcionka bitmapowa, PL/EN) | VERIFIED | właściciel 2026-11-12; logi |
+| Menu na rendererze (PL/EN). Od 0.1.135 rysowane polami renderera RRECT/CARD/GLYPHS i atlasami Ubuntu (jak ekran YouTube); do 0.1.134 same prostokąty i czcionka bitmapowa | VERIFIED do 0.1.134 (właściciel 2026-11-12; logi); nowy wygląd 0.1.135 UNVERIFIED na aucie (te same pola renderera rysuje na aucie ekran YouTube) |
 | Dotyk w menu | VERIFIED | `menu-touch`, `menu-hit` |
 | Pokrętło w menu (CCU z renderera) | ASSUMPTION | kod `menu_draw.js:take()` (`CCU`/`X_CCU`); CHANGELOG 0.1.84/0.1.110 opisuje działanie, brak logu |
 | Klawiatura pokrętłem (IP/konto/hasło) | UNVERIFIED (H27) | `knob_keyboard.js`, test lokalny OK |

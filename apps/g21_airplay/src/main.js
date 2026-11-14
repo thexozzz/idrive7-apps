@@ -32,6 +32,7 @@ var windowsOffers = require('./windows_offers.js');
 var frameBridgeFactory = require('./frame_bridge.js');
 // RideTube's screen (GPL-3.0-or-later, JustAnotherPU/ridetube on the MGU App Kit): rt_*.js
 var rideTube = require('./rt_host.js');
+var rtI18n = require('./rt_i18n.js');
 
 // YouTube load on the MGU: ytdec decodes in software at the film's own
 // frame rate, so the picture is kept small: the size of THEiPlay's
@@ -76,7 +77,7 @@ var ROOT_STATUS_TEXT = {
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'brak-wifi': 'brak wifi',
-    'waiting': 'wybierz protokol',
+    'waiting': 'wybierz AirPlay albo YouTube',
     'idle': 'menu',
     'unknown': 'menu'
 };
@@ -86,77 +87,77 @@ var AIR_STATUS_TEXT = {
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'brak-wifi': 'brak wifi',
-    'starting': 'AirPlay start',
-    'running': 'AirPlay dziala',
+    'starting': 'AirPlay startuje',
+    'running': 'AirPlay działa',
     'missing': 'brak odbiornika',
     'mdns-brak': 'brak dns',
-    'uxplay-exit': 'AirPlay stop',
-    'idle': 'AirPlay off',
+    'uxplay-exit': 'AirPlay zatrzymany',
+    'idle': 'AirPlay wyłączony',
     'waiting': 'gotowe do lustra',
     'pick-out': 'wybierz ekran',
     'pin-wait': 'czekam na kod',
-    'not-parked': 'tylko postoj',
-    'speed-unknown': 'brak predkosci',
-    'bad-name': 'zla nazwa',
+    'not-parked': 'tylko postój',
+    'speed-unknown': 'brak prędkości',
+    'bad-name': 'zła nazwa',
     'unknown': 'AirPlay'
 };
 
 var RDP_STATUS_TEXT = {
-    'speed-unknown': 'brak predkosci',
-    'not-parked': 'tylko postoj',
+    'speed-unknown': 'brak prędkości',
+    'not-parked': 'tylko postój',
     'uplink-not-wifi': 'brak wifi',
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'no-host': 'ustaw IP',
     'rdp-client-missing': 'brak g21-rdp',
-    'secret-write-failed': 'blad hasla',
-    'status-write': 'blad statusu',
-    'connect-failed': 'RDP blad start',
-    'starting': 'RDP lacze',
-    'connecting': 'RDP lacze',
-    'connected': 'RDP dziala',
-    'running': 'RDP dziala',
+    'secret-write-failed': 'błąd hasła',
+    'status-write': 'błąd statusu',
+    'connect-failed': 'RDP: błąd startu',
+    'starting': 'RDP łączy',
+    'connecting': 'RDP łączy',
+    'connected': 'RDP działa',
+    'running': 'RDP działa',
     'missing': 'brak g21-rdp',
-    'cert': 'zatwierdz Cert',
-    'error': 'RDP blad',
-    'freerdp': 'blad FreeRDP',
-    'connect': 'PC odrzucil',
-    'gdi': 'blad obrazu',
+    'cert': 'zatwierdź certyfikat',
+    'error': 'RDP: błąd',
+    'freerdp': 'błąd FreeRDP',
+    'connect': 'PC odrzucił',
+    'gdi': 'błąd obrazu',
     'idle': 'RDP off',
-    'waiting': 'profil + Polacz',
+    'waiting': 'profil + Połącz',
     'pick-out': 'wybierz ekran',
-    'not-parked': 'tylko postoj',
+    'not-parked': 'tylko postój',
     'panel-www': 'panel WWW :1235',
-    'bad-host': 'zly IP',
-    'bad-port': 'zly port',
-    'bad-name': 'zla nazwa',
+    'bad-host': 'zły IP',
+    'bad-port': 'zły port',
+    'bad-name': 'zła nazwa',
     'max-profiles': 'max 6 profili',
     'last-profile': 'zostaw 1 profil',
     'unknown': 'RDP'
 };
 
 var VNC_STATUS_TEXT = {
-    'speed-unknown': 'brak predkosci',
-    'not-parked': 'tylko postoj',
+    'speed-unknown': 'brak prędkości',
+    'not-parked': 'tylko postój',
     'uplink-not-wifi': 'brak wifi',
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
     'no-host': 'ustaw IP',
-    'starting': 'odbiornik lacze',
-    'running': 'odbiornik dziala',
-    'connected': 'odbiornik dziala',
+    'starting': 'odbiornik łączy',
+    'running': 'odbiornik działa',
+    'connected': 'odbiornik działa',
     'idle': 'odbiornik off',
     'waiting': 'WL = ekran z PC',
-    'bad-host': 'zly IP',
-    'bad-port': 'zly port',
+    'bad-host': 'zły IP',
+    'bad-port': 'zły port',
     'max-profiles': 'max 6 profili',
     'last-profile': 'zostaw 1 profil',
     'unknown': 'VNC'
 };
 
 var WINDOWS_STATUS_TEXT = {
-    'speed-unknown': 'brak predkosci',
-    'not-parked': 'tylko postoj',
+    'speed-unknown': 'brak prędkości',
+    'not-parked': 'tylko postój',
     'uplink-not-wifi': 'brak wifi',
     'wifi-down': 'brak wifi',
     'no-lease': 'brak wifi',
@@ -164,10 +165,10 @@ var WINDOWS_STATUS_TEXT = {
     'starting': 'Miracast start',
     'waiting': 'czekam Win+K',
     'offer': 'PC wykryty',
-    'running': 'Miracast dziala',
+    'running': 'Miracast działa',
     'missing': 'brak g21-mice',
     'mdns-brak': 'brak dns',
-    'error': 'Miracast blad',
+    'error': 'Miracast: błąd',
     'idle': 'Miracast off',
     'no-offers': 'brak ofert',
     'unknown': 'Miracast'
@@ -401,7 +402,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.134',
+        version: (this._packageJson && this._packageJson.version) || '0.1.135',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -466,6 +467,7 @@ function AirPlayApp() {
     if (this._desk.uiLang && this._desk.uiLang() === 'en' && this._menu.setLang) {
         this._menu.setLang('en');
     }
+    rtI18n.setUiLanguage(this._desk.uiLang && this._desk.uiLang() === 'en' ? 'en' : 'pl');
     if (this._desk.uiRender && this._desk.uiRender() === 'software') {
         this._paintRender();
     }
@@ -533,7 +535,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.134') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.135') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -704,7 +706,7 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
     if (protocol === 'rdp') {
         profiles = this._desk.profiles('rdp');
         active = this._desk.activeProfileId('rdp');
-        items.push({ name: 'rdp-connect', title: 'Polacz', hint: 'wybierz ekran', icon: 'desktop' });
+        items.push({ name: 'rdp-connect', title: 'Połącz', hint: 'wybierz ekran', icon: 'desktop' });
         items.push({ name: 'rdp-cut', title: 'Stop RDP', hint: 'Koniec sesji', icon: 'stop' });
         profiles.forEach(function (p) {
             items.push({
@@ -719,15 +721,15 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
         items.push({ name: 'rdp-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' });
         items.push({ name: 'rdp-cert', title: 'Cert', hint: 'zaufaj odcisk', icon: 'wifi' });
         items.push({ name: 'rdp-panel', title: 'WWW', hint: ':1235', icon: 'grid' });
-        items.push({ name: 'rdp-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' });
+        items.push({ name: 'rdp-back', title: 'Wstecz', hint: 'Menu główne', icon: 'back' });
         this._menu.setItems(items, 'RDP');
         return;
     }
     if (protocol === 'vnc') {
         profiles = this._desk.profiles('vnc');
         active = this._desk.activeProfileId('vnc');
-        items.push({ name: 'vnc-toggle', title: 'WYL', hint: 'wylaczony', icon: 'grid' });
-        items.push({ name: 'vnc-connect', title: 'Polacz', hint: 'ekran z PC', icon: 'grid' });
+        items.push({ name: 'vnc-toggle', title: 'WYL', hint: 'wyłączony', icon: 'grid' });
+        items.push({ name: 'vnc-connect', title: 'Połącz', hint: 'ekran z PC', icon: 'grid' });
         items.push({ name: 'vnc-cut', title: 'Stop VNC', hint: 'Koniec sesji', icon: 'stop' });
         profiles.forEach(function (p) {
             items.push({
@@ -740,7 +742,7 @@ AirPlayApp.prototype._rebuildProtocolMenu = function (protocol) {
         items.push({ name: 'vnc-add', title: 'Dodaj', hint: 'Nowy profil', icon: 'tag' });
         items.push({ name: 'vnc-edit', title: 'Edytuj', hint: 'IP / port', icon: 'gear' });
         items.push({ name: 'vnc-del', title: 'Usun', hint: 'Skasuj profil', icon: 'stop' });
-        items.push({ name: 'vnc-back', title: 'Wstecz', hint: 'Menu glowne', icon: 'back' });
+        items.push({ name: 'vnc-back', title: 'Wstecz', hint: 'Menu główne', icon: 'back' });
         this._menu.setItems(items, 'VNC');
     }
 };
@@ -1618,7 +1620,7 @@ AirPlayApp.prototype._syncYoutubeLogin = function () {
         ];
     } else if (auth.state === 'unsupported') {
         items = [
-            { name: 'yt-login-code', title: 'Potrzebny nowszy jap-ridetube-d', hint: 'usługa w aucie', icon: 'tag' },
+            { name: 'yt-login-code', title: 'Potrzebna nowsza usługa YouTube', hint: 'zaktualizuj narzędzie YouTube w MGU Store', icon: 'tag' },
             { name: 'yt-login-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
         ];
     } else {
@@ -1720,9 +1722,9 @@ AirPlayApp.prototype._syncYoutubeBrowse = function () {
     rows = this._ytBrowseRows();
     this._ytRows = rows;
     items = [
-        { name: 'yt-feed-home', title: 'Home', hint: 'RideTube', icon: 'grid', on: which === 'home' },
-        { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'RideTube', icon: 'grid', on: which === 'subs' },
-        { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'RideTube', icon: 'tag', on: which === 'wl' },
+        { name: 'yt-feed-home', title: 'Home', hint: 'YouTube', icon: 'grid', on: which === 'home' },
+        { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'YouTube', icon: 'grid', on: which === 'subs' },
+        { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'YouTube', icon: 'tag', on: which === 'wl' },
         { name: 'yt-search', title: 'Szukaj', hint: model.q || 'tytuł filmu', icon: 'tag', on: which === 'results' }
     ];
     if (model.state === 'playing' || model.state === 'paused' || model.state === 'preparing') {
@@ -1765,7 +1767,7 @@ AirPlayApp.prototype._syncYoutubeBrowse = function () {
             on: true,
             mode: which === 'player' ? 'player' : which,
             sections: this._ytTileSections(rows),
-            status: model.connected ? (which === 'results' ? 'Nothing found' : 'Loading...') : 'The RideTube service is not running',
+            status: model.connected ? (which === 'results' ? 'Nic nie znaleziono' : 'Wczytuję…') : 'Usługa YouTube w aucie nie działa',
             playing: {
                 title: model.title || '',
                 channel: model.channel || '',
@@ -1965,10 +1967,13 @@ AirPlayApp.prototype._setYtScreen = function (kind, on) {
         this._saveDesk();
     }
     this._ytGaugeOuts = '';
-    if (!this._ytCluster && this._settings.outputs().indexOf('cluster') === -1) {
+    // A screen switched off leaves at once, unless a running AirPlay shows there. (The saved
+    // AirPlay screens alone used to keep the film's last frame up with no AirPlay on.)
+    var airOuts = (this._sessions && this._sessions.active() === 'airplay') ? this._settings.outputs() : [];
+    if (!this._ytCluster && airOuts.indexOf('cluster') === -1) {
         this._dropMirrorFace('cluster');
     }
-    if (!this._ytHud && this._settings.outputs().indexOf('hud') === -1) {
+    if (!this._ytHud && airOuts.indexOf('hud') === -1) {
         this._dropMirrorFace('hud');
     }
     this._paintYoutube();
@@ -2124,6 +2129,8 @@ AirPlayApp.prototype._enterStream = function (protocol) {
         this._mirrorPainted = false;
         this._yuvStamp = '';
         this._streamEpoch = Date.now();
+        this._airGoneAt = 0;
+        this._airSawMirror = false;
         this._dropMirror();
         if (this._menu && typeof this._menu.rebindVideo === 'function') {
             this._menu.rebindVideo();
@@ -2523,7 +2530,7 @@ AirPlayApp.prototype._onRdpAction = function (name) {
         return;
     }
     if (name === 'rdp-e-pass' || name === 'rdp-pass') {
-        this._startFieldEdit('rdp-pass', 'pass', '', 'Haslo RDP');
+        this._startFieldEdit('rdp-pass', 'pass', '', 'Hasło RDP');
         return;
     }
     if (name === 'rdp-cert') {
@@ -2721,6 +2728,20 @@ AirPlayApp.prototype._takeYoutube = function () {
         return;
     }
     this._ytPolledAt = now;
+    // The player says whether a film is on. ytdec's file stays after a film was stopped, has
+    // finished or failed, with its last frame in it: read alone, it kept that frame on the
+    // cluster and the HUD for good (before 0.1.135). Paused keeps its picture.
+    var film = this._ytModel;
+    if (film && film.state !== 'playing' && film.state !== 'paused') {
+        if (this._ytLive || this._ytGaugeFrame || this._ytFrame) {
+            noteStart('yt-gone ' + film.state);
+            this._ytLive = false;
+            this._ytFrame = null;
+            this._dropYoutubeFaces();
+            this._paintYoutube();
+        }
+        return;
+    }
     // Without gauges only the file's 64-byte head is read (is a film on?).
     frame = this._ytFile.pull(!gauges);
     if (frame === null && gauges && this._ytFile.lastError) {
@@ -2898,6 +2919,8 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'lang-toggle') {
         this._desk.setUiLang(this._menu && this._menu.lang ? this._menu.lang() : 'pl');
+        // the YouTube screen speaks THEiPlay's language
+        rtI18n.setUiLanguage(this._desk.uiLang());
         this._saveDesk();
         return;
     }
@@ -3249,10 +3272,10 @@ AirPlayApp.prototype._choose = function (name) {
     this._sessions.connect(name, this._endpoint(name)).then(function (result) {
         self._sessionText = result.ok
             ? (name + ' ' + (result.state || 'ok'))
-            : (name + ' ' + (result.reason || 'blad'));
+            : (name + ' ' + (result.reason || 'błąd'));
         noteStart(result.ok
             ? ('session-ok ' + name + ' ' + (result.state || 'ok'))
-            : ('session-fail ' + name + ' ' + (result.reason || 'blad')));
+            : ('session-fail ' + name + ' ' + (result.reason || 'błąd')));
         if (name === 'airplay') {
             self._airStarting = false;
             if (!result.ok && self._menu && typeof self._menu.setScreen === 'function') {
@@ -3486,19 +3509,30 @@ AirPlayApp.prototype._refreshAirBadge = function () {
             pin = this._readAirplayPin();
         }
     }
+    // The tool's watcher: "mirroring" while the iPhone sends its screen. Seen once and then idle,
+    // an error or no state at all (UxPlay restarting): the iPhone left. ("pair" is not that: the
+    // watcher writes it for any new connection, also one opened beside a running mirror.)
+    if (live.on && client.state === 'mirroring') {
+        this._airSawMirror = true;
+    } else if (this._airSawMirror && (!live.on || client.state === 'idle' || client.state === 'error' || client.state === '')) {
+        this._airSawMirror = false;
+        if (live.on) {
+            this._airPictureGone('client ' + (client.state || 'gone'));
+        }
+    }
     snap = uplink.readUplink();
     choice = uplink.selectStoreWifi(snap.status, snap.lease);
     online = !!(live.on && (this._decoded || client.state === 'mirroring'));
     bad = false;
     if (!live.on) {
-        status = this._airNeedPick ? 'wybierz ekran' : 'offline';
+        status = this._airNeedPick ? 'wybierz ekran' : 'wyłączony';
     } else if (online) {
-        status = 'sukces';
+        status = 'połączono';
     } else if (client.state === 'error') {
-        status = client.detail ? ('blad ' + String(client.detail).slice(0, 16)) : 'blad lustra';
+        status = client.detail ? ('błąd ' + String(client.detail).slice(0, 16)) : 'błąd lustra';
         bad = true;
     } else if (client.state === 'pair') {
-        status = 'iPhone laczy';
+        status = 'iPhone łączy';
     } else if (pin) {
         status = 'kod ' + pin;
     } else if (receiver.mode === 'missing') {
@@ -3508,7 +3542,7 @@ AirPlayApp.prototype._refreshAirBadge = function () {
         status = 'brak dns';
         bad = true;
     } else if (receiver.mode === 'uxplay-exit') {
-        status = 'odbiornik spadl';
+        status = 'odbiornik spadł';
         bad = true;
     } else if (!choice.ok) {
         status = 'brak wifi';
@@ -3570,9 +3604,9 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
     if (mirrored) {
         headline = 'THEiPlay — lustro';
     } else if (client.state === 'pair') {
-        headline = 'THEiPlay — iPhone laczy';
+        headline = 'THEiPlay — iPhone łączy';
     } else if (client.state === 'error') {
-        headline = 'THEiPlay — blad lustra';
+        headline = 'THEiPlay — błąd lustra';
     } else if (pin) {
         headline = 'THEiPlay — kod';
     } else {
@@ -3617,7 +3651,7 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
             ? (pin ? 'wpisz kod na iPhonie' : 'iPhone: Centrum sterowania → AirPlay → ' + ((this._desk && this._desk.airplayName && this._desk.airplayName()) || 'THEiPlay'))
             : mirrored
                 ? (showCentral ? 'lustro aktywne' : 'obraz poza srodkiem')
-                : (linked ? 'czekam na klatke' : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay')),
+                : (linked ? 'czekam na klatkę' : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay')),
         mirrored: !soundOnly && showCentral && mirrored,
         spin: !soundOnly && !mirrored,
         lines: lines,
@@ -3962,13 +3996,15 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
     var mode = live.on && receiver && receiver.mode ? receiver.mode : 'idle';
     var wantPin = !!(this._desk.airplayPin && this._desk.airplayPin());
     var pin = wantPin ? this._readAirplayPin() : '';
+    // What "Zakończ" would end, in plain words (it used to say "bez kodu / czekaj iPhone" even
+    // while the iPhone was mirroring).
     var onHint = 'włączony';
-    if (pin) {
-        onHint = 'PIN ' + pin;
-    } else if (mode === 'running') {
-        onHint = wantPin ? 'lustro / czekaj iPhone' : 'bez kodu / czekaj iPhone';
-    } else if (live.on) {
-        onHint = wantPin ? 'czekaj na iPhone' : 'bez kodu';
+    if (this._decoded) {
+        onHint = 'iPhone połączony';
+    } else if (pin) {
+        onHint = 'kod ' + pin + ': wpisz na iPhonie';
+    } else if (mode === 'running' || live.on) {
+        onHint = 'czeka na iPhone';
     }
     if (typeof this._menu.setItemTitle === 'function') {
         this._menu.setItemTitle('air-toggle', live.on ? 'Zakończ' : 'Start');
@@ -4003,9 +4039,9 @@ AirPlayApp.prototype._paintRdpMenu = function () {
     var user = host.user || 'brak';
     var pass = this._store.hasSecret(secretKind) || this._store.hasSecret('rdp')
         ? 'zapisane'
-        : 'wpisz pokretlem';
+        : 'wpisz pokrętłem';
     var cert = '';
-    var outHint = this._rdpOutput === 'cluster' ? 'zegary' : (this._rdpOutput === 'hud' ? 'HUD' : 'srodek');
+    var outHint = this._rdpOutput === 'cluster' ? 'zegary' : (this._rdpOutput === 'hud' ? 'HUD' : 'środek');
     if (live.state === 'cert' && live.detail) {
         cert = String(live.detail).slice(0, 18);
     } else if (host.cert) {
@@ -4050,11 +4086,11 @@ AirPlayApp.prototype._paintVncMenu = function () {
     if (live.state === 'connected' || live.state === 'running') {
         onHint = 'ekran z PC';
     } else if (session.on) {
-        onHint = 'lacze do PC';
+        onHint = 'łączy z PC';
     }
     if (screen === 'vnc') {
-        this._paintSwitch('vnc-toggle', session.on, onHint, 'wylaczony');
-        this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'ekran z PC' : 'Polacz teraz');
+        this._paintSwitch('vnc-toggle', session.on, onHint, 'wyłączony');
+        this._menu.setItemHint('vnc-connect', live.state === 'connected' || live.state === 'running' ? 'ekran z PC' : 'Połącz teraz');
         this._menu.setItemHint('vnc-cut', active ? 'Rozlacz teraz' : 'Sesja off');
         this._menu.setItemHint('vnc-edit', (host.label || host.id) + ' ' + this._desk.formatHostIp('vnc'));
         return;
@@ -4257,7 +4293,7 @@ AirPlayApp.prototype._paint = function (choice) {
     var screen = this._menuScreen();
     if (!choice.ok) {
         this._write('airNet', 'Wi-Fi Store: brak połączenia');
-        this._write('airAddr', 'Wlacz hotspot iPhone i dolacz MGU Store do tej sieci');
+        this._write('airAddr', 'Włącz hotspot iPhone i dołącz MGU Store do tej sieci');
         this._write('airState', choice.reason || 'brak-wifi');
         return;
     }
@@ -4902,6 +4938,30 @@ AirPlayApp.prototype._useRing = function (ring) {
     }
 };
 
+// The iPhone left while AirPlay stays on for the next one (it stopped mirroring, the link
+// dropped, UxPlay was restarted): its last frame leaves the centre screen, the cluster and the
+// HUD. Before 0.1.135 the frame stayed on all three until AirPlay was switched off in the menu.
+AirPlayApp.prototype._airPictureGone = function (reason) {
+    var had = !!(this._decoded || this._ringActive || this._lastFrame);
+    this._ringActive = false;
+    this._ringIno = '';
+    this._ring = null;
+    this._ringAt = 0;
+    this._lastFrame = null;
+    this._airDims = null;
+    this._airGoneAt = Date.now();
+    if (!had) {
+        return;
+    }
+    noteStart('air-gone ' + reason);
+    this._setAirFull(false);
+    this._dropMirror();
+    if (this._menu && typeof this._menu.rebindVideo === 'function') {
+        this._menu.rebindVideo();
+    }
+    this._refreshAirBadge();
+};
+
 AirPlayApp.prototype._takeFrame = function () {
     var parsed = null;
     var st;
@@ -4930,9 +4990,18 @@ AirPlayApp.prototype._takeFrame = function () {
         src = KOMBI_YUV;
         gap = KOMBI_GAP_MS;
     } else if (this._ringActive) {
-        this._ringActive = false;
-        this._ringIno = '';
-        noteStart('air-ring off');
+        // The ring's status is gone: the tool ended it because the iPhone left (or UxPlay stopped).
+        this._airPictureGone('ring off');
+    }
+    if (this._airGoneAt && !ring) {
+        // no ring: this app would read latest.yuv itself; a frame from before the iPhone left stays out
+        try {
+            if (fs.statSync(src).mtime.getTime() <= this._airGoneAt) {
+                return;
+            }
+        } catch (errGone) {
+            return;
+        }
     }
     if (this._ingestAt && (now - this._ingestAt) < gap) {
         return;

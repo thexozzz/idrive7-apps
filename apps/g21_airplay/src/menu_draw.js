@@ -15,6 +15,7 @@ var qr = require('./qr.js');
 var HELLO = 1;
 var PLACE = 2;
 var SHOW = 3;
+var ATLAS = 4;
 var FRAME = 7;
 var VIDEO = 13;
 var DROP_VIDEO = 14;
@@ -49,6 +50,19 @@ var RED_CARD = 0x4A1616FF;
 var ACCENT_DIM = 0x7A4A22FF;
 var ACCENT_GLOW = 0x3A2414FF;
 var LINE = 0x3A3026FF;
+// shaded surfaces (top, bottom) and the tints the rows use
+var PAGE_A = 0x100D0AFF;
+var PAGE_B = 0x070605FF;
+var HEAD_A = 0x1C1612FF;
+var HEAD_B = 0x110E0BFF;
+var ROW_A = 0x1C1713FF;
+var ROW_B = 0x14100DFF;
+var ROW_HI_A = 0x3A2D20FF;
+var ROW_HI_B = 0x251D16FF;
+var WELL = 0x2B231BFF;
+var RED_A = 0x5C1D1DFF;
+var RED_B = 0x3C1313FF;
+var SOFT = 0xE9DFD2FF;
 var uiLang = 'pl';
 var EN = {
     'lustro iPhone': 'iPhone mirror',
@@ -189,7 +203,70 @@ var EN = {
     'Koniec sesji': 'End session',
     'Menu glowne': 'Main menu',
     'Polacz': 'Connect',
-    'wybierz ekran': 'pick a screen'
+    'wybierz ekran': 'pick a screen',
+    // 0.1.135: Polish with its marks, and the words of the new look
+    'połączono': 'connected',
+    'iPhone łączy': 'iPhone connecting',
+    'odbiornik spadł': 'receiver stopped',
+    'błąd lustra': 'mirror error',
+    'włączone': 'on',
+    'wyłączone': 'off',
+    'pokrętło albo dotyk': 'knob or touch',
+    'pokrętło albo – i + zmienia, klik zapisuje': 'the knob or – and + change it, a press saves',
+    'pokrętło zmienia, klik zapisuje': 'the knob changes it, a press saves',
+    'całość': 'whole',
+    'szer.': 'width',
+    'wys.': 'height',
+    'na żywo': 'live',
+    'wybierz pozycję, rozmiar, wysokość albo szerokość': 'pick position, size, height or width',
+    'zapisane': 'saved',
+    'Zapisz': 'Save',
+    'Anuluj': 'Cancel',
+    'Wysokość': 'Height',
+    'Szerokość': 'Width',
+    'podgląd': 'preview',
+    'wielkość': 'size',
+    'rozmiar': 'size',
+    'Okno': 'Window',
+    'kod: wpisz go na iPhonie': 'code: enter it on the iPhone',
+    'czekam na klatkę': 'waiting for a frame',
+    'lustro': 'mirror',
+    'spacja': 'space',
+    'usuń': 'delete',
+    'anuluj': 'cancel',
+    'wpisz tekst': 'type here',
+    'pokrętło: obrót lub wychylenie wybiera  ·  naciśnij: wpisz  ·  przytrzymaj literę: polskie znaki': 'knob: turn or tilt to pick  ·  press: type  ·  hold a letter: Polish letters',
+    'Szukaj': 'Search',
+    'Zaloguj się': 'Sign in',
+    'Konto zostaje w aucie': 'The account stays on the car',
+    'Logowanie niedostępne': 'Sign-in is not available',
+    'dotknij, żeby spróbować ponownie': 'tap to try again',
+    'Spróbuj ponownie': 'Try again',
+    'Logowanie wymaga nowszej usługi w aucie': 'Signing in needs a newer service on the car',
+    'Wczytuję…': 'Loading…',
+    'Nic nie znaleziono': 'Nothing found',
+    'Usługa YouTube w aucie nie działa': 'The YouTube service on the car is not running',
+    'AirPlay działa': 'AirPlay is on',
+    'AirPlay wyłączony': 'AirPlay is off',
+    'AirPlay startuje': 'AirPlay is starting',
+    'AirPlay zatrzymany': 'AirPlay stopped',
+    'gotowe do lustra': 'ready to mirror',
+    'czekam na kod': 'waiting for the code',
+    'wybierz AirPlay albo YouTube': 'pick AirPlay or YouTube',
+    'tylko postój': 'only when parked',
+    'iPhone połączony': 'iPhone connected',
+    'Kod AirPlay': 'AirPlay code',
+    'wpisz go na iPhonie': 'enter it on the iPhone',
+    'Połącz iPhone': 'Connect the iPhone',
+    'otwórz Centrum sterowania': 'open Control Centre',
+    'dotknij AirPlay przy odtwarzaczu': 'tap AirPlay by the player',
+    'wybierz Klonowanie ekranu': 'pick Screen Mirroring',
+    'wybierz': 'pick',
+    'iPhone i auto w jednej sieci Wi-Fi': 'the iPhone and the car on one Wi-Fi',
+    'czeka na iPhone': 'waiting for the iPhone',
+    'zła nazwa': 'bad name',
+    'napis': 'caption',
+    'Hasło': 'Password'
 };
 
 function tr(text) {
@@ -203,7 +280,7 @@ function tr(text) {
     if (s.indexOf('okno ') === 0) {
         return 'window ' + s.slice(5);
     }
-    if (s.indexOf('blad ') === 0) {
+    if (s.indexOf('błąd ') === 0) {
         return 'error ' + s.slice(5);
     }
     if (s.indexOf('kod ') === 0) {
@@ -660,9 +737,9 @@ var YT_LOGIN_ITEMS = [
 ];
 
 var YT_BROWSE_ITEMS = [
-    { name: 'yt-feed-home', title: 'Home', hint: 'RideTube', icon: 'grid', on: true },
-    { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'RideTube', icon: 'grid' },
-    { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'RideTube', icon: 'tag' },
+    { name: 'yt-feed-home', title: 'Home', hint: 'YouTube', icon: 'grid', on: true },
+    { name: 'yt-feed-subs', title: 'Subskrypcje', hint: 'YouTube', icon: 'grid' },
+    { name: 'yt-feed-wl', title: 'Do obejrzenia', hint: 'YouTube', icon: 'tag' },
     { name: 'yt-search', title: 'Szukaj', hint: 'tytuł filmu', icon: 'tag' },
     { name: 'yt-browse-back', title: 'Wstecz', hint: 'YouTube', icon: 'back' }
 ];
@@ -742,67 +819,151 @@ function u32(value) {
     return b;
 }
 
-function FrameBuilder() {
-    this.parts = [];
-    this.rects = 0;
+// ---------------------------------------------------------------- drawing
+// Until 0.1.134 a frame was CLEAR and RECT only: text was a 5x7 pixel font, one RECT per lit
+// pixel (2000 to 3800 rects, 50 to 90 kB a frame). The renderer draws more (kit/renderd
+// PROTOCOL.md: RRECT, CARD, RSTROKE, LINE, ARC, QUAD, GLYPHS from an uploaded glyph atlas), and
+// the YouTube screen (rt_view.js) has drawn with those on the car since 0.1.122. The menu records
+// the same ops with the same recorder and the same Ubuntu atlases: one look for both screens,
+// real letters with Polish marks, and a frame of 100 to 250 ops (3 to 8 kB).
+var record = require('./rt_record.js');
+var rtFonts = require('./rt_fonts.js');
+var HAVE_FONTS = (function () {
+    try {
+        return !!rtFonts.get('label', 24, 'a');
+    } catch (err) {
+        return false;
+    }
+}());
+var CAP_H = 0.72;   // Ubuntu: a capital's height in em
+
+// The callers still size text by the pixel font's "scale" (a glyph was 7 * scale px tall).
+// This gives the atlas size whose capitals are about as tall, so every layout holds.
+function fontPx(scale) {
+    return Math.round(scale * 9.6);
 }
 
-FrameBuilder.prototype.op = function (value) {
-    this.parts.push(u32(value));
-};
+function fontFor(scale, text) {
+    if (scale >= 8 && /^[0-9 ]*$/.test(String(text))) {
+        return 'light';     // the AirPlay code: thin large digits
+    }
+    return scale >= 4 ? 'bold' : 'label';
+}
 
-FrameBuilder.prototype.f32 = function (value) {
-    var b = Buffer.alloc(4);
-    b.writeFloatLE(value, 0);
-    this.parts.push(b);
-};
+function FrameBuilder() {
+    this.rec = new record.Recorder(1920, 720);
+    this.rects = 0;     // drawing ops in the frame (named in the rect-only days; the log and tests read it)
+}
 
 FrameBuilder.prototype.clear = function (color) {
-    this.op(1);
-    this.op(color);
+    this.rec.clear(color >>> 0);
 };
 
 FrameBuilder.prototype.video = function (x, y, w, h, id) {
     if (!(w > 0) || !(h > 0)) {
         return;
     }
-    this.op(19);
-    this.f32(x);
-    this.f32(y);
-    this.f32(w);
-    this.f32(h);
-    this.f32(0);
-    this.op(id || 1);
+    this.rec.video(id || 1, x, y, w, h, 0);
 };
 
 FrameBuilder.prototype.rect = function (x, y, w, h, color) {
     if (!(w > 0) || !(h > 0)) {
         return;
     }
-    this.op(2);
-    this.f32(x);
-    this.f32(y);
-    this.f32(w);
-    this.f32(h);
-    this.op(color);
+    this.rec.fillRect(x, y, w, h, color >>> 0);
     this.rects += 1;
 };
 
-FrameBuilder.prototype.text = function (str, x, y, scale, color) {
+/** rounded rectangle, radius r */
+FrameBuilder.prototype.round = function (x, y, w, h, r, color) {
+    if (!(w > 0) || !(h > 0)) {
+        return;
+    }
+    this.rec.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)), color >>> 0);
+    this.rects += 1;
+};
+
+/** rounded outline, lw px wide, inside the box */
+FrameBuilder.prototype.stroke = function (x, y, w, h, r, lw, color) {
+    if (!(w > 0) || !(h > 0)) {
+        return;
+    }
+    this.rec.strokeRoundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)), lw, color >>> 0);
+    this.rects += 1;
+};
+
+/**
+ * A card: a rounded rectangle in the colour between top and bottom. (Not the renderer's CARD op,
+ * a rounded rectangle shaded top to bottom: the YouTube screen never draws one, so it is not
+ * proven on the car's renderer. Every op used here is one that screen draws on the car.)
+ */
+FrameBuilder.prototype.card = function (x, y, w, h, r, top, bottom) {
+    var mix = function (shift) {
+        return ((((top >>> shift) & 255) + ((bottom >>> shift) & 255)) >> 1) << shift;
+    };
+    this.round(x, y, w, h, r, (mix(24) | mix(16) | mix(8) | 0xFF) >>> 0);
+};
+
+/** rectangle shaded top to bottom */
+FrameBuilder.prototype.grad = function (x, y, w, h, top, bottom) {
+    if (!(w > 0) || !(h > 0)) {
+        return;
+    }
+    this.rec.gradientRect(x, y, w, h, [[0, top >>> 0], [1, bottom >>> 0]]);
+    this.rects += 1;
+};
+
+FrameBuilder.prototype.line = function (xa, ya, xb, yb, lw, color) {
+    this.rec.line(xa, ya, xb, yb, lw, color >>> 0);
+    this.rects += 1;
+};
+
+/** ring segment, degrees clockwise from 12 o'clock */
+FrameBuilder.prototype.arc = function (cx, cy, r0, r1, a0, a1, color, round) {
+    this.rec.arc(cx, cy, r0, r1, a0, a1, color >>> 0, round ? { round: true } : null);
+    this.rects += 1;
+};
+
+FrameBuilder.prototype.circle = function (cx, cy, r, color) {
+    this.rec.arc(cx, cy, 0, r, 0, 360, color >>> 0, null);
+    this.rects += 1;
+};
+
+/** filled convex shape of three or four points */
+FrameBuilder.prototype.quad = function (pts, color) {
+    var p = pts.length === 3 ? [pts[0], pts[1], pts[2], [(pts[2][0] + pts[0][0]) / 2, (pts[2][1] + pts[0][1]) / 2]] : pts;
+    this.rec.quad(p, color >>> 0);
+    this.rects += 1;
+};
+
+FrameBuilder.prototype.pill = function (x, y, w, h, color) {
+    this.round(x, y, w, h, Math.floor(Math.min(h / 2, w / 2, 28)), color);
+};
+
+// The 5x7 pixel font, one RECT per lit pixel: the caption ("Napis", font Pixel) keeps this
+// look on the centre screen, and everything falls back to it when the atlases are missing.
+FrameBuilder.prototype.pixelText = function (str, x, y, scale, color) {
     var pen = x;
     var text = String(str);
     var i;
     var row;
     var col;
     var glyph;
-    var ch;
+    var run;
     for (i = 0; i < text.length; i += 1) {
-        ch = text.charAt(i);
-        glyph = FONT[ch] || FONT[' '];
+        glyph = FONT[text.charAt(i)] || FONT[' '];
         for (row = 0; row < glyph.length; row += 1) {
-            for (col = 0; col < glyph[row].length; col += 1) {
-                if (glyph[row].charAt(col) === '1') {
-                    this.rect(pen + col * scale, y + row * scale, scale, scale, color);
+            col = 0;
+            while (col < glyph[row].length) {
+                if (glyph[row].charAt(col) !== '1') {
+                    col += 1;
+                } else {
+                    run = col;
+                    while (run < glyph[row].length && glyph[row].charAt(run) === '1') {
+                        run += 1;
+                    }
+                    this.rect(pen + col * scale, y + row * scale, (run - col) * scale, scale, color);
+                    col = run;
                 }
             }
         }
@@ -810,49 +971,129 @@ FrameBuilder.prototype.text = function (str, x, y, scale, color) {
     }
 };
 
-FrameBuilder.prototype.textWidth = function (str, scale) {
-    return String(str || '').length * 6 * scale;
-};
-
-FrameBuilder.prototype.pill = function (x, y, w, h, color) {
-    var radius = Math.floor(Math.min(h / 2, w / 2, 28));
-    var i;
-    var inset;
-    var span;
-    if (radius < 6) {
-        this.rect(x, y, w, h, color);
+// y is the top of the old pixel cell (7 * scale px tall); the capitals are centred in it.
+FrameBuilder.prototype.text = function (str, x, y, scale, color, font) {
+    var text = String(str);
+    var px;
+    if (!text) {
         return;
     }
-    for (i = 0; i < radius; i += 1) {
-        inset = radius - 1 - Math.floor(Math.sqrt((radius * radius) - ((radius - 1 - i) * (radius - 1 - i))));
-        if (inset < 0) {
-            inset = 0;
-        }
-        span = w - (inset * 2);
-        if (span > 0) {
-            this.rect(x + inset, y + i, span, 1, color);
-            this.rect(x + inset, y + h - 1 - i, span, 1, color);
-        }
+    if (!HAVE_FONTS) {
+        this.pixelText(text, x, y, scale, color);
+        return;
     }
-    if (h > radius * 2) {
-        this.rect(x, y + radius, w, h - (radius * 2), color);
+    px = fontPx(scale);
+    this.rec.text(text, x, Math.round(y + 3.5 * scale + px * CAP_H / 2), px, color >>> 0,
+        { raw: true, literal: true, font: font || fontFor(scale, text) });
+    this.rects += 1;
+};
+
+FrameBuilder.prototype.textWidth = function (str, scale, font) {
+    var text = String(str || '');
+    if (!HAVE_FONTS) {
+        return text.length * 6 * scale;
+    }
+    return Math.ceil(this.rec.textWidth(text, fontPx(scale), { raw: true, literal: true, font: font || fontFor(scale, text) }));
+};
+
+/** text cut to maxW px, with "…" when cut */
+FrameBuilder.prototype.fit = function (str, scale, maxW, font) {
+    var s = String(str || '');
+    if (this.textWidth(s, scale, font) <= maxW) {
+        return s;
+    }
+    while (s.length > 1 && this.textWidth(s + '…', scale, font) > maxW) {
+        s = s.slice(0, -1);
+    }
+    return s.replace(/\s+$/, '') + '…';
+};
+
+// Icons: drawn with lines and arcs on a 16 x 16 grid, u px per cell (the option rows use 3: 48 px).
+var VECTOR_ICONS = {
+    airplay: function (d, x, y, u, c) {
+        var w = 1.5 * u;
+        d.line(x + 2.2 * u, y + 3 * u, x + 13.8 * u, y + 3 * u, w, c);
+        d.line(x + 2.2 * u, y + 3 * u, x + 2.2 * u, y + 10.4 * u, w, c);
+        d.line(x + 13.8 * u, y + 3 * u, x + 13.8 * u, y + 10.4 * u, w, c);
+        d.line(x + 2.2 * u, y + 10.4 * u, x + 4.2 * u, y + 10.4 * u, w, c);
+        d.line(x + 11.8 * u, y + 10.4 * u, x + 13.8 * u, y + 10.4 * u, w, c);
+        d.quad([[x + 8 * u, y + 8.4 * u], [x + 12.2 * u, y + 13.8 * u], [x + 3.8 * u, y + 13.8 * u]], c);
+    },
+    desktop: function (d, x, y, u, c) {
+        d.stroke(x + 1.5 * u, y + 2.2 * u, 13 * u, 8.8 * u, 1.8 * u, 1.5 * u, c);
+        d.line(x + 8 * u, y + 11.4 * u, x + 8 * u, y + 13.2 * u, 1.5 * u, c);
+        d.line(x + 5 * u, y + 13.7 * u, x + 11 * u, y + 13.7 * u, 1.5 * u, c);
+    },
+    grid: function (d, x, y, u, c) {
+        var i;
+        var j;
+        for (i = 0; i < 3; i += 1) {
+            for (j = 0; j < 3; j += 1) {
+                d.round(x + (2.1 + i * 4.3) * u, y + (2.1 + j * 4.3) * u, 3.2 * u, 3.2 * u, 0.9 * u, c);
+            }
+        }
+    },
+    play: function (d, x, y, u, c) {
+        d.quad([[x + 4.6 * u, y + 2.6 * u], [x + 13.4 * u, y + 8 * u], [x + 4.6 * u, y + 13.4 * u]], c);
+    },
+    stop: function (d, x, y, u, c) {
+        d.round(x + 3.6 * u, y + 3.6 * u, 8.8 * u, 8.8 * u, 1.8 * u, c);
+    },
+    tag: function (d, x, y, u, c) {
+        var w = 1.5 * u;
+        d.line(x + 2.4 * u, y + 3.2 * u, x + 9 * u, y + 3.2 * u, w, c);
+        d.line(x + 9 * u, y + 3.2 * u, x + 13.8 * u, y + 8 * u, w, c);
+        d.line(x + 13.8 * u, y + 8 * u, x + 9 * u, y + 12.8 * u, w, c);
+        d.line(x + 9 * u, y + 12.8 * u, x + 2.4 * u, y + 12.8 * u, w, c);
+        d.line(x + 2.4 * u, y + 12.8 * u, x + 2.4 * u, y + 3.2 * u, w, c);
+        d.circle(x + 5.6 * u, y + 8 * u, 1.3 * u, c);
+    },
+    wifi: function (d, x, y, u, c) {
+        d.arc(x + 8 * u, y + 12.6 * u, 9.2 * u, 10.7 * u, -45, 45, c, true);
+        d.arc(x + 8 * u, y + 12.6 * u, 5.9 * u, 7.4 * u, -45, 45, c, true);
+        d.arc(x + 8 * u, y + 12.6 * u, 2.6 * u, 4.1 * u, -45, 45, c, true);
+        d.circle(x + 8 * u, y + 12.6 * u, 1.2 * u, c);
+    },
+    back: function (d, x, y, u, c) {
+        var w = 1.6 * u;
+        d.line(x + 12.6 * u, y + 8 * u, x + 3.6 * u, y + 8 * u, w, c);
+        d.line(x + 3.6 * u, y + 8 * u, x + 7.6 * u, y + 4 * u, w, c);
+        d.line(x + 3.6 * u, y + 8 * u, x + 7.6 * u, y + 12 * u, w, c);
+    },
+    host: function (d, x, y, u, c) {
+        d.stroke(x + 2 * u, y + 2.4 * u, 12 * u, 4.8 * u, 1.3 * u, 1.4 * u, c);
+        d.stroke(x + 2 * u, y + 8.8 * u, 12 * u, 4.8 * u, 1.3 * u, 1.4 * u, c);
+        d.circle(x + 4.8 * u, y + 4.8 * u, 0.8 * u, c);
+        d.circle(x + 4.8 * u, y + 11.2 * u, 0.8 * u, c);
+    },
+    user: function (d, x, y, u, c) {
+        d.circle(x + 8 * u, y + 5.4 * u, 2.9 * u, c);
+        d.arc(x + 8 * u, y + 15.2 * u, 4.6 * u, 6.2 * u, -78, 78, c, true);
+    },
+    gear: function (d, x, y, u, c) {
+        var k;
+        var a;
+        d.arc(x + 8 * u, y + 8 * u, 2.5 * u, 4.5 * u, 0, 360, c, false);
+        for (k = 0; k < 8; k += 1) {
+            a = k * Math.PI / 4;
+            d.line(x + (8 + Math.sin(a) * 4.6) * u, y + (8 - Math.cos(a) * 4.6) * u,
+                x + (8 + Math.sin(a) * 6.1) * u, y + (8 - Math.cos(a) * 6.1) * u, 1.9 * u, c);
+        }
+    },
+    lock: function (d, x, y, u, c) {
+        d.round(x + 3.4 * u, y + 7.2 * u, 9.2 * u, 6.8 * u, 1.6 * u, c);
+        d.arc(x + 8 * u, y + 7.4 * u, 2.4 * u, 3.9 * u, -90, 90, c, false);
+    },
+    unlock: function (d, x, y, u, c) {
+        d.round(x + 3.4 * u, y + 7.2 * u, 9.2 * u, 6.8 * u, 1.6 * u, c);
+        d.arc(x + 8 * u, y + 6 * u, 2.4 * u, 3.9 * u, -90, 62, c, true);
+        d.line(x + 4.85 * u, y + 6 * u, x + 4.85 * u, y + 7.6 * u, 1.5 * u, c);
     }
 };
 
 FrameBuilder.prototype.icon = function (name, x, y, px, color) {
-    var rows = ICONS[name] || ICONS.play;
-    var row;
-    var col;
-    var line;
-    var size = px || 3;
-    for (row = 0; row < rows.length; row += 1) {
-        line = rows[row];
-        for (col = 0; col < line.length; col += 1) {
-            if (line.charAt(col) === '1') {
-                this.rect(x + col * size, y + row * size, size, size, color);
-            }
-        }
-    }
+    var u = px || 3;
+    (VECTOR_ICONS[name] || VECTOR_ICONS.play)(this, x, y, u, color);
 };
 
 FrameBuilder.prototype.iconSize = function (px) {
@@ -860,8 +1101,46 @@ FrameBuilder.prototype.iconSize = function (px) {
 };
 
 FrameBuilder.prototype.bytes = function () {
-    return Buffer.concat(this.parts);
+    var w = this.rec.words();
+    return Buffer.from(w.buffer.slice(w.byteOffset, w.byteOffset + w.byteLength));
 };
+
+/** ids of the glyph atlases the frame's text needs (sent once per connection before it) */
+FrameBuilder.prototype.atlases = function () {
+    return Array.from(this.rec.atlases);
+};
+
+/** the FRAME message of a drawing; its .atlases names the glyph atlases to upload first */
+function packFrame(draw) {
+    var out = message(FRAME, draw.bytes());
+    out.atlases = draw.atlases();
+    return out;
+}
+
+// A chevron: the tip points n / e / s / w, s px from its middle to an end.
+function chevron(draw, dir, cx, cy, s, lw, color) {
+    if (dir === 'w' || dir === 'e') {
+        var k = dir === 'w' ? -1 : 1;
+        draw.line(cx - k * s * 0.5, cy - s, cx + k * s * 0.5, cy, lw, color);
+        draw.line(cx + k * s * 0.5, cy, cx - k * s * 0.5, cy + s, lw, color);
+        return;
+    }
+    var m = dir === 'n' ? -1 : 1;
+    draw.line(cx - s, cy - m * s * 0.5, cx, cy + m * s * 0.5, lw, color);
+    draw.line(cx, cy + m * s * 0.5, cx + s, cy - m * s * 0.5, lw, color);
+}
+
+// A check mark in a box of side s at x, y.
+function checkMark(draw, x, y, s, lw, color) {
+    draw.line(x + s * 0.2, y + s * 0.52, x + s * 0.42, y + s * 0.74, lw, color);
+    draw.line(x + s * 0.42, y + s * 0.74, x + s * 0.82, y + s * 0.28, lw, color);
+}
+
+// The power sign: a ring open at the top and a bar through the gap.
+function powerSign(draw, cx, cy, r, lw, color) {
+    draw.arc(cx, cy, r - lw, r, 35, 325, color, true);
+    draw.line(cx, cy - r - 1, cx, cy - r * 0.15, lw, color);
+}
 
 function pageBox(width, height) {
     var boxW = width - CONTENT.x - 20;
@@ -1103,7 +1382,7 @@ function placeName(field, title) {
         return 'Konto';
     }
     if (field === 'rdp-pass') {
-        return 'Haslo';
+        return 'Hasło';
     }
     return title ? String(title) : 'Wpisz';
 }
@@ -1118,70 +1397,99 @@ function fitCrumb(draw, text, scale, maxW) {
 
 function drawMenuHeader(draw, lay, crumb, showBack) {
     var textX = lay.ox + 36;
-    var scale = 4;
-    var label;
+    var maxW;
+    var parts;
+    var i;
+    var x;
+    var last;
     lay.crumb = tr(crumb || 'THEiPlay');
     lay.backHit = null;
     if (showBack) {
-        draw.pill(lay.ox + 20, lay.oy + 14, 150, 40, CARD);
-        draw.text(tr('wstecz'), lay.ox + 40, lay.oy + 24, 3, ACCENT);
-        lay.backHit = { x: lay.ox + 20, y: lay.oy + 14, w: 150, h: 40 };
-        textX = lay.ox + 188;
-        scale = 4;
+        draw.round(lay.ox + 20, lay.oy + 12, 156, 44, 22, CARD_HI);
+        chevron(draw, 'w', lay.ox + 46, lay.oy + 34, 8, 3, ACCENT);
+        draw.text(tr('wstecz'), lay.ox + 64, lay.oy + 24, 3, ACCENT);
+        lay.backHit = { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 };
+        textX = lay.ox + 198;
     }
-    label = fitCrumb(draw, lay.crumb, scale, lay.ox + lay.boxW - textX - 780);
-    draw.text(label, textX, lay.oy + 22, scale, showBack ? INK : ACCENT);
+    maxW = lay.ox + lay.boxW - textX - 780;
+    if (!showBack) {
+        // the home page: the name as a mark, "THE" light and "iPlay" in the accent
+        if (lay.crumb === 'THEiPlay') {
+            draw.text('THE', textX, lay.oy + 22, 4, SOFT, 'label');
+            draw.text('iPlay', textX + draw.textWidth('THE', 4, 'label') + 2, lay.oy + 22, 4, ACCENT, 'bold');
+        } else {
+            draw.text(draw.fit(lay.crumb, 4, maxW), textX, lay.oy + 22, 4, ACCENT);
+        }
+        return;
+    }
+    // "AirPlay > Ekrany > Środek": the way here quiet, the place itself bright
+    parts = lay.crumb.split(' > ');
+    while (parts.length > 1 && draw.textWidth(parts.join('  ›  '), 4) > maxW) {
+        parts.shift();
+    }
+    x = textX;
+    for (i = 0; i < parts.length; i += 1) {
+        last = i === parts.length - 1;
+        if (last) {
+            draw.text(draw.fit(parts[i], 4, Math.max(120, maxW - (x - textX))), x, lay.oy + 22, 4, INK, 'bold');
+        } else {
+            draw.text(parts[i], x, lay.oy + 22, 4, MUTED, 'label');
+            x += draw.textWidth(parts[i], 4, 'label') + 14;
+            chevron(draw, 'e', x + 4, lay.oy + 36, 7, 2.5, MUTED);
+            x += 24;
+        }
+    }
 }
 
 function drawSpinner(draw, cx, cy) {
     var phase = Math.floor(Date.now() / 140) % 8;
     var i;
     var ang;
-    var x;
-    var y;
-    var on;
+    var age;
     for (i = 0; i < 8; i += 1) {
         ang = i * Math.PI / 4 - Math.PI / 2;
-        x = cx + Math.round(Math.cos(ang) * 42) - 7;
-        y = cy + Math.round(Math.sin(ang) * 42) - 7;
-        on = i === phase;
-        draw.rect(x, y, on ? 18 : 10, on ? 18 : 10, on ? ACCENT : MUTED);
+        age = (phase - i + 8) % 8;      // 0: the head, then its tail
+        draw.circle(cx + Math.cos(ang) * 42, cy + Math.sin(ang) * 42, age === 0 ? 9 : (age < 3 ? 7 : 5),
+            age === 0 ? ACCENT : (age < 3 ? ACCENT_DIM : LINE));
     }
 }
 
 // exit: the right button closes the app (menu pages). Without it the
 // button is "wybierz" (the knob keyboard still needs it).
-function drawNav(draw, lay, onTop, exit) {
+function drawNav(draw, lay, onTop, exit, hot) {
     var y = onTop ? (lay.oy + lay.headerH + 10) : (lay.oy + lay.boxH - 78);
     var h = 56;
     var arrow = 76;
     var label = exit ? tr('Wyłącz aplikację') : 'wybierz';
-    var textScale = exit ? 3 : 4;
-    var tw = draw.textWidth(label, textScale);
-    var okW = Math.max(230, tw + (exit ? 76 : 48));
+    var tw = draw.textWidth(label, 3);
+    var okW = Math.max(230, tw + (exit ? 88 : 48));
     var gap = 14;
     var okX = lay.ox + lay.boxW - okW - 24;
     var rightX = okX - gap - arrow;
     var leftX = rightX - gap - arrow;
-    var ix;
-    draw.pill(leftX, y, arrow, h, CARD_HI);
-    draw.text('<', leftX + 28, y + 16, 4, INK);
-    draw.pill(rightX, y, arrow, h, CARD_HI);
-    draw.text('>', rightX + 28, y + 16, 4, INK);
-    if (exit) {
-        // Power glyph: a ring with a gap at the top and a bar through it.
-        draw.pill(okX, y, okW, h, CARD_HI);
-        ix = okX + 22;
-        draw.rect(ix, y + 18, 3, 20, INK);
-        draw.rect(ix + 21, y + 18, 3, 20, INK);
-        draw.rect(ix, y + 38, 24, 3, INK);
-        draw.rect(ix, y + 18, 6, 3, INK);
-        draw.rect(ix + 18, y + 18, 6, 3, INK);
-        draw.rect(ix + 10, y + 11, 4, 18, INK);
-        draw.text(label, okX + 56 + Math.floor((okW - 56 - tw) / 2) - 8, y + 19, textScale, INK);
+    var across = !!(lay.bubbles && lay.bubbles[0] && lay.bubbles[0].home);
+    var cy = y + h / 2;
+    draw.round(leftX, y, arrow, h, 28, hot ? RED_B : CARD_HI);
+    draw.round(rightX, y, arrow, h, 28, hot ? RED_B : CARD_HI);
+    if (hot) {
+        // an armed slider: the two buttons change its value (as the knob does)
+        draw.stroke(leftX, y, arrow, h, 28, 2, RED);
+        draw.stroke(rightX, y, arrow, h, 28, 2, RED);
+        draw.line(leftX + arrow / 2 - 10, cy, leftX + arrow / 2 + 10, cy, 4, INK);
+        draw.line(rightX + arrow / 2 - 10, cy, rightX + arrow / 2 + 10, cy, 4, INK);
+        draw.line(rightX + arrow / 2, cy - 10, rightX + arrow / 2, cy + 10, 4, INK);
     } else {
-        draw.pill(okX, y, okW, h, ACCENT);
-        draw.text(label, okX + Math.floor((okW - tw) / 2), y + 16, textScale, PAGE);
+        // a list runs down the page: up and down; the two-tile pages run across
+        chevron(draw, across ? 'w' : 'n', leftX + arrow / 2, cy, 9, 3.5, INK);
+        chevron(draw, across ? 'e' : 's', rightX + arrow / 2, cy, 9, 3.5, INK);
+    }
+    if (exit) {
+        draw.round(okX, y, okW, h, 28, CARD_HI);
+        powerSign(draw, okX + 36, cy + 1, 12, 3, HINT);
+        draw.text(label, okX + 60 + Math.floor((okW - 60 - tw) / 2) - 6, y + 18, 3, INK);
+    } else {
+        draw.round(okX, y, okW, h, 28, ACCENT);
+        draw.text(label, okX + Math.floor((okW - tw) / 2), y + 18, 3, PAGE);
     }
     lay.nav = {
         left: { x: leftX, y: y, w: arrow, h: h },
@@ -1195,13 +1503,13 @@ function drawNav(draw, lay, onTop, exit) {
 
 function keyLabel(key) {
     if (key === 'SPC') {
-        return 'spacja';
+        return tr('spacja');
     }
     if (key === 'ANU') {
-        return 'anuluj';
+        return tr('anuluj');
     }
     if (key === 'DEL') {
-        return 'usuń';
+        return tr('usuń');
     }
     if (key === 'SH') {
         return 'Aa';
@@ -1211,21 +1519,7 @@ function keyLabel(key) {
 
 // A rounded rectangle with its own corner radius (pill() rounds to half the height).
 function roundBox(draw, x, y, w, h, r, color) {
-    var i;
-    var inset;
-    var dy;
-    r = Math.floor(Math.min(r, w / 2, h / 2));
-    if (r < 2) {
-        draw.rect(x, y, w, h, color);
-        return;
-    }
-    for (i = 0; i < r; i += 1) {
-        dy = r - i - 0.5;
-        inset = Math.round(r - Math.sqrt(Math.max(0, r * r - dy * dy)));
-        draw.rect(x + inset, y + i, w - inset * 2, 1, color);
-        draw.rect(x + inset, y + h - 1 - i, w - inset * 2, 1, color);
-    }
-    draw.rect(x, y + r, w, h - r * 2, color);
+    draw.round(x, y, w, h, r, color);
 }
 
 var KB_KEY = 0x2A2622FF;       // letter keys
@@ -1282,22 +1576,21 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     var altX;
     var altY;
     draw.clear(0);
-    draw.rect(page.ox, page.oy, page.boxW, page.boxH, PAGE);
-    draw.rect(page.ox, page.oy, page.boxW, 56, PAGE_TOP);
+    drawPage(draw, { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH, headerH: 62 });
     drawMenuHeader(draw, head, crumb || edit.title || 'Wpisz', true);
 
     // the field: its name, the text with a caret, how many characters are left
     roundBox(draw, fieldX - 2, fieldY - 2, fieldW + 4, fieldH + 4, 18, ACCENT_DIM);
     roundBox(draw, fieldX, fieldY, fieldW, fieldH, 16, KB_FIELD);
     // (the field's name is the header's title)
-    count = value.length + ' z ' + (edit.max || 0);
+    count = value.length + (uiLang === 'en' ? ' of ' : ' z ') + (edit.max || 0);
     draw.text(count, fieldX + fieldW - 28 - draw.textWidth(count, 3), fieldY + Math.floor((fieldH - 21) / 2), 3, MUTED);
     maxChars = Math.max(4, Math.floor((fieldW - 200) / 30));
     shown = value.length > maxChars ? value.slice(value.length - maxChars) : value;
     if (shown.length) {
         draw.text(shown, fieldX + 28, fieldY + Math.floor((fieldH - 35) / 2), 5, INK);
     } else {
-        draw.text('wpisz tekst', fieldX + 28, fieldY + Math.floor((fieldH - 28) / 2), 4, LINE);
+        draw.text(tr('wpisz tekst'), fieldX + 28, fieldY + Math.floor((fieldH - 28) / 2), 4, LINE, 'label');
     }
     draw.rect(fieldX + 28 + draw.textWidth(shown, 5) + (shown.length ? 4 : 0), fieldY + 22, 4, 40, ACCENT);
 
@@ -1339,7 +1632,7 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
             label = keyLabel(key);
             scale = label.length === 1 ? 4 : 3;
             lw = draw.textWidth(label, scale);
-            draw.text(label, x + Math.floor((w - lw + scale) / 2), y + Math.floor((keyH - 7 * scale) / 2), scale, ink);
+            draw.text(label, x + Math.floor((w - lw) / 2), y + Math.floor((keyH - 7 * scale) / 2), scale, ink);
             if (knobKeyboard.altsFor(key).length && !focus) {
                 // a dot: holding this key gives Polish letters
                 draw.rect(x + w - 12, y + 8, 4, 4, MUTED);
@@ -1369,13 +1662,13 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     }
 
     // how to use it, under the tray
-    label = 'pokrętło: obrót lub wychylenie wybiera   naciśnij: wpisz   przytrzymaj literę: polskie znaki';
+    label = tr('pokrętło: obrót lub wychylenie wybiera  ·  naciśnij: wpisz  ·  przytrzymaj literę: polskie znaki');
     draw.text(label, page.ox + Math.floor((page.boxW - draw.textWidth(label, 3)) / 2), trayY + trayH + 12, 3, MUTED);
 
     var board = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
     var airBadge = drawAirBadge(draw, board, air, versionText);
     return {
-        frame: message(FRAME, draw.bytes()),
+        frame: packFrame(draw),
         rects: draw.rects,
         layout: {
             ox: page.ox,
@@ -1433,22 +1726,14 @@ function streamLayout(items, selected, width, height, detail, heading) {
 
 function drawVersionMark(draw, box, version) {
     var label;
-    var scale;
     var tw;
     var text = String(version || '').replace(/^v/i, '');
     if (!text || !box) {
         return;
     }
     label = 'v' + text;
-    scale = 3;
-    tw = draw.textWidth(label, scale);
-    draw.text(
-        label,
-        box.ox + box.boxW - tw - 40,
-        box.oy + 26,
-        scale,
-        MUTED
-    );
+    tw = draw.textWidth(label, 2);
+    draw.text(label, box.ox + box.boxW - tw - 36, box.oy + 28, 2, MUTED);
 }
 
 function parsePinDetail(detail) {
@@ -1484,18 +1769,23 @@ function streamWindow(win, page) {
 }
 
 function drawChip(draw, box, on, label) {
-    var scale = 3;
     var text = String(label || '');
-    var tw = draw.textWidth(text, scale);
-    draw.rect(box.x, box.y, box.w, box.h, on ? ACCENT : CARD);
-    draw.rect(box.x, box.y + box.h - 3, box.w, 3, on ? PAGE : LINE);
-    draw.text(text, box.x + Math.floor((box.w - tw) / 2), box.y + Math.floor((box.h - 21) / 2), scale, on ? PAGE : INK);
+    var tw = draw.textWidth(text, 3);
+    var r = Math.min(box.h / 2, 22);
+    if (on) {
+        draw.round(box.x, box.y, box.w, box.h, r, ACCENT);
+    } else {
+        draw.round(box.x, box.y, box.w, box.h, r, CARD_HI);
+        draw.stroke(box.x, box.y, box.w, box.h, r, 1.5, LINE);
+    }
+    draw.text(text, box.x + Math.floor((box.w - tw) / 2), box.y + Math.floor((box.h - 21) / 2), 3, on ? PAGE : INK);
 }
 
 function drawSlider(draw, x, y, w, value, min, max, hot) {
     var span = (max | 0) - (min | 0);
     var t = span > 0 ? ((value | 0) - (min | 0)) / span : 0;
     var fill;
+    var tone = hot ? RED : ACCENT;
     if (!(w > 8)) {
         return;
     }
@@ -1506,11 +1796,12 @@ function drawSlider(draw, x, y, w, value, min, max, hot) {
         t = 1;
     }
     fill = Math.round((w - 4) * t);
-    draw.rect(x, y, w, 16, PAGE);
+    draw.round(x, y + 4, w, 8, 4, WELL);
     if (fill > 0) {
-        draw.rect(x + 2, y + 2, fill, 12, hot ? RED : ACCENT);
+        draw.round(x, y + 4, fill + 4, 8, 4, tone);
     }
-    draw.rect(x + 2 + fill - 5, y - 4, 10, 24, INK);
+    draw.circle(x + 2 + fill, y + 8, 11, INK);
+    draw.circle(x + 2 + fill, y + 8, 5, tone);
 }
 
 function drawStage(draw, x, y, maxW, maxH, shown) {
@@ -1535,9 +1826,10 @@ function drawStage(draw, x, y, maxW, maxH, shown) {
     if (wy + wh > y + stageH) {
         wy = y + stageH - wh;
     }
-    draw.rect(x, y, stageW, stageH, PAGE);
-    draw.rect(wx, wy, ww, wh, ACCENT_DIM);
-    draw.rect(wx, wy, ww, Math.min(8, wh), ACCENT);
+    draw.round(x, y, stageW, stageH, 8, PAGE);
+    draw.stroke(x, y, stageW, stageH, 8, 1.5, LINE);
+    draw.round(wx, wy, ww, wh, 4, ACCENT_DIM);
+    draw.stroke(wx, wy, ww, wh, 4, 2, ACCENT);
 }
 
 function pushHit(hits, box) {
@@ -1554,20 +1846,18 @@ function drawAirBadge(draw, lay, air, versionText) {
     var tone;
     var tw;
     var total;
-    var anyOn;
     var x;
     var y;
     var h;
     var cx;
     var btn;
+    var lw;
+    var px;
+    var word;
     if (!air || !lay) {
         return null;
     }
-    picks = [
-        { name: 'air-pick-central', title: 'Środek', key: 'central' },
-        { name: 'air-pick-cluster', title: 'Zegary', key: 'cluster' },
-        { name: 'air-pick-hud', title: 'HUD', key: 'hud' }
-    ];
+    picks = ['central', 'cluster', 'hud'];
     chosen = {};
     screens = air.screens || [];
     for (i = 0; i < screens.length; i += 1) {
@@ -1576,33 +1866,63 @@ function drawAirBadge(draw, lay, air, versionText) {
             chosen[row.key || row.name] = true;
         }
     }
-    label = String(air.status || (air.online ? 'sukces' : 'offline')).slice(0, 16);
+    label = tr(String(air.status || (air.online ? 'połączono' : 'wyłączony'))).slice(0, 22);
     tw = draw.textWidth(label, 3);
+    h = 44;
+    total = 34 + tw + 18 + 164 + 10 + 132;
+    x = lay.ox + lay.boxW - total - 20;
+    y = lay.oy + 12;
+    // the state: a lamp and its word
+    if (air.online) {
+        draw.circle(x + 14, y + h / 2, 11, ACCENT_GLOW);
+        draw.circle(x + 14, y + h / 2, 7, ACCENT);
+    } else if (air.bad) {
+        draw.circle(x + 14, y + h / 2, 7, RED);
+    } else {
+        draw.arc(x + 14, y + h / 2, 5, 8, 0, 360, air.on ? ACCENT : MUTED, false);
+    }
+    tone = air.online ? ACCENT : (air.bad ? 0xFF9A8FFF : HINT);
+    draw.text(label, x + 34, y + 12, 3, tone);
+    cx = x + 34 + tw + 18;
+    lay.airHits = [];
+    // "Ekrany": three pips say which screens are chosen (centre, cluster, HUD)
+    btn = { name: 'air-where', x: cx, y: y, w: 164, h: h };
+    word = tr('Ekrany');
+    lw = draw.textWidth(word, 3);
+    if (air.whereOpen) {
+        draw.round(btn.x, btn.y, btn.w, btn.h, 22, ACCENT);
+    } else {
+        draw.round(btn.x, btn.y, btn.w, btn.h, 22, CARD_HI);
+        draw.stroke(btn.x, btn.y, btn.w, btn.h, 22, 1.5, LINE);
+    }
+    px = btn.x + Math.floor((btn.w - (lw + 14 + 46)) / 2);
+    draw.text(word, px, btn.y + 12, 3, air.whereOpen ? PAGE : INK);
+    px += lw + 14 + 5;
     for (i = 0; i < picks.length; i += 1) {
-        if (chosen[picks[i].key]) {
-            anyOn = true;
+        if (chosen[picks[i]]) {
+            draw.circle(px + i * 16, btn.y + h / 2, 5, air.whereOpen ? PAGE : ACCENT);
+        } else {
+            draw.arc(px + i * 16, btn.y + h / 2, 3.5, 5, 0, 360, air.whereOpen ? ACCENT_DIM : MUTED, false);
         }
     }
-    total = 36 + tw + 12 + 132 + 8 + 112 + 16;
-    h = 40;
-    x = lay.ox + lay.boxW - total - 16;
-    y = lay.oy + 14;
-    draw.rect(x, y, total, h, PAGE_TOP);
-    if (air.online) {
-        draw.rect(x + 12, y + 12, 16, 16, ACCENT);
-    } else {
-        draw.rect(x + 12, y + 12, 16, 16, MUTED);
-        draw.rect(x + 16, y + 16, 8, 8, PAGE_TOP);
-    }
-    tone = air.online ? ACCENT : (air.bad ? INK : HINT);
-    draw.text(tr(label), x + 36, y + 10, 3, tone);
-    cx = x + 36 + tw + 12;
-    lay.airHits = [];
-    btn = { name: 'air-where', x: cx, y: y + 6, w: 132, h: 28 };
-    drawChip(draw, btn, !!(air.whereOpen || anyOn), tr('Ekrany'));
     lay.airHits.push(btn);
-    btn = { name: 'air-badge', x: x + total - 128, y: y + 6, w: 112, h: 28 };
-    drawChip(draw, btn, !!air.on, tr(air.on ? 'Stop' : 'Start'));
+    // Start / Stop
+    btn = { name: 'air-badge', x: cx + 164 + 10, y: y, w: 132, h: h };
+    word = tr(air.on ? 'Stop' : 'Start');
+    lw = draw.textWidth(word, 3);
+    if (air.on) {
+        draw.round(btn.x, btn.y, btn.w, btn.h, 22, ACCENT);
+    } else {
+        draw.round(btn.x, btn.y, btn.w, btn.h, 22, CARD_HI);
+        draw.stroke(btn.x, btn.y, btn.w, btn.h, 22, 1.5, ACCENT_DIM);
+    }
+    px = btn.x + Math.floor((btn.w - (lw + 26)) / 2);
+    if (air.on) {
+        draw.round(px + 1, btn.y + h / 2 - 7, 14, 14, 3, PAGE);
+    } else {
+        draw.quad([[px + 2, btn.y + h / 2 - 8], [px + 16, btn.y + h / 2], [px + 2, btn.y + h / 2 + 8]], ACCENT);
+    }
+    draw.text(word, px + 26, btn.y + 12, 3, air.on ? PAGE : INK);
     lay.airHits.push(btn);
     lay.airStrip = { x: x, y: y, w: total, h: h };
     if (versionText) {
@@ -1621,13 +1941,16 @@ function drawTunePanel(draw, hits, panel, tune) {
     var shown;
     var maxX;
     var maxY;
+    var title;
     if (!tune) {
         return;
     }
-    draw.rect(panel.x, panel.y, panel.w, panel.h, PAGE_TOP);
-    draw.rect(panel.x, panel.y, 6, panel.h, ACCENT);
-    draw.text(String(tune.title || 'Ekran'), panel.x + 24, panel.y + 16, 4, INK);
-    draw.text('pokretlo zmienia, klik zapisuje', panel.x + 280, panel.y + 22, 3, MUTED);
+    draw.card(panel.x, panel.y, panel.w, panel.h, 22, HEAD_A, HEAD_B);
+    draw.stroke(panel.x, panel.y, panel.w, panel.h, 22, 1.5, LINE);
+    draw.round(panel.x + 10, panel.y + 22, 5, 32, 2.5, ACCENT);
+    title = tr(String(tune.title || 'Ekran'));
+    draw.text(title, panel.x + 28, panel.y + 18, 4, INK);
+    draw.text(tr('pokrętło zmienia, klik zapisuje'), panel.x + 28 + draw.textWidth(title, 4) + 24, panel.y + 24, 3, MUTED);
     tools = [
         { name: 'stream-pos', title: 'Pozycja', tool: 'pos' },
         { name: 'stream-size', title: 'Rozmiar', tool: 'size' },
@@ -1637,40 +1960,40 @@ function drawTunePanel(draw, hits, panel, tune) {
     x = panel.x + 24;
     for (i = 0; i < tools.length; i += 1) {
         tool = tools[i];
-        chip = { name: tool.name, x: x, y: panel.y + 58, w: 176, h: 48 };
-        drawChip(draw, chip, tune.tool === tool.tool, tool.title);
+        chip = { name: tool.name, x: x, y: panel.y + 62, w: 176, h: 48 };
+        drawChip(draw, chip, tune.tool === tool.tool, tr(tool.title));
         pushHit(hits, chip);
         x += 186;
     }
-    sliderY = panel.y + 124;
+    sliderY = panel.y + 132;
     maxX = Math.max(0, (tune.limitW || 1920) - (tune.w || 0));
     maxY = Math.max(0, (tune.limitH || 720) - (tune.h || 0));
     if (tune.tool === 'pos') {
-        draw.text('X', panel.x + 24, sliderY, 3, tune.axis === 'y' ? MUTED : ACCENT);
-        drawSlider(draw, panel.x + 56, sliderY, 460, tune.x, 0, maxX);
-        draw.text(String(tune.x | 0), panel.x + 530, sliderY, 3, INK);
-        pushHit(hits, { name: 'stream-axis-x', x: panel.x + 24, y: sliderY - 6, w: 560, h: 28 });
-        draw.text('Y', panel.x + 24, sliderY + 40, 3, tune.axis === 'y' ? ACCENT : MUTED);
-        drawSlider(draw, panel.x + 56, sliderY + 40, 460, tune.y, 0, maxY);
-        draw.text(String(tune.y | 0), panel.x + 530, sliderY + 40, 3, INK);
-        pushHit(hits, { name: 'stream-axis-y', x: panel.x + 24, y: sliderY + 34, w: 560, h: 28 });
+        draw.text('X', panel.x + 28, sliderY - 2, 3, tune.axis === 'y' ? MUTED : ACCENT);
+        drawSlider(draw, panel.x + 64, sliderY, 452, tune.x, 0, maxX);
+        draw.text(String(tune.x | 0), panel.x + 536, sliderY - 2, 3, INK);
+        pushHit(hits, { name: 'stream-axis-x', x: panel.x + 24, y: sliderY - 10, w: 580, h: 36 });
+        draw.text('Y', panel.x + 28, sliderY + 38, 3, tune.axis === 'y' ? ACCENT : MUTED);
+        drawSlider(draw, panel.x + 64, sliderY + 40, 452, tune.y, 0, maxY);
+        draw.text(String(tune.y | 0), panel.x + 536, sliderY + 38, 3, INK);
+        pushHit(hits, { name: 'stream-axis-y', x: panel.x + 24, y: sliderY + 30, w: 580, h: 36 });
     } else if (tune.tool === 'size' || tune.tool === 'w' || tune.tool === 'h') {
         if (tune.tool === 'h') {
-            draw.text('wys.', panel.x + 24, sliderY + 8, 3, ACCENT);
-            drawSlider(draw, panel.x + 110, sliderY + 6, 400, tune.h, 90, tune.limitH || 720);
+            draw.text(tr('wys.'), panel.x + 28, sliderY + 6, 3, ACCENT);
+            drawSlider(draw, panel.x + 124, sliderY + 8, 386, tune.h, 90, tune.limitH || 720);
         } else {
-            draw.text(tune.tool === 'size' ? 'calosc' : 'szer.', panel.x + 24, sliderY + 8, 3, ACCENT);
-            drawSlider(draw, panel.x + 110, sliderY + 6, 400, tune.w, 160, tune.limitW || 1920);
+            draw.text(tr(tune.tool === 'size' ? 'całość' : 'szer.'), panel.x + 28, sliderY + 6, 3, ACCENT);
+            drawSlider(draw, panel.x + 124, sliderY + 8, 386, tune.w, 160, tune.limitW || 1920);
         }
-        draw.text(String(tune.w) + 'x' + String(tune.h), panel.x + 524, sliderY + 8, 3, INK);
+        draw.text(String(tune.w) + ' × ' + String(tune.h), panel.x + 536, sliderY + 6, 3, INK);
     } else {
-        draw.text('wybierz pozycje, rozmiar, wysokosc albo szerokosc', panel.x + 24, sliderY + 10, 3, HINT);
+        draw.text(tr('wybierz pozycję, rozmiar, wysokość albo szerokość'), panel.x + 28, sliderY + 10, 3, HINT);
     }
     chip = { name: 'stream-save', x: panel.x + 24, y: panel.y + 204, w: 180, h: 44 };
-    drawChip(draw, chip, !!tune.saved, tune.saved ? 'zapisane' : 'Zapisz');
+    drawChip(draw, chip, !!tune.saved, tr(tune.saved ? 'zapisane' : 'Zapisz'));
     pushHit(hits, chip);
     chip = { name: 'stream-cancel', x: panel.x + 216, y: panel.y + 204, w: 180, h: 44 };
-    drawChip(draw, chip, false, 'Anuluj');
+    drawChip(draw, chip, false, tr('Anuluj'));
     pushHit(hits, chip);
     shown = tune.shown || {
         x: tune.x,
@@ -1680,27 +2003,30 @@ function drawTunePanel(draw, hits, panel, tune) {
         limitW: tune.limitW,
         limitH: tune.limitH
     };
-    drawStage(draw, panel.x + panel.w - 250, panel.y + 58, 220, 120, shown);
-    draw.text('na zywo', panel.x + panel.w - 250, panel.y + 186, 3, MUTED);
+    drawStage(draw, panel.x + panel.w - 256, panel.y + 62, 226, 124, shown);
+    draw.text(tr('na żywo'), panel.x + panel.w - 256, panel.y + 198, 3, MUTED);
 }
 
-function drawWhereGlyph(draw, kind, x, y) {
+function drawWhereGlyph(draw, kind, x, y, tone, dim) {
+    // a 210 x 130 sketch of the screen: tone = its picture, dim = the screen itself
     if (kind === 'cluster') {
-        draw.pill(x + 18, y + 28, 78, 78, ACCENT_DIM);
-        draw.pill(x + 114, y + 28, 78, 78, ACCENT_DIM);
-        draw.pill(x + 40, y + 50, 34, 34, PAGE);
-        draw.pill(x + 136, y + 50, 34, 34, PAGE);
+        draw.arc(x + 60, y + 72, 37, 44, -128, 128, dim, true);
+        draw.arc(x + 150, y + 72, 37, 44, -128, 128, dim, true);
+        draw.round(x + 78, y + 52, 54, 40, 8, tone);
+        draw.line(x + 60, y + 72, x + 42, y + 54, 4, dim);
+        draw.line(x + 150, y + 72, x + 168, y + 54, 4, dim);
         return;
     }
     if (kind === 'hud') {
-        draw.rect(x + 24, y + 36, 162, 22, ACCENT_DIM);
-        draw.rect(x + 48, y + 70, 114, 8, MUTED);
-        draw.rect(x + 70, y + 88, 70, 6, LINE);
+        draw.line(x + 34, y + 26, x + 176, y + 26, 4, dim);
+        draw.line(x + 34, y + 26, x + 8, y + 112, 4, dim);
+        draw.line(x + 176, y + 26, x + 202, y + 112, 4, dim);
+        draw.line(x + 8, y + 112, x + 202, y + 112, 4, dim);
+        draw.round(x + 66, y + 62, 78, 34, 8, tone);
         return;
     }
-    draw.rect(x + 8, y + 22, 194, 110, ACCENT_DIM);
-    draw.rect(x + 20, y + 34, 170, 86, PAGE);
-    draw.rect(x + 36, y + 48, 138, 58, CARD_HI);
+    draw.stroke(x + 8, y + 22, 194, 104, 14, 4, dim);
+    draw.round(x + 60, y + 46, 90, 56, 8, tone);
 }
 
 function drawWhereSheet(draw, lay, air) {
@@ -1720,6 +2046,8 @@ function drawWhereSheet(draw, lay, air) {
     var on;
     var cursor;
     var close;
+    var here;
+    var title;
     if (!air || !lay) {
         return;
     }
@@ -1744,7 +2072,7 @@ function drawWhereSheet(draw, lay, air) {
             hints[row.key || row.name] = String(row.hint);
         }
     }
-    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
+    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, 0x060504F4);
     panelW = 900;
     panelH = 460;
     if (panelW > lay.boxW - 40) {
@@ -1755,10 +2083,11 @@ function drawWhereSheet(draw, lay, air) {
     }
     x = lay.ox + Math.floor((lay.boxW - panelW) / 2);
     y = lay.oy + Math.floor((lay.boxH - panelH) / 2);
-    draw.rect(x, y, panelW, panelH, PAGE_TOP);
-    draw.rect(x, y, panelW, 6, ACCENT);
-    draw.text(tr('Gdzie pokazać'), x + 28, y + 22, 4, INK);
-    draw.text(tr('kliknij kafelek'), x + 320, y + 28, 3, MUTED);
+    draw.card(x, y, panelW, panelH, 28, HEAD_A, HEAD_B);
+    draw.stroke(x, y, panelW, panelH, 28, 1.5, LINE);
+    title = tr('Gdzie pokazać');
+    draw.text(title, x + 32, y + 24, 4, INK);
+    draw.text(tr('kliknij kafelek'), x + 32 + draw.textWidth(title, 4) + 22, y + 30, 3, MUTED);
     tileW = Math.floor((panelW - 56 - 32) / 3);
     gap = 16;
     tx = x + 28;
@@ -1770,21 +2099,36 @@ function drawWhereSheet(draw, lay, air) {
     for (i = 0; i < tiles.length; i += 1) {
         tile = tiles[i];
         on = !!chosen[tile.key];
-        draw.rect(tx, y + 78, tileW, 280, (cursor === i || on) ? CARD_HI : CARD);
-        draw.rect(tx, y + 78, tileW, cursor === i ? 6 : 3, on ? RED : (cursor === i ? ACCENT : LINE));
-        drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), y + 100);
-        draw.text(tr(tile.title), tx + 16, y + 250, 3, on ? RED : INK);
-        draw.text(tr(on ? 'wlaczone' : 'wylaczone'), tx + 16, y + 282, 3, on ? ACCENT : MUTED);
+        here = cursor === i;
+        // chosen: warm and ringed in the accent, with a tick; the knob's place: a light ring
+        draw.card(tx, y + 78, tileW, 280, 20, on ? ROW_HI_A : ROW_A, on ? ROW_HI_B : ROW_B);
+        if (on) {
+            draw.stroke(tx, y + 78, tileW, 280, 20, 3, ACCENT);
+            draw.circle(tx + tileW - 30, y + 108, 15, ACCENT);
+            checkMark(draw, tx + tileW - 41, y + 97, 22, 3.5, PAGE);
+        } else {
+            draw.stroke(tx, y + 78, tileW, 280, 20, 1.5, LINE);
+        }
+        if (here) {
+            draw.stroke(tx - 5, y + 73, tileW + 10, 290, 24, 2.5, INK);
+        }
+        drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), y + 92, on ? ACCENT : MUTED, on ? ACCENT_DIM : LINE);
+        draw.text(tr(tile.title), tx + 20, y + 236, 4, on ? INK : SOFT);
+        draw.text(tr(on ? 'włączone' : 'wyłączone'), tx + 20, y + 280, 3, on ? ACCENT : MUTED);
         if (hints[tile.key]) {
-            draw.text(hints[tile.key], tx + 16, y + 314, 2, MUTED);
+            draw.text(draw.fit(hints[tile.key], 2, tileW - 40), tx + 20, y + 318, 2, MUTED);
         }
         lay.airHits.push({ name: tile.name, x: tx, y: y + 78, w: tileW, h: 280 });
         tx += tileW + gap;
     }
-    var closeLabel = (air && air.closeLabel) || 'Gotowe';
-    var closeW = closeLabel.length > 8 ? 300 : 148;
-    close = { name: shut, x: x + panelW - closeW - 32, y: y + panelH - 64, w: closeW, h: 40 };
-    drawChip(draw, close, cursor === 3, tr(closeLabel));
+    var closeLabel = tr((air && air.closeLabel) || 'Gotowe');
+    var closeW = Math.max(160, draw.textWidth(closeLabel, 3) + 64);
+    close = { name: shut, x: x + panelW - closeW - 32, y: y + panelH - 72, w: closeW, h: 48 };
+    draw.round(close.x, close.y, close.w, close.h, 24, ACCENT);
+    if (cursor === 3) {
+        draw.stroke(close.x - 5, close.y - 5, close.w + 10, close.h + 10, 29, 2.5, INK);
+    }
+    draw.text(closeLabel, close.x + Math.floor((close.w - draw.textWidth(closeLabel, 3)) / 2), close.y + 14, 3, PAGE);
     lay.airHits.push(close);
 }
 
@@ -1799,11 +2143,11 @@ function drawFullScreen(draw, lay, air) {
     lay.airBadge = null;
     lay.airStrip = null;
     if (air.fullUi) {
-        draw.rect(0, 560, 1920, 160, 0x000000B0);
-        draw.rect(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, CARD_HI);
-        draw.rect(FULL_EXIT.x, FULL_EXIT.y + FULL_EXIT.h - 4, FULL_EXIT.w, 4, ACCENT);
+        draw.grad(0, 520, 1920, 200, 0x00000000, 0x000000D8);
+        draw.round(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, 36, 0x1C1612F0);
+        draw.stroke(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, 36, 2, ACCENT);
         var label = tr('Wyjdź z trybu pełnoekranowego');
-        draw.text(label, FULL_EXIT.x + Math.floor((FULL_EXIT.w - draw.textWidth(label, 4)) / 2), FULL_EXIT.y + 20, 4, INK);
+        draw.text(label, FULL_EXIT.x + Math.floor((FULL_EXIT.w - draw.textWidth(label, 4)) / 2), FULL_EXIT.y + 22, 4, INK);
     }
 }
 
@@ -1939,9 +2283,9 @@ function appendStreamChrome(draw, lay, page, info, win) {
             h: 64
         };
         active = !!(info.tune && info.tune.name === String(screens[i].name || '').replace('stream-', ''));
-        drawChip(draw, chip, active, screens[i].title);
+        drawChip(draw, chip, active, tr(screens[i].title));
         if (screens[i].on && !active) {
-            draw.rect(chip.x + 12, chip.y + chip.h - 8, chip.w - 24, 4, ACCENT);
+            draw.circle(chip.x + chip.w - 24, chip.y + 20, 5, ACCENT);
         }
         pushHit(hits, chip);
         x += chip.w + 14;
@@ -1957,10 +2301,10 @@ function appendStreamChrome(draw, lay, page, info, win) {
     }
     if (win && win.w >= 520 && win.h >= 80) {
         chip = { name: 'stream-win-pos', x: win.x + win.w - 318, y: win.y + 6, w: 148, h: 32 };
-        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'pos'), 'pozycja');
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'pos'), tr('pozycja'));
         pushHit(hits, chip);
         chip = { name: 'stream-win-size', x: win.x + win.w - 162, y: win.y + 6, w: 148, h: 32 };
-        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'size'), 'rozmiar');
+        drawChip(draw, chip, !!(info && info.tune && info.tune.name === 'central' && info.tune.tool === 'size'), tr('rozmiar'));
         pushHit(hits, chip);
     }
     tune = info && info.tune;
@@ -1975,12 +2319,13 @@ function appendStreamChrome(draw, lay, page, info, win) {
 function drawStreamExit(draw, lay, page) {
     var label = tr('Wyłącz aplikację');
     var tw = draw.textWidth(label, 3);
-    var w = tw + 40;
+    var w = tw + 76;
     var h = 48;
     var x = page.ox + page.boxW - w - 190;
     var y = page.oy + 8;
-    draw.pill(x, y, w, h, CARD_HI);
-    draw.text(label, x + 20, y + 15, 3, INK);
+    draw.round(x, y, w, h, 24, CARD_HI);
+    powerSign(draw, x + 30, y + h / 2 + 1, 11, 3, HINT);
+    draw.text(label, x + 54, y + 14, 3, INK);
     lay.nav = { left: null, right: null, ok: { x: x, y: y, w: w, h: h, exit: true } };
 }
 
@@ -1988,7 +2333,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var draw = new FrameBuilder();
     var lay = streamLayout(items, selected, width, height, detail, heading);
     var bubble = lay.bubbles[0];
-    var title = String((items[0] && items[0].title) || 'Zakończ');
+    var title = tr(String((items[0] && items[0].title) || 'Zakończ'));
     var titleW;
     var page = pageBox(width, height);
     var info = streamInfo || null;
@@ -1996,7 +2341,6 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var mirrored = !!(info && info.mirrored);
     var pinScale;
     var pinW;
-    var pinX;
     var pinY;
     var label;
     var labelW;
@@ -2009,10 +2353,12 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     var panelH;
     var placedWin = null;
     // The window is drawn here. waylandsink under the HMI stays blank on this unit.
+    // (No page behind it: the picture of a desktop session shows through.)
     draw.clear(0);
     var head = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
     if (crumb) {
-        draw.rect(page.ox, page.oy, page.boxW, 64, PAGE_TOP);
+        draw.grad(page.ox, page.oy, page.boxW, 64, HEAD_A, HEAD_B);
+        draw.rect(page.ox, page.oy + 63, page.boxW, 1, LINE);
         drawMenuHeader(draw, head, crumb, true);
         lay.crumb = head.crumb;
         lay.backHit = head.backHit;
@@ -2021,117 +2367,126 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
 
     panelX = page.ox + 80;
     panelW = page.boxW - 160;
-        if (info && info.window && info.window.w > 80 && info.window.h > 80) {
-            var win = {
-                x: info.window.x | 0,
-                y: info.window.y | 0,
-                w: info.window.w | 0,
-                h: info.window.h | 0
-            };
-            placedWin = win;
-            draw.rect(win.x, win.y, win.w, win.h, PAGE);
+    if (info && info.window && info.window.w > 80 && info.window.h > 80) {
+        var win = {
+            x: info.window.x | 0,
+            y: info.window.y | 0,
+            w: info.window.w | 0,
+            h: info.window.h | 0
+        };
+        placedWin = win;
+        // the mirror's window: a dark title bar, the picture, a thin accent frame
+        draw.rect(win.x, win.y, win.w, win.h, PAGE);
         if (info.video) {
             draw.video(win.x, win.y, win.w, win.h, 1);
         }
-        draw.rect(win.x, win.y, win.w, 44, ACCENT);
-        draw.rect(win.x, win.y + 44, win.w, 3, ACCENT_DIM);
-        draw.rect(win.x, win.y, 3, win.h, ACCENT);
-        draw.rect(win.x + win.w - 3, win.y, 3, win.h, ACCENT);
-        draw.rect(win.x, win.y + win.h - 3, win.w, 3, ACCENT);
-        draw.text('THEiPlay', win.x + 16, win.y + 12, 3, PAGE);
+        draw.grad(win.x, win.y, win.w, 46, HEAD_A, HEAD_B);
+        draw.rect(win.x, win.y + 44, win.w, 2, ACCENT);
+        draw.stroke(win.x, win.y, win.w, win.h, 2, 2, ACCENT);
+        draw.text('THE', win.x + 16, win.y + 12, 3, SOFT, 'label');
+        draw.text('iPlay', win.x + 16 + draw.textWidth('THE', 3, 'label') + 1, win.y + 12, 3, ACCENT, 'bold');
         if (!mirrored && pin) {
             pinScale = 8;
             pinW = draw.textWidth(pin, pinScale);
-            draw.text(pin, win.x + Math.floor((win.w - pinW) / 2), win.y + 80, pinScale, INK);
+            draw.text(pin, win.x + Math.floor((win.w - pinW) / 2), win.y + 84, pinScale, INK);
         } else if (!mirrored) {
             if (info && info.spin) {
-                drawSpinner(draw, win.x + Math.floor(win.w / 2), win.y + Math.floor(win.h / 2));
+                drawSpinner(draw, win.x + Math.floor(win.w / 2), win.y + Math.floor(win.h / 2) + 40);
             }
-            label = String((info && info.hint) || detail || 'czekam na klatke');
+            label = draw.fit(tr(String((info && info.hint) || detail || 'czekam na klatkę')), 4, win.w - 40);
             labelW = draw.textWidth(label, 4);
-            draw.text(label, win.x + Math.floor((win.w - labelW) / 2), win.y + 90, 4, INK);
+            draw.text(label, win.x + Math.floor((win.w - labelW) / 2), win.y + 70, 4, INK);
             lines = (info && info.lines) || [];
-            lineY = win.y + 150;
+            lineY = win.y + 124;
             for (i = 0; i < lines.length && i < 4; i += 1) {
-                draw.text(String(lines[i]).slice(0, 36), win.x + 24, lineY, 3, HINT);
-                lineY += 32;
+                draw.text(draw.fit(String(lines[i]), 3, win.w - 48), win.x + 24, lineY, 3, HINT);
+                lineY += 34;
             }
         }
         if (mirrored) {
-            label = String((info && (info.hint || info.headline)) || detail || 'lustro');
-            draw.text(String(label).slice(0, 42), win.x, win.y + win.h + 10, 3, HINT);
+            label = tr(String((info && (info.hint || info.headline)) || detail || 'lustro'));
+            draw.text(draw.fit(label, 3, win.w), win.x, win.y + win.h + 10, 3, HINT);
         }
     } else if (!mirrored) {
-        panelY = page.oy + 48;
-        panelH = page.boxH - 200;
-        draw.pill(panelX - 8, panelY - 8, panelW + 16, panelH + 16, ACCENT_DIM);
-        draw.pill(panelX, panelY, panelW, panelH, CARD);
-        label = String((info && info.headline) || heading || 'THEiPlay');
+        // no picture yet: one card with what to do (the code, or what is awaited)
+        panelY = page.oy + 84;
+        panelH = page.boxH - 84 - 130;
+        draw.card(panelX, panelY, panelW, panelH, 28, HEAD_A, HEAD_B);
+        draw.stroke(panelX, panelY, panelW, panelH, 28, 2, ACCENT_DIM);
+        label = tr(String((info && info.headline) || heading || 'THEiPlay'));
         labelW = draw.textWidth(label, 4);
-        draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 36, 4, INK);
+        draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 28, 4, INK);
         if (pin) {
             pinScale = 12;
             pinW = draw.textWidth(pin, pinScale);
-            pinX = panelX + Math.floor((panelW - pinW) / 2);
-            pinY = panelY + 110;
-            label = 'kod — wpisz na iPhonie';
+            label = tr('kod: wpisz go na iPhonie');
             labelW = draw.textWidth(label, 3);
-            draw.text(label, panelX + Math.floor((panelW - labelW) / 2), pinY - 40, 3, MUTED);
-            draw.text(pin, pinX, pinY, pinScale, INK);
-            lineY = pinY + pinScale * 8 + 36;
+            draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 82, 3, ACCENT);
+            pinY = panelY + 128;
+            draw.text(pin, panelX + Math.floor((panelW - pinW) / 2), pinY, pinScale, INK);
+            lineY = pinY + pinScale * 7 + 40;
         } else {
-            lineY = panelY + 120;
-            label = String((info && info.hint) || detail || 'czekam na iPhone');
+            lineY = panelY + 96;
+            label = tr(String((info && info.hint) || detail || 'czekam na iPhone'));
             labelW = draw.textWidth(label, 3);
             draw.text(label, panelX + Math.floor((panelW - labelW) / 2), lineY, 3, HINT);
-            lineY += 48;
+            if (info && info.spin) {
+                drawSpinner(draw, panelX + Math.floor(panelW / 2), lineY + 110);
+                lineY += 190;
+            } else {
+                lineY += 52;
+            }
         }
         lines = (info && info.lines) || [];
         for (i = 0; i < lines.length; i += 1) {
-            draw.text(String(lines[i]).slice(0, 42), panelX + 48, lineY, 3, MUTED);
-            lineY += 36;
             if (lineY > panelY + panelH - 40) {
                 break;
             }
+            label = draw.fit(String(lines[i]), 3, panelW - 96);
+            draw.text(label, panelX + Math.floor((panelW - draw.textWidth(label, 3)) / 2), lineY, 3, MUTED);
+            lineY += 36;
         }
     } else {
         if (detail) {
-            draw.text(String(detail).slice(0, 48), lay.ox + 72, page.oy + 28, 3, MUTED);
+            draw.text(draw.fit(String(detail), 3, 900), lay.ox + 72, page.oy + 78, 3, MUTED);
         }
         lines = (info && info.lines) || [];
-        lineY = page.oy + 64;
+        lineY = page.oy + 112;
         for (i = 0; i < lines.length && i < 3; i += 1) {
-            draw.text(String(lines[i]).slice(0, 48), lay.ox + 72, lineY, 3, HINT);
-            lineY += 32;
+            draw.text(draw.fit(String(lines[i]), 3, 900), lay.ox + 72, lineY, 3, HINT);
+            lineY += 34;
         }
     }
 
-    draw.pill(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, ACCENT_DIM);
-    draw.pill(bubble.x, bubble.y, bubble.w, bubble.h, CARD_HI);
-    draw.rect(bubble.x + 24, bubble.y + bubble.h - 12, bubble.w - 48, 4, ACCENT);
-    draw.icon('stop', bubble.x + 28, bubble.y + 8, 3, ICON_ACCENT);
+    // "Zakończ": the one button of this screen
+    draw.round(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, 36, ACCENT_GLOW);
+    draw.card(bubble.x, bubble.y, bubble.w, bubble.h, 32, ROW_HI_A, ROW_HI_B);
+    draw.stroke(bubble.x, bubble.y, bubble.w, bubble.h, 32, 2.5, ACCENT);
     titleW = draw.textWidth(title, 4);
-    draw.text(title, bubble.x + Math.floor((bubble.w - titleW) / 2) + 20, bubble.y + 18, 4, INK);
+    draw.round(bubble.x + Math.floor((bubble.w - titleW - 38) / 2), bubble.y + Math.floor(bubble.h / 2) - 11, 22, 22, 5, ACCENT);
+    draw.text(title, bubble.x + Math.floor((bubble.w - titleW - 38) / 2) + 38, bubble.y + 18, 4, INK);
     appendStreamChrome(draw, lay, page, info, placedWin);
     drawStreamExit(draw, lay, page);
     applyAirOverlay(draw, lay, air, version);
     if (caption && caption.on && caption.text) {
-        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
+        draw.pixelText(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     return {
-        frame: message(FRAME, draw.bytes()),
+        frame: packFrame(draw),
         rects: draw.rects,
         layout: lay
     };
 }
 
-var RT_BG = 0x0B0F1EFF;
-var RT_CARD = 0x1A2038FF;
-var RT_PH = 0x232A46FF;
-var RT_TEXT = 0xF1F3FFFF;
-var RT_DIM = 0xA4ABC8FF;
-var RT_PINK = 0xFF3F8EFF;
-var RT_HEAD = 0x070A14FF;
+// The menu's own YouTube pages (shown only when the YouTube screen, rt_view.js, could not start):
+// THEiPlay's colours, as everything else.
+var RT_BG = PAGE;
+var RT_CARD = CARD_HI;
+var RT_PH = CARD;
+var RT_TEXT = INK;
+var RT_DIM = HINT;
+var RT_PINK = ACCENT;
+var RT_HEAD = PAGE_TOP;
 
 function drawQrBlock(draw, text, x, y, mod) {
     var q;
@@ -2169,10 +2524,10 @@ function drawRideFrame(items, selected, width, height, ride) {
     var hits = [];
     var sel = items[selected] && items[selected].name ? items[selected].name : '';
     var rails = [
-        { name: 'yt-search', label: 'Search' },
+        { name: 'yt-search', label: 'Szukaj' },
         { name: 'yt-feed-home', label: 'Home' },
-        { name: 'yt-feed-subs', label: 'Subs' },
-        { name: 'yt-feed-wl', label: 'Watch later' }
+        { name: 'yt-feed-subs', label: 'Subskrypcje' },
+        { name: 'yt-feed-wl', label: 'Do obejrzenia' }
     ];
     var mode = ride.mode || 'home';
     var i;
@@ -2194,21 +2549,23 @@ function drawRideFrame(items, selected, width, height, ride) {
     var cardX;
     var cardY;
     var play;
-    draw.rect(0, 0, width, height, RT_BG);
-    draw.rect(0, 0, width, 56, RT_HEAD);
-    draw.text('RideTube', 88, 16, 4, RT_TEXT);
+    draw.grad(0, 0, width, height, PAGE_A, PAGE_B);
+    draw.grad(0, 0, width, 56, HEAD_A, HEAD_B);
+    draw.rect(0, 55, width, 1, LINE);
+    draw.text('YouTube', 88, 14, 4, RT_TEXT);
     hits.push({ name: 'yt-ride-back', x: 16, y: 8, w: 56, h: 40 });
-    draw.text('<', 24, 16, 4, RT_TEXT);
+    draw.round(16, 8, 56, 40, 20, CARD_HI);
+    chevron(draw, 'w', 44, 28, 8, 3, ACCENT);
     if (mode !== 'player' && mode !== 'signin') {
         for (i = 0; i < rails.length; i += 1) {
             rail = rails[i];
             on = sel === rail.name || (rail.name === 'yt-feed-home' && mode === 'home') || (rail.name === 'yt-feed-subs' && mode === 'subs') || (rail.name === 'yt-feed-wl' && mode === 'wl') || (rail.name === 'yt-search' && mode === 'results');
             ry = 88 + i * 110;
             if (on) {
-                draw.pill(18, ry, 112, 92, RT_CARD);
-                draw.rect(18, ry + 30, 6, 32, RT_PINK);
+                draw.round(12, ry, 150, 92, 18, RT_CARD);
+                draw.round(18, ry + 30, 5, 32, 2.5, RT_PINK);
             }
-            draw.text(rail.label, 36, ry + 36, 3, on ? RT_TEXT : RT_DIM);
+            draw.text(draw.fit(tr(rail.label), 2, 116), 34, ry + 38, 2, on ? RT_TEXT : RT_DIM);
             hits.push({ name: rail.name, x: 12, y: ry, w: 124, h: 96 });
         }
     }
@@ -2223,40 +2580,44 @@ function drawRideFrame(items, selected, width, height, ride) {
             if (!side) {
                 side = 180;
             }
-            draw.text('Sign in', cardX + side + 140, cardY + 90, 5, RT_TEXT);
-            draw.text('Enter this code on your phone', cardX + side + 140, cardY + 150, 3, RT_DIM);
+            draw.text(tr('Zaloguj się'), cardX + side + 140, cardY + 90, 5, RT_TEXT);
+            draw.text(tr('Wpisz ten kod na telefonie'), cardX + side + 140, cardY + 150, 3, RT_DIM);
             draw.pill(cardX + side + 140, cardY + 190, 640, 90, RT_HEAD);
             draw.text(String(auth.code), cardX + side + 164, cardY + 214, 6, RT_TEXT);
             draw.text(String(url).replace(/^https:\/\/(www\.)?/, ''), cardX + side + 140, cardY + 320, 3, RT_DIM);
-            draw.text('The account stays on the car', cardX + side + 140, cardY + 370, 3, RT_DIM);
+            draw.text(tr('Konto zostaje w aucie'), cardX + side + 140, cardY + 370, 3, RT_DIM);
         } else if (auth.state === 'error') {
-            draw.text('Sign-in is not available', cardX + 80, cardY + 180, 4, RT_TEXT);
-            draw.text(String(auth.msg || 'tap to try again').slice(0, 48), cardX + 80, cardY + 230, 3, RT_DIM);
+            draw.text(tr('Logowanie niedostępne'), cardX + 80, cardY + 180, 4, RT_TEXT);
+            draw.text(draw.fit(String(auth.msg || tr('dotknij, żeby spróbować ponownie')), 3, 1200), cardX + 80, cardY + 230, 3, RT_DIM);
             hits.push({ name: 'yt-login-retry', x: cardX + 80, y: cardY + 280, w: 360, h: 64 });
             draw.pill(cardX + 80, cardY + 280, 360, 64, RT_PINK);
-            draw.text('Try again', cardX + 120, cardY + 298, 4, RT_HEAD);
+            draw.text(tr('Spróbuj ponownie'), cardX + 110, cardY + 298, 4, PAGE);
         } else if (auth.state === 'unsupported') {
-            draw.text('Signing in needs a newer service', cardX + 80, cardY + 200, 4, RT_TEXT);
+            draw.text(tr('Logowanie wymaga nowszej usługi w aucie'), cardX + 80, cardY + 200, 4, RT_TEXT);
         } else {
-            draw.text('Getting a sign-in code...', cardX + 80, cardY + 200, 4, RT_TEXT);
+            draw.text(tr('Pobieram kod logowania') + '…', cardX + 80, cardY + 200, 4, RT_TEXT);
         }
     } else if (mode === 'player') {
         play = ride.playing || {};
-        draw.text(String(play.title || 'RideTube').slice(0, 36), 120, 100, 5, RT_TEXT);
-        draw.text(String(play.channel || '').slice(0, 40), 120, 150, 3, RT_DIM);
-        draw.text(play.state === 'playing' ? 'Pause' : 'Play', 700, 340, 4, RT_TEXT);
+        draw.text(draw.fit(String(play.title || 'YouTube'), 5, 1500), 120, 100, 5, RT_TEXT);
+        draw.text(draw.fit(String(play.channel || ''), 3, 1200), 120, 156, 3, RT_DIM);
         hits.push({ name: 'yt-back10', x: 480, y: 300, w: 140, h: 80 });
         draw.pill(480, 300, 140, 80, RT_CARD);
         draw.text('-10', 510, 326, 4, RT_TEXT);
         hits.push({ name: 'yt-play', x: 660, y: 280, w: 180, h: 110 });
-        draw.pill(660, 280, 180, 110, 0xFFFFFFFF);
-        draw.text(play.state === 'playing' ? 'II' : '>', 720, 314, 5, RT_HEAD);
+        draw.round(660, 280, 180, 110, 55, ACCENT);
+        if (play.state === 'playing') {
+            draw.round(728, 310, 16, 50, 4, PAGE);
+            draw.round(756, 310, 16, 50, 4, PAGE);
+        } else {
+            draw.quad([[734, 308], [778, 335], [734, 362]], PAGE);
+        }
         hits.push({ name: 'yt-fwd10', x: 880, y: 300, w: 140, h: 80 });
         draw.pill(880, 300, 140, 80, RT_CARD);
         draw.text('+10', 910, 326, 4, RT_TEXT);
-        draw.rect(160, 520, 1400, 8, RT_CARD);
+        draw.round(160, 520, 1400, 8, 4, WELL);
         if (play.total > 0) {
-            draw.rect(160, 520, Math.max(8, Math.round(1400 * play.elapsed / play.total)), 8, RT_PINK);
+            draw.round(160, 520, Math.max(8, Math.round(1400 * play.elapsed / play.total)), 8, 4, RT_PINK);
         }
         draw.text(play.state || '', 160, 560, 3, RT_DIM);
     } else {
@@ -2265,36 +2626,40 @@ function drawRideFrame(items, selected, width, height, ride) {
         n = 0;
         for (i = 0; i < sections.length && i < 2; i += 1) {
             sec = sections[i];
-            draw.text(String(sec.title || '').slice(0, 28), 180, ty, 4, RT_TEXT);
+            draw.text(draw.fit(String(sec.title || ''), 4, 1400), 180, ty, 4, RT_TEXT);
             ty += 36;
             itemsRow = sec.items || [];
             for (col = 0; col < itemsRow.length && col < 4; col += 1) {
                 tile = itemsRow[col];
                 tx = 180 + col * 360;
                 on = sel === 'yt-vid-' + n;
-                draw.pill(tx, ty, 340, 190, on ? RT_PINK : RT_PH);
-                draw.pill(tx + 8, ty + 8, 324, 120, RT_CARD);
+                draw.card(tx, ty, 340, 190, 20, on ? ROW_HI_A : ROW_A, on ? ROW_HI_B : ROW_B);
+                if (on) {
+                    draw.stroke(tx, ty, 340, 190, 20, 2.5, ACCENT);
+                }
+                draw.round(tx + 8, ty + 8, 324, 120, 14, WELL);
+                draw.quad([[tx + 156, ty + 50], [tx + 190, ty + 68], [tx + 156, ty + 86]], LINE);
                 label = String(tile.duration || '');
                 if (label) {
-                    draw.pill(tx + 220, ty + 96, 96, 28, RT_HEAD);
-                    draw.text(label, tx + 232, ty + 102, 3, RT_TEXT);
+                    draw.round(tx + 324 - draw.textWidth(label, 2) - 24, ty + 94, draw.textWidth(label, 2) + 16, 28, 8, 0x000000C8);
+                    draw.text(label, tx + 324 - draw.textWidth(label, 2) - 16, ty + 100, 2, RT_TEXT);
                 }
-                draw.text(String(tile.title || '').slice(0, 22), tx + 8, ty + 140, 3, RT_TEXT);
-                draw.text(String(tile.hint || '').slice(0, 28), tx + 8, ty + 164, 2, RT_DIM);
+                draw.text(draw.fit(String(tile.title || ''), 3, 316), tx + 12, ty + 136, 3, RT_TEXT);
+                draw.text(draw.fit(String(tile.hint || ''), 2, 316), tx + 12, ty + 164, 2, RT_DIM);
                 hits.push({ name: 'yt-vid-' + n, x: tx, y: ty, w: 340, h: 190 });
                 n += 1;
             }
             if (!itemsRow.length) {
-                draw.text(ride.status || 'Loading...', 180, ty + 20, 3, RT_DIM);
+                draw.text(tr(ride.status || 'Wczytuję…'), 180, ty + 20, 3, RT_DIM);
             }
             ty += 230;
         }
         if (!sections.length) {
-            draw.text(ride.status || 'Loading...', 200, 280, 4, RT_TEXT);
+            draw.text(tr(ride.status || 'Wczytuję…'), 200, 280, 4, RT_TEXT);
         }
     }
     return {
-        frame: message(FRAME, draw.bytes()),
+        frame: packFrame(draw),
         rects: draw.rects,
         layout: {
             hits: [],
@@ -2312,6 +2677,172 @@ function drawRideFrame(items, selected, width, height, ride) {
     };
 }
 
+function drawPage(draw, lay) {
+    // the page: a warm dark sheet, lighter at the top; its header band; the accent down the left edge
+    draw.grad(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE_A, PAGE_B);
+    draw.grad(lay.ox, lay.oy, lay.boxW, lay.headerH, HEAD_A, HEAD_B);
+    draw.rect(lay.ox, lay.oy + lay.headerH - 1, lay.boxW, 1, LINE);
+    draw.grad(lay.ox, lay.oy, 6, lay.boxH, ACCENT, ACCENT_DIM);
+}
+
+// One option row: icon in its well, title, hint, the tick of a chosen one.
+function drawRow(draw, bubble, item, title, hint, focus) {
+    var hot = !!item.armed;
+    var x = bubble.x;
+    var y = bubble.y;
+    var w = bubble.w;
+    var h = bubble.h;
+    var r = bubble.home ? 26 : 18;
+    var well;
+    var wx;
+    var wy;
+    var side = draw.iconSize(bubble.iconPx);
+    var textX;
+    var labelY;
+    var room;
+    var tw;
+    if (hot) {
+        draw.card(x, y, w, h, r, RED_A, RED_B);
+        draw.stroke(x, y, w, h, r, 3, RED);
+    } else if (focus) {
+        draw.round(x - 4, y - 4, w + 8, h + 8, r + 4, ACCENT_GLOW);
+        draw.card(x, y, w, h, r, ROW_HI_A, ROW_HI_B);
+        draw.stroke(x, y, w, h, r, 2.5, ACCENT);
+    } else {
+        draw.card(x, y, w, h, r, ROW_A, ROW_B);
+    }
+    if (bubble.home) {
+        // a large tile (pages of two): the icon in a round well, the words centred under it
+        well = 112;
+        wx = x + Math.floor((w - well) / 2);
+        wy = y + 40;
+        draw.circle(wx + well / 2, wy + well / 2, well / 2, hot ? RED : (focus ? ACCENT : WELL));
+        draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
+        title = draw.fit(title, bubble.scale, w - 48);
+        tw = draw.textWidth(title, bubble.scale);
+        draw.text(title, x + Math.floor((w - tw) / 2), y + 178, bubble.scale, (hot || focus) ? INK : SOFT);
+        if (hint) {
+            hint = draw.fit(hint, 3, w - 48);
+            tw = draw.textWidth(hint, 3);
+            draw.text(hint, x + Math.floor((w - tw) / 2), y + 236, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
+        }
+        if (item.on) {
+            draw.circle(x + w - 36, y + 36, 15, ACCENT);
+            checkMark(draw, x + w - 47, y + 25, 22, 3.5, PAGE);
+        }
+        return;
+    }
+    well = 60;
+    wx = x + 16;
+    wy = y + Math.floor((h - well) / 2);
+    draw.round(wx, wy, well, well, 16, hot ? RED : (focus ? ACCENT : WELL));
+    draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
+    textX = wx + well + 20;
+    room = w - (textX - x) - (item.on ? 70 : 24);
+    labelY = hint ? y + 15 : y + Math.floor((h - 28) / 2);
+    draw.text(draw.fit(title, bubble.scale, room), textX, labelY, bubble.scale, (hot || focus) ? INK : SOFT);
+    if (hint) {
+        draw.text(draw.fit(hint, 3, room), textX, labelY + 40, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
+    }
+    if (item.on) {
+        draw.circle(x + w - 38, y + h / 2, 15, ACCENT);
+        checkMark(draw, x + w - 49, y + h / 2 - 11, 22, 3.5, PAGE);
+    }
+}
+
+// The right half of the AirPlay page while AirPlay is on and no iPhone sends a picture yet: the
+// code to type (until 0.1.134 only a small "PIN 1234" at the page's foot), or how to connect.
+function drawAirGuide(draw, lay, air, items, detail) {
+    var pin = parsePinDetail(detail);
+    var name = '';
+    var sound = false;
+    var onPage = false;
+    var i;
+    var x;
+    var y;
+    var w = 600;
+    var h;
+    var top;
+    var bottom;
+    var label;
+    var steps;
+    if (!air || !air.on || air.online || air.bad || air.whereOpen || (air.mirrored && air.window)) {
+        return;
+    }
+    if (!lay.bubbles.length || lay.bubbles[0].home) {
+        return;
+    }
+    for (i = 0; i < items.length; i += 1) {
+        if (items[i].name === 'air-name') {
+            name = String(items[i].hint || '');
+            onPage = true;
+        }
+        if (items[i].name === 'air-sound') {
+            sound = /^włączone/.test(String(items[i].hint || ''));
+        }
+    }
+    if (!onPage) {
+        return;
+    }
+    x = lay.ox + lay.boxW - w - 60;
+    if (x < lay.bubbles[0].x + lay.bubbles[0].w + 40) {
+        return;
+    }
+    h = pin ? 300 : 322;
+    top = lay.oy + lay.headerH + 12;
+    bottom = lay.oy + lay.boxH - 96;
+    y = top + Math.max(0, Math.floor((bottom - top - h) / 2));
+    draw.card(x, y, w, h, 26, HEAD_A, HEAD_B);
+    draw.stroke(x, y, w, h, 26, 1.5, pin ? ACCENT_DIM : LINE);
+    if (pin) {
+        label = tr('Kod AirPlay');
+        draw.text(label, x + Math.floor((w - draw.textWidth(label, 4)) / 2), y + 30, 4, INK);
+        draw.text(pin, x + Math.floor((w - draw.textWidth(pin, 12)) / 2), y + 96, 12, INK);
+        label = tr('wpisz go na iPhonie');
+        draw.text(label, x + Math.floor((w - draw.textWidth(label, 3)) / 2), y + 236, 3, ACCENT);
+        return;
+    }
+    draw.text(tr('Połącz iPhone'), x + 36, y + 28, 4, INK);
+    steps = [
+        tr('otwórz Centrum sterowania'),
+        tr(sound ? 'dotknij AirPlay przy odtwarzaczu' : 'wybierz Klonowanie ekranu'),
+        tr('wybierz') + ' ' + (name || 'THEiPlay')
+    ];
+    for (i = 0; i < steps.length; i += 1) {
+        draw.circle(x + 56, y + 116 + i * 58, 19, i === 2 ? ACCENT : WELL);
+        label = String(i + 1);
+        draw.text(label, x + 56 - Math.floor(draw.textWidth(label, 3, 'bold') / 2), y + 105 + i * 58, 3, i === 2 ? PAGE : SOFT, 'bold');
+        draw.text(draw.fit(steps[i], 3, w - 130), x + 92, y + 105 + i * 58, 3, i === 2 ? INK : SOFT, i === 2 ? 'bold' : 'label');
+    }
+    draw.text(tr('iPhone i auto w jednej sieci Wi-Fi'), x + 36, y + h - 44, 2, MUTED);
+}
+
+// More rows than fit: a track beside the list, its thumb where the shown rows are.
+function drawScroll(draw, lay) {
+    var pin = lay.pinned || 0;
+    var shown = lay.bubbles.length - pin;
+    var total = lay.count - pin;
+    var first;
+    var last;
+    var x;
+    var top;
+    var bottom;
+    var len;
+    var thumb;
+    if (!lay.bubbles.length || lay.bubbles[0].home || shown < 1 || total <= shown) {
+        return;
+    }
+    first = lay.bubbles[pin];
+    last = lay.bubbles[lay.bubbles.length - 1];
+    x = first.x + first.w + 14;
+    top = first.y + 4;
+    bottom = last.y + last.h - 4;
+    len = bottom - top;
+    thumb = Math.max(36, Math.round(len * shown / total));
+    draw.round(x, top, 6, len, 3, WELL);
+    draw.round(x, top + Math.round((len - thumb) * (lay.first - pin) / (total - shown)), 6, thumb, 3, ACCENT);
+}
+
 function buildFrame(items, selected, width, height, detail, heading, version, streamInfo, boxPreview, caption, crumb, air, ride) {
     if (ride && ride.on) {
         return drawRideFrame(items, selected, width, height, ride);
@@ -2321,40 +2852,31 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     var i;
     var bubble;
     var title;
-    var titleW;
-    var ink;
     var hint;
-    var iconName;
-    var iconPx;
-    var iconSide;
-    var iconX;
-    var iconY;
-    var labelY;
-    var focus;
+    var itemIndex;
+    var item;
+    var armedNow;
     if (isStreamItems(items) || heading === 'Stream') {
         return buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air);
     }
     var previewSpace = !!(boxPreview && ((boxPreview.frames && boxPreview.frames.length) || boxPreview.w || boxPreview.limitW));
     lay = menuLayout(items, selected, width, height, detail, heading, previewSpace);
     draw.clear(0);
-    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE);
-    draw.rect(lay.ox, lay.oy, 8, lay.boxH, ACCENT);
-    draw.rect(lay.ox, lay.oy, lay.boxW, lay.headerH, PAGE_TOP);
-    draw.rect(lay.ox + 28, lay.oy + lay.headerH - 3, 96, 3, ACCENT);
+    drawPage(draw, lay);
     if (crumb) {
         drawMenuHeader(draw, lay, crumb, crumb !== 'THEiPlay');
     } else if (lay.heading) {
-        draw.text(lay.heading, lay.ox + 36, lay.oy + 22, 5, INK);
+        draw.text(lay.heading, lay.ox + 36, lay.oy + 22, 4, INK);
     } else {
-        draw.text('THEiPlay', lay.ox + 36, lay.oy + 22, 5, ACCENT);
+        drawMenuHeader(draw, lay, 'THEiPlay', false);
     }
     if (!air) {
         drawVersionMark(draw, lay, version);
     }
     for (i = 0; i < lay.bubbles.length; i += 1) {
         bubble = lay.bubbles[i];
-        var itemIndex = bubble.index != null ? bubble.index : i;
-        var item = items[itemIndex];
+        itemIndex = bubble.index != null ? bubble.index : i;
+        item = items[itemIndex];
         title = String(item.title || '');
         hint = item.hint ? String(item.hint) : '';
         if (item.name === 'lang-toggle') {
@@ -2364,89 +2886,31 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
             title = tr(title);
             hint = tr(hint);
         }
-        iconName = item.icon || 'play';
-        iconPx = bubble.iconPx;
-        iconSide = draw.iconSize(iconPx);
-        focus = itemIndex === selected;
-        var hot = !!item.armed;
-        var edge = hot ? RED : ACCENT;
-        draw.rect(bubble.x, bubble.y, bubble.w, bubble.h, hot ? RED_CARD : (focus ? CARD_HI : CARD));
-        if (hot || focus) {
-            draw.rect(bubble.x, bubble.y, bubble.w, 4, edge);
-            draw.rect(bubble.x, bubble.y + bubble.h - 4, bubble.w, 4, edge);
-            draw.rect(bubble.x, bubble.y, 4, bubble.h, edge);
-            draw.rect(bubble.x + bubble.w - 4, bubble.y, 4, bubble.h, edge);
-        }
-        if (bubble.home) {
-            iconX = bubble.x + Math.floor((bubble.w - iconSide) / 2);
-            iconY = bubble.y + 64;
-            draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
-            titleW = draw.textWidth(title, bubble.scale);
-            draw.text(
-                title,
-                bubble.x + Math.floor((bubble.w - titleW) / 2),
-                bubble.y + 160,
-                bubble.scale,
-                focus ? INK : HINT
-            );
-            if (hint) {
-                titleW = draw.textWidth(hint.slice(0, 22), 3);
-                draw.text(
-                    hint.slice(0, 22),
-                    bubble.x + Math.floor((bubble.w - titleW) / 2),
-                    bubble.y + 210,
-                    3,
-                    focus ? ACCENT : MUTED
-                );
-            }
-        } else {
-            iconX = bubble.x + 28;
-            iconY = bubble.y + Math.floor((bubble.h - iconSide) / 2);
-            draw.icon(iconName, iconX, iconY, iconPx, focus ? ICON_ACCENT : ICON_FG);
-            labelY = hint ? bubble.y + 22 : bubble.y + Math.floor((bubble.h - 28) / 2);
-            draw.text(title, bubble.x + 28 + iconSide + 22, labelY, bubble.scale, focus ? INK : HINT);
-            if (hint) {
-                draw.text(hint.slice(0, item.on ? 28 : 36), bubble.x + 28 + iconSide + 22, labelY + 34, 3, focus ? ACCENT : MUTED);
-            }
-            if (item.on) {
-                var mark = 16;
-                draw.rect(
-                    bubble.x + bubble.w - mark - 22,
-                    bubble.y + Math.floor((bubble.h - mark) / 2),
-                    mark,
-                    mark,
-                    ACCENT
-                );
-            }
-        }
+        drawRow(draw, bubble, item, title, hint, itemIndex === selected);
     }
-    if (lay.bubbles.length && !lay.bubbles[0].home) {
-        var pinN = lay.pinned || 0;
-        if (lay.first > pinN) {
-            draw.text(tr('w gore'), lay.ox + lay.boxW - 280, lay.oy + 28, 3, MUTED);
-        }
-        if (lay.first + (lay.bubbles.length - pinN) < lay.count) {
-            draw.text(tr('dalej'), lay.ox + lay.boxW - 160, lay.hintY, 3, MUTED);
-        }
+    drawScroll(draw, lay);
+    if (!previewSpace) {
+        drawAirGuide(draw, lay, air, items, detail);
     }
+    armedNow = !!(items[selected] && items[selected].armed);
     if (detail) {
-        draw.text(detail.slice(0, 28), lay.ox + 36, lay.oy + lay.boxH - 58, 3, INK);
+        draw.text(draw.fit(tr(detail), 3, 620), lay.ox + 36, lay.oy + lay.boxH - 60, 3, INK);
     } else {
-        draw.text(tr('strzalki, potem wybierz'), lay.ox + 36, lay.oy + lay.boxH - 58, 3, MUTED);
+        draw.text(tr(armedNow ? 'pokrętło albo – i + zmienia, klik zapisuje' : 'pokrętło albo dotyk'), lay.ox + 36, lay.oy + lay.boxH - 60, 3, MUTED);
     }
     var framesOn = !!(boxPreview && boxPreview.frames && boxPreview.frames.length);
-    drawNav(draw, lay, framesOn, true);
+    drawNav(draw, lay, framesOn, true, armedNow);
     if (boxPreview && boxPreview.frames && boxPreview.frames.length) {
         drawScreenFrames(draw, lay, boxPreview, items[selected]);
     } else if (boxPreview && (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD')) {
         drawBoxPreview(draw, lay, boxPreview, items[selected]);
     }
     if (caption && caption.on && caption.text) {
-        draw.text(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
+        draw.pixelText(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     applyAirOverlay(draw, lay, air, version);
     return {
-        frame: message(FRAME, draw.bytes()),
+        frame: packFrame(draw),
         rects: draw.rects,
         layout: lay
     };
@@ -2463,7 +2927,7 @@ function drawScreenFrames(draw, lay, preview, selectedItem) {
     var x0 = lay.ox + lay.boxW - colW - 24;
     var i;
     var frame;
-    var labelH = 22;
+    var labelH = 26;
     var innerH;
     var scale;
     var stageW;
@@ -2474,7 +2938,6 @@ function drawScreenFrames(draw, lay, preview, selectedItem) {
     var wy;
     var ww;
     var wh;
-    var edge;
     if (x0 < lay.ox + 520) {
         x0 = lay.ox + 520;
         colW = lay.ox + lay.boxW - x0 - 24;
@@ -2512,15 +2975,12 @@ function drawScreenFrames(draw, lay, preview, selectedItem) {
         if (wy + wh > sy + stageH) {
             wy = sy + stageH - wh;
         }
-        edge = frame.focus ? ACCENT : LINE;
-        draw.text(tr(String(frame.label || '')), sx, y, 3, frame.focus ? ACCENT : MUTED);
-        draw.rect(sx - 3, sy - 3, stageW + 6, stageH + 6, edge);
-        draw.rect(sx, sy, stageW, stageH, PAGE_TOP);
-        draw.rect(wx, wy, ww, wh, frame.focus ? ACCENT_DIM : CARD_HI);
-        draw.rect(wx, wy, ww, 3, frame.focus ? ACCENT : LINE);
-        draw.rect(wx, wy + wh - 3, ww, 3, frame.focus ? ACCENT : LINE);
-        draw.rect(wx, wy, 3, wh, frame.focus ? ACCENT : LINE);
-        draw.rect(wx + ww - 3, wy, 3, wh, frame.focus ? ACCENT : LINE);
+        // each screen to scale, the window where it will be shown on it
+        draw.text(tr(String(frame.label || '')), sx, y - 2, 3, frame.focus ? ACCENT : MUTED);
+        draw.round(sx, sy, stageW, stageH, 8, PAGE);
+        draw.stroke(sx, sy, stageW, stageH, 8, frame.focus ? 2 : 1.5, frame.focus ? ACCENT : LINE);
+        draw.round(wx, wy, ww, wh, 4, frame.focus ? ACCENT_DIM : CARD_HI);
+        draw.stroke(wx, wy, ww, wh, 4, 2, frame.focus ? ACCENT : LINE);
         y += slot + gap;
     }
 }
@@ -2545,6 +3005,7 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     var row;
     var sy;
     var lab;
+    var size;
     if (selectedItem && selectedItem.name === 'air-box-size') {
         mode = 'size';
     }
@@ -2563,18 +3024,20 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     if (wy + wh > y + stageH) {
         wy = y + stageH - wh;
     }
-    draw.rect(x - 4, y - 4, stageW + 8, stageH + 8, LINE);
-    draw.rect(x, y, stageW, stageH, PAGE_TOP);
-    draw.rect(wx, wy, ww, wh, ACCENT_DIM);
-    draw.rect(wx, wy, ww, Math.min(14, wh), ACCENT);
-    caption = mode === 'move' ? 'pozycja' : (mode === 'size' ? 'wielkosc' : 'podglad');
+    // the screen to scale, the window where it will be shown on it
+    draw.round(x, y, stageW, stageH, 10, PAGE);
+    draw.stroke(x, y, stageW, stageH, 10, 1.5, LINE);
+    draw.round(wx, wy, ww, wh, 5, ACCENT_DIM);
+    draw.stroke(wx, wy, ww, wh, 5, 2, ACCENT);
+    caption = tr(mode === 'move' ? 'pozycja' : (mode === 'size' ? 'wielkość' : 'podgląd'));
     if (preview.label) {
-        caption = String(preview.label) + '  ' + caption;
+        caption = tr(String(preview.label)) + ' · ' + caption;
     }
-    draw.text(caption, x, y + stageH + 18, 3, HINT);
-    draw.text(String(preview.w || 0) + 'x' + String(preview.h || 0), x, y + stageH + 48, 3, MUTED);
+    draw.text(caption, x, y + stageH + 16, 3, HINT);
+    size = String(preview.w || 0) + ' × ' + String(preview.h || 0);
+    draw.text(size, x + stageW - draw.textWidth(size, 3), y + stageH + 16, 3, MUTED);
     if (preview.sliders && preview.sliders.length) {
-        sy = y + stageH + 78;
+        sy = y + stageH + 62;
         for (si = 0; si < preview.sliders.length; si += 1) {
             row = preview.sliders[si];
             if (selectedItem && row.key) {
@@ -2582,10 +3045,11 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
             }
             var hotSlider = !!(selectedItem && selectedItem.armed && row.key === selectedItem.name);
             lab = tr(String(row.label || ''));
-            draw.text(lab, x, sy, 3, hotSlider ? RED : (row.on ? ACCENT : MUTED));
-            drawSlider(draw, x + 130, sy, Math.max(80, stageW - 220), row.value | 0, row.min | 0, row.max | 0, hotSlider);
-            draw.text(String(row.value | 0), x + stageW - 72, sy, 3, INK);
-            sy += 36;
+            draw.text(lab, x, sy - 2, 3, hotSlider ? RED : (row.on ? ACCENT : MUTED));
+            drawSlider(draw, x + 140, sy, Math.max(80, stageW - 232), row.value | 0, row.min | 0, row.max | 0, hotSlider);
+            lab = String(row.value | 0);
+            draw.text(lab, x + stageW - draw.textWidth(lab, 3), sy - 2, 3, INK);
+            sy += 40;
         }
     }
 }
@@ -2718,6 +3182,31 @@ function createMenuSurface(opts) {
     // One frame in flight, like the other apps: the renderer sends TICK when the
     // screen has drawn it (up to 60 fps). A second frame waits. Sending faster
     // than that drops the client and the picture goes.
+    // Glyph atlases (the fonts): each is uploaded once per connection, before the first frame
+    // whose text needs it (as rt_renderd.js does for the YouTube screen).
+    var sentAtlases = {};
+    function sendAtlases(ids) {
+        var i;
+        var f;
+        var head;
+        for (i = 0; ids && i < ids.length; i += 1) {
+            if (sentAtlases[ids[i]]) {
+                continue;
+            }
+            f = record.atlasById(ids[i]);
+            if (!f || !f.alpha) {
+                continue;
+            }
+            head = Buffer.alloc(12);
+            head.writeUInt32LE(ids[i] >>> 0, 0);
+            head.writeUInt32LE(f.atlasW, 4);
+            head.writeUInt32LE(f.atlasH, 8);
+            write(message(ATLAS, Buffer.concat([head, f.alpha])));
+            sentAtlases[ids[i]] = true;
+            note('menu-atlas ' + f.family + '@' + f.size);
+        }
+    }
+
     var sentFrame = null;
     function flushFrame(force) {
         if (!lastFrame || !sock || !shown) {
@@ -2745,6 +3234,7 @@ function createMenuSurface(opts) {
         if (frameHoldTimer.unref) {
             frameHoldTimer.unref();
         }
+        sendAtlases(lastFrame.atlases);
         sentFrame = lastFrame;
         write(lastFrame);
     }
@@ -2899,6 +3389,13 @@ function createMenuSurface(opts) {
         airHits = (built.layout && built.layout.airHits) || [];
         airStrip = built.layout && built.layout.airStrip ? built.layout.airStrip : null;
         airWindow = built.layout && built.layout.airWindow ? built.layout.airWindow : null;
+        if (!edit && (whereOpen || ytOpen)) {
+            // "Gdzie pokazać" covers the page: the back pill, the arrows and "Wyłącz aplikację"
+            // under it must not answer a tap (they did until 0.1.134: a tap beside the sheet at
+            // the bottom right closed the whole app)
+            navBoxes = null;
+            backBox = null;
+        }
         backAction = edit ? '' : findBack(items);
         lastFrame = built.frame;
         flushFrame();
@@ -2917,6 +3414,7 @@ function createMenuSurface(opts) {
         front = false;
         shown = false;
         note('menu-drop ' + (reason || 'leave'));
+        stopNavRepeat();
         if (pulse) {
             clearInterval(pulse);
             pulse = null;
@@ -3014,7 +3512,51 @@ function createMenuSurface(opts) {
         return '';
     }
 
+    // An armed slider (Poziomo, Pionowo, Rozciągnięcie, Wielkość): the two buttons change its value
+    // as the knob does. Until 0.1.134 they left the slider, so a finger alone could not set it.
+    function navAdjusts() {
+        var it = items[selected];
+        return !!(!edit && armed && it && it.adjust && it.name === armed && typeof opts.adjust === 'function');
+    }
+
+    var navRepeat = null;
+    var navRepeatFired = false;
+    var navRepeatLeft = 0;
+    function stopNavRepeat() {
+        if (navRepeat) {
+            clearTimeout(navRepeat);
+            navRepeat = null;
+        }
+    }
+
+    // held: after 0.4 s a step every 70 ms, for at most 20 s (a lost "finger up" must not run on)
+    function startNavRepeat(which) {
+        stopNavRepeat();
+        navRepeatFired = false;
+        if ((which !== 'left' && which !== 'right') || !navAdjusts()) {
+            return;
+        }
+        navRepeatLeft = 280;
+        var tick = function () {
+            navRepeat = null;
+            if (!shown || !navAdjusts() || navRepeatLeft <= 0) {
+                return;
+            }
+            navRepeatLeft -= 1;
+            navRepeatFired = true;
+            opts.adjust(armed, which === 'left' ? -1 : 1);
+            paintSoon();
+            navRepeat = setTimeout(tick, 70);
+        };
+        navRepeat = setTimeout(tick, 400);
+    }
+
     function useNav(which) {
+        if ((which === 'left' || which === 'right') && navAdjusts()) {
+            opts.adjust(armed, which === 'left' ? -1 : 1);
+            paintSoon();
+            return;
+        }
         if (which === 'left') {
             if (edit) {
                 knobKeyboard.moveKey(edit, -1);
@@ -3373,6 +3915,14 @@ function createMenuSurface(opts) {
             return;
         }
         if (ytOpen && !edit) {
+            if (tilted) {
+                step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
+                if (tilt === 's') {
+                    ytCursor = 3;
+                } else if (tilt === 'n' && ytCursor === 3) {
+                    ytCursor = 1;
+                }
+            }
             if (step) {
                 ytCursor += step > 0 ? 1 : -1;
                 if (ytCursor < 0) {
@@ -3398,12 +3948,20 @@ function createMenuSurface(opts) {
                 }
             }
             lastPush = push;
-            if (step || push === 1) {
+            if (step || push === 1 || tilted) {
                 paint();
             }
             return;
         }
         if (whereOpen && !edit) {
+            if (tilted) {
+                step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
+                if (tilt === 's') {
+                    whereCursor = 3;
+                } else if (tilt === 'n' && whereCursor === 3) {
+                    whereCursor = 1;
+                }
+            }
             if (step) {
                 whereCursor += step > 0 ? 1 : -1;
                 if (whereCursor < 0) {
@@ -3425,7 +3983,7 @@ function createMenuSurface(opts) {
                 }
             }
             lastPush = push;
-            if (step || push === 1) {
+            if (step || push === 1 || tilted) {
                 paint();
             }
             return;
@@ -3792,16 +4350,25 @@ function createMenuSurface(opts) {
                         return;
                     }
                 }
+                if (phase === 3) {
+                    stopNavRepeat();
+                }
                 if (hitsNav(tx, ty)) {
                     if (phase === 1) {
                         touchDown = { nav: hitsNav(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
+                        startNavRepeat(touchDown.nav);
                     } else if (phase === 3 && touchDown && touchDown.nav && hitsNav(tx, ty) === touchDown.nav) {
-                        useNav(touchDown.nav);
+                        if (!navRepeatFired) {
+                            useNav(touchDown.nav);      // (a held button has done its steps already)
+                        }
                         touchDown = null;
                     } else if (phase === 3) {
                         touchDown = null;
                     }
                     return;
+                }
+                if (touchDown && touchDown.nav) {
+                    stopNavRepeat();        // the finger slid off the button
                 }
                 if (hitsBack(tx, ty)) {
                     if (phase === 3) {
@@ -3971,6 +4538,7 @@ function createMenuSurface(opts) {
             native = false;
             mirrorSent = false;
             sentFrame = null;
+            sentAtlases = {};
             clearFrameHold();
             incoming = Buffer.alloc(0);
             write(message(HELLO, Buffer.concat([
