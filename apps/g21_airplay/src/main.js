@@ -398,7 +398,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.126',
+        version: (this._packageJson && this._packageJson.version) || '0.1.128',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -515,7 +515,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.126') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.128') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -626,7 +626,6 @@ AirPlayApp.prototype._seedBuiltinRdp = function () {
     var host = null;
     var i;
     var kind;
-    var pass = 'Karoleslaw1234?';
     if (!builtin) {
         return;
     }
@@ -649,15 +648,11 @@ AirPlayApp.prototype._seedBuiltinRdp = function () {
         return;
     }
     kind = 'rdp-p1';
-    if (this._store.hasSecret(kind) && this._store.hasSecret('rdp')) {
-        return;
-    }
-    try {
-        this._store.writeSecret(kind, pass);
-        this._store.writeSecret('rdp', pass);
-        noteStart('rdp-seed secret p1');
-    } catch (err) {
-        noteStart('rdp-seed-secret ' + (err && err.message));
+    // No password in the code (the repository is public): the one already
+    // saved on the car stays; else it is typed once (menu "Haslo RDP" or the
+    // config panel) and kept in the app's data folder only.
+    if (!this._store.hasSecret(kind) && !this._store.hasSecret('rdp')) {
+        noteStart('rdp-seed no secret: type the RDP password in the menu');
     }
 };
 
@@ -739,7 +734,35 @@ AirPlayApp.prototype._writeAirplayAuth = function () {
     } catch (err) {
         noteStart('airplay-auth-write ' + (err && err.message));
     }
+    this._writeAirplayMode();
     return auth;
+};
+
+// AirPlay Sound: g21-airplay-open starts the receiver with -vs 0 (audio only)
+// for "audio", the mirror for "video"; a change restarts the receiver there.
+AirPlayApp.prototype._writeAirplayMode = function () {
+    var mode = this._desk && this._desk.airplaySound && this._desk.airplaySound() ? 'audio' : 'video';
+    try {
+        if (this._paths.airplayMode) {
+            fs.writeFileSync(this._paths.airplayMode, mode + '\n');
+        }
+    } catch (err) {
+        noteStart('airplay-mode-write ' + (err && err.message));
+    }
+    return mode;
+};
+
+AirPlayApp.prototype._toggleAirplaySound = function () {
+    var on = !(this._desk && this._desk.airplaySound && this._desk.airplaySound());
+    if (!this._desk.setAirplaySound) {
+        return;
+    }
+    this._desk.setAirplaySound(on);
+    this._saveDesk();
+    this._writeAirplayMode();
+    this._paintAirPinSwitch();
+    noteStart(on ? 'air-sound-on' : 'air-sound-off');
+    this._sync();
 };
 
 AirPlayApp.prototype._endpoint = function (name) {
@@ -2172,6 +2195,11 @@ AirPlayApp.prototype._paintAirPinSwitch = function () {
     if (typeof this._menu.setItemIcon === 'function') {
         this._menu.setItemIcon('air-pin', on ? 'lock' : 'unlock');
     }
+    // AirPlay Sound sits beside the code switch and is painted with it
+    var sound = !!(this._desk && this._desk.airplaySound && this._desk.airplaySound());
+    if (typeof this._menu.setItemHint === 'function') {
+        this._menu.setItemHint('air-sound', sound ? 'włączone: tylko dźwięk, bez obrazu' : 'wyłączone: obraz i dźwięk');
+    }
 };
 
 AirPlayApp.prototype._toggleAirplayPin = function () {
@@ -2196,6 +2224,10 @@ AirPlayApp.prototype._onAirAction = function (name) {
     }
     if (name === 'air-pin') {
         this._toggleAirplayPin();
+        return;
+    }
+    if (name === 'air-sound') {
+        this._toggleAirplaySound();
         return;
     }
     if (name === 'air-quality') {
@@ -3531,14 +3563,18 @@ AirPlayApp.prototype._paintStreamInfo = function (air, receiver) {
             { name: 'stream-hud', title: 'HUD', on: names.indexOf('hud') !== -1 }
         ];
     }
+    // AirPlay Sound: no picture comes; the screen says how to send the sound.
+    var soundOnly = this._streamProtocol === 'airplay' && !!(this._desk && this._desk.airplaySound && this._desk.airplaySound());
     this._menu.setStreamInfo({
         pin: mirrored ? '' : pin,
-        headline: headline,
-        hint: mirrored
-            ? (showCentral ? 'lustro aktywne' : 'obraz poza srodkiem')
-            : (linked ? 'czekam na klatke' : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay')),
-        mirrored: showCentral && mirrored,
-        spin: !mirrored,
+        headline: soundOnly ? 'AirPlay Sound — tylko dźwięk' : headline,
+        hint: soundOnly
+            ? (pin ? 'wpisz kod na iPhonie' : 'iPhone: Centrum sterowania → AirPlay → ' + ((this._desk && this._desk.airplayName && this._desk.airplayName()) || 'THEiPlay'))
+            : mirrored
+                ? (showCentral ? 'lustro aktywne' : 'obraz poza srodkiem')
+                : (linked ? 'czekam na klatke' : (pin ? 'wpisz kod na iPhonie' : 'połącz iPhone z THEiPlay')),
+        mirrored: !soundOnly && showCentral && mirrored,
+        spin: !soundOnly && !mirrored,
         lines: lines,
         window: (showCentral || !mirrored) ? (showCentral ? this._settings.picture('central') : waitWin) : null,
         screens: screenRow,
@@ -4761,7 +4797,6 @@ AirPlayApp.prototype._takeFrame = function () {
     var outs;
     var now = Date.now();
     var started;
-    var heavy = false;
     if (this._frameBusy) {
         return;
     }
@@ -4782,14 +4817,15 @@ AirPlayApp.prototype._takeFrame = function () {
     if (stamp === this._yuvStamp) {
         return;
     }
-    // A movie-sized frame at 60 fps is read on this thread and the picture collapses.
-    // The phone is asked for the centre profile ("Jakość obrazu", 600x400), in
-    // either orientation. A bigger frame (seen while the phone turns) is no
-    // longer dropped, which froze the picture: it is taken at most ~8 times a
-    // second and scaled down to the profile (_centralFrame, _placeMirrorFaces).
+    // The phone is asked for the centre profile ("Jakość obrazu", 600x400), but
+    // an iPhone sends its own size anyway (seen on the car: 1080x498 landscape,
+    // 332x720 portrait). Every frame is taken (dropping or slowing the big ones
+    // made the picture stutter) and scaled to the profile (_centralFrame,
+    // _placeMirrorFaces: ~1.5 ms for 1080x498). Only past 1920x1080 is it left.
     var cq = this._quality('central');
     var big = st.size > 8 + Math.ceil(cq.w * cq.h * 1.1 * 3 / 2);
-    if (big && this._bigAt && (now - this._bigAt) < 120) {
+    if (st.size > 8 + (1920 * 1080 * 3) / 2) {
+        this._yuvStamp = stamp;
         return;
     }
     this._yuvStamp = stamp;
@@ -4806,15 +4842,11 @@ AirPlayApp.prototype._takeFrame = function () {
         this._ingestGap = 16;
         return;
     }
-    if (big) {
-        this._bigAt = now;
-    }
     // The phone turned (or changed its picture): one line per new size in the start log.
     if (!this._airDims || this._airDims.w !== parsed.w || this._airDims.h !== parsed.h) {
         noteStart('air-frame ' + parsed.w + 'x' + parsed.h + (this._airDims ? ' (was ' + this._airDims.w + 'x' + this._airDims.h + ')' : '') + (big ? ' big' : ''));
         this._airDims = { w: parsed.w, h: parsed.h };
     }
-    heavy = parsed.w * parsed.h > Math.ceil(cq.w * cq.h * 1.1);
     this._lastFrame = { i420: parsed.i420, w: parsed.w, h: parsed.h };
     outs = this._settings.outputs();
     try {
@@ -4860,7 +4892,8 @@ AirPlayApp.prototype._takeFrame = function () {
     // A slow copy waits one extra frame. It does not drop the picture down to a crawl.
     this._ingestGap = spent > 12 ? 32 : 16;
     this._ingestAt = Date.now();
-    if (!heavy && (outs.indexOf('hud') !== -1 || outs.indexOf('cluster') !== -1) && this._showGauges()) {
+    // (a big frame too: an iPhone always sends one; _placeMirrorFaces scales it to the KOMBI profile)
+    if ((outs.indexOf('hud') !== -1 || outs.indexOf('cluster') !== -1) && this._showGauges()) {
         this._armFace(0);
     }
 };

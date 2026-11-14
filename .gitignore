@@ -29,6 +29,11 @@ preview/
 *.log
 node_modules/
 
+# Local SSH material for the head unit (keys, notes). Never commit.
+ssh/
+# Python caches next to native tools.
+__pycache__/
+
 # Developer SSH cycle artifacts (never commit HU logs / staging).
 dev-logs/
 dev-staging/

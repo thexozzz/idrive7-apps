@@ -561,6 +561,7 @@ var AIRPLAY_ITEMS = [
     { name: 'air-quality', title: 'Jakość obrazu', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
+    { name: 'air-sound', title: 'AirPlay Sound', hint: 'wyłączone: obraz i dźwięk', icon: 'play' },
     { name: 'air-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 

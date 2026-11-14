@@ -15,6 +15,8 @@ function sessionPaths() {
         target: pick('G21_SESSION_TARGET', '/run/g21-session/target'),
         output: pick('G21_SESSION_OUTPUT', '/run/g21-session/output'),
         airplayAuth: pick('G21_SESSION_AIRPLAY_AUTH', '/run/g21-session/airplay-auth'),
+        // AirPlay Sound: audio = the receiver without a picture (g21-airplay-open 0.1.47+)
+        airplayMode: pick('G21_SESSION_AIRPLAY_MODE', '/run/g21-session/airplay-mode'),
         airplaySize: pick('G21_SESSION_AIRPLAY_SIZE', '/run/g21-session/airplay-size'),
         secret: pick('G21_SESSION_SECRET', '/run/g21-session/secret'),
         cert: pick('G21_SESSION_CERT', '/run/g21-session/cert'),

@@ -54,9 +54,13 @@ mv.close();
 // main.js: no fixed 640x400 cut-off; big frames slowed down, size changes logged; gauges keep their picture
 var main = fs.readFileSync(path.join(src, 'main.js'), 'utf8');
 assert.ok(main.indexOf('st.size > 8 + (640 * 400 * 3) / 2') === -1, 'the fixed 600x400 limit is gone');
-assert.ok(/var big = st\.size > 8 \+ Math\.ceil\(cq\.w \* cq\.h \* 1\.1 \* 3 \/ 2\);/.test(main), 'limit from the centre profile');
+assert.ok(main.indexOf('_bigAt') === -1, 'big frames (an iPhone sends 1080x498) are not slowed down');
+assert.ok(main.indexOf('st.size > 8 + (1920 * 1080 * 3) / 2') !== -1, 'only past 1920x1080 a frame is left');
+var t0 = Date.now(); for (var k = 0; k < 20; k += 1) { frameFit.scaleToProfile(i420(1080, 498, 3), 1080, 498, 600, 400); }
+assert.ok((Date.now() - t0) / 20 < 20, 'scaling 1080x498 to the profile is quick');
 assert.ok(main.indexOf("noteStart('air-frame '") !== -1, 'size changes logged');
 assert.ok(main.indexOf('} else if (!this._showGauges() || heavy) {') === -1, 'a big frame does not drop the cluster/HUD picture');
+assert.ok(main.indexOf('heavy') === -1, 'a big frame still updates the cluster/HUD');
 // a portrait frame fits the turned centre profile as it is; a big one is scaled into it
 assert.ok(frameFit.fitsProfile(184, 400, 600, 400), 'portrait 184x400 fits 600x400 turned');
 var s = frameFit.scaleToProfile(i420(828, 1792, 1), 828, 1792, 600, 400);
@@ -64,3 +68,23 @@ assert.ok(s.w <= 400 && s.h <= 600 && s.w % 4 === 0, 'a big portrait frame scale
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('airplay-turn: new size = new mirror file (rename), big frames scaled not dropped, sizes logged');
+
+// AirPlay Sound: a menu switch, saved, written for g21-airplay-open, which then starts the receiver
+// with -vs 0 (streamed audio only) and restarts it when the switch changes.
+(function () {
+    var desk = require(path.join(src, 'desktop_settings.js'));
+    var menuDraw = require(path.join(src, 'menu_draw.js'));
+    var paths = require(path.join(src, 'paths.js'));
+    var d = desk.createDesktopSettings({});
+    assert.strictEqual(d.airplaySound(), false, 'off by default: picture and sound');
+    assert.ok(d.setAirplaySound(true).ok);
+    assert.strictEqual(desk.createDesktopSettings(JSON.parse(JSON.stringify(d.snapshot()))).airplaySound(), true, 'saved');
+    assert.ok(menuDraw.AIRPLAY_ITEMS.some(function (i) { return i.name === 'air-sound' && i.title === 'AirPlay Sound'; }), 'in the AirPlay menu');
+    assert.strictEqual(paths.sessionPaths().airplayMode, '/run/g21-session/airplay-mode');
+    assert.ok(main.indexOf("if (name === 'air-sound') {") !== -1 && main.indexOf("? 'audio' : 'video'") !== -1);
+    var tool = fs.readFileSync(path.join(__dirname, '..', 'native', 'g21-airplay-open', 'g21-airplay-open'), 'utf8');
+    assert.ok(/airplay_mode_of\(\) \{/.test(tool), 'the tool reads airplay-mode');
+    assert.ok(tool.indexOf('set -- -n "$shown" -nh -p 7400 $mac_args -vs 0 -as "$audio_sink" $pin_args -d 1') !== -1, 'audio only: -vs 0');
+    assert.ok(tool.indexOf("grep -q -- ' -vs 0 ' /run/g21-airplay/ux.cmd") !== -1, 'a change restarts the receiver');
+})();
+console.log('airplay-sound: menu switch, saved, -vs 0 in the tool');

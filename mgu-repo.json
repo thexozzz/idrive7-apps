@@ -20,7 +20,7 @@
       "description": "AirPlay, Windows Win+K (MS-MICE), RDP i VNC. Jedna aktywna sesja; lustro iPhone lub emisja PC na Wi-Fi Store.",
       "uninstallable": true,
       "mguHmi": ["ID7"],
-      "requires": { "g21-airplay-open": "0.1.36", "cluster-render": "0.5.4", "jap-ridetube-d": "0.3.9" }
+      "requires": { "g21-airplay-open": "0.1.47", "cluster-render": "0.5.4", "jap-ridetube-d": "0.3.9" }
     }
   ],
   "tools": [
@@ -36,7 +36,7 @@
     {
       "id": "g21-airplay-open",
       "path": "native/g21-airplay-open",
-      "version": "0.1.46",
+      "version": "0.1.47",
       "title": "AirPlay i Windows Miracast",
       "description": "Backend AirPlay (UxPlay+mdnsd/avahi) oraz odbiornik Windows Win+K (MS-MICE g21-mice).",
       "uninstallable": true,

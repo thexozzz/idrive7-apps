@@ -47,6 +47,27 @@ function walk(dir, out) {
     });
 }
 
+// The files a commit can take: tracked plus untracked that .gitignore does not
+// exclude (a local ssh/ folder with a key stays out of git, so it is not the
+// repository's). Outside a git checkout (an unpacked source tree) every file.
+function publishable(out) {
+    var listed;
+    try {
+        listed = require('child_process').execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+            cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: Object.assign({}, process.env, { GIT_OPTIONAL_LOCKS: '0' })
+        });
+    } catch (err) {
+        walk(ROOT, out);
+        return;
+    }
+    listed.split('\0').forEach(function (name) {
+        var full = path.join(ROOT, name);
+        if (name && fs.existsSync(full) && fs.statSync(full).isFile()) {
+            out.push(full);
+        }
+    });
+}
+
 function rel(file) {
     return path.relative(ROOT, file).split(path.sep).join('/');
 }
@@ -181,7 +202,7 @@ function checkTree(errors) {
 
 function checkSources(errors) {
     var files = [];
-    walk(ROOT, files);
+    publishable(files);
     var markers = privateKeyMarkers().concat(tokenMarkers());
     var textExt = {
         '.js': true, '.json': true, '.md': true, '.yml': true, '.yaml': true,

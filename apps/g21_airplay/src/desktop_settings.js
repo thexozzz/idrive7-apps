@@ -208,6 +208,8 @@ function createDesktopSettings(stored) {
     }
     // false = jak na kkds (bez kodu); true = -pin na iPhonie.
     var airplayPin = data.airplayPin === true;
+    // AirPlay Sound: the iPhone sends only sound (G21 as a speaker), no picture.
+    var airplaySound = data.airplaySound === true;
     var airQuality = data.airQuality === '1080' ? '1080' : '720';
     // Older settings have no profiles. The centre screen kept running at the
     // fixed 600x400 (airQuality is not read since 0.1.109), so that stays;
@@ -328,6 +330,11 @@ function createDesktopSettings(stored) {
         setAirplayPin: function (on) {
             airplayPin = !!on;
             return { ok: true, on: airplayPin };
+        },
+        airplaySound: function () { return airplaySound; },
+        setAirplaySound: function (on) {
+            airplaySound = !!on;
+            return { ok: true, on: airplaySound };
         },
         airQuality: function () { return airQuality; },
         setAirQuality: function (next) {
@@ -622,6 +629,7 @@ function createDesktopSettings(stored) {
                 inspect: data.inspect === true,
                 airplayName: airplayName,
                 airplayPin: airplayPin,
+                airplaySound: airplaySound,
                 airQuality: airQuality,
                 qualityCentral: qualityCentral,
                 qualityKombi: qualityKombi,

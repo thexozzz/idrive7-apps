@@ -464,6 +464,19 @@ airplay_auth_of() {
     esac
 }
 
+# AirPlay Sound (menu): audio = UxPlay with -vs 0 (streamed audio only, no picture);
+# anything else = the mirror as before. Written by the app to $SESSION_DIR/airplay-mode.
+airplay_mode_of() {
+    m=video
+    if [ -f "$SESSION_DIR/airplay-mode" ]; then
+        m=$(tr -d '\r\n' < "$SESSION_DIR/airplay-mode" | tr 'A-Z' 'a-z')
+    fi
+    case $m in
+        audio|sound|dzwiek) printf '%s\n' audio ;;
+        *) printf '%s\n' video ;;
+    esac
+}
+
 stop_pid() {
     pid=$1
     if [ -n "$pid" ]; then
@@ -1013,6 +1026,14 @@ start_ux() {
             elif [ "$auth" = "open" ] && grep -q -- ' -pin ' /run/g21-airplay/ux.cmd 2>/dev/null; then
                 stop_ux
             fi
+            # Menu toggled AirPlay Sound: recycle so UxPlay starts with or without the picture.
+            if [ -n "$UXPID" ] && kill -0 "$UXPID" 2>/dev/null; then
+                if [ "$(airplay_mode_of)" = "audio" ] && ! grep -q -- ' -vs 0 ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                    stop_ux
+                elif [ "$(airplay_mode_of)" = "video" ] && grep -q -- ' -vs 0 ' /run/g21-airplay/ux.cmd 2>/dev/null; then
+                    stop_ux
+                fi
+            fi
         fi
         if [ -z "$UXPID" ] || ! kill -0 "$UXPID" 2>/dev/null; then
             :
@@ -1116,7 +1137,10 @@ start_ux() {
             [0-9]*x[0-9]*) vsize=$(tr -d '\r\n' < "$SESSION_DIR/airplay-size") ;;
         esac
     fi
-    if [ -n "$mac_args" ]; then
+    if [ "$(airplay_mode_of)" = "audio" ]; then
+        # AirPlay Sound: -vs 0 = streamed audio only (the phone picks G21 as a speaker).
+        set -- -n "$shown" -nh -p 7400 $mac_args -vs 0 -as "$audio_sink" $pin_args -d 1
+    elif [ -n "$mac_args" ]; then
         set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
     else
         set -- -n "$shown" -nh -p 7400 -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.128
+
+- Bezpieczeństwo: hasło RDP nie jest już zapisane w kodzie aplikacji (repozytorium jest publiczne). Hasło zapisane wcześniej w aucie zostaje; nowe wpisuje się raz w menu (Hasło RDP) albo w panelu konfiguracji.
+- AirPlay → nowa opcja AirPlay Sound: po włączeniu odbiornik AirPlay działa tylko z dźwiękiem, bez obrazu (iPhone wybiera auto jako głośnik: Centrum sterowania → AirPlay). Przełączenie restartuje odbiornik w narzędziu, wybór się zapisuje. Ekran AirPlay mówi wtedy, jak wysłać dźwięk, zamiast czekać na obraz. Narzędzie g21-airplay-open 0.1.47.
+
+## 0.1.127
+
+- AirPlay płynny: iPhone nie trzyma się rozmiaru 600x400 i wysyła swój (na aucie: 1080x498 poziomo, 332x720 pionowo). Takie klatki były dotąd zwalniane do ~8/s (a wcześniej odrzucane), stąd klatkowanie. Teraz każda klatka idzie dalej i jest zmniejszana do profilu Jakość obrazu (Ekran centralny; zegary i HUD do profilu Zegary i HUD). Duża klatka nie wstrzymuje już też obrazu na zegarach i HUD.
+
 ## 0.1.126
 
 - AirPlay po obróceniu telefonu: nowy rozmiar obrazu idzie do nowego pliku dla renderera (rename), a nie przez ucięcie pliku, który renderer właśnie czyta — to mogło zacinać obraz i zrywać połączenie z ekranem. Klatka większa niż profil Ekran centralny (np. w trakcie obrotu) nie jest już odrzucana (obraz stawał): idzie wolniej (do ~8/s) i jest zmniejszana do profilu. Zegary i HUD zostają wtedy na ostatnim obrazie zamiast gasnąć. Każda zmiana rozmiaru klatki trafia do dziennika startu (air-frame WxH).
