@@ -125,6 +125,25 @@ VERIFIED na aucie (log 0.1.5, 11:22 UTC): `sandbox helper installed: …/chrome-
 - VERIFIED odczytem z auta: `/etc/asound.conf` definiuje tylko PCM-y HFP; `default` z `alsa.conf` = `hw:0,0` = `/dev/snd/pcmC0D0p` (`0:29 0660`, HFP sink); uid silnika go nie otworzy. W maszynie 18.04 silnik loguje `alsa_util.cc PcmOpen: default, No such file or directory` mimo `--mute-audio`.
 - Poprawka: `--disable-audio-output`. HIPOTEZA co do skutku: błąd odtwarzacza brał się z nieotwartego wyjścia dźwięku; próba odtworzenia w maszynie została przerwana na prośbę właściciela, więc ani przyczyna, ani skuteczność nie są potwierdzone pomiarem. Jeśli błąd wróci, następne tropy: pamięć procesu strony (`--js-flags=--max-old-space-size=512`, strażnik 900 MB), kodeki (Chrome for Testing nie ma H.264/AAC), proxy przy długich pobraniach.
 
+## G21 Audio (2026-11-15) — narzędzie g21-audio 0.1.0, g21-browser 0.1.8, aplikacja 0.1.144
+
+Decyzja właściciela (2026-11-15): wspólny moduł dźwięku na sprawdzonych rozwiązaniach; testy robi właściciel na aucie, nie w maszynie 18.04.
+
+**Stan faktyczny na aucie (VERIFIED odczytami i próbą):**
+- YouTube/RideTube: `CommandControl.connect(1046, 1024)` + BMW `MediaPlayer.playFile` (instancja `OapGenericMedia`) na gotowym pliku. To nie jest strumień PCM; źródło 1046 nie ma portu SmartX.
+- Porty SmartX 48 kHz stereo: AndroidAutoMedia, AndroidAutoUI, AudioCD_Front, CarLifeMedia, CarPlayMain, SDARS_IP. Na aucie nie ma `aplay`, `/lib64` ani `ld-linux` poza `/lib/ld-linux-x86-64.so.2`.
+- `connect(287, 1024)` bez niczego więcej: `CS_CONNECTING` bez końca (to tłumaczy ciszę AirPlay w 0.1.132/0.1.133). Z `RoutingControlObserver.hookSourceAvailablityStatusChange(287, A_AVAILABLE)` (serwis 45090, opis interfejsu generowany z `/etc/oap/someip/someip-interfaces.json`): `CS_CONNECTED` w 1,4 s.
+- Ton 440 Hz z `g21-audio-out` (nobody, grupa `mgu_alsa` 917) do `plug:smartx:CarLifeMedia_CF_48_STEREO`: 478752 z 480000 ramek przyjęte w czasie rzeczywistym, **słychać z głośników** (potwierdził właściciel). Blokada SmartX: `65534:917 0660`. Po próbie źródło 266 (CarPlayMedia) z powrotem `CS_CONNECTED`.
+- `snd_pcm_close` na strumieniu SmartX nie wraca: program wychodzi przez `_exit`. `spawnSync` blokuje pętlę zdarzeń i wywołania SOME/IP wygasają: pisarz zawsze asynchronicznie.
+
+**Budowa:** `native/g21-audio`: `g21-audiod.js` (root, `/usr/bin/node` 8, gniazdo `/run/g21-audio/ctl.sock` 0600: `caps`, `open`, `close`, `tone`, `status`), `speakers.js` (Vizualyse, bez zmian), `g21-audio-out` (C, budowany `build-out.sh` na Ubuntu 18.04 z loaderem auta). Jeden strumień naraz. Przeglądarka: `openAudio()` w `g21-browserd.js` → FIFO `/run/g21-audio/chromium.pcm` (właściciel: uid silnika, grupa `mgu_alsa`, 0620) → `/run/g21-browser/asound.conf` (`pcm.g21out`: `type file` na FIFO) → silnik z `--alsa-output-device=g21out` i `ALSA_CONFIG_PATH`.
+
+**UNVERIFIED (nie testowane nigdzie z prawdziwym silnikiem):** czy biblioteka ALSA silnika przyjmie tę konfigurację bez `alsa.conf`; format i tempo tego, co silnik pisze (założenie: S16LE 48 kHz stereo); opóźnienie obraz–dźwięk (kolejka 16 KiB ≈ 85 ms + SmartX 64 ms); zachowanie, gdy `g21-audiod` zniknie przy grającej stronie (zapis do FIFO bez czytelnika). Test `engine sound` w `tools/test_browser_tool.js` jest napisany, ale nie został uruchomiony.
+
+**Odczyt z auta po aktualizacji:** `tail -n 30 /var/opt/g21-audio/log/audiod.log`; w logu przeglądarki wiersz `sound: G21 Audio stream …` albo `sound: no G21 Audio (…)`.
+
+**Dalej wg specyfikacji właściciela:** backend plikowy (klasa `Audio` z `ytd.js`) do `g21-audio` i YouTube przez niego; AirPlay (zamiast `g21-audio-route.js`); sekcja „G21 Audio” w ustawieniach; pomiary CPU/RAM i opóźnienia.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

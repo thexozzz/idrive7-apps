@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=g21-audio: G21 Audio, THEiPlay's stream sound to the car's speakers (SmartX CarLifeMedia, AudioManager)
+RequiresMountsFor=/var/opt
+After=local-fs.target
+
+[Service]
+# root: the AudioManager's routing interface takes a source's availability only from root, and the stream's
+# FIFO is handed to its player. The PCM writer runs as nobody with the group mgu_alsa, never as root.
+User=root
+ExecStartPre=-/bin/sh -c 'mkdir -p /var/opt/g21-audio/log && chmod 0755 /var/opt/g21-audio'
+# The head unit's own Node 8: /usr/lib/someip.node is built for it.
+ExecStart=/usr/bin/node /var/opt/g21-audio/current/g21-audiod.js
+RuntimeDirectory=g21-audio
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=3
+# SIGTERM: the stream is closed and the speakers go back to the source that had them (4 s cap in the daemon).
+TimeoutStopSec=6
+Nice=-5
+LimitCORE=1
+
+[Install]
+WantedBy=multi-user.target

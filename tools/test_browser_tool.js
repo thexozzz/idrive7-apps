@@ -15,6 +15,7 @@ const http = require('http');
 const cp = require('child_process');
 
 const tool = path.join(__dirname, '..', 'native', 'g21-browser');
+const root0 = path.join(__dirname, '..');
 const d = require(path.join(tool, 'g21-browserd.js'));
 const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQACADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD8qqKKKAP6qKKKKAP/2Q==', 'base64'); // 32x16: left half black, right half white (4:2:0, quality 90)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -228,23 +229,25 @@ function socks(port, host, dport) {
 function testPolicy(base) {
     const file = path.join(base, 'policy-test.json');
     let r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
     assert.deepStrictEqual([r.problems, r.file], [[], false]);
-    fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
+    fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
     assert.deepStrictEqual(r.problems, []);
-    fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
+    fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, audio: 'loud', memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
-    assert.strictEqual(r.problems.length, 10, r.problems.join(' | '));
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
+    assert.strictEqual(r.problems.length, 11, r.problems.join(' | '));
     fs.writeFileSync(file, '{ sandbox: off }');
     r = d.readPolicy(file);
     assert.deepStrictEqual([r.policy.sandbox, r.problems.length], ['ask', 1], 'a file that is not JSON changes nothing');
     fs.unlinkSync(file);
     // the engine never opens a sound device of the head unit (its "default" is the hands-free telephone's)
     const flags = d.Daemon.prototype.engineArgs.call({ zoom: 1.5, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75 }, { profile: '/p', major: '153' }, 'about:blank', true);
-    assert.ok(flags.indexOf('--disable-audio-output') >= 0 && flags.indexOf('--mute-audio') >= 0 && flags.indexOf('--no-sandbox') < 0);
+    assert.ok(flags.indexOf('--disable-audio-output') >= 0 && flags.indexOf('--mute-audio') >= 0 && flags.indexOf('--no-sandbox') < 0 && flags.indexOf('--alsa-output-device=g21out') < 0, 'without G21 Audio: no sound device');
+    const flagsSound = d.Daemon.prototype.engineArgs.call({ zoom: 1.5, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75, audio: { fifo: '/x' } }, { profile: '/p', major: '153' }, 'about:blank', true);
+    assert.ok(flagsSound.indexOf('--alsa-output-device=g21out') >= 0 && flagsSound.indexOf('--disable-audio-output') < 0 && flagsSound.indexOf('--mute-audio') < 0, 'with G21 Audio: the engine plays into its own ALSA device');
     console.log('ok policy: defaults without a file, the owner\'s values taken, values not allowed keep their default and are named');
 }
 async function testProxy(port) {
@@ -302,6 +305,8 @@ async function testChain(base, eng) {
         s.setHeader('content-type', 'text/html; charset=utf-8');
         if (q.url === '/two') s.end('<!doctype html><title>Druga</title><h1>druga strona</h1>');
         else if (q.url === '/three') s.end('<!doctype html><title>Trzecia</title><h1>z nowego okna</h1>');
+        else if (q.url === '/snd') s.end('<!doctype html><title>Dzwiek</title><body style="margin:0"><div id="b" style="width:300px;height:150px;background:#c60"></div><script>document.getElementById("b").addEventListener("click",function(){'
+            + 'var c=new AudioContext();var o=c.createOscillator();var g=c.createGain();g.gain.value=0.05;o.connect(g);g.connect(c.destination);o.start();setTimeout(function(){document.title="snd "+c.sampleRate+" "+c.state},400)})</script>');
         else if (q.url === '/fs') s.end('<!doctype html><title>Pelny</title><body style="margin:0"><div id="v" style="width:300px;height:150px;background:#06c"></div><script>var v=document.getElementById("v");'
             + 'v.addEventListener("click",function(){v.requestFullscreen().then(function(){setTimeout(function(){document.title="fs "+innerWidth+"x"+innerHeight+" "+screen.width+"x"+screen.height+" "+v.clientWidth+"x"+v.clientHeight},300)},function(e){document.title="fs failed "+e})})</script>');
         else if (q.url === '/engine.zip') { s.setHeader('content-type', 'application/zip'); s.setHeader('content-length', fs.statSync(eng.zip).size); fs.createReadStream(eng.zip).pipe(s); }
@@ -357,7 +362,7 @@ async function testChain(base, eng) {
         assert.strictEqual(s.back, true);
         // rules set from THEiPlay's menu: three of them, never "sandbox": "off"; written to the rules file
         const polFile = path.join(base, 'state', 'policy.json');
-        assert.deepStrictEqual(s.pol, { sandbox: 'ask', picture: 0.75, memoryLimitMb: 900 }, 'the state carries the rules');
+        assert.deepStrictEqual(s.pol, { sandbox: 'ask', picture: 0.75, memoryLimitMb: 900, audio: 'on', sound: 'none' }, 'the state carries the rules (no G21 Audio here: no sound)');
         c.send({ op: 'policy', key: 'memoryLimitMb', value: 1200 });
         await c.until('memory limit set', (x) => x.pol && x.pol.memoryLimitMb === 1200);
         assert.strictEqual(JSON.parse(fs.readFileSync(polFile, 'utf8')).memoryLimitMb, 1200);
@@ -560,6 +565,63 @@ async function testChain(base, eng) {
                 if (c3) c3.close();
                 await d3.close();
                 try { fs.writeFileSync(nsFile, nsWas); } catch (e) { /* the VM goes away */ }
+            }
+        }
+        // The engine's sound: through its own ALSA file device into G21 Audio's FIFO, read in real time by g21-audio-out.
+        // Here G21 Audio runs with a speakers.js that only writes down what it is asked, and ALSA's null device.
+        const audioDir = path.join(root0, 'native', 'g21-audio');
+        const outBin = path.join(audioDir, 'g21-audio-out');
+        const canRun = fs.existsSync(outBin) && cp.spawnSync(outBin, [], { encoding: 'utf8' }).status === 2;
+        if (!canRun) skip('engine sound', 'g21-audio-out does not run here (it is built for the head unit\'s loader, /lib/ld-linux-x86-64.so.2)');
+        else {
+            const arun = path.join(base, 'audio-run'), flog = path.join(base, 'speakers.log');
+            fs.mkdirSync(arun); fs.chmodSync(arun, 0o755); fs.writeFileSync(flog, ''); fs.chmodSync(flog, 0o666);
+            const audiod = cp.spawn(process.execPath, [path.join(audioDir, 'g21-audiod.js')], { stdio: ['ignore', 'pipe', 'pipe'], env: Object.assign({}, process.env, {
+                G21_AUDIO_RUN: arun, G21_AUDIO_ROOT: path.join(base, 'audio'), G21_AUDIO_SPEAKERS: path.join(root0, 'tools', 'fake_speakers.js'), G21_AUDIO_DEVICE: 'null', G21_AUDIO_GID: '65534', G21_FAKE_SPEAKERS_LOG: flog }) });
+            let alog = '';
+            audiod.stdout.on('data', (x) => { alog += x; });
+            audiod.stderr.on('data', (x) => { alog += x; });
+            const asock = path.join(arun, 'ctl.sock');
+            const ask = (o) => new Promise((resolve, reject) => { const c = net.connect(asock); let b = ''; c.on('data', (x) => { b += x; if (b.indexOf('\n') >= 0) { c.destroy(); resolve(JSON.parse(b.slice(0, b.indexOf('\n')))); } }); c.on('error', reject); c.write(JSON.stringify(o) + '\n'); });
+            const d4 = new d.Daemon({ idleMs: 400, pollMs: 120, audioSock: asock });
+            let c4 = null;
+            try {
+                for (let i = 0; i < 100 && !fs.existsSync(asock); i++) await sleep(50);
+                assert.ok(fs.existsSync(asock), 'g21-audiod is up: ' + alog.slice(-300));
+                const capsNow = await ask({ op: 'caps' });
+                assert.deepStrictEqual([capsNow.stream.formats, capsNow.stream.rates, capsNow.stream.channels, capsNow.file.here], [['s16le'], [48000], [2], false]);
+                await d4.start();
+                for (let i = 0; i < 100 && !fs.existsSync(d4.opts.sock); i++) await sleep(20);
+                c4 = client(d4.opts.sock);
+                c4.send({ op: 'open', w: 1796, h: 548, zoom: 1.5 });
+                const s4 = await c4.until('engine up with sound', (x) => x.engine === 'ready' && x.live, 60000);
+                assert.strictEqual(s4.pol.sound, 'g21-audio', 'the engine has G21 Audio: ' + alog.slice(-300));
+                assert.strictEqual((await ask({ op: 'status' })).stream, 'chromium');
+                assert.strictEqual(fs.readFileSync(flog, 'utf8').indexOf('claim'), -1, 'a silent page does not take the speakers');
+                c4.send({ op: 'nav', url: site + '/snd' });
+                await c4.until('the sound page', (x) => x.title === 'Dzwiek' && !x.loading && x.live, 30000);
+                c4.send({ op: 'touch', p: 1, x: 150, y: 100 }); c4.send({ op: 'touch', p: 3, x: 150, y: 100 });
+                const snd = await c4.until('a tone plays in the page', (x) => /^snd /.test(x.title), 20000);
+                assert.strictEqual(snd.title, 'snd 48000 running', 'the page\'s audio runs at 48 kHz');
+                let stNow = null;
+                for (let i = 0; i < 100; i++) { stNow = await ask({ op: 'status' }); if (stNow.active && stNow.claimed) break; await sleep(100); }
+                assert.ok(stNow.active && stNow.claimed, 'sound flows: the speakers are claimed: ' + JSON.stringify(stNow) + ' ' + alog.slice(-400));
+                assert.ok(fs.readFileSync(flog, 'utf8').indexOf('claim') >= 0);
+                // real time: the writer's first report (after 5 s) has about 5 s of 48 kHz frames, hardly any dropped
+                for (let i = 0; i < 90 && !stNow.stats; i++) { await sleep(100); stNow = await ask({ op: 'status' }); }
+                const fr = /^frames (\d+) dropped (\d+)/.exec(stNow.stats || '');
+                assert.ok(fr && Number(fr[1]) > 200000 && Number(fr[1]) < 280000 && Number(fr[2]) < 12000, 'about 240000 frames in the first 5 s: ' + stNow.stats);
+                // the browser is closed: the stream ends, the speakers go back
+                c4.send({ op: 'close' });
+                await c4.until('engine off', (x) => x.engine === 'off', 20000);
+                for (let i = 0; i < 60 && fs.readFileSync(flog, 'utf8').indexOf('release') < 0; i++) await sleep(100);
+                assert.ok(fs.readFileSync(flog, 'utf8').indexOf('release') >= 0, 'the speakers are released: ' + alog.slice(-300));
+                assert.strictEqual((await ask({ op: 'status' })).stream, null);
+                console.log('ok engine sound: a page\'s audio reaches G21 Audio as S16LE 48 kHz stereo in real time (' + stNow.stats + '); the speakers are claimed while it plays and released when the browser closes');
+            } finally {
+                if (c4) c4.close();
+                await d4.close();
+                audiod.kill('SIGTERM');
             }
         }
         srv.close();

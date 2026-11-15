@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.144
+
+- G21 Audio: nowe narzędzie `g21-audio` 0.1.0, wspólna droga dźwięku THEiPlay do głośników auta dla dźwięku, który przychodzi jako strumień. Strumień PCM (S16LE, 48 kHz, stereo) trafia do urządzenia SmartX `CarLifeMedia`, a AudioManager BMW łączy to źródło (287) z przednimi głośnikami (1024); głośność reguluje iDrive. Głośniki są przejmowane dopiero, gdy płynie dźwięk (około 1,4 s), i oddawane poprzedniemu źródłu (CarPlay, radio) po 3 s ciszy albo po zamknięciu. Sprawdzone na aucie: ton testowy 440 Hz słychać z głośników, po próbie CarPlay wraca.
+- Przeglądarka ma dźwięk: narzędzie `g21-browser` 0.1.8 kieruje wyjście audio silnika do G21 Audio (prywatne urządzenie ALSA silnika zapisuje do kolejki G21 Audio; biblioteki silnika i auta nie mieszają się w jednym procesie, piaskownica zostaje). Nowa reguła `audio`: `on` (domyślnie) / `off`. Bez zainstalowanego G21 Audio strony są nieme, jak dotąd. Na aucie jeszcze niesprawdzone.
+- Skąd kod: `speakers.js` to niezmienione narzędzie „speakers” z Vizualyse/idrive-apps (GPL-3.0-or-later, Yousaf Khan); sposób zapisu do SmartX według Moonride (GPL-3.0-or-later, JustAnotherPU). Szczegóły w `native/g21-audio/NOTICE.md`. Niczego z BMW nie kopiujemy.
+- AirPlay ma dźwięk przez G21 Audio: narzędzie `g21-airplay-open` 0.1.54 najpierw prosi G21 Audio o strumień, a UxPlay zapisuje do niego dźwięk (S16LE, 48 kHz, stereo, w takt zegara strumienia). Dotychczasowa droga (samo połączenie źródła w AudioManagerze) zostaje jako zapas, gdy G21 Audio nie ma albo strumień zajmuje przeglądarka. Wyjaśniona cisza z 0.1.132/0.1.133: połączenie CarLifeMedia bez oznaczenia źródła jako dostępnego wisi w stanie „łączenie”. Na aucie jeszcze niesprawdzone.
+- Czego jeszcze nie ma: YouTube nadal gra przez `jap-ridetube-d` (odtwarzacz BMW, gotowe pliki) — nic w nim nie zmieniono; RDP i pozostałe moduły nie są podłączone do G21 Audio; jest jeden strumień naraz (przeglądarka albo AirPlay); nie ma sekcji „G21 Audio” w ustawieniach.
+
 ## 0.1.143
 
 - Przeglądarka: film nie powinien już kończyć się po chwili komunikatem odtwarzacza „Coś poszło nie tak”. Odczyt z auta: domyślne urządzenie dźwiękowe ALSA to kanał zestawu głośnomówiącego (`hw:0,0`, `root:audio`), którego użytkownik silnika nie może otworzyć, a samo wyciszenie (`--mute-audio`) nadal próbowało je otwierać. Narzędzie `g21-browser` 0.1.7 uruchamia silnik z `--disable-audio-output` (sztuczne wyjście dźwięku, zegar filmu działa dalej). Przyczyna wskazana odczytem konfiguracji auta; skutek poprawki na aucie jeszcze niesprawdzony. Dźwięku stron nadal nie ma.

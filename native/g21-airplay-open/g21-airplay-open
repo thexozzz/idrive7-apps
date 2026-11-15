@@ -374,10 +374,37 @@ audio_route_disconnect() {
     audio_node "$js" disconnect 2>>"$AUDIOLOG" || true
 }
 
+# G21 Audio (the tool g21-audio): AirPlay's sound as a PCM stream to the car's speakers. The stream lives as
+# long as the client process does; it prints the FIFO UxPlay writes into. Nothing printed: no G21 Audio, or
+# another player (the browser) has the one stream; then the old route below is tried.
+g21_audio_open() {
+    js=/var/opt/g21-audio/current/g21-audio-client.js
+    [ -f "$js" ] && [ -S /run/g21-audio/ctl.sock ] && [ -x /usr/bin/node ] || return 0
+    mkdir -p /run/g21-airplay
+    g21_audio_close
+    : > /run/g21-airplay/g21-audio.fifo
+    ( audio_node "$js" hold airplay 0 >/run/g21-airplay/g21-audio.fifo 2>>"$AUDIOLOG" ) &
+    printf '%s\n' "$!" > /run/g21-airplay/g21-audio.pid
+    i=0
+    while [ "$i" -lt 40 ] && [ ! -s /run/g21-airplay/g21-audio.fifo ] && kill -0 "$(cat /run/g21-airplay/g21-audio.pid)" 2>/dev/null; do
+        usleep 100000 2>/dev/null || sleep 1
+        i=$((i + 1))
+    done
+    head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null
+}
+
+g21_audio_close() {
+    [ -f /run/g21-airplay/g21-audio.pid ] || return 0
+    p=$(cat /run/g21-airplay/g21-audio.pid 2>/dev/null)
+    rm -f /run/g21-airplay/g21-audio.pid /run/g21-airplay/g21-audio.fifo
+    [ -n "$p" ] && kill "$p" 2>/dev/null || true
+}
+
 stop_ux() {
     had_ux=$UXPID
     stop_ring
     audio_route_disconnect
+    g21_audio_close
     clear_pin
     if [ -n "$UXPID" ]; then
         kill "$UXPID" 2>/dev/null || true
@@ -1281,9 +1308,21 @@ start_ux() {
     # audio device"), and a SmartX device is only heard while the audio manager connects its
     # source to a sink. g21-audio-route.js makes that connection (as RideTube does) and names a
     # free device; without one, CarPlayMain as before.
-    audio_dev=$(audio_route_connect)
-    [ -n "$audio_dev" ] || audio_dev=CarPlayMain
-    audio_sink="alsasink device=smartx:$audio_dev"
+    # 0.1.54: first G21 Audio. Car 2026-11-15: a connect of CarLifeMedia alone stays CS_CONNECTING for ever (the
+    # source has to be marked available first), which is why 0.1.132/0.1.133 were silent; G21 Audio does that, and
+    # its tone is heard from the speakers. UxPlay then writes S16LE 48 kHz stereo into G21 Audio's FIFO, in step
+    # with the stream's clock (sync=true), and needs no ALSA device of the car at all.
+    audio_fifo=$(g21_audio_open)
+    if [ -n "$audio_fifo" ] && [ -p "$audio_fifo" ]; then
+        audio_dev=g21-audio
+        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=true"
+        printf '%s g21-airplay-open: sound through G21 Audio (%s)\n' "$(date '+%F %T')" "$audio_fifo" >>"$AUDIOLOG"
+    else
+        g21_audio_close
+        audio_dev=$(audio_route_connect)
+        [ -n "$audio_dev" ] || audio_dev=CarPlayMain
+        audio_sink="alsasink device=smartx:$audio_dev"
+    fi
     printf '%s\n' "$audio_dev" > /run/g21-airplay/audio-device 2>/dev/null || true
     export ALSA_PLUGIN_DIR="${ALSA_PLUGIN_DIR:-/usr/lib/alsa-lib}"
     # Auth: menu writes /run/g21-session/airplay-auth (pin|open).

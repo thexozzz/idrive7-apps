@@ -12,4 +12,11 @@ native/g21-browser/build-sandbox.sh text eol=lf
 native/g21-browser/sandbox-src/** text eol=lf
 native/g21-browser/policy.example.json text eol=lf
 native/g21-browser/lib/* binary
+native/g21-audio/g21-audio-out binary
+native/g21-audio/*.js text eol=lf
+native/g21-audio/*.sh text eol=lf
+native/g21-audio/*.c text eol=lf
+native/g21-audio/*.service text eol=lf
+native/g21-audio/*.json text eol=lf
+native/g21-audio/*.md text eol=lf
 native/g21-browser/fonts/*.ttf binary

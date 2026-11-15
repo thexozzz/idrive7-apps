@@ -80,6 +80,7 @@ function defaults() {
         sandboxHelper: path.join(here, 'g21-chrome-sandbox'), // Chromium's setuid sandbox helper, built from sandbox-src/
         policyFile: path.join(root, 'state', 'policy.json'),   // the owner's rules; see POLICY_DEFAULT
         policyOut: path.join(run, 'policy.json'),              // the rules in force, for reading (0644)
+        audioSock: env.G21_BROWSER_AUDIO_SOCK || '/run/g21-audio/ctl.sock', // G21 Audio (the tool g21-audio), when it is installed
         idleMs: 90000,        // the engine stays this long after the app went away
         frameGapMs: 50,       // at most 20 page frames a second
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
@@ -655,12 +656,15 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *                         gbm_bo_get_fd_for_plane, which the car's libgbm (Mesa 19.0.6) does not have, so it cannot
  *                         load the car's graphics libraries as they are (docs/ai/BROWSER_PLAN.md).
  *   picture   1 | 0.75 | 0.5   share of the screen's pixels the page is rendered at (default 0.75)
+ *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
+ *                         the car's speakers while a page plays and gives them back after (default)
+ *             "off"       pages are silent
  *   memoryLimitMb  300..3000   the engine's processes together; above it the engine is stopped (default 900)
  *   network.blockPrivate  true: pages cannot reach loopback, private, link-local and Tailscale addresses (default)
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -668,12 +672,13 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
         pick('gpu', (v) => v === 'off');
         pick('picture', (v) => [1, 0.75, 0.5].indexOf(v) >= 0);
+        pick('audio', (v) => v === 'on' || v === 'off');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -736,7 +741,7 @@ Daemon.prototype.push = function (force) {
     const start = /^data:/.test(s.url);
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? '' : s.url, title: start ? 'Strona startowa' : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
-        pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb } };
+        pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none' } };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -843,12 +848,12 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'policy') {
         // A rule set from THEiPlay's menu (Aplikacje > Ustawienia). Only these three, and never "sandbox": "off" or a
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
-        const ok = { picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
+        const ok = { audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture();
+        const pictureWas = this.picture(), audioWas = this.policy().audio;
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -858,7 +863,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && this.picture() !== pictureWas) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'sandbox-off') {
@@ -1001,6 +1006,50 @@ Daemon.prototype.adoptRing = function (ino) {
     } catch (e) { this.log('video file not taken over (the renderer will not draw it): ' + e.message); }
     if (fd >= 0) { try { fs.closeSync(fd); } catch (e) { /* closed */ } }
 };
+/*
+ * The engine's sound. G21 Audio (g21-audiod, the tool g21-audio) gives a FIFO for this engine's uid; the engine's own
+ * ALSA library (lib/libasound.so.2, not the car's) gets a configuration with one device, "g21out": a file device that
+ * writes what the engine plays, raw, into that FIFO. G21 Audio's writer reads it in real time and plays it into the
+ * car's SmartX device with the car's ALSA. The two C libraries never meet in one process. The connection to G21
+ * Audio stays open while the engine runs; closing it closes the stream. No G21 Audio, or policy "audio": "off":
+ * the engine has no sound device (this.audio = null).
+ */
+Daemon.prototype.openAudio = function () {
+    this.closeAudio();
+    if (this.policy().audio !== 'on') return Promise.resolve();
+    const uid = this.opts.noSetuid ? (process.getuid ? process.getuid() : 0) : this.uid;
+    return new Promise((resolve) => {
+        let done = false, buf = '';
+        const c = net.connect(this.opts.audioSock);
+        const end = (why) => { if (done) return; done = true; clearTimeout(t); if (why) { this.log('sound: no G21 Audio (' + why + '): pages are silent'); try { c.destroy(); } catch (e) { /* gone */ } } resolve(); };
+        const t = setTimeout(() => end('no answer'), 3000);
+        c.setEncoding('utf8');
+        c.on('connect', () => c.write(JSON.stringify({ op: 'open', name: 'chromium', uid: uid }) + '\n'));
+        c.on('error', (e) => end(e.code || e.message));
+        c.on('close', () => { if (this.audio && this.audio.conn === c) { this.audio = null; this.log('sound: G21 Audio went away'); } end('closed'); });
+        c.on('data', (d) => {
+            buf += d;
+            const i = buf.indexOf('\n');
+            if (i < 0 || done) return;
+            let m = null;
+            try { m = JSON.parse(buf.slice(0, i)); } catch (e) { m = null; }
+            if (!m || m.ev !== 'open' || !m.ok || typeof m.fifo !== 'string' || !/^\/[A-Za-z0-9._\/-]+$/.test(m.fifo)) return end(m && m.err ? String(m.err) : 'refused');
+            const conf = path.join(this.opts.runDir, 'asound.conf');
+            try {
+                mkdirp(this.opts.runDir);
+                writeIfChanged(conf, 'pcm.g21null {\n    type null\n}\npcm.g21out {\n    type file\n    slave.pcm "g21null"\n    file "' + m.fifo + '"\n    format "raw"\n}\npcm.!default {\n    type plug\n    slave.pcm "g21out"\n}\n', 0o644);
+            } catch (e) { return end('asound.conf: ' + e.message); }
+            this.audio = { conn: c, fifo: m.fifo, conf: conf };
+            this.log('sound: G21 Audio stream ' + m.fifo);
+            end('');
+        });
+    });
+};
+Daemon.prototype.closeAudio = function () {
+    const a = this.audio;
+    this.audio = null;
+    if (a) { try { a.conn.end(JSON.stringify({ op: 'close' }) + '\n'); } catch (e) { /* gone */ } }
+};
 Daemon.prototype.startFrame = function () {
     if (this.frame) return;
     let colour = (lines(path.join(this.opts.stateDir, 'color'))[0] || '').trim();
@@ -1126,13 +1175,17 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
         // No sound device for the engine: on the head unit ALSA's "default" is hw:0,0, the hands-free telephone's PCM
         // (/dev/snd/pcmC0D0p, root:audio 0660), which the engine's uid cannot open. --mute-audio alone still opens the
         // device; with --disable-audio-output the engine keeps a film's clock on a sink of its own.
-        '--mute-audio', '--disable-audio-output', '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+        '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
         '--autoplay-policy=user-gesture-required', '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
         '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--js-flags=--max-old-space-size=512'
     ];
+    // Sound: with G21 Audio the engine plays into its own ALSA device "g21out" (asound.conf made by openAudio: a file
+    // device that writes S16LE 48 kHz stereo into G21 Audio's FIFO). Without it: no device at all (see above).
+    if (this.audio) args.push('--alsa-output-device=g21out');
+    else args.push('--mute-audio', '--disable-audio-output');
     if (!sandbox) args.push('--no-sandbox');
     try { const st = fs.statfsSync('/dev/shm'); if (Number(st.bavail) * Number(st.bsize) < (256 << 20)) args.push('--disable-dev-shm-usage'); } catch (e) { args.push('--disable-dev-shm-usage'); }
     // state/engine-flags: extra switches, one per line (e.g. to try the GPU on the car without a new build)
@@ -1200,6 +1253,7 @@ Daemon.prototype.startEngine2 = async function (url) {
     this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
     await this.startProxy();
     this.startFrame();
+    await this.openAudio();
     const mode = this.policy().sandbox;
     const refuse = (why) => {
         if (mode === 'required') { this.log(why + ': policy "sandbox": "required", the engine is not started'); return new UserError('reguły wymagają piaskownicy, a silnik nie może jej użyć'); }
@@ -1234,6 +1288,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
         FONTCONFIG_FILE: dirs.conf, DBUS_SESSION_BUS_ADDRESS: 'disabled:', DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=' + path.join(o.runDir, 'no-dbus') };
     if (process.env.TZ) env.TZ = process.env.TZ;
     if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
+    if (this.audio) env.ALSA_CONFIG_PATH = this.audio.conf;
     const child = cp.spawn(path.join(dirs.engine, 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
     const e = { child: child, cdp: null, session: '', target: '', mainFrame: '', down: null, err: '', product: '' };
     this.engine = e;
@@ -1352,6 +1407,7 @@ Daemon.prototype.onEngineExit = function (e, code, sig) {
 Daemon.prototype.killEngine = function () {
     const e = this.engine;
     this.engine = null;
+    this.closeAudio();
     clearInterval(this.memTimer);
     clearInterval(this.pollTimer);
     Object.keys(this.popups).forEach((k) => clearTimeout(this.popups[k]));
@@ -1392,6 +1448,7 @@ Daemon.prototype.stopEngine = async function (why) {
     if (this.starting) { try { await this.starting; } catch (e) { /* logged */ } }
     const had = !!this.engine;
     const e = this.engine;
+    this.closeAudio();
     if (e) {
         this.engine = null;
         clearInterval(this.memTimer);

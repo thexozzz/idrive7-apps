@@ -40,6 +40,11 @@ if (posix) {
     assert.ok(!/^(LD_PRELOAD|G21_BIND_IP|LD_LIBRARY_PATH)=/m.test(envOut), 'clean env: ' + envOut.split('\n').filter(function (l) { return /^(LD_|G21_)/.test(l); }).join(' '));
 } else { skipped += 1; console.log('SKIP audio_node clean environment: needs a POSIX sh'); }
 assert.ok(/alsasink device=smartx:\$audio_dev/.test(tool), 'sink follows the routed device');
+// 0.1.54: G21 Audio first (a FIFO UxPlay writes S16LE 48 kHz stereo into, in step with the clock); the old route only without it
+assert.ok(/audio_fifo=\$\(g21_audio_open\)/.test(tool) && /filesink location=\$audio_fifo sync=true/.test(tool) && /format=S16LE,rate=48000,channels=2/.test(tool), 'AirPlay sound goes to G21 Audio');
+assert.ok(tool.indexOf('audio_fifo=$(g21_audio_open)') < tool.indexOf('audio_dev=$(audio_route_connect)'), 'G21 Audio is tried before the old route');
+assert.ok(/audio_route_disconnect\n    g21_audio_close/.test(tool), 'the stream is closed when UxPlay stops');
+assert.ok(/hold airplay 0/.test(tool) && fs.existsSync(path.join(root, 'native', 'g21-audio', 'g21-audio-client.js')), 'the stream is held by g21-audio\'s client');
 
 // Fake audio manager: records calls in calls.json.
 var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g21-audio-'));
