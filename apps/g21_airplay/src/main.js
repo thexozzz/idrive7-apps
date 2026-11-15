@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.175',
+        version: (this._packageJson && this._packageJson.version) || '0.1.176',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.175') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.176') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5392,7 +5392,9 @@ AirPlayApp.prototype._webFsBox = function () {
     var y = box && box.y > 0 ? (box.y | 0) : 0;
     var w = box && box.w ? Math.min(box.w | 0, scr.w - x) & ~3 : 0;
     var h = box && box.h ? Math.min(box.h | 0, scr.h - y) & ~1 : 0;
-    if (this._webFsFull || w < 320 || h < 200) {
+    // Always the whole screen: a film in a small window with a second button to make it large was neither clear
+    // nor did it work in the car (owner, 2026-11-15).
+    if (scr.w > 0 || x || y || w || h) {
         return { x: 0, y: 0, w: scr.w, h: scr.h };
     }
     return { x: x, y: y, w: w, h: h };

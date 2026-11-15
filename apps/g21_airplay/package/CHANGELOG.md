@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.176
+
+- Pełny ekran bez napisów: zamiast dwóch przycisków z tekstem („Pełny ekran” i „Pozycja” nad oknem AirPlay, „Wyjdź” i „Pełny ekran” w Przeglądarce, „Rozciągnij” i pasek „Wyjdź z trybu pełnoekranowego” w AirPlay) są okrągłe znaki. Okno AirPlay: jeden znak (cztery narożniki) – pełny ekran; położenie okna ustawia się w Ustawienia > Obraz > Pozycja. Pełny ekran AirPlay: krzyżyk (wyjście, zawsze widoczny) i strzałka w obie strony (rozciągnięcie na 1920×720). Pełny ekran Przeglądarki: tylko krzyżyk, w tym samym miejscu.
+- Przeglądarka: pełny ekran odtwarzacza to zawsze cały ekran środkowy (wariant „okno z Pozycji” z drugim przyciskiem usunięty). `g21-browser` 0.1.30: wyjście z pełnego ekranu mówi stronie wprost `document.exitFullscreen()` – sam klawisz Escape w silniku bez własnego okna nie wychodził z pełnego ekranu.
+- Pomiar na aucie podczas filmu (2026-11-15, 0.1.175 / 0.1.29): odtwarzacz strony dostał H.264 1280×720 („lekkie wideo” działa), dekoduje programowo (FFmpegVideoDecoder), procesor wolny w 0–10%, dźwięk bez opróżnień bufora. Nowe przyciski niesprawdzone w aucie.
+
 ## 0.1.175
 
 - Płynność filmu w Przeglądarce, po pomiarze na aucie podczas odtwarzania (2026-11-15, 0.1.174): procesor zajęty w 92–98%, obciążenie ok. 11 na 4 rdzeniach; procesy THEiPlay ok. 40%, z czego połowa to przenoszenie obrazu strony (silnik koduje każdą klatkę jako JPEG, `g21-webframe` ją dekoduje), a nie dekodowanie filmu; reszta to kilkadziesiąt procesów systemu po 2–5%. Dźwięk czysty (0 opróżnień bufora). `g21-browser` 0.1.29: pełny ekran jest renderowany w połowie rozmiaru (960×360 zamiast 1280×480, o 44% mniej pikseli na klatkę), JPEG o jakości 64, usługa ma priorytet `Nice=-4`. Log zapisuje, jakiego dekodera, rozmiaru i liczby klatek używa odtwarzacz. Niesprawdzone w aucie.

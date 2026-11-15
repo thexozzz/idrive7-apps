@@ -1329,6 +1329,12 @@ Daemon.prototype.onCommand = async function (m) {
 Daemon.prototype.key = async function (e, k) {
     const K = { Enter: [13, '\r'], Backspace: [8, ''], Tab: [9, ''], Escape: [27, ''] }[k];
     if (!K) return;
+    // Out of a player's full screen: the engine without a window of its own does not leave full screen on the
+    // Escape key (that is the browser's doing, not the page's), so the page is told directly.
+    if (k === 'Escape' && this.fs) {
+        try { await e.cdp.send('Runtime.evaluate', { expression: 'document.fullscreenElement && document.exitFullscreen && document.exitFullscreen().catch(function () {}); 0', returnByValue: true }, e.session); } catch (x) { /* the page is on its way somewhere else */ }
+        setTimeout(() => { if (this.engine === e) this.refresh(e).catch(() => {}); }, 150);
+    }
     const base = { key: k, code: k, windowsVirtualKeyCode: K[0], nativeVirtualKeyCode: K[0] };
     await e.cdp.send('Input.dispatchKeyEvent', Object.assign({ type: K[1] ? 'keyDown' : 'rawKeyDown' }, base, K[1] ? { text: K[1] } : {}), e.session);
     await e.cdp.send('Input.dispatchKeyEvent', Object.assign({ type: 'keyUp' }, base), e.session);

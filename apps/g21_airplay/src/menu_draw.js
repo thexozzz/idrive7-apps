@@ -2096,6 +2096,37 @@ function drawChip(draw, box, on, label) {
     draw.text(text, box.x + Math.floor((box.w - tw) / 2), box.y + Math.floor((box.h - 21) / 2), 3, on ? PAGE : INK);
 }
 
+// A round button with a drawn sign and no words, for what floats over a picture (a film, a page in full screen):
+// 'full' four corners, 'close' a cross, 'stretch' an arrow to both sides. Two worded chips side by side over the
+// picture were neither pretty nor clear (owner, 2026-11-15).
+function drawIconBtn(draw, box, kind, on) {
+    var r = Math.floor(box.h / 2);
+    var cx = box.x + Math.floor(box.w / 2);
+    var cy = box.y + r;
+    var ink = on ? PAGE : 0xFFFFFFFF;
+    var a = 9;
+    var t = 3;
+    draw.round(box.x, box.y, box.w, box.h, r, on ? ACCENT : 0x000000B4);
+    if (!on) {
+        draw.stroke(box.x, box.y, box.w, box.h, r, 1.5, 0xFFFFFF70);
+    }
+    if (kind === 'close') {
+        draw.quad([[cx - a - 2, cy - a + 2], [cx - a + 2, cy - a - 2], [cx + a + 2, cy + a - 2], [cx + a - 2, cy + a + 2]], ink);
+        draw.quad([[cx + a - 2, cy - a - 2], [cx + a + 2, cy - a + 2], [cx - a + 2, cy + a + 2], [cx - a - 2, cy + a - 2]], ink);
+    } else if (kind === 'stretch') {
+        draw.rect(cx - 7, cy - 2, 14, 4, ink);
+        draw.quad([[cx - 15, cy], [cx - 6, cy - 8], [cx - 6, cy + 8]], ink);
+        draw.quad([[cx + 15, cy], [cx + 6, cy + 8], [cx + 6, cy - 8]], ink);
+    } else {
+        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (c) {
+            var px = cx + c[0] * 11;
+            var py = cy + c[1] * 11;
+            draw.rect(c[0] < 0 ? px : px - 8 + 1, c[1] < 0 ? py : py - t + 1, 8, t, ink);
+            draw.rect(c[0] < 0 ? px : px - t + 1, c[1] < 0 ? py : py - 8 + 1, t, 8, ink);
+        });
+    }
+}
+
 function drawSlider(draw, x, y, w, value, min, max, hot) {
     var span = (max | 0) - (min | 0);
     var t = span > 0 ? ((value | 0) - (min | 0)) / span : 0;
@@ -2447,11 +2478,12 @@ function drawWhereSheet(draw, lay, air) {
     lay.airHits.push(close);
 }
 
-// Full screen: black over the whole menu, only the picture; a tap shows the way out.
-var FULL_EXIT = { name: 'air-full', x: 560, y: 590, w: 800, h: 72 };
+// Full screen: black over the whole menu, only the picture, and two round signs at the top right of the part of
+// the screen the app gets touches from: the way out (a cross) and, left of it, the stretch.
+var FULL_EXIT = { name: 'air-full', x: 104 + 1796 - 12 - 48, y: 88 + 12, w: 48, h: 48 };
 // the floating button of the full screen, top right of the part of the screen the app gets touches from: the
 // picture over the whole 1920 x 720, its shape given up
-var FULL_STRETCH = { name: 'air-stretch', x: 104 + 1796 - 12 - 200, y: 88 + 12, w: 200, h: 40 };
+var FULL_STRETCH = { name: 'air-stretch', x: 104 + 1796 - 12 - 48 - 12 - 48, y: 88 + 12, w: 48, h: 48 };
 function drawFullScreen(draw, lay, air) {
     draw.rect(0, 0, 1920, 720, 0x000000FF);
     draw.video(0, 0, 1920, 720, 1);
@@ -2460,14 +2492,8 @@ function drawFullScreen(draw, lay, air) {
     lay.hits = [];
     lay.airBadge = null;
     lay.airStrip = null;
-    drawChip(draw, FULL_STRETCH, !!air.stretch, tr('Rozciągnij'));
-    if (air.fullUi) {
-        draw.grad(0, 520, 1920, 200, 0x00000000, 0x000000D8);
-        draw.round(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, 36, 0x1C1612F0);
-        draw.stroke(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, 36, 2, ACCENT);
-        var label = tr('Wyjdź z trybu pełnoekranowego');
-        draw.text(label, FULL_EXIT.x + Math.floor((FULL_EXIT.w - draw.textWidth(label, 4)) / 2), FULL_EXIT.y + 22, 4, INK);
-    }
+    drawIconBtn(draw, FULL_STRETCH, 'stretch', !!air.stretch);
+    drawIconBtn(draw, FULL_EXIT, 'close', false);
 }
 
 function applyAirOverlay(draw, lay, air, versionText) {
@@ -2542,9 +2568,9 @@ var CHIP_W = 200;
 var CHIP_H = 40;
 var CHIP_GAP = 12;
 function drawCenterChrome(draw, lay, win, full, moving) {
-    // two chips of one size, side by side, at the window's top right inside it
-    // (moved in when the window reaches past the menu page)
-    var row = CHIP_W * 2 + CHIP_GAP;
+    // one round sign at the window's top right inside it (moved in when the window reaches past the menu page):
+    // full screen. Where the window is: Ustawienia > Obraz > Pozycja.
+    var row = 44;
     var x = win.x + win.w - 12 - row;
     var y = win.y + 12;
     var fullBtn;
@@ -2558,20 +2584,17 @@ function drawCenterChrome(draw, lay, win, full, moving) {
     if (y < lay.oy + 58) {
         y = lay.oy + 58;
     }
-    if (y + CHIP_H > lay.oy + lay.boxH - 12) {
-        y = lay.oy + lay.boxH - 12 - CHIP_H;
+    if (y + 44 > lay.oy + lay.boxH - 12) {
+        y = lay.oy + lay.boxH - 12 - 44;
     }
-    fullBtn = { name: 'air-full', x: x, y: y, w: CHIP_W, h: CHIP_H };
-    posBtn = { name: 'air-pos', x: x + CHIP_W + CHIP_GAP, y: y, w: CHIP_W, h: CHIP_H };
-    drawChip(draw, fullBtn, full, tr('Pełny ekran'));
-    if (!full) {
-        drawChip(draw, posBtn, moving, tr('Pozycja'));
-    }
+    fullBtn = { name: 'air-full', x: x, y: y, w: 44, h: 44 };
+    posBtn = null;
+    drawIconBtn(draw, fullBtn, full ? 'close' : 'full', false);
     if (!lay.airHits) {
         lay.airHits = [];
     }
     lay.airHits.push(fullBtn);
-    if (!full) {
+    if (posBtn && moving) {
         lay.airHits.push(posBtn);
     }
 }
@@ -3536,18 +3559,10 @@ function buildWebFrame(width, height, web) {
         draw.video(fsBox.x, fsBox.y, fsBox.w, fsBox.h, 1);
         // "Pełny ekran" at the picture's top right (inside the part of the screen the app gets touches from): the
         // whole centre screen, 1920 x 720, in place of the Pozycja window; again: the window
-        var fsChip = { name: 'web-fs-full', x: Math.min(fsBox.x + fsBox.w, CONTENT.x + CONTENT.w) - 12 - CHIP_W, y: Math.max(fsBox.y, CONTENT.y) + 12, w: CHIP_W, h: CHIP_H };
-        if (fsChip.x < CONTENT.x + 12) {
-            fsChip.x = CONTENT.x + 12;
-        }
-        drawChip(draw, fsChip, !!info.fsFull, tr('Pełny ekran'));
         // and the way out, beside it (a small picture with no way out looked like a hang: car, 2026-11-15)
-        var fsOut = { name: 'web-fs-exit', x: fsChip.x - 12 - 150, y: fsChip.y, w: 150, h: CHIP_H };
-        if (fsOut.x < CONTENT.x + 12) {
-            fsOut.x = fsChip.x;
-            fsOut.y = fsChip.y + CHIP_H + 10;
-        }
-        drawChip(draw, fsOut, false, tr('Wyjdź'));
+        // one round sign, the same and in the same place as AirPlay's full screen has
+        var fsOut = { name: 'web-fs-exit', x: FULL_EXIT.x, y: FULL_EXIT.y, w: FULL_EXIT.w, h: FULL_EXIT.h };
+        drawIconBtn(draw, fsOut, 'close', false);
         if (info.mouse) {
             var fx = fsBox.x + Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
             var fy = fsBox.y + Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
@@ -3557,7 +3572,7 @@ function buildWebFrame(width, height, web) {
         return {
             frame: packFrame(draw),
             rects: draw.rects,
-            layout: { webHits: [fsChip, fsOut], webPage: fsBox, web: lay, video: true, fs: true }
+            layout: { webHits: [fsOut], webPage: fsBox, web: lay, video: true, fs: true }
         };
     }
     if (showVideo) {
@@ -5169,7 +5184,7 @@ function createMenuSurface(opts) {
                 if (airState && airState.full && !edit) {
                     // full screen: a tap shows "Wyjdź z trybu pełnoekranowego"; on it, it leaves
                     if (phase === 3) {
-                        choose(pointIn(FULL_STRETCH, tx, ty) ? 'air-stretch' : (airState.fullUi && pointIn(FULL_EXIT, tx, ty) ? 'air-full' : 'air-full-tap'));
+                        choose(pointIn(FULL_STRETCH, tx, ty) ? 'air-stretch' : (pointIn(FULL_EXIT, tx, ty) ? 'air-full' : 'air-full-tap'));
                     }
                     touchDown = null;
                     return;

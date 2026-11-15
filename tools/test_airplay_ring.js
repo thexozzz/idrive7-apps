@@ -112,14 +112,13 @@ assert.deepStrictEqual(full.layout.airWindow, { x: 0, y: 0, w: 1920, h: 720 }, '
 assert.strictEqual((full.layout.airHits || []).length, 0, 'no buttons over it until a tap');
 var shownUi = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, '', 'AirPlay', 'v', null, null, null, 'AirPlay',
     { on: true, online: true, mirrored: true, full: true, fullUi: true, window: win, screens: [] });
-assert.ok(shownUi.rects > full.rects, 'a tap shows "Wyjdź z trybu pełnoekranowego"');
+assert.strictEqual(shownUi.rects, full.rects, 'the way out (a round sign) is always there: a tap adds nothing');
 var windowed = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, '', 'AirPlay', 'v', null, null, null, 'AirPlay',
     { on: true, online: true, mirrored: true, full: false, window: win, screens: [] });
 var chips = (windowed.layout.airHits || []).filter(function (h) { return h.name === 'air-full' || h.name === 'air-pos'; });
-assert.strictEqual(chips.length, 2, 'Pełny ekran and Pozycja over the window');
-assert.strictEqual(chips[0].y, chips[1].y, 'in one row');
-assert.strictEqual(chips[0].w, chips[1].w, 'of one size');
-assert.ok(chips[1].x + chips[1].w <= win.x + win.w && chips[0].x >= win.x, 'inside the window, right-aligned');
+assert.strictEqual(chips.length, 1, 'one sign over the window: full screen');
+assert.strictEqual(chips[0].name, 'air-full');
+assert.ok(chips[0].x + chips[0].w <= win.x + win.w && chips[0].x >= win.x, 'inside the window, right-aligned');
 // the app: full screen is not saved, ends when the app is left or the stream ends
 assert.ok(main.indexOf("this._setAirFull(!this._airFull);") !== -1);
 assert.ok(main.indexOf("this._settings.setPicture('central', {\n                x: 0,") === -1 && main.indexOf('w: 1920,\r\n                h: 720,') === -1, 'no saved 1920x720 window');

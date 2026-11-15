@@ -259,7 +259,7 @@ var framed = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1
     window: { x: 200, y: 120, w: 640, h: 360 }
 });
 assert.ok(framed.layout.airHits.some(function (hit) { return hit.name === 'air-full'; }));
-assert.ok(framed.layout.airHits.some(function (hit) { return hit.name === 'air-pos'; }));
+assert.ok(!framed.layout.airHits.some(function (hit) { return hit.name === 'air-pos'; }), 'no second button over the picture');
 assert.ok(!hitNamed(badged, 'stream-central'));
 var clipped = menu.streamWindow({ x: 180, y: 36, w: 1280, h: 640 }, { ox: 104, oy: 88, boxW: 1796, boxH: 632 });
 assert.ok(clipped.y + clipped.h <= 88 + 632 - 160);
