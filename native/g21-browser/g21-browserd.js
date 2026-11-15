@@ -1653,8 +1653,8 @@ Daemon.prototype.appUrl = async function (id) {
 /*
  * THEiPlay Player. A film inside a page is drawn by the engine, photographed (screencast, JPEG) and decoded again:
  * on the head unit that is what stutters, not the film's own decoding (car, 2026-11-15: H.264 1280 x 720 costs the
- * processor about a fifth of one core). So every <video> of a page gets a button, "Odtwórz w THEiPlay Player":
- * the page's film stops, g21-film.py (yt-dlp) brings the stream, gputest/ffmpeg-va decodes it and scales it to the
+ * processor about a fifth of one core). So a film does not play inside a page at all (owner, 2026-11-15): every
+ * <video> is held paused and gets a large button in its middle, "Odtwórz"; then g21-film.py (yt-dlp) brings the stream, gputest/ffmpeg-va decodes it and scales it to the
  * centre screen, and the frames go as they are into the video file through g21-webframe; the sound goes to the
  * G21 Audio stream the engine has. The app sees it as a page in full screen: the cross leaves, the knob's press
  * (Enter) or a click pauses.
@@ -1663,22 +1663,34 @@ Daemon.prototype.appUrl = async function (id) {
  * another site where dialogs are not allowed, through a window that is closed at once (about:blank#theiplay-player:).
  * Neither needs the Runtime domain, which pages can notice.
  * Not played: films with DRM (yt-dlp cannot fetch them). No seeking yet; the film starts from its beginning.
+ *
+ * Car, 2026-11-15, the first version: a YouTube film played (1234 frames in 56 s, about 22 a second: a 720p stream
+ * scaled to 1280 x 480 on a head unit at load 11). The film's picture inside 1280 x 480 is 854 x 480, so the 480p
+ * stream is asked for and nothing is scaled. The graphics chip is not used: read on the same day, decoding there
+ * costs an eighth of the processor's time, but bringing each frame back to memory costs 30 ms of processor time
+ * against 11 ms for decoding and scaling on the processor.
  */
 const PLAYER_HOOK = '(function(){try{if(window.__g21Film)return;window.__g21Film=1;'
-    + 'var T="\\u25B6 Odtw\\u00F3rz w THEiPlay Player",W="\\u0141adowanie filmu\\u2026",map=new WeakMap(),last=0;'
+    + 'var T="\\u25B6 Odtw\\u00F3rz",W="\\u0141adowanie filmu\\u2026",map=new WeakMap(),last=0;'
+    // a film does not play inside the page at all: whatever starts one (the page itself, a tap) is stopped at once
+    + 'function hold(ev){var v=ev.target;if(v&&v.tagName==="VIDEO"){try{v.pause();}catch(e){}}}'
+    + 'document.addEventListener("play",hold,true);document.addEventListener("playing",hold,true);'
     + 'function ask(v,b){var now=Date.now();if(now-last<1500)return;last=now;try{v.pause();}catch(e){}b.textContent=W;'
     + 'var q=JSON.stringify({src:String(v.currentSrc||v.src||""),page:String(location.href)});'
     + 'setTimeout(function(){try{if(window.top===window.self)window.prompt("theiplay-player:"+q);else window.open("about:blank#theiplay-player:"+encodeURIComponent(q));}catch(e){}'
-    + 'setTimeout(function(){b.textContent=T;},6000);},350);}'
+    + 'setTimeout(function(){b.textContent=T;},45000);},350);}'
     + 'function make(v){var b=document.createElement("button");b.type="button";b.textContent=T;'
-    + 'b.style.cssText="position:fixed;z-index:2147483647;display:none;margin:0;padding:10px 18px;border:0;border-radius:22px;background:rgba(0,0,0,.84);color:#fff;font:600 15px/1.2 sans-serif;cursor:pointer;box-shadow:0 0 0 1.5px rgba(255,255,255,.6)";'
+    + 'b.style.cssText="position:fixed;z-index:2147483647;display:none;margin:0;padding:22px 46px;border:0;border-radius:48px;background:rgba(0,0,0,.86);color:#fff;font:700 32px/1.15 sans-serif;white-space:nowrap;cursor:pointer;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.7),0 6px 28px rgba(0,0,0,.6)";'
     + 'var go=function(ev){ev.preventDefault();ev.stopPropagation();ask(v,b);};b.addEventListener("click",go,true);b.addEventListener("touchend",go,true);'
     + '(document.body||document.documentElement).appendChild(b);return b;}'
-    + 'function scan(){var vs=document.querySelectorAll("video"),i,v,b,r;for(i=0;i<vs.length;i++){v=vs[i];b=map.get(v);if(!b){b=make(v);map.set(v,b);}'
+    + 'function scan(){var vs=document.querySelectorAll("video"),i,v,b,r,x,y;for(i=0;i<vs.length;i++){v=vs[i];b=map.get(v);if(!b){b=make(v);map.set(v,b);}'
+    + 'if(!v.paused){try{v.pause();}catch(e){}}'
     + 'if(!b.isConnected)(document.body||document.documentElement).appendChild(b);r=v.getBoundingClientRect();'
     + 'if(r.width<160||r.height<90||r.bottom<40||r.right<40||r.top>window.innerHeight-40||r.left>window.innerWidth-40||document.fullscreenElement){b.style.display="none";continue;}'
-    + 'b.style.left=Math.max(8,r.left+12)+"px";b.style.top=Math.max(8,r.top+12)+"px";b.style.display="block";}}'
-    + 'setInterval(scan,800);'
+    // in the middle of the film's picture (of the part of it that is on the screen)
+    + 'x=(Math.max(0,r.left)+Math.min(window.innerWidth,r.right))/2;y=(Math.max(0,r.top)+Math.min(window.innerHeight,r.bottom))/2;'
+    + 'b.style.left=x+"px";b.style.top=y+"px";b.style.display="block";}}'
+    + 'setInterval(scan,700);'
     + '}catch(e){}})();';
 const TUBE_RE = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
 Daemon.prototype.filmAsk = function (e, text) {
@@ -1687,6 +1699,8 @@ Daemon.prototype.filmAsk = function (e, text) {
     const ok = (u) => (typeof u === 'string' && /^https?:\/\/[^\s]+$/i.test(u) ? u.slice(0, 4000) : '');
     const page = ok(q && q.page), src = ok(q && q.src);
     if (!page && !src) { this.log('film: asked without an address'); return; }
+    // (the same film asked again while it is on its way: the button was pressed twice)
+    if (this.film && !this.film.shown && this.film.key === page + '|' + src) return;
     this.guard(() => this.filmStart(e, page, src));
 };
 Daemon.prototype.filmStart = async function (e, page, src) {
@@ -1708,7 +1722,7 @@ Daemon.prototype.filmStart = async function (e, page, src) {
     const fw = this.want.fw || this.want.w, fh = this.want.fh || this.want.h;
     const k = fw > 1280 ? 2 / 3 : 1;
     const W = Math.round(fw * k) & ~3, H = Math.round(fh * k) & ~1, size = W * H * 3 / 2;
-    const f = { W: W, H: H, fw: fw, fh: fh, procs: [], frames: 0, dropped: 0, paused: false, shown: false, notes: 0 };
+    const f = { W: W, H: H, fw: fw, fh: fh, key: page + '|' + src, procs: [], frames: 0, dropped: 0, paused: false, shown: false, notes: 0 };
     this.film = f;
     this.log('film: ' + (tube ? 'YouTube' : (originOf(url) || 'address')) + ', picture ' + W + 'x' + H + (this.audio ? '' : ', no sound stream'));
     const env = { PATH: '/usr/bin:/bin', HOME: '/', LANG: 'C.UTF-8' };
@@ -1721,12 +1735,14 @@ Daemon.prototype.filmStart = async function (e, page, src) {
         f.procs.push(c);
         return c;
     };
+    // the stream whose lines fit the picture (480 for the whole centre screen), so that nothing is scaled
+    const top = H >= 720 ? 720 : (H >= 480 ? 480 : 360);
     // YouTube gives the picture and the sound apart; other sites one stream with both
-    const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=720][fps<=30]/bv*[vcodec^=avc1][height<=720]/b[height<=720]'), fetch('ba[ext=m4a]/ba')]
-        : [fetch('b[height<=720]/b/bv*[height<=720]/bv*')];
+    const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=' + top + '][fps<=30]/bv*[vcodec^=avc1][height<=' + top + ']/b[height<=' + top + ']/b'), fetch('ba[ext=m4a]/ba')]
+        : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*')];
     const vf = 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
-    const args = ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-re', '-i', 'pipe:3'] : [],
-        ['-map', '0:v:0', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
+    const args = ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-thread_queue_size', '512', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-thread_queue_size', '512', '-re', '-i', 'pipe:3'] : [],
+        ['-map', '0:v:0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
         this.audio ? ['-map', feeds[1] ? '1:a:0' : '0:a:0?', '-ar', '48000', '-ac', '2', '-f', 's16le', '-y', this.audio.fifo] : []);
     let dec;
     try {

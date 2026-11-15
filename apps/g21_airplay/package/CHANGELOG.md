@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.182
+
+- THEiPlay Player, wynik z auta (2026-11-15, `g21-browser` 0.1.35): film z YouTube odtworzył się własną drogą, pauza i wyjście działają; 1234 klatki w 56 s, czyli ok. 22 klatki/s – za mało (strumień 720p skalowany do 1280×480 przy obciążeniu jednostki 11). Start trwał ok. 14 s.
+- `g21-browser` 0.1.36: film na stronie nie odtwarza się wcale – każde wideo jest trzymane w pauzie, a na jego środku jest duży przycisk „▶ Odtwórz”, który uruchamia THEiPlay Player na pełnym ekranie. Odtwarzacz bierze strumień 480p (obraz filmu w 1280×480 ma 854×480, więc nic nie jest skalowane), większe kolejki wejścia dekodera. Przycisk pokazuje „Ładowanie filmu…” do 45 s, a drugie naciśnięcie w tym czasie nie zaczyna pobierania od nowa. Niesprawdzone w aucie.
+- GPU, pomiar w aucie (2026-11-15): po poprawce układu struktur kopiowanie klatek z GPU działa, ale jest wolne. 720p: GPU z kopiowaniem 600 klatek w 46,9 s (38,7 s czasu procesora); GPU ze skalowaniem do 854×480 i kopiowaniem ok. 30 ms czasu procesora na klatkę; sam procesor (dekodowanie i skalowanie) ok. 11 ms na klatkę. Dlatego odtwarzacz dekoduje procesorem.
+
 ## 0.1.181
 
 - THEiPlay Player, pierwsza wersja (`g21-browser` 0.1.35). Na każdym wideo strony w Przeglądarce pojawia się przycisk „▶ Odtwórz w THEiPlay Player”. Po kliknięciu film strony zatrzymuje się, a odtwarza go własny odtwarzacz na całym ekranie środkowym: strumień pobiera `g21-film.py` (yt-dlp z `jap-ridetube-d`, Python z `mgu-python`), dekoduje i skaluje `gputest/ffmpeg-va`, klatki idą wprost do warstwy wideo przez `g21-webframe` (bez zrzutów ekranu i JPEG), dźwięk do strumienia G21 Audio przeglądarki. Krzyżyk kończy film i wraca do strony, wciśnięcie gałki albo klik pauzuje.
