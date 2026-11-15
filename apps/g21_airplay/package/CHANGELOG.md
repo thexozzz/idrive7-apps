@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.180
+
+- Test GPU, wynik z auta (2026-11-15, g21-browser 0.1.33): test startuje z kafelka. Procesor: 600 klatek H.264 1280x720 w 2,9 s, 5,0 s czasu procesora. GPU, samo dekodowanie (klatki zostaja w pamieci GPU): 600 klatek w 0,8 s, 0,6 s czasu procesora. Kopiowanie klatki z GPU do pamieci nie dzialalo: biblioteka auta (libva 1.99, VA-API 0.99, stan z 2017 r.) ma struktury obrazu w starym ukladzie (VAImageFormat 32 bajty, VAImage 96 bajtow), a binarka byla zbudowana z naglowkami 2.0.0.
+- g21-browser 0.1.34: gputest/ffmpeg-va zbudowany z naglowkami libva z 2017-09-08 (commit 0fd48763, ostatni przed dodaniem pol va_reserved), z nazwami bibliotek auta. Kopiowanie klatek z GPU nadal niesprawdzone w aucie.
+
 ## 0.1.179
 
 - Test GPU, trzecia budowa (g21-browser 0.1.33). Auto, 2026-11-15, 0.1.32: binarka nie startowała (blad programu ladujacego: nazwa biblioteki zmieniona w gotowym pliku nie zgadzala sie z tablica wersji symboli). Teraz biblioteka ma nazwy auta juz przy linkowaniu, a z FFmpeg usuniete sa dwa wywolania (vaSetErrorCallback, vaSetInfoCallback), ktorych biblioteka auta nie ma. Dekodowanie na GPU nadal niesprawdzone w aucie.
