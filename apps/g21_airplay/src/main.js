@@ -11,6 +11,7 @@ var videoDecoder = require('./video_decoder.js');
 var mirrorVideo = require('./mirror_video.js');
 var youtubeFile = require('./youtube_file.js');
 var youtubeClient = require('./youtube_client.js');
+var browserClient = require('./browser_client.js');
 var frameFit = require('./frame_fit.js');
 var videoRouter = require('./video_router.js');
 var adapterFactory = require('./cluster_render_adapter.js');
@@ -237,6 +238,10 @@ function AirPlayApp() {
     this._rows = {};
     this._visible = false;
     this._shutdownPromise = null;
+    this._web = null;
+    this._webOn = false;
+    this._webIno = 0;
+    this._webOpenAt = 0;
     this._timer = null;
     this._line = { net: '', addr: '', state: '' };
     this._gate = parked.createParkedGate();
@@ -402,9 +407,15 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.135',
+        version: (this._packageJson && this._packageJson.version) || '0.1.136',
         choose: function (name) {
             self._onMenuChoice(name);
+        },
+        onWebTouch: function (phase, x, y) {
+            self._webTouch(phase, x, y);
+        },
+        onWebScroll: function (dx, dy) {
+            self._webScroll(dx, dy);
         },
         onTilt: function (dir) {
             return self._tiltBox(dir);
@@ -535,7 +546,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.135') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.136') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2865,6 +2876,9 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._exitApp();
         return;
     }
+    if (this._onWebChoice(name)) {
+        return;
+    }
     if (this._onQualityChoice(name)) {
         return;
     }
@@ -5151,6 +5165,205 @@ AirPlayApp.prototype._setVisible = function (visible) {
 // appGetsTerminated -> _handleShutdown. Opening the app again starts clean.
 // Shared renderers (mgu-render, cluster-render) and the tool service keep
 // running for other apps; only our layers and sockets go.
+// ---- Przeglądarka (native/g21-browser). The engine and the page picture live in the daemon
+// g21-browserd; here: the toolbar's buttons, the keyboard, and touch and knob passed on.
+AirPlayApp.prototype._webClient = function () {
+    var self = this;
+    if (!this._web) {
+        this._web = browserClient.createBrowserClient({
+            note: noteStart,
+            onState: function (state) {
+                self._onWebState(state);
+            },
+            onEdit: function (ev) {
+                self._onWebEdit(ev);
+            }
+        });
+    }
+    return this._web;
+};
+
+AirPlayApp.prototype._openBrowser = function () {
+    var self = this;
+    var page;
+    if (!this._menu || typeof this._menu.setWeb !== 'function') {
+        return;
+    }
+    page = this._menu.webPage();
+    this._webOn = true;
+    this._webIno = 0;
+    this._webOpenAt = Date.now();
+    noteStart('web-open ' + page.w + 'x' + page.h);
+    this._webClient().open(page.w, page.h);
+    this._paintWeb();
+    // no daemon after 3 s: the screen says the tool is missing (until then: "Uruchamiam")
+    setTimeout(function () {
+        self._paintWeb();
+    }, 3100);
+};
+
+AirPlayApp.prototype._closeBrowser = function () {
+    if (!this._webOn) {
+        return;
+    }
+    this._webOn = false;
+    noteStart('web-close');
+    if (this._web) {
+        this._web.leave();
+    }
+    if (this._menu && typeof this._menu.setWeb === 'function') {
+        this._menu.setWeb(null);
+    }
+};
+
+AirPlayApp.prototype._paintWeb = function () {
+    var s;
+    var waiting;
+    if (!this._menu || typeof this._menu.setWeb !== 'function') {
+        return;
+    }
+    if (!this._webOn) {
+        this._menu.setWeb(null);
+        return;
+    }
+    s = this._web ? this._web.state() : browserClient.blank();
+    waiting = !s.connected && (Date.now() - this._webOpenAt) < 3000;
+    this._menu.setWeb({
+        on: true,
+        connected: s.connected || waiting,
+        engine: waiting ? 'starting' : s.engine,
+        err: s.err,
+        url: s.url,
+        title: s.title,
+        loading: s.loading,
+        back: s.back,
+        fwd: s.fwd,
+        live: s.live,
+        zoom: s.zoom,
+        editable: s.editable,
+        pct: s.pct,
+        ring: s.ring
+    });
+};
+
+AirPlayApp.prototype._onWebState = function (state) {
+    if (!this._webOn) {
+        return;
+    }
+    if (state.ino && state.ino !== this._webIno) {
+        // a new video file (first picture, new zoom): name it to the renderer again
+        this._webIno = state.ino;
+        this._paintWeb();
+        if (this._menu && typeof this._menu.rebindVideo === 'function') {
+            this._menu.rebindVideo();
+        }
+        return;
+    }
+    if (!state.ino) {
+        this._webIno = 0;
+    }
+    this._paintWeb();
+};
+
+// a tap landed in a text field of the page: the app's keyboard, with what the field holds
+AirPlayApp.prototype._onWebEdit = function (ev) {
+    var self = this;
+    var secret = ev.kind === 'password';
+    if (!this._webOn || !this._menu || this._menu.editing()) {
+        return;
+    }
+    this._menu.startEdit({
+        mode: secret ? 'webpass' : 'text',
+        field: 'web-text',
+        title: secret ? 'Hasło' : 'Tekst',
+        value: ev.value,
+        onDone: function (value) {
+            if (self._web && self._webOn) {
+                self._web.send({ op: 'text', s: String(value == null ? '' : value), replace: true, enter: !!ev.submit });
+            }
+        }
+    });
+};
+
+/** true: the choice was Przeglądarka's */
+AirPlayApp.prototype._onWebChoice = function (name) {
+    var self = this;
+    var web = this._web;
+    var s;
+    var at;
+    if (name === 'browser') {
+        this._openBrowser();
+        return true;
+    }
+    if (String(name).indexOf('web-') !== 0) {
+        return false;
+    }
+    if (!this._webOn) {
+        return true;
+    }
+    if (name === 'web-exit') {
+        this._closeBrowser();
+        return true;
+    }
+    if (!web) {
+        return true;
+    }
+    s = web.state();
+    if (name === 'web-back') {
+        web.send({ op: 'back' });
+    } else if (name === 'web-fwd') {
+        web.send({ op: 'fwd' });
+    } else if (name === 'web-reload') {
+        web.send({ op: s.loading && s.engine === 'ready' ? 'stop' : 'reload' });
+    } else if (name === 'web-home') {
+        web.send({ op: 'home' });
+    } else if (name === 'web-enter') {
+        web.send({ op: 'key', k: 'Enter' });
+    } else if (name === 'web-zoom-in' || name === 'web-zoom-out') {
+        at = menuDraw.WEB_ZOOMS.indexOf(s.zoom) + (name === 'web-zoom-in' ? 1 : -1);
+        if (menuDraw.WEB_ZOOMS[at]) {
+            web.send({ op: 'zoom', z: menuDraw.WEB_ZOOMS[at] });
+        }
+    } else if (name === 'web-url' && s.engine === 'ready') {
+        this._menu.startEdit({
+            mode: 'url',
+            field: 'web-url',
+            title: 'Adres',
+            value: s.url,
+            onDone: function (value) {
+                if (self._web && self._webOn && String(value || '').trim()) {
+                    self._web.send({ op: 'nav', url: String(value) });
+                }
+            }
+        });
+    } else if (name === 'web-keys' && s.engine === 'ready') {
+        this._menu.startEdit({
+            mode: 'text',
+            field: 'web-text',
+            title: 'Tekst',
+            value: '',
+            onDone: function (value) {
+                if (self._web && self._webOn && value) {
+                    self._web.send({ op: 'text', s: String(value) });
+                }
+            }
+        });
+    }
+    return true;
+};
+
+AirPlayApp.prototype._webTouch = function (phase, x, y) {
+    if (this._webOn && this._web) {
+        this._web.send({ op: 'touch', p: phase, x: Math.round(x), y: Math.round(y) });
+    }
+};
+
+AirPlayApp.prototype._webScroll = function (dx, dy) {
+    if (this._webOn && this._web) {
+        this._web.send({ op: 'scroll', dx: dx, dy: dy });
+    }
+};
+
 AirPlayApp.prototype._exitApp = function () {
     var active;
     var self = this;
@@ -5174,6 +5387,15 @@ AirPlayApp.prototype._exitApp = function () {
         }
     } catch (err) {
         noteStart('exit-ridetube ' + (err && err.message));
+    }
+    try {
+        // Przeglądarka: the daemon stops the engine now (not after its idle wait)
+        if (this._web) {
+            this._web.shutdown();
+        }
+        this._webOn = false;
+    } catch (err) {
+        noteStart('exit-web ' + (err && err.message));
     }
     try {
         this._stopYoutube();
@@ -5267,6 +5489,9 @@ AirPlayApp.prototype._handleShutdown = function () {
     }
     if (this._panel) {
         this._panel.stop();
+    }
+    if (this._web) {
+        this._web.shutdown();
     }
     if (this._menu) {
         this._menu.close();

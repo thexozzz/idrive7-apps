@@ -11,6 +11,7 @@
 | `apps/g21_airplay/` | THEiPlay 0.1.121 | `mgu-app.json` (lista modułów!), `package/` (manifest, permissions, rhmiData, config, CHANGELOG), `src/` (30 modułów) |
 | `native/g21-airplay-open/` | narzędzie backendu (root, systemd) | skrypt `g21-airplay-open` (1393 linii sh), binaria ELF, `lib/` (~GStreamer 1.14, FFmpeg, FreeRDP, avahi z Ubuntu 18.04), `component.json`, `.service` |
 | `native/jap-ridetube-d/` | narzędzie YouTube (GPL-3.0, autor zewnętrzny) | `ytd.js`, `ytdec`, `ytdlp.pyz`, `ytfetch.py` |
+| `native/g21-browser/` | narzędzie przeglądarki 0.1.0 (GPL-3.0-or-later): demon, proxy, dekoder klatek, biblioteki i czcionki dla silnika Google (sam silnik pobiera auto) | `g21-browserd.js`, `g21-webframe(.c)`, `engine/manifest.json`, `lib/`, `fonts/`, `LIBS.txt`; opis: `docs/ai/BROWSER_PLAN.md` |
 | `lib/parked-gate.js` | re-eksport bramki postoju | 86 B |
 | `tools/` | walidator, testy jednostkowe, symulator, bump wersji | `test_all.js` uruchamia 14 skryptów |
 | `scripts/` | `build/test/publish/bump/diagnose/uninstall.ps1`, `dev/` (cykl SSH, HotPatch, rollback, skrypty zdalne) | patrz BUILD_AND_DEPLOY.md |
@@ -43,6 +44,7 @@
 | `input_manager.js` | mapowanie pokrętła/touchpada/ekranu na kursor |
 | `windows_offers.js` | oferty Win+K z `/run/g21-desktop/offers` |
 | `youtube_client.js`, `youtube_file.js` | sterowanie demonem `jap-ridetube-d` (kopia GPL) |
+| `browser_client.js` | łącze do `g21-browserd` (`/run/g21-browser/ctl.sock`): stan, dotyk, klawiatura; obraz strony idzie plikiem wideo, nie tędy |
 | `uplink.js` | stan `mgu-uplink` (`/run/mgu-uplink/status.json`) |
 | `mdns.js`, `airplay.js` | pomocnicze (starsze; ogłoszenie robi narzędzie) |
 | `paths.js` | ścieżki danych OAP |

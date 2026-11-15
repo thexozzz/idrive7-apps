@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "product": "Google Chrome for Testing 153.0.8010.12",
+  "binarySha256": "ea2a24583bb006c2cacc192750c9bd1e053c4fb291ae2186190eb459b115d94c",
+  "source": {
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.12/linux64/chrome-headless-shell-linux64.zip",
+    "prefix": "chrome-headless-shell-linux64/"
+  },
+  "format": "g21pack1+brotli",
+  "interp": {
+    "offset": 736,
+    "size": 28,
+    "from": "/lib64/ld-linux-x86-64.so.2",
+    "to": "/run/g21-browser/ld.so"
+  },
+  "files": [
+    {
+      "path": "chrome-headless-shell",
+      "mode": 493,
+      "size": 197422408,
+      "sha256": "ea2a24583bb006c2cacc192750c9bd1e053c4fb291ae2186190eb459b115d94c"
+    },
+    {
+      "path": "icudtl.dat",
+      "mode": 420,
+      "size": 10823536,
+      "sha256": "a3c6d7824935e87fed17e94c2d84b7683ef360ebc5c4ea92e2ca70f361bc9314"
+    },
+    {
+      "path": "v8_context_snapshot.bin",
+      "mode": 420,
+      "size": 747232,
+      "sha256": "2c8872dd6615b15d192d9b49a6c9da63bcdc9649ee0b1b4a5d1e49b0151fa381"
+    },
+    {
+      "path": "headless_lib_data.pak",
+      "mode": 420,
+      "size": 730171,
+      "sha256": "4519fcd2ddd1c185d22e9a5f8927a6427585d5b1fd7ae527706ccc8d8d48b0aa"
+    },
+    {
+      "path": "headless_lib_strings.pak",
+      "mode": 420,
+      "size": 4210995,
+      "sha256": "d9307a1c47c4dc246091a6d441601da5b49fb25e24b14632239d6f9b47bc6c7d"
+    },
+    {
+      "path": "headless_command_resources.pak",
+      "mode": 420,
+      "size": 3033,
+      "sha256": "5dacfe683bbd88ab1c96dfbaa1f375b54821235772cb71dd71273350cdfec867"
+    },
+    {
+      "path": "libEGL.so",
+      "mode": 493,
+      "size": 230712,
+      "sha256": "532800b1f5882fb0034a72582233edaf50ed6433e3911c43f88cbcfcb24708d1"
+    },
+    {
+      "path": "libGLESv2.so",
+      "mode": 493,
+      "size": 230712,
+      "sha256": "17370d7cc22d0bc4048cc851b7f8fdbb5e51c4f4b0f53d6c68b8770fb6a8ab00"
+    },
+    {
+      "path": "libvk_swiftshader.so",
+      "mode": 493,
+      "size": 3980504,
+      "sha256": "1d5d7ab9c4c1499041aa44ea7a2ae3da3ca9812cd8bda9b5ac920ae158adb163"
+    },
+    {
+      "path": "libvulkan.so.1",
+      "mode": 493,
+      "size": 689840,
+      "sha256": "c53295a113b0bb075be6624ced1a5056acabefc4d49c2d2ff3fbbc76854880ea"
+    },
+    {
+      "path": "vk_swiftshader_icd.json",
+      "mode": 420,
+      "size": 107,
+      "sha256": "c9eef28b6b984fec220ef0abfecc40b502d46946706e47bfe97707027cb818bd"
+    }
+  ],
+  "parts": [
+    {
+      "name": "engine.pack.br.00",
+      "size": 46137344,
+      "sha256": "494466fb647701bfacbe969b9b83099d4a1fd48fef760c6e0b84577d42b9d319"
+    },
+    {
+      "name": "engine.pack.br.01",
+      "size": 23355488,
+      "sha256": "caea2b38bcb10deed9c2e4773e2f99cb71fa37f06055370ffe2c1af21f2d0154"
+    }
+  ]
+}

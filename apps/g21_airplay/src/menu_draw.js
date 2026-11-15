@@ -21,6 +21,7 @@ var VIDEO = 13;
 var DROP_VIDEO = 14;
 var MIRROR_FILE = '/dev/shm/mgu-video-g21airplay';
 var youtubeFilePath = '/dev/shm/mgu-video-ridetube';
+var WEB_FILE = '/dev/shm/mgu-video-g21browser';
 var GRAB = 10;
 var READY = 101;
 var TICK = 102;
@@ -266,7 +267,27 @@ var EN = {
     'czeka na iPhone': 'waiting for the iPhone',
     'zła nazwa': 'bad name',
     'napis': 'caption',
-    'Hasło': 'Password'
+    'Hasło': 'Password',
+    'Przeglądarka': 'Browser',
+    'strony internetowe': 'web pages',
+    'Wpisz adres albo szukaj': 'Type an address or search',
+    'Uruchamiam przeglądarkę': 'Starting the browser',
+    'Pobieram silnik przeglądarki': 'Downloading the browser engine',
+    'jednorazowo, około 100 MB': 'once, about 100 MB',
+    'Sprawdzam i rozpakowuję silnik': 'Checking and unpacking the engine',
+    'nie udało się pobrać silnika: sprawdź internet w aucie': 'the engine could not be downloaded: check the car\'s internet',
+    'Brak narzędzia Przeglądarka': 'The Browser tool is missing',
+    'zainstaluj je w MGU Store': 'install it from MGU Store',
+    'Brak obrazu strony': 'No page picture',
+    'renderer bez warstwy wideo': 'the renderer has no video layer',
+    'dotknij odśwież, aby spróbować ponownie': 'tap reload to try again',
+    'Strona startowa': 'Start page',
+    'Adres': 'Address',
+    'silnik nie wystartował': 'the engine did not start',
+    'silnik się zatrzymał: odśwież': 'the engine stopped: reload',
+    'strona zużyła za dużo pamięci': 'the page used too much memory',
+    'strona przestała działać: odśwież': 'the page stopped working: reload',
+    'zły adres': 'bad address'
 };
 
 function tr(text) {
@@ -631,7 +652,8 @@ var ROOT_ITEMS = [
     { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'settings', title: 'Ustawienia', hint: 'GPU', icon: 'gear' },
-    { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' }
+    { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
+    { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' }
 ];
 
 var AIRPLAY_ITEMS = [
@@ -1010,6 +1032,13 @@ FrameBuilder.prototype.fit = function (str, scale, maxW, font) {
 
 // Icons: drawn with lines and arcs on a 16 x 16 grid, u px per cell (the option rows use 3: 48 px).
 var VECTOR_ICONS = {
+    globe: function (d, x, y, u, c) {
+        d.arc(x + 8 * u, y + 8 * u, 5.2 * u, 6.5 * u, 0, 360, c);
+        d.line(x + 2 * u, y + 8 * u, x + 14 * u, y + 8 * u, 1.2 * u, c);
+        d.line(x + 8 * u, y + 2 * u, x + 8 * u, y + 14 * u, 1.2 * u, c);
+        d.arc(x + 13.4 * u, y + 8 * u, 7.6 * u, 8.8 * u, 228, 312, c);
+        d.arc(x + 2.6 * u, y + 8 * u, 7.6 * u, 8.8 * u, 48, 132, c);
+    },
     airplay: function (d, x, y, u, c) {
         var w = 1.5 * u;
         d.line(x + 2.2 * u, y + 3 * u, x + 13.8 * u, y + 3 * u, w, c);
@@ -3054,6 +3083,206 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
     }
 }
 
+// ---- Przeglądarka: a toolbar over the page picture. The picture is the video file
+// g21-browserd's decoder writes (/dev/shm/mgu-video-g21browser), drawn by the renderer (op 19)
+// exactly as large as the page area, so a touch at (x, y) below the toolbar is the page's pixel.
+var WEB_BAR_H = 84;
+var WEB_ZOOMS = [1, 1.25, 1.5, 1.75, 2];
+
+function webLayout(width, height) {
+    var y = 14;
+    var h = 56;
+    var right = width - 16;
+    var lay = {
+        exit: { name: 'web-exit', x: 16, y: y, w: 136, h: h },
+        back: { name: 'web-back', x: 164, y: y, w: 64, h: h },
+        fwd: { name: 'web-fwd', x: 236, y: y, w: 64, h: h },
+        reload: { name: 'web-reload', x: 308, y: y, w: 64, h: h },
+        home: { name: 'web-home', x: 380, y: y, w: 64, h: h },
+        power: { name: 'app-exit', x: right - 64, y: y, w: 64, h: h },
+        zoomIn: { name: 'web-zoom-in', x: right - 136, y: y, w: 64, h: h },
+        zoomOut: { name: 'web-zoom-out', x: right - 208, y: y, w: 64, h: h },
+        enter: { name: 'web-enter', x: right - 280, y: y, w: 64, h: h },
+        keys: { name: 'web-keys', x: right - 352, y: y, w: 64, h: h }
+    };
+    lay.url = { name: 'web-url', x: 456, y: y, w: lay.keys.x - 12 - 456, h: h };
+    lay.page = { x: 0, y: WEB_BAR_H, w: width & ~3, h: (height - WEB_BAR_H) & ~1 };
+    return lay;
+}
+
+// what the page area says while there is no picture
+function webStatus(web) {
+    if (!web.connected) {
+        return { title: 'Brak narzędzia Przeglądarka', hint: 'zainstaluj je w MGU Store', busy: false };
+    }
+    if (web.engine === 'failed') {
+        return { title: web.err || 'silnik nie wystartował', hint: 'dotknij odśwież, aby spróbować ponownie', busy: false };
+    }
+    if (web.engine === 'downloading') {
+        // once: the head unit fetches Google's engine itself (about 100 MB)
+        return { title: 'Pobieram silnik przeglądarki', hint: (web.pct | 0) + '%  ·  ' + tr('jednorazowo, około 100 MB'), busy: true };
+    }
+    if (web.engine === 'unpacking') {
+        return { title: 'Sprawdzam i rozpakowuję silnik', hint: (web.pct | 0) + '%', busy: true };
+    }
+    if (web.live && !web.video) {
+        return { title: 'Brak obrazu strony', hint: 'renderer bez warstwy wideo', busy: false };
+    }
+    return { title: 'Uruchamiam przeglądarkę', hint: '', busy: true };
+}
+
+function webButton(draw, hits, box, on, fill) {
+    draw.round(box.x, box.y, box.w, box.h, 18, fill || CARD_HI);
+    if (on) {
+        hits.push(box);
+    }
+    return { cx: box.x + box.w / 2, cy: box.y + box.h / 2 };
+}
+
+function webReloadGlyph(draw, cx, cy, ink) {
+    var r = 12.75;
+    var a = 330 * Math.PI / 180;
+    var px = cx + Math.sin(a) * r;
+    var py = cy - Math.cos(a) * r;
+    var tx = Math.cos(a);
+    var ty = Math.sin(a);
+    var nx = Math.sin(a);
+    var ny = -Math.cos(a);
+    draw.arc(cx, cy, 11, 14.5, 50, 330, ink, true);
+    draw.quad([[px + tx * 9, py + ty * 9], [px + nx * 6.5, py + ny * 6.5], [px - nx * 6.5, py - ny * 6.5]], ink);
+}
+
+function buildWebFrame(width, height, web) {
+    var draw = new FrameBuilder();
+    var lay = webLayout(width, height);
+    var hits = [];
+    var info = web || {};
+    var showVideo = !!(info.live && info.video);
+    var ready = !!(info.connected && info.engine === 'ready');
+    var zoomAt = WEB_ZOOMS.indexOf(Number(info.zoom));
+    var c;
+    var ink;
+    var st;
+    var tw;
+    var hw;
+    var midY;
+    var shown;
+    var title;
+    var titleW;
+    var urlW;
+    var secure;
+    var i;
+    draw.clear(0);
+    if (showVideo) {
+        draw.video(lay.page.x, lay.page.y, lay.page.w, lay.page.h, 1);
+    } else {
+        draw.grad(0, WEB_BAR_H, width, height - WEB_BAR_H, PAGE_A, PAGE_B);
+        st = webStatus(info);
+        midY = WEB_BAR_H + Math.floor((height - WEB_BAR_H) / 2);
+        if (st.busy) {
+            drawSpinner(draw, Math.floor(width / 2), midY - 70);
+        }
+        tw = draw.textWidth(tr(st.title), 5);
+        draw.text(tr(st.title), Math.floor((width - tw) / 2), midY + (st.busy ? 16 : -40), 5, st.busy ? INK : SOFT);
+        if (st.hint) {
+            hw = draw.textWidth(tr(st.hint), 3);
+            draw.text(tr(st.hint), Math.floor((width - hw) / 2), midY + (st.busy ? 76 : 20), 3, MUTED);
+        }
+    }
+
+    // the toolbar
+    draw.grad(0, 0, width, WEB_BAR_H, HEAD_A, HEAD_B);
+    draw.rect(0, WEB_BAR_H - 3, width, 3, info.loading && ready ? ACCENT : LINE);
+
+    c = webButton(draw, hits, lay.exit, true);
+    chevron(draw, 'w', lay.exit.x + 26, c.cy, 8, 3, ACCENT);
+    draw.text('Menu', lay.exit.x + 46, lay.exit.y + 18, 3, ACCENT);
+
+    c = webButton(draw, hits, lay.back, ready && !!info.back);
+    chevron(draw, 'w', c.cx, c.cy, 10, 3.5, ready && info.back ? INK : LINE);
+    c = webButton(draw, hits, lay.fwd, ready && !!info.fwd);
+    chevron(draw, 'e', c.cx, c.cy, 10, 3.5, ready && info.fwd ? INK : LINE);
+
+    // reload; while a page loads the same button stops it
+    c = webButton(draw, hits, lay.reload, !!info.connected);
+    ink = info.connected ? INK : LINE;
+    if (ready && info.loading) {
+        draw.line(c.cx - 9, c.cy - 9, c.cx + 9, c.cy + 9, 3.5, ink);
+        draw.line(c.cx + 9, c.cy - 9, c.cx - 9, c.cy + 9, 3.5, ink);
+    } else {
+        webReloadGlyph(draw, c.cx, c.cy, ink);
+    }
+
+    c = webButton(draw, hits, lay.home, ready);
+    ink = ready ? INK : LINE;
+    draw.quad([[c.cx, c.cy - 15], [c.cx + 16, c.cy - 1], [c.cx - 16, c.cy - 1]], ink);
+    draw.round(c.cx - 10, c.cy - 2, 20, 15, 2, ink);
+    draw.rect(c.cx - 3, c.cy + 4, 6, 9, CARD_HI);
+
+    // the address: its text, or what to type
+    draw.round(lay.url.x, lay.url.y, lay.url.w, lay.url.h, 18, WELL);
+    if (ready) {
+        hits.push(lay.url);
+    }
+    shown = String(info.url || '').replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    if (shown) {
+        secure = /^https:/i.test(String(info.url));
+        draw.icon(secure ? 'lock' : 'unlock', lay.url.x + 16, lay.url.y + 12, 2, secure ? HINT : MUTED);
+        title = String(info.title || '');
+        titleW = 0;
+        if (title && title !== info.url) {
+            title = draw.fit(title, 3, Math.floor(lay.url.w * 0.36));
+            titleW = draw.textWidth(title, 3);
+            draw.text(title, lay.url.x + lay.url.w - 24 - titleW, lay.url.y + 18, 3, MUTED);
+        }
+        urlW = lay.url.w - 60 - 24 - (titleW ? titleW + 28 : 0);
+        draw.text(draw.fit(shown, 3, urlW), lay.url.x + 60, lay.url.y + 18, 3, INK);
+    } else {
+        draw.text(tr(ready ? 'Wpisz adres albo szukaj' : 'Przeglądarka'), lay.url.x + 26, lay.url.y + 18, 3, MUTED);
+    }
+
+    // the app's keyboard for a field of the page; bright when the page has a text field in focus
+    c = webButton(draw, hits, lay.keys, ready, ready && info.editable ? ACCENT : CARD_HI);
+    ink = !ready ? LINE : (info.editable ? PAGE : INK);
+    draw.stroke(c.cx - 18, c.cy - 12, 36, 24, 5, 2.5, ink);
+    for (i = 0; i < 4; i += 1) {
+        draw.rect(c.cx - 12 + i * 7, c.cy - 6, 3.5, 3.5, ink);
+    }
+    draw.rect(c.cx - 9, c.cy + 3, 18, 3.5, ink);
+
+    c = webButton(draw, hits, lay.enter, ready);
+    ink = ready ? INK : LINE;
+    draw.line(c.cx + 11, c.cy - 10, c.cx + 11, c.cy + 4, 3, ink);
+    draw.line(c.cx + 11, c.cy + 4, c.cx - 10, c.cy + 4, 3, ink);
+    chevron(draw, 'w', c.cx - 7, c.cy + 4, 6, 3, ink);
+
+    c = webButton(draw, hits, lay.zoomOut, ready && zoomAt > 0);
+    ink = ready && zoomAt > 0 ? INK : LINE;
+    draw.text('A', c.cx - 19, lay.zoomOut.y + 18, 3, ink);
+    draw.line(c.cx + 5, c.cy, c.cx + 18, c.cy, 3, ink);
+    c = webButton(draw, hits, lay.zoomIn, ready && zoomAt >= 0 && zoomAt < WEB_ZOOMS.length - 1);
+    ink = ready && zoomAt >= 0 && zoomAt < WEB_ZOOMS.length - 1 ? INK : LINE;
+    draw.text('A', c.cx - 19, lay.zoomIn.y + 18, 3, ink);
+    draw.line(c.cx + 5, c.cy, c.cx + 18, c.cy, 3, ink);
+    draw.line(c.cx + 11.5, c.cy - 6.5, c.cx + 11.5, c.cy + 6.5, 3, ink);
+
+    // "Wyłącz aplikację", as on every other screen
+    c = webButton(draw, hits, lay.power, true, RED_CARD);
+    powerSign(draw, c.cx, c.cy + 1, 12, 3, INK);
+
+    // what the daemon has to say over a page that shows (a bad address, a page that stopped)
+    if (showVideo && info.err) {
+        tw = draw.textWidth(tr(info.err), 3);
+        draw.round(Math.floor((width - tw) / 2) - 28, height - 78, tw + 56, 52, 26, RED_CARD);
+        draw.text(tr(info.err), Math.floor((width - tw) / 2), height - 78 + 16, 3, INK);
+    }
+    return {
+        frame: packFrame(draw),
+        rects: draw.rects,
+        layout: { webHits: hits, webPage: lay.page, web: lay, video: showVideo }
+    };
+}
+
 function encoderStep(previous, next) {
     if (previous === null || previous === undefined) {
         return 0;
@@ -3115,6 +3344,12 @@ function createMenuSurface(opts) {
     var lastTilt = '';
     var boxPreview = null;
     var rideView = null;
+    var webView = null;
+    var webHits = [];
+    var webPage = null;
+    var webTouch = null;
+    var webMoveAt = 0;
+    var webKey = '';
     var rideHits = [];
     var caption = null;
     var lastFrame = null;
@@ -3341,6 +3576,39 @@ function createMenuSurface(opts) {
             sendClaim();
             surfaced = true;
         }
+        if (webView && webView.on && !edit) {
+            // Przeglądarka: its own frame; the video is the browser's file, not the mirror's
+            var webInfo = {
+                connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
+                loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
+                editable: webView.editable, pct: webView.pct, video: native
+            };
+            var webBuilt;
+            sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
+            webBuilt = buildWebFrame(screen.w || 1920, screen.h || 720, webInfo);
+            webHits = webBuilt.layout.webHits;
+            webPage = webBuilt.layout.webPage;
+            keyHits = [];
+            popupHits = [];
+            backBox = null;
+            backAction = '';
+            navBoxes = null;
+            streamHits = [];
+            rideHits = [];
+            airBadge = null;
+            airHits = [];
+            airStrip = null;
+            airWindow = null;
+            lastFrame = webBuilt.frame;
+            flushFrame();
+            if (!noted) {
+                noted = true;
+                note('menu-frame ' + webBuilt.rects);
+            }
+            return;
+        }
+        webHits = [];
+        webPage = null;
         if (streamInfo && screenName === 'stream') {
             streamInfo.video = !!(streamInfo.mirrored && native && streamInfo.window);
         } else if (streamInfo) {
@@ -3891,6 +4159,23 @@ function createMenuSurface(opts) {
         var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
         lastTilt = tilt;
+        if (webView && webView.on && !edit) {
+            // Przeglądarka: the knob scrolls the page, left / right is back / forward, a press opens the address
+            if (step && typeof opts.onWebScroll === 'function') {
+                opts.onWebScroll(0, step * 96);
+            } else if (tilted && (tilt === 'n' || tilt === 's') && typeof opts.onWebScroll === 'function') {
+                opts.onWebScroll(0, tilt === 's' ? 300 : -300);
+            } else if (tilted && tilt === 'w') {
+                choose('web-back');
+            } else if (tilted && tilt === 'e') {
+                choose('web-fwd');
+            }
+            if (push === 1 && lastPush !== 1) {
+                choose('web-url');
+            }
+            lastPush = push;
+            return;
+        }
         if (airState && airState.full && !edit) {
             // full screen: the knob shows the way out; pressed while shown, it leaves
             if (push === 1 && lastPush !== 1) {
@@ -4248,6 +4533,69 @@ function createMenuSurface(opts) {
         dragTimer = setTimeout(pumpDrag, 50);
     }
 
+    // Przeglądarka: the toolbar's buttons answer a tap that ends on them; everything below goes to
+    // the page as it is (down, moves, up), in the page area's own pixels.
+    function onWebTouch(phase, tx, ty) {
+        var hit = '';
+        var i;
+        var px;
+        var py;
+        if (phase === 1) {
+            for (i = webHits.length - 1; i >= 0; i -= 1) {
+                if (pointIn(webHits[i], tx, ty)) {
+                    hit = webHits[i].name;
+                    break;
+                }
+            }
+            if (hit) {
+                webTouch = { hit: hit };
+            } else if (webPage && pointIn(webPage, tx, ty) && webView.live) {
+                webTouch = { page: true };
+                webMoveAt = Date.now();
+                if (typeof opts.onWebTouch === 'function') {
+                    opts.onWebTouch(1, tx - webPage.x, ty - webPage.y);
+                }
+            } else {
+                webTouch = null;
+            }
+            return;
+        }
+        if (!webTouch) {
+            return;
+        }
+        if (webTouch.page) {
+            if (!webPage) {
+                webTouch = null;
+                return;
+            }
+            if (phase === 2) {
+                if (Date.now() - webMoveAt < 14) {
+                    return;
+                }
+                webMoveAt = Date.now();
+            }
+            px = Math.max(0, Math.min(webPage.w - 1, tx - webPage.x));
+            py = Math.max(0, Math.min(webPage.h - 1, ty - webPage.y));
+            if (typeof opts.onWebTouch === 'function') {
+                opts.onWebTouch(phase === 2 ? 2 : 3, px, py);
+            }
+            if (phase !== 2) {
+                webTouch = null;
+            }
+            return;
+        }
+        if (phase !== 2) {
+            hit = webTouch.hit;
+            webTouch = null;
+            for (i = webHits.length - 1; i >= 0; i -= 1) {
+                if (webHits[i].name === hit && pointIn(webHits[i], tx, ty)) {
+                    choose(hit);
+                    return;
+                }
+            }
+        }
+    }
+
     function hitStream(x, y) {
         var i;
         var box;
@@ -4321,6 +4669,10 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if (webView && webView.on && !edit) {
+                    onWebTouch(phase, tx, ty);
+                    return;
+                }
                 if (airState && airState.full && !edit) {
                     // full screen: a tap shows "Wyjdź z trybu pełnoekranowego"; on it, it leaves
                     if (phase === 3) {
@@ -4664,6 +5016,27 @@ function createMenuSurface(opts) {
                 paint();
             }
         },
+        // Przeglądarka: info.on and the daemon's state (browser_client.js); null leaves the screen
+        setWeb: function (info) {
+            var next = info && info.on ? info : null;
+            var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring].join('|') : '';
+            if (key === webKey && !!next === !!webView) {
+                return;
+            }
+            webView = next;
+            webKey = key;
+            if (!next) {
+                webTouch = null;
+            }
+            if (!edit) {
+                paintSoon();
+            }
+        },
+        /** the page area of Przeglądarka on this screen: { x, y, w, h } */
+        webPage: function () {
+            return webLayout(screen.w || 1920, screen.h || 720).page;
+        },
         setRideView: function (info) {
             rideView = info && info.on ? info : null;
             if (!edit) {
@@ -4883,6 +5256,9 @@ module.exports = {
     buildStreamFrame: buildStreamFrame,
     streamWindow: streamWindow,
     buildKeyboardFrame: buildKeyboardFrame,
+    buildWebFrame: buildWebFrame,
+    webLayout: webLayout,
+    WEB_ZOOMS: WEB_ZOOMS,
     encoderStep: encoderStep,
     crumbFor: crumbFor,
     createMenuSurface: createMenuSurface,

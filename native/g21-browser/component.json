@@ -1,0 +1,124 @@
+{
+  "id": "g21-browser",
+  "kind": "tool",
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "title": "Przeglądarka",
+  "description": "Silnik przeglądarki dla THEiPlay: Google chrome-headless-shell z własnymi bibliotekami, obraz strony prosto do warstwy wideo. Sterowanie przez /run/g21-browser/ctl.sock.",
+  "requires": {
+    "mgu-deploy": "0.7.0",
+    "jap-node22": "22.23.4",
+    "mgu-render": "0.6.11"
+  },
+  "uninstallable": true,
+  "internet": true,
+  "uids": "state/internet-uids",
+  "mguHmi": [
+    "ID7"
+  ],
+  "files": [
+    { "path": "LIBS.txt", "mode": "0644" },
+    { "path": "LICENSE", "mode": "0644" },
+    { "path": "check.sh", "mode": "0755" },
+    { "path": "engine/manifest.json", "mode": "0644" },
+    { "path": "fonts/DejaVuSans-Bold.ttf", "mode": "0644" },
+    { "path": "fonts/DejaVuSans.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationMono-Bold.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationMono-BoldItalic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationMono-Italic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationMono-Regular.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSans-Bold.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSans-BoldItalic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSans-Italic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSans-Regular.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSerif-Bold.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSerif-BoldItalic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSerif-Italic.ttf", "mode": "0644" },
+    { "path": "fonts/LiberationSerif-Regular.ttf", "mode": "0644" },
+    { "path": "g21-browserd.js", "mode": "0644" },
+    { "path": "g21-webframe", "mode": "0755" },
+    { "path": "lib/ld-linux-x86-64.so.2", "mode": "0755" },
+    { "path": "lib/libX11.so.6", "mode": "0755" },
+    { "path": "lib/libXau.so.6", "mode": "0755" },
+    { "path": "lib/libXcomposite.so.1", "mode": "0755" },
+    { "path": "lib/libXdamage.so.1", "mode": "0755" },
+    { "path": "lib/libXdmcp.so.6", "mode": "0755" },
+    { "path": "lib/libXext.so.6", "mode": "0755" },
+    { "path": "lib/libXfixes.so.3", "mode": "0755" },
+    { "path": "lib/libXi.so.6", "mode": "0755" },
+    { "path": "lib/libXrandr.so.2", "mode": "0755" },
+    { "path": "lib/libXrender.so.1", "mode": "0755" },
+    { "path": "lib/libasound.so.2", "mode": "0755" },
+    { "path": "lib/libatk-1.0.so.0", "mode": "0755" },
+    { "path": "lib/libatk-bridge-2.0.so.0", "mode": "0755" },
+    { "path": "lib/libatspi.so.0", "mode": "0755" },
+    { "path": "lib/libblkid.so.1", "mode": "0755" },
+    { "path": "lib/libbsd.so.0", "mode": "0755" },
+    { "path": "lib/libc.so.6", "mode": "0755" },
+    { "path": "lib/libcap.so.2", "mode": "0755" },
+    { "path": "lib/libdbus-1.so.3", "mode": "0755" },
+    { "path": "lib/libdl.so.2", "mode": "0755" },
+    { "path": "lib/libdrm.so.2", "mode": "0755" },
+    { "path": "lib/libexpat.so.1", "mode": "0755" },
+    { "path": "lib/libffi.so.8", "mode": "0755" },
+    { "path": "lib/libfreebl3.so", "mode": "0755" },
+    { "path": "lib/libfreeblpriv3.so", "mode": "0755" },
+    { "path": "lib/libgbm.so.1", "mode": "0755" },
+    { "path": "lib/libgcc_s.so.1", "mode": "0755" },
+    { "path": "lib/libgcrypt.so.20", "mode": "0755" },
+    { "path": "lib/libgio-2.0.so.0", "mode": "0755" },
+    { "path": "lib/libglib-2.0.so.0", "mode": "0755" },
+    { "path": "lib/libgmodule-2.0.so.0", "mode": "0755" },
+    { "path": "lib/libgobject-2.0.so.0", "mode": "0755" },
+    { "path": "lib/libgpg-error.so.0", "mode": "0755" },
+    { "path": "lib/liblz4.so.1", "mode": "0755" },
+    { "path": "lib/liblzma.so.5", "mode": "0755" },
+    { "path": "lib/libm.so.6", "mode": "0755" },
+    { "path": "lib/libmd.so.0", "mode": "0755" },
+    { "path": "lib/libmount.so.1", "mode": "0755" },
+    { "path": "lib/libnspr4.so", "mode": "0755" },
+    { "path": "lib/libnss3.so", "mode": "0755" },
+    { "path": "lib/libnssckbi.so", "mode": "0755" },
+    { "path": "lib/libnssdbm3.so", "mode": "0755" },
+    { "path": "lib/libnssutil3.so", "mode": "0755" },
+    { "path": "lib/libpcre2-8.so.0", "mode": "0755" },
+    { "path": "lib/libplc4.so", "mode": "0755" },
+    { "path": "lib/libplds4.so", "mode": "0755" },
+    { "path": "lib/libpthread.so.0", "mode": "0755" },
+    { "path": "lib/libselinux.so.1", "mode": "0755" },
+    { "path": "lib/libsoftokn3.so", "mode": "0755" },
+    { "path": "lib/libsqlite3.so.0", "mode": "0755" },
+    { "path": "lib/libsystemd.so.0", "mode": "0755" },
+    { "path": "lib/libudev.so.1", "mode": "0755" },
+    { "path": "lib/libxcb.so.1", "mode": "0755" },
+    { "path": "lib/libxkbcommon.so.0", "mode": "0755" },
+    { "path": "lib/libz.so.1", "mode": "0755" },
+    { "path": "lib/libzstd.so.1", "mode": "0755" }
+  ],
+  "check": [
+    "check.sh"
+  ],
+  "units": [
+    {
+      "name": "g21-browser.service",
+      "from": "g21-browser.service"
+    }
+  ],
+  "enable": [
+    {
+      "unit": "g21-browser.service",
+      "target": "multi-user.target"
+    }
+  ],
+  "crashNames": [
+    "chrome-headless-shell",
+    "chrome-headless",
+    "g21-webframe"
+  ],
+  "recmgr": [
+    "g21-browser"
+  ],
+  "restart": [
+    "g21-browser.service"
+  ]
+}

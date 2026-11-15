@@ -1,0 +1,428 @@
+'use strict';
+// SPDX-License-Identifier: GPL-3.0-or-later
+/*
+ * native/g21-browser: the daemon's own logic, the frame decoder, the engine pack and, where the
+ * machine allows it (root, the real engine in native/g21-browser/engine), the whole chain with the
+ * real chrome-headless-shell: app socket -> daemon -> engine -> g21-webframe -> video file.
+ * A part that cannot run here says SKIP with the reason; nothing is reported as passed untested.
+ */
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const net = require('net');
+const http = require('http');
+const cp = require('child_process');
+
+const tool = path.join(__dirname, '..', 'native', 'g21-browser');
+const d = require(path.join(tool, 'g21-browserd.js'));
+const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQACADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD8qqKKKAP6qKKKKAP/2Q==', 'base64'); // 32x16: left half black, right half white (4:2:0, quality 90)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let skipped = 0;
+function skip(what, why) { skipped += 1; console.log('SKIP ' + what + ': ' + why); }
+
+function testUrls() {
+    assert.strictEqual(d.toUrl('wp.pl'), 'https://wp.pl/');
+    assert.strictEqual(d.toUrl(' https://example.com/a?b=1 '), 'https://example.com/a?b=1');
+    assert.strictEqual(d.toUrl('example.com:8443/p'), 'https://example.com:8443/p');
+    assert.strictEqual(d.toUrl('127.0.0.1:8080/x'), 'http://127.0.0.1:8080/x');
+    assert.ok(/^https:\/\/www\.google\.com\/search\?q=pogoda%20krak/.test(d.toUrl('pogoda kraków')));
+    assert.ok(/search\?q=/.test(d.toUrl('jak zrobić: pierogi')));
+    ['file:///etc/passwd', 'javascript:alert(1)', 'chrome://gpu', 'about:blank', 'data:text/html,x', '', '   '].forEach((u) => assert.strictEqual(d.toUrl(u), null, u));
+    [[10, 0, 0, 1], [127, 0, 0, 1], [100, 125, 63, 29], [172, 16, 0, 1], [172, 31, 255, 1], [192, 168, 1, 1], [169, 254, 1, 1], [0, 0, 0, 0], [224, 0, 0, 251], [255, 255, 255, 255]]
+        .forEach((p) => assert.strictEqual(d.blockedV4(p), true, p.join('.')));
+    [[8, 8, 8, 8], [142, 250, 1, 1], [172, 15, 0, 1], [172, 32, 0, 1], [100, 63, 0, 1], [100, 128, 0, 1], [192, 167, 1, 1]].forEach((p) => assert.strictEqual(d.blockedV4(p), false, p.join('.')));
+    const page = Buffer.from(d.startPage([{ url: 'https://pl.wikipedia.org/wiki/BMW', title: 'BMW <b>' }]).split(',')[1], 'base64').toString('utf8');
+    assert.ok(page.indexOf('BMW &lt;b&gt;') > 0 && page.indexOf('pl.wikipedia.org/wiki/BMW') > 0 && page.indexOf('Przeglądarka') > 0);
+    console.log('ok addresses, local-address filter, start page');
+}
+
+// the engine's uid: picked as jap-ridetube-d picks its own, and never one something else holds
+function testUid() {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'g21uid-'));
+    const mk = (p, text) => { fs.mkdirSync(path.dirname(path.join(base, p)), { recursive: true }); fs.writeFileSync(path.join(base, p), text); };
+    mk('mainapp/config/base.json', JSON.stringify({ usableUidsAndGids: { min: 12203, max: 12290 }, usableUidsAndGidsRse: { a: { min: 12291, max: 12299 } }, mainAppUids: [12201] }));
+    mk('etc/passwd', 'root:x:0:0::/:/bin/sh\nfoo:x:12300:12300::/:/bin/false\n');
+    mk('etc/group', 'tm_oap_app:x:12202:\n');
+    mk('opt/mgu-uplink/uids.d/jap-ridetube-d', '12301\n');
+    mk('opt/mgu-uplink/uids.d/other', '12302 # a comment\n');
+    mk('opt/mgu-updater/state/uids.json', JSON.stringify({ fetch: 12303 }));
+    mk('opt/some-tool/state/uids.json', JSON.stringify({ x: 12304 }));
+    mk('proc/77/status', 'Name:\tx\nUid:\t12305\t12305\t12305\t12305\nGid:\t12305\t12305\t12305\t12305\n');
+    mk('proc/77/comm', 'x\n');
+    fs.mkdirSync(path.join(base, 'oap', 'oap_12250'), { recursive: true });
+    const logs = [];
+    const o = { stateDir: path.join(base, 'opt', 'g21-browser', 'state'), etcDir: path.join(base, 'etc'), oapRoot: path.join(base, 'oap'), toolRoot: path.join(base, 'opt'), procDir: path.join(base, 'proc'),
+        mainapps: [{ root: path.join(base, 'mainapp'), hmi: 'HmiMain3D' }], testUid: null, log: (m) => logs.push(m) };
+    assert.strictEqual(d.pickEngineUid(o), 12306, 'the lowest uid above MainApp\'s ranges that nothing holds');
+    assert.strictEqual(fs.readFileSync(path.join(o.stateDir, 'internet-uids'), 'utf8'), '12306\n', 'for the deploy tool');
+    assert.strictEqual(fs.readFileSync(path.join(base, 'opt', 'mgu-uplink', 'uids.d', 'g21-browser'), 'utf8'), '12306\n', 'for mgu-uplink');
+    assert.strictEqual(d.pickEngineUid(o), 12306, 'kept on the next start');
+    fs.writeFileSync(path.join(base, 'etc', 'passwd'), fs.readFileSync(path.join(base, 'etc', 'passwd'), 'utf8') + 'new:x:12306:12306::/:/bin/false\n');
+    assert.strictEqual(d.pickEngineUid(o), 12307, 'taken by someone else meanwhile: another one');
+    fs.unlinkSync(path.join(base, 'mainapp', 'config', 'base.json'));
+    fs.unlinkSync(path.join(o.stateDir, 'uids.json'));
+    assert.strictEqual(d.pickEngineUid(o), null, 'MainApp\'s ranges unknown: no guess');
+    fs.rmSync(base, { recursive: true, force: true });
+    console.log('ok engine uid: above MainApp\'s ranges, never one in use, written for the uplink, no guess without the ranges');
+}
+
+function runFrame(colour, frames) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g21wf-'));
+    const ring = path.join(dir, 'ring');
+    const input = Buffer.concat(frames.map((f) => { const l = Buffer.alloc(4); l.writeUInt32LE(f.length, 0); return Buffer.concat([l, f]); }));
+    const r = cp.spawnSync(path.join(tool, 'g21-webframe'), [ring, colour], { input: input });
+    const out = String(r.stdout).trim().split('\n');
+    const file = fs.existsSync(ring) ? fs.readFileSync(ring) : null;
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { out: out, file: file, status: r.status };
+}
+function testWebframe() {
+    const bin = path.join(tool, 'g21-webframe');
+    if (!fs.existsSync(bin) || os.platform() !== 'linux' || os.arch() !== 'x64') return skip('g21-webframe', 'needs the Linux x86-64 binary');
+    const mean = (b, w, x0, x1, y0, y1, off) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { s += b[off + y * w + x]; n++; } return s / n; };
+    ['601', 'full', '709'].forEach((colour) => {
+        const r = runFrame(colour, [JPEG, Buffer.from('not a jpeg'), JPEG]);
+        assert.strictEqual(r.status, 0);
+        assert.ok(/^ring 32 16 \d+$/.test(r.out[0]), r.out[0]);
+        assert.ok(/^f 1 \d+$/.test(r.out[1]) && /^e /.test(r.out[2]) && /^f 2 \d+$/.test(r.out[3]), r.out.join(' / '));
+        const f = r.file;
+        assert.strictEqual(f.readUInt32LE(0), 0x4656474d);
+        assert.deepStrictEqual([f.readUInt32LE(4), f.readUInt32LE(8), f.readUInt32LE(12), f.readUInt32LE(16), f.readUInt32LE(20), f.readUInt32LE(24)], [1, 32, 16, 2, 2, 4]);
+        assert.strictEqual(f.length, 64 + 4 * 32 * 16 * 3 / 2);
+        const off = 64 + 2 * (32 * 16 * 3 / 2);
+        const black = mean(f, 32, 0, 12, 0, 16, off), white = mean(f, 32, 20, 32, 0, 16, off);
+        if (colour === 'full') assert.ok(black < 3 && white > 252, 'full ' + black + ' ' + white);
+        else assert.ok(Math.abs(black - 16) < 3 && Math.abs(white - 235) < 3, colour + ' ' + black + ' ' + white);
+        const u = mean(f, 16, 0, 16, 0, 8, off + 32 * 16), v = mean(f, 16, 0, 16, 0, 8, off + 32 * 16 + 16 * 8);
+        assert.ok(Math.abs(u - 128) < 3 && Math.abs(v - 128) < 3, 'grey chroma ' + u + ' ' + v);
+    });
+    console.log('ok g21-webframe: video file layout, three colour forms, a broken frame is skipped');
+    return undefined;
+}
+
+function localPack() {
+    try { const m = d.loadManifest({ engineSrc: path.join(tool, 'engine') }); return d.havePack({ engineSrc: path.join(tool, 'engine') }, m) ? m : null; } catch (e) { return null; }
+}
+// a zip as Google's: prefix + name, deflated; plus one file the manifest does not name
+function writeZip(file, prefix, entries) {
+    const zlib = require('zlib');
+    const fd = fs.openSync(file, 'w');
+    const cds = [];
+    let off = 0;
+    entries.forEach((e) => {
+        const name = Buffer.from(prefix + e.name), comp = zlib.deflateRawSync(e.data, { level: 1 }), crc = zlib.crc32 ? zlib.crc32(e.data) >>> 0 : 0;
+        const lh = Buffer.alloc(30);
+        lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8); lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(e.data.length, 22); lh.writeUInt16LE(name.length, 26);
+        fs.writeSync(fd, lh); fs.writeSync(fd, name); fs.writeSync(fd, comp);
+        const cd = Buffer.alloc(46);
+        cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(8, 10); cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(comp.length, 20); cd.writeUInt32LE(e.data.length, 24); cd.writeUInt16LE(name.length, 28); cd.writeUInt32LE(off, 42);
+        cds.push(cd, name);
+        off += 30 + name.length + comp.length;
+    });
+    const cdb = Buffer.concat(cds), eo = Buffer.alloc(22);
+    fs.writeSync(fd, cdb);
+    eo.writeUInt32LE(0x06054b50, 0); eo.writeUInt16LE(entries.length, 8); eo.writeUInt16LE(entries.length, 10); eo.writeUInt32LE(cdb.length, 12); eo.writeUInt32LE(off, 16);
+    fs.writeSync(fd, eo);
+    fs.closeSync(fd);
+}
+/*
+ * The engine for the tests: G21_TEST_ENGINE_ZIP (Google's chrome-headless-shell-linux64.zip, downloaded by hand)
+ * or the packed parts build-engine.js left in native/g21-browser/engine. Returns { m, zip } or null.
+ */
+async function testEngineFiles(base) {
+    const repoManifest = d.loadManifest({ engineSrc: path.join(tool, 'engine') });
+    assert.ok(d.SOURCE_RE.test(repoManifest.source.url), 'the manifest names Google\'s Chrome for Testing storage');
+    assert.ok(repoManifest.source.url.indexOf((/(\d+\.\d+\.\d+\.\d+)/.exec(repoManifest.product) || [])[1]) > 0, 'the address is of the same build as the hashes');
+    if (process.env.G21_TEST_ENGINE_ZIP) return { m: repoManifest, zip: process.env.G21_TEST_ENGINE_ZIP };
+    const m = localPack();
+    if (!m) { skip('engine files', 'no engine here: set G21_TEST_ENGINE_ZIP to Google\'s zip (' + repoManifest.source.url + ') or run native/g21-browser/build-engine.js'); return null; }
+    const st = fs.statfsSync(os.tmpdir());
+    if (Number(st.bavail) * Number(st.bsize) < 900e6) { skip('engine files', 'under 900 MB free in ' + os.tmpdir()); return null; }
+    const o = { engineSrc: path.join(tool, 'engine'), cacheDir: path.join(base, 'pack-cache'), log: () => {} };
+    assert.strictEqual(d.engineReady(o, m), false);
+    const t0 = Date.now();
+    let pct = 0;
+    const phases = {};
+    const dest = await d.installEngine(o, m, {}, (phase, p) => { phases[phase] = true; if (phase === 'unpacking') { assert.ok(p >= pct); pct = p; } });
+    assert.strictEqual(pct, 100);
+    assert.deepStrictEqual(Object.keys(phases), ['unpacking'], 'a local pack means no download');
+    assert.strictEqual(d.engineReady(o, m), true);
+    const bin = fs.readFileSync(path.join(dest, 'chrome-headless-shell'));
+    assert.strictEqual(bin.toString('latin1', m.interp.offset, m.interp.offset + m.interp.to.length + 1), m.interp.to + '\0');
+    // only the loader path differs from the binary the manifest names
+    Buffer.alloc(m.interp.size).copy(bin, m.interp.offset);
+    bin.write(m.interp.from, m.interp.offset, 'latin1');
+    assert.strictEqual(require('crypto').createHash('sha256').update(bin).digest('hex'), m.binarySha256);
+    console.log('ok engine pack: ' + m.product + ', ' + m.files.length + ' files, every SHA-256 matched, unpacked in ' + (Date.now() - t0) + ' ms');
+    // the same files as a zip like Google's (the binary as Google ships it), for the download path
+    const zip = path.join(base, 'engine.zip');
+    writeZip(zip, m.source.prefix, m.files.map((f) => ({ name: f.path, data: f.path === 'chrome-headless-shell' ? bin : fs.readFileSync(path.join(dest, f.path)) })).concat([{ name: 'ABOUT', data: Buffer.from('not in the manifest') }]));
+    fs.rmSync(o.cacheDir, { recursive: true, force: true });
+    return { m: m, zip: zip };
+}
+async function testZip(base, eng) {
+    // a manifest that names another hash for one file: refused, and nothing is kept
+    const mm = JSON.parse(JSON.stringify(eng.m));
+    mm.files[mm.files.length - 1].sha256 = '0'.repeat(64);
+    const dir = path.join(base, 'zip-bad');
+    fs.mkdirSync(dir);
+    await assert.rejects(d.fillFromZip(mm, eng.zip, dir, null), /SHA-256/);
+    fs.rmSync(dir, { recursive: true, force: true });
+    // a link instead of the zip (the download directory belongs to the engine uid): not followed
+    const link = path.join(base, 'link.zip');
+    fs.symlinkSync(eng.zip, link);
+    fs.mkdirSync(dir);
+    await assert.rejects(d.fillFromZip(eng.m, link, dir, null));
+    fs.rmSync(dir, { recursive: true, force: true });
+    // a cut file
+    const cut = path.join(base, 'cut.zip');
+    const whole = fs.statSync(eng.zip).size;
+    const fd = fs.openSync(eng.zip, 'r'), part = Buffer.alloc(1 << 20);
+    fs.readSync(fd, part, 0, part.length, 0);
+    fs.closeSync(fd);
+    fs.writeFileSync(cut, part);
+    fs.mkdirSync(dir);
+    await assert.rejects(d.fillFromZip(eng.m, cut, dir, null), /zip/);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.ok(whole > part.length);
+    console.log('ok engine zip: another SHA-256, a link in place of the file and a cut download are all refused');
+}
+
+function client(sock) {
+    const c = net.connect(sock);
+    const events = [];
+    let buf = '';
+    c.setEncoding('utf8');
+    c.on('data', (x) => { buf += x; let i; while ((i = buf.indexOf('\n')) >= 0) { events.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
+    c.on('error', () => {});
+    return {
+        send: (o) => c.write(JSON.stringify(o) + '\n'),
+        state: () => { for (let i = events.length - 1; i >= 0; i--) if (events[i].ev === 'state') return events[i]; return {}; },
+        events: events,
+        async until(what, pred, ms) { const end = Date.now() + (ms || 15000); while (Date.now() < end) { if (pred(this.state(), events)) return this.state(); await sleep(40); } throw new Error('timeout: ' + what + ' (state ' + JSON.stringify(this.state()) + ')'); },
+        close: () => c.destroy()
+    };
+}
+function socks(port, host, dport) {
+    return new Promise((resolve) => {
+        const c = net.connect(port, '127.0.0.1');
+        let got = Buffer.alloc(0), sent = false;
+        c.on('connect', () => c.write(Buffer.from([5, 1, 0])));
+        c.on('data', (x) => {
+            got = Buffer.concat([got, x]);
+            if (!sent && got.length >= 2) { sent = true; got = got.subarray(2); const h = Buffer.from(host, 'latin1'); const p = Buffer.alloc(2); p.writeUInt16BE(dport, 0); c.write(Buffer.concat([Buffer.from([5, 1, 0, 3, h.length]), h, p])); }
+            if (sent && got.length >= 2) { resolve(got[1]); c.destroy(); }
+        });
+        c.on('error', () => resolve(-1));
+        setTimeout(() => { resolve(-2); c.destroy(); }, 4000);
+    });
+}
+async function testProxy(port) {
+    const child = cp.spawn(process.execPath, [path.join(tool, 'g21-browserd.js'), '--proxy', '/nonexistent/lease.json'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (x) => { out += x; });
+    for (let i = 0; i < 100 && !/port \d+/.test(out); i++) await sleep(30);
+    const pp = Number((/port (\d+)/.exec(out) || [0, 0])[1]);
+    assert.ok(pp > 0, 'proxy port');
+    assert.strictEqual(await socks(pp, '127.0.0.1', port), 2, 'loopback literal must be refused');
+    assert.strictEqual(await socks(pp, 'localhost', port), 2, 'a name that resolves to loopback must be refused');
+    assert.strictEqual(await socks(pp, '192.168.1.1', 80), 2);
+    assert.strictEqual(await socks(pp, '100.125.63.29', 22), 2);
+    child.stdin.end();
+    for (let i = 0; i < 50 && child.exitCode === null; i++) await sleep(30);
+    assert.strictEqual(child.exitCode, 0, 'the proxy ends when the daemon goes away');
+    console.log('ok proxy: loopback, private and Tailscale addresses are refused; it ends with the daemon');
+}
+
+const PAGE = '<!doctype html><html><head><meta charset="utf-8"><title>Strona testowa</title><style>body{margin:0;font:20px sans-serif;background:#fff}#b{position:absolute;left:40px;top:40px;width:200px;height:80px}#i{position:absolute;left:300px;top:40px;width:300px;height:60px;font-size:24px}#a{position:absolute;left:40px;top:160px;font-size:30px}#n{position:absolute;left:300px;top:160px;font-size:30px}.sp{height:3000px}</style></head>'
+    + '<body><button id="b" onclick="document.title=\'klik \'+(++n)">przycisk</button><form onsubmit="document.title=\'wyslano \'+document.getElementById(\'i\').value;return false"><input id="i" type="search" oninput="document.title=\'pole \'+this.value"></form>'
+    + '<a id="a" href="/two">druga</a><a id="n" href="/three" target="_blank">nowe okno</a><script>var n=0;addEventListener("scroll",function(){document.title="scroll "+(scrollY>0)})</script><div class="sp"></div></body></html>';
+
+async function testChain(base, eng) {
+    if (os.platform() !== 'linux' || os.arch() !== 'x64') return skip('real engine', 'needs Linux x86-64');
+    if (!eng) return skip('real engine', 'no engine files');
+    const m = eng.m;
+    const root = typeof process.getuid === 'function' && process.getuid() === 0;
+    try { fs.mkdirSync(path.dirname(m.interp.to), { recursive: true }); fs.accessSync(path.dirname(m.interp.to), fs.constants.W_OK); } catch (e) { return skip('real engine', 'cannot write ' + path.dirname(m.interp.to) + ' (the loader link); run as root'); }
+    // the tool as the head unit has it: the manifest, no packed parts
+    const src = path.join(base, 'engine-src');
+    fs.mkdirSync(src);
+    fs.copyFileSync(path.join(tool, 'engine', 'manifest.json'), path.join(src, 'manifest.json'));
+    fs.chmodSync(eng.zip, 0o644);
+    process.env.G21_BROWSER_ENGINE = src;
+    process.env.G21_BROWSER_ROOT = base;
+    process.env.G21_BROWSER_RUN = path.join(base, 'run');
+    fs.mkdirSync(path.join(base, 'shm'));
+    fs.chmodSync(path.join(base, 'shm'), 0o1777); // as /dev/shm: the frame decoder is not root
+    process.env.G21_BROWSER_RING = path.join(base, 'shm', 'mgu-video-g21browser');
+    process.env.G21_BROWSER_ALLOW_LOCAL = '1';
+    if (root) process.env.G21_BROWSER_UID = '65534'; else process.env.G21_BROWSER_NOSETUID = '1';
+    const srv = http.createServer((q, s) => {
+        s.setHeader('content-type', 'text/html; charset=utf-8');
+        if (q.url === '/two') s.end('<!doctype html><title>Druga</title><h1>druga strona</h1>');
+        else if (q.url === '/three') s.end('<!doctype html><title>Trzecia</title><h1>z nowego okna</h1>');
+        else if (q.url === '/engine.zip') { s.setHeader('content-type', 'application/zip'); s.setHeader('content-length', fs.statSync(eng.zip).size); fs.createReadStream(eng.zip).pipe(s); }
+        else s.end(PAGE);
+    });
+    await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+    const port = srv.address().port, site = 'http://127.0.0.1:' + port;
+    process.env.G21_BROWSER_SOURCE = site + '/engine.zip';
+    await testProxy(port);
+    const daemon = new d.Daemon({ idleMs: 400, pollMs: 120 });
+    const logFile = path.join(base, 'log', 'browserd.log');
+    let c = null;
+    try {
+        await daemon.start();
+        for (let i = 0; i < 100 && !fs.existsSync(daemon.opts.sock); i++) await sleep(20);
+        c = client(daemon.opts.sock);
+        const t0 = Date.now();
+        c.send({ op: 'open', w: 1920, h: 636, zoom: 1.5 });
+        let s = await c.until('engine ready with a picture', (x) => x.engine === 'ready' && x.live && x.w === 1920 && x.h === 636, 120000);
+        const seenPhases = c.events.filter((e) => e.ev === 'state').map((e) => e.engine).filter((e, i, a) => a.indexOf(e) === i);
+        ['downloading', 'unpacking', 'starting', 'ready'].forEach((p) => assert.ok(seenPhases.indexOf(p) >= 0, 'phase ' + p + ' in ' + seenPhases.join(',')));
+        assert.strictEqual(fs.existsSync(path.join(base, 'cache', 'download')), false, 'the downloaded zip is removed');
+        assert.strictEqual(s.title, 'Strona startowa');
+        assert.strictEqual(s.url, '');
+        assert.strictEqual(s.zoom, 1.5);
+        const ring = () => { const f = fs.readFileSync(daemon.opts.ring); return { w: f.readUInt32LE(8), h: f.readUInt32LE(12), seq: f.readUInt32LE(16), ino: fs.statSync(daemon.opts.ring).ino, size: f.length }; };
+        let r = ring();
+        assert.deepStrictEqual([r.w, r.h, r.size], [1920, 636, 64 + 4 * 1920 * 636 * 3 / 2]);
+        assert.strictEqual(r.ino, s.ino);
+        console.log('ok engine: downloaded as the engine uid, checked, unpacked; start page shown ' + (Date.now() - t0) + ' ms after "open", video file 1920x636');
+        // the engine and its helpers are not root
+        if (root) {
+            const pids = daemon.engineProcs();
+            assert.ok(pids.length >= 3, 'engine processes');
+            pids.forEach((pid) => assert.ok(/Uid:\s+65534\s/.test(fs.readFileSync('/proc/' + pid + '/status', 'utf8')), 'engine pid ' + pid + ' uid'));
+            [daemon.proxy.pid, daemon.frame.pid].forEach((pid) => assert.ok(/Uid:\s+65534\s/.test(fs.readFileSync('/proc/' + pid + '/status', 'utf8')), 'helper uid'));
+            // no library of this machine: only the tool's own
+            const foreign = {};
+            pids.forEach((pid) => fs.readFileSync('/proc/' + pid + '/maps', 'utf8').split('\n').forEach((l) => { const f = l.split(/\s+/)[5]; if (f && /\.so(\.|$)/.test(f) && f.indexOf(tool) !== 0 && f.indexOf(base) !== 0) foreign[f] = 1; }));
+            const must = Object.keys(foreign).filter((f) => /\/(libc|libm|libglib|libnss3|libnspr4|libX11|libdbus|ld-linux)[.-]/.test(f));
+            assert.deepStrictEqual(must, [], 'engine loaded system libraries');
+            console.log('ok engine: runs as uid 65534 with the tool\'s own loader and libraries' + (Object.keys(foreign).length ? ' (optional, opened by name: ' + Object.keys(foreign).map((f) => path.basename(f)).join(', ') + ')' : ''));
+        }
+        c.send({ op: 'nav', url: '127.0.0.1:' + port + '/' });
+        s = await c.until('test page', (x) => x.title === 'Strona testowa' && !x.loading);
+        assert.strictEqual(s.url, site + '/');
+        assert.strictEqual(s.back, true);
+        const tap = (x, y) => { c.send({ op: 'touch', p: 1, x: x * 1.5, y: y * 1.5 }); c.send({ op: 'touch', p: 3, x: x * 1.5, y: y * 1.5 }); };
+        const seq0 = ring().seq;
+        tap(140, 80);
+        await c.until('tap on the button', (x) => x.title === 'klik 1');
+        tap(140, 80);
+        await c.until('second tap', (x) => x.title === 'klik 2');
+        console.log('ok touch: a tap in screen pixels lands on the page element (zoom 1.5)');
+        const before = c.events.length;
+        tap(450, 70);
+        await c.until('edit event', (x, ev) => ev.slice(before).some((e) => e.ev === 'edit'));
+        const ed = c.events.slice(before).filter((e) => e.ev === 'edit')[0];
+        assert.strictEqual(ed.kind, 'search');
+        assert.strictEqual(ed.submit, true);
+        assert.strictEqual(c.state().editable, true);
+        c.send({ op: 'text', s: 'zażółć', replace: true });
+        await c.until('typed text', (x) => x.title === 'pole zażółć');
+        c.send({ op: 'text', s: 'gęślą', replace: true, enter: true });
+        await c.until('replace + Enter', (x) => x.title === 'wyslano gęślą');
+        console.log('ok keyboard: a tap in a text field asks the app for its keyboard; text replaces the field, Enter submits');
+        c.send({ op: 'scroll', dx: 0, dy: 300 });
+        await c.until('wheel scroll', (x) => x.title === 'scroll true');
+        c.send({ op: 'touch', p: 1, x: 900, y: 500 });
+        for (let i = 1; i <= 8; i++) { c.send({ op: 'touch', p: 2, x: 900, y: 500 - i * 30 }); await sleep(16); }
+        c.send({ op: 'touch', p: 3, x: 900, y: 260 });
+        await sleep(1500); // (the page glides on after the finger lifts)
+        assert.ok(ring().seq > seq0 + 3, 'frames while the page moved');
+        console.log('ok scroll: knob (wheel) and finger drag move the page, new frames reach the video file');
+        c.send({ op: 'scroll', dx: 0, dy: -9000 });
+        await c.until('back at the top', (x) => x.title === 'scroll false');
+        tap(80, 178);
+        s = await c.until('link', (x) => x.title === 'Druga' && !x.loading);
+        assert.strictEqual(s.url, site + '/two');
+        c.send({ op: 'back' });
+        s = await c.until('back', (x) => x.url === site + '/' && !x.loading && x.fwd === true);
+        c.send({ op: 'fwd' });
+        await c.until('forward', (x) => x.url === site + '/two' && !x.loading);
+        c.send({ op: 'back' });
+        await c.until('back again', (x) => x.url === site + '/' && !x.loading);
+        tap(380, 178);
+        await c.until('new window opens in the page', (x) => x.url === site + '/three' && x.title === 'Trzecia');
+        console.log('ok navigation: link, back, forward, target=_blank opens in the same page');
+        c.send({ op: 'nav', url: 'file:///etc/passwd' });
+        await c.until('refused address', (x) => x.err === 'zły adres');
+        assert.strictEqual(c.state().url, site + '/three');
+        c.send({ op: 'zoom', z: 2 });
+        s = await c.until('zoom 2', (x) => x.zoom === 2 && x.engine === 'ready' && x.live && x.url === site + '/three', 30000);
+        assert.deepStrictEqual([s.w, s.h], [1920, 636]);
+        assert.strictEqual(JSON.parse(fs.readFileSync(path.join(base, 'state', 'settings.json'), 'utf8')).zoom, 2);
+        console.log('ok zoom: the engine restarts on the same page, the picture stays 1920x636');
+        const rec = JSON.parse(fs.readFileSync(path.join(base, 'state', 'recent.json'), 'utf8'));
+        assert.ok(rec.some((x) => x.url === site + '/two') && rec.every((x) => !/[?#]/.test(x.url)));
+        // the app goes away: the engine follows after idleMs, the video file goes
+        c.close();
+        for (let i = 0; i < 100 && (daemon.engine || fs.existsSync(daemon.opts.ring)); i++) await sleep(50);
+        assert.strictEqual(daemon.engine, null);
+        assert.strictEqual(fs.existsSync(daemon.opts.ring), false);
+        assert.deepStrictEqual(daemon.engineProcs(), []);
+        console.log('ok idle: without the app the engine stops and its processes and video file are gone');
+        // memory guard
+        fs.writeFileSync(path.join(base, 'state', 'mem-limit-mb'), '1\n');
+        c = client(daemon.opts.sock);
+        c.send({ op: 'open', w: 1920, h: 636 });
+        await c.until('engine up again', (x) => x.engine === 'ready', 30000);
+        daemon.checkMemory();
+        s = await c.until('memory guard', (x) => x.engine === 'failed');
+        assert.strictEqual(s.err, 'strona zużyła za dużo pamięci');
+        fs.unlinkSync(path.join(base, 'state', 'mem-limit-mb'));
+        c.send({ op: 'reload' });
+        await c.until('reload starts the engine again', (x) => x.engine === 'ready' && x.live, 30000);
+        console.log('ok memory guard: an engine over the limit is stopped, "odśwież" starts it again');
+        const log = fs.readFileSync(logFile, 'utf8');
+        assert.ok(!/\/two|\/three|zażółć|gęślą/.test(log), 'the log must not hold paths or typed text');
+    } catch (e) {
+        try { console.log('--- daemon log ---\n' + fs.readFileSync(logFile, 'utf8').split('\n').slice(-25).join('\n')); } catch (x) { /* none */ }
+        throw e;
+    } finally {
+        if (c) c.close();
+        await daemon.close();
+        srv.close();
+    }
+    assert.deepStrictEqual(daemon.engineProcs(), []);
+    if (root) {
+        // an engine that will not start with its sandbox (here: as root) gets one more start without, and the tool remembers
+        const d2 = new d.Daemon({ testUid: null, noSetuid: true, forceSandbox: true });
+        let c2 = null;
+        try {
+            await d2.start();
+            for (let i = 0; i < 100 && !fs.existsSync(d2.opts.sock); i++) await sleep(20);
+            c2 = client(d2.opts.sock);
+            c2.send({ op: 'open', w: 1280, h: 424, zoom: 1 });
+            const s2 = await c2.until('engine up without its sandbox', (x) => x.engine === 'ready' && x.live, 60000);
+            assert.deepStrictEqual([s2.w, s2.h], [1280, 424]);
+            assert.strictEqual(fs.readFileSync(path.join(base, 'state', 'sandbox'), 'utf8').trim(), 'off');
+            assert.ok(/did not start with its sandbox/.test(fs.readFileSync(logFile, 'utf8')));
+            console.log('ok sandbox: when the engine cannot start with it, one more start without, remembered in state/sandbox');
+        } finally {
+            if (c2) c2.close();
+            await d2.close();
+        }
+    }
+    return undefined;
+}
+
+(async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'g21br-'));
+    fs.chmodSync(base, 0o755);
+    try {
+        testUrls();
+        testUid();
+        testWebframe();
+        const eng = await testEngineFiles(base);
+        if (eng) await testZip(base, eng);
+        await testChain(base, eng);
+    } finally {
+        fs.rmSync(base, { recursive: true, force: true });
+    }
+    console.log('test_browser_tool: ok' + (skipped ? ' (' + skipped + ' part(s) skipped, see SKIP above)' : ''));
+    process.exit(0);
+})().catch((e) => { console.error(e.stack || e); process.exit(1); });

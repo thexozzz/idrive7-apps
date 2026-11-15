@@ -37,3 +37,8 @@ __pycache__/
 # Developer SSH cycle artifacts (never commit HU logs / staging).
 dev-logs/
 dev-staging/
+
+# Przeglądarka: Google's engine is downloaded by the head unit from Google itself. The packed copy
+# (build-engine.js, for tests on this machine) and its notices never go into this public repository.
+native/g21-browser/engine/engine.pack.br.*
+native/g21-browser/engine/LICENSE.headless_shell

@@ -50,7 +50,7 @@ function menuFrame(screen, sel, detail, heading, air, extra) {
         list[0].title = 'Zakończ'; list[0].icon = 'stop'; list[0].hint = air.online ? 'iPhone połączony' : 'czeka na iPhone'; list[1].hint = 'środek + zegary';
     }
     if (extra.armed) { list[sel].armed = true; list[sel].adjust = true; }
-    return menu.buildFrame(list, sel, 1920, 720, detail || '', heading || 'THEiPlay', '0.1.135', extra.stream || null, extra.preview || null, null,
+    return menu.buildFrame(list, sel, 1920, 720, detail || '', heading || 'THEiPlay', '0.1.136', extra.stream || null, extra.preview || null, null,
         menu.crumbFor(screen, heading || 'THEiPlay', ''), air, null);
 }
 var winPreview = { x: 640, y: 180, w: 640, h: 360, limitW: 1920, limitH: 720, label: 'Okno', sliders: [
@@ -82,17 +82,29 @@ var full = JSON.parse(JSON.stringify(airOn)); full.full = true; full.fullUi = tr
 done.push(save('12-fullscreen', menuFrame('airplay', 0, '', 'THEiPlay', full)));
 var stream = { pin: '', headline: 'Miracast', hint: 'czekam na komputer', mirrored: false, spin: true, lines: ['Wi-Fi: iPhone', 'Win+K na komputerze'], window: null,
     screens: [{ name: 'stream-central', title: 'Środek', on: true }, { name: 'stream-cluster', title: 'Zegary', on: false }, { name: 'stream-hud', title: 'HUD', on: false }], tune: null };
-done.push(save('13-stream-wait', menu.buildFrame(items('stream'), 0, 1920, 720, 'czekam', 'Stream', '0.1.135', stream, null, null, 'Miracast', null, null)));
+done.push(save('13-stream-wait', menu.buildFrame(items('stream'), 0, 1920, 720, 'czekam', 'Stream', '0.1.136', stream, null, null, 'Miracast', null, null)));
 var pinInfo = JSON.parse(JSON.stringify(stream)); pinInfo.pin = '4821'; pinInfo.headline = 'AirPlay';
-done.push(save('14-stream-pin', menu.buildFrame(items('stream'), 0, 1920, 720, 'PIN 4821', 'Stream', '0.1.135', pinInfo, null, null, 'AirPlay > Lustro', null, null)));
+done.push(save('14-stream-pin', menu.buildFrame(items('stream'), 0, 1920, 720, 'PIN 4821', 'Stream', '0.1.136', pinInfo, null, null, 'AirPlay > Lustro', null, null)));
 var tuned = JSON.parse(JSON.stringify(stream)); tuned.mirrored = true; tuned.video = true; tuned.window = { x: 1100, y: 150, w: 700, h: 300 };
 tuned.tune = { name: 'central', title: 'Środek', tool: 'pos', axis: 'x', x: 640, y: 180, w: 640, h: 360, limitW: 1920, limitH: 720, saved: false };
-done.push(save('15-stream-tune', menu.buildFrame(items('stream'), 0, 1920, 720, '', 'Stream', '0.1.135', tuned, null, null, 'AirPlay > Lustro', null, null)));
+done.push(save('15-stream-tune', menu.buildFrame(items('stream'), 0, 1920, 720, '', 'Stream', '0.1.136', tuned, null, null, 'AirPlay > Lustro', null, null)));
 var edit = kb.createEdit({ mode: 'name', value: 'G21-Car', title: 'Nazwa AirPlay' });
 kb.moveKeyDir(edit, 's');
-done.push(save('16-keyboard', menu.buildKeyboardFrame(edit, 1920, 720, 'AirPlay > Nazwa', airOff, '0.1.135')));
+done.push(save('16-keyboard', menu.buildKeyboardFrame(edit, 1920, 720, 'AirPlay > Nazwa', airOff, '0.1.136')));
 var ride = { on: true, mode: 'home', status: 'Wczytuję…', sections: [{ title: 'Polecane', items: [
     { title: 'BMW G21 – test', hint: 'kanał · 12 tys. wyświetleń', duration: '12:04' }, { title: 'Nocna jazda', hint: 'kanał', duration: '8:31' }] }] };
-done.push(save('17-youtube-fallback', menu.buildFrame(items('yt-browse'), 0, 1920, 720, '', 'THEiPlay', '0.1.135', null, null, null, 'YouTube', null, ride)));
+done.push(save('17-youtube-fallback', menu.buildFrame(items('yt-browse'), 0, 1920, 720, '', 'THEiPlay', '0.1.136', null, null, null, 'YouTube', null, ride)));
+
+// Przeglądarka: the menu with its new item, then the browser screen in its states
+done.push(save('18-menu-browser', menuFrame('root', 6, '', 'THEiPlay', airOff)));
+var webPage = { connected: true, engine: 'ready', err: '', url: 'https://pl.wikipedia.org/wiki/BMW_serii_3', title: 'BMW serii 3 – Wikipedia, wolna encyklopedia', loading: false, back: true, fwd: false, live: true, video: true, zoom: 1.5, editable: true, pct: 100 };
+done.push(save('19-browser-page', menu.buildWebFrame(1920, 720, webPage)));
+done.push(save('20-browser-loading', menu.buildWebFrame(1920, 720, Object.assign({}, webPage, { loading: true, editable: false, url: 'http://example.com/', title: '', fwd: true, err: 'zły adres' }))));
+done.push(save('21-browser-download', menu.buildWebFrame(1920, 720, { connected: true, engine: 'downloading', pct: 37, video: true, zoom: 1.5 })));
+done.push(save('22-browser-starting', menu.buildWebFrame(1920, 720, { connected: true, engine: 'starting', video: true, zoom: 1.5 })));
+done.push(save('23-browser-failed', menu.buildWebFrame(1920, 720, { connected: true, engine: 'failed', err: 'nie udało się pobrać silnika: sprawdź internet w aucie', video: true, zoom: 1.5 })));
+done.push(save('24-browser-no-tool', menu.buildWebFrame(1920, 720, { connected: false, engine: 'off', video: true, zoom: 1.5 })));
+var webEdit = kb.createEdit({ mode: 'url', value: 'pl.wikipedia.org/wiki/BMW', title: 'Adres' });
+done.push(save('25-browser-address', menu.buildKeyboardFrame(webEdit, 1920, 720, 'Adres', null, '0.1.136')));
 
 done.forEach(function (d) { console.log(d.name + ': ' + d.ops + ' ops, ' + d.bytes + ' B'); });

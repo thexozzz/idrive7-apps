@@ -86,3 +86,14 @@ Narzędzia: `dev-logs/ssh-bridge.cmd` (most SSH tylko do odczytu, lista dozwolon
 - 0.1.134: klawiatura (układ telefonu, wychylenie pokrętła).
 - 0.1.135: (1) ostatnia klatka po rozłączeniu iPhone'a / zatrzymaniu filmu znika (`_airPictureGone`, `drop_picture` w narzędziu 0.1.53, `_takeYoutube` pyta model); (2) narzędzie: `procs_matching` bez forka na proces (0.1.51/0.1.52 forkiowały `tr` setki razy na sekundę — UNVERIFIED skutek na aucie, wniosek z kodu), sprzątanie co 20 obrotów; (3) menu rysowane przez `rt_record.js` (RRECT/CARD/GLYPHS, atlasy Ubuntu), ekran YouTube w kolorach THEiPlay, po polsku przez `rt_i18n.ui()`; (4) poprawki logiki UI (modalne okienko, – i + dla suwaków, karta kodu AirPlay). Wszystko UNVERIFIED na aucie; testy lokalne (`tools/test_all.js`, w tym `test_last_frame.js`, `test_ui_look.js`) przechodzą. Podglądy: `node tools/preview_ui.js`.
 - Sprawdzone tylko w kodzie (nic nie zmieniane): pokrętło, przyciski przy pokrętle (`FrontCCU.statusPushButtonsState`) i przycisk telefonu na kierownicy (`SteeringWheelPushButton.statusTelephoneButton`) wymagałyby wpisów w `manifest.json` — osobna zgoda właściciela.
+
+## Sesja 2026-11-15 — 0.1.136: „Przeglądarka” (Chromium), narzędzie g21-browser 0.1.0
+
+Wszystko o przeglądarce: `docs/ai/BROWSER_PLAN.md` (części, co sprawdzone, co nie, polecenia odczytu z auta).
+
+- Silnik: Google Chrome for Testing 153.0.8010.12 `chrome-headless-shell`. Znaleziony w środowisku roboczym asystenta (sieć była zamknięta), uruchomiony i przetestowany lokalnie. Do repo trafia tylko `engine/manifest.json` (adres Google + SHA-256); auto pobiera silnik samo. UNVERIFIED: czy plik pod adresem Google ma te same sumy (to ma być ta sama kompilacja; jeśli nie, narzędzie odmówi i pokaże błąd pobrania/sumy).
+- Narzędzie `native/g21-browser`: demon `g21-browserd.js` (root, `jap-node22`), proxy SOCKS5 i dekoder `g21-webframe` jako osobny uid, własny loader + glibc 2.39 + biblioteki Ubuntu 24.04.
+- Aplikacja: pozycja `browser` na końcu `ROOT_ITEMS`, `buildWebFrame`, `setWeb`, `browser_client.js`, tryby klawiatury `url`/`text`/`webpass`.
+- Testy: `tools/test_browser_tool.js` (cały łańcuch z prawdziwym silnikiem przeszedł w kontenerze jako root; na PC właściciela część z silnikiem jest pomijana z komunikatem SKIP, bo wymaga roota), `tools/test_browser_app.js`. `node tools/test_all.js` → 0.
+- Na aucie nic nie sprawdzono. Pierwsze, co trzeba odczytać po Update: `/var/opt/g21-browser/log/browserd.log`.
+- Do zrobienia potem (prośba właściciela z tej sesji): panel na porcie 1235 (`config_panel.js`) ma być dokładnie taki jak menu w aucie, ze wszystkimi opcjami konfiguracji.

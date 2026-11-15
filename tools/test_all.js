@@ -29,6 +29,8 @@ var tools = [
     path.join(__dirname, 'test_windows_offers.js'),
     path.join(__dirname, 'test_knob_keyboard.js'),
     path.join(__dirname, 'test_config_panel.js'),
+    path.join(__dirname, 'test_browser_app.js'),
+    path.join(__dirname, 'test_browser_tool.js'),
 ];
 
 tools.forEach(function (tool) {

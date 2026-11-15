@@ -1,0 +1,211 @@
+'use strict';
+
+/*
+ * browser_client.js - THEiPlay's link to g21-browserd (native/g21-browser), the daemon behind
+ * "Przeglądarka". JSON lines on /run/g21-browser/ctl.sock; reconnects every 2 s while the browser
+ * is open.
+ *
+ *   App -> daemon: open{w,h} (the page area in screen pixels) nav{url} home back fwd reload stop
+ *                  touch{p:1|2|3,x,y} scroll{dx,dy} text{s,replace,enter} key{k} zoom{z} close
+ *   Daemon -> app: state{engine:off|unpacking|starting|ready|failed, err, url, title, loading, back,
+ *                  fwd, live, w, h, ino, zoom, editable, pct, ring}
+ *                  edit{kind,value,submit}: a tap landed in a text field, open the keyboard
+ *
+ * The page picture does not come here: the daemon's decoder writes the video file state.ring names
+ * and the renderer draws it (menu_draw.js names the file to it; a new ino means name it again).
+ * The daemon stops the engine a little after this socket closes, so leaving the screen frees its
+ * memory and a quick return still finds the page.
+ *
+ * Node 8.
+ */
+var net = require('net');
+
+var SOCKET = '/run/g21-browser/ctl.sock';
+var MAX_LINE = 65536;
+
+function blank() {
+    return {
+        connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
+        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: ''
+    };
+}
+
+function createBrowserClient(opts) {
+    var options = opts || {};
+    var file = options.socket || SOCKET;
+    var note = options.note || function () {};
+    var sock = null;
+    var up = false;
+    var buf = '';
+    var want = null;        // { w, h }: the page area; null: the browser is closed
+    var retry = null;
+    var state = blank();
+    var failNoted = false;
+
+    function tell() {
+        if (typeof options.onState === 'function') {
+            options.onState(state);
+        }
+    }
+
+    function send(obj) {
+        if (!up || !sock) {
+            return false;
+        }
+        try {
+            sock.write(JSON.stringify(obj) + '\n');
+        } catch (err) {
+            return false;
+        }
+        return true;
+    }
+
+    function onLine(line) {
+        var m;
+        try {
+            m = JSON.parse(line);
+        } catch (err) {
+            return;
+        }
+        if (!m || typeof m.ev !== 'string') {
+            return;
+        }
+        if (m.ev === 'state') {
+            state = {
+                connected: true,
+                engine: String(m.engine || 'off'),
+                err: String(m.err || ''),
+                url: String(m.url || ''),
+                title: String(m.title || ''),
+                loading: !!m.loading,
+                back: !!m.back,
+                fwd: !!m.fwd,
+                live: !!m.live,
+                w: m.w | 0,
+                h: m.h | 0,
+                ino: Number(m.ino) || 0,
+                zoom: Number(m.zoom) || 1.5,
+                editable: !!m.editable,
+                pct: m.pct | 0,
+                ring: String(m.ring || '')
+            };
+            tell();
+        } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {
+            options.onEdit({ kind: String(m.kind || 'text'), value: String(m.value || ''), submit: !!m.submit, multi: !!m.multi });
+        }
+    }
+
+    function connect() {
+        var s;
+        clearTimeout(retry);
+        retry = null;
+        if (!want || sock) {
+            return;
+        }
+        s = net.createConnection(file);
+        sock = s;
+        s.setEncoding('utf8');
+        s.on('connect', function () {
+            if (sock !== s) {
+                return;
+            }
+            up = true;
+            buf = '';
+            failNoted = false;
+            note('web-up');
+            send({ op: 'open', w: want.w, h: want.h });
+        });
+        s.on('data', function (d) {
+            var i;
+            if (sock !== s) {
+                return;
+            }
+            buf += d;
+            if (buf.length > MAX_LINE && buf.indexOf('\n') < 0) {
+                buf = '';
+                return;
+            }
+            while ((i = buf.indexOf('\n')) >= 0) {
+                onLine(buf.slice(0, i));
+                buf = buf.slice(i + 1);
+            }
+        });
+        s.on('error', function (err) {
+            if (!failNoted) {
+                failNoted = true;
+                note('web-sock ' + ((err && err.code) || err));
+            }
+        });
+        s.on('close', function () {
+            var was;
+            if (sock !== s) {
+                return;
+            }
+            was = up;
+            sock = null;
+            up = false;
+            state = blank();
+            if (was) {
+                note('web-down');
+            }
+            tell();
+            if (want) {
+                retry = setTimeout(connect, 2000);
+            }
+        });
+    }
+
+    function drop(last) {
+        var s = sock;
+        want = null;
+        clearTimeout(retry);
+        retry = null;
+        sock = null;
+        if (s) {
+            try {
+                if (last && up) {
+                    s.end(JSON.stringify(last) + '\n');
+                } else {
+                    s.destroy();
+                }
+            } catch (err) {
+                s.destroy();
+            }
+        }
+        up = false;
+        state = blank();
+    }
+
+    return {
+        /** show the browser in a page area of w x h screen pixels */
+        open: function (w, h) {
+            want = { w: w | 0, h: h | 0 };
+            if (up) {
+                send({ op: 'open', w: want.w, h: want.h });
+            } else {
+                connect();
+            }
+        },
+        /** leave the screen: the socket closes, the daemon stops the engine a little later */
+        leave: function () {
+            drop(null);
+        },
+        /** the app is switched off: the engine stops now */
+        shutdown: function () {
+            drop({ op: 'close' });
+        },
+        send: send,
+        state: function () {
+            return state;
+        },
+        isOpen: function () {
+            return !!want;
+        }
+    };
+}
+
+module.exports = {
+    createBrowserClient: createBrowserClient,
+    blank: blank,
+    SOCKET: SOCKET
+};

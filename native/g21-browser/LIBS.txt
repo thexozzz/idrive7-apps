@@ -1,0 +1,92 @@
+Runtime libraries and fonts for the browser engine on the head unit.
+
+The engine itself (Google's chrome-headless-shell, the build engine/manifest.json names) is NOT in
+this tool: the head unit downloads it from Google's Chrome for Testing storage and keeps it only
+when every file has the SHA-256 the manifest lists. It is Google's program under Google's terms.
+
+The engine is a dynamically linked program. The head unit has an older C library and lacks most of
+what the engine links to, so this tool carries those libraries and the engine uses ONLY these (its
+ELF interpreter is lib/ld-linux-x86-64.so.2, its search path is lib/): nothing of the head unit's
+/lib or /usr/lib is replaced or changed.
+
+The files below are the unmodified binaries of these Ubuntu 24.04.5 LTS packages (x86-64), copied from an
+installed system. Corresponding sources: http://archive.ubuntu.com/ubuntu (noble, noble-updates,
+noble-security), package name and version as listed.
+
+file  package  version
+lib/ld-linux-x86-64.so.2  libc6  2.39-0ubuntu8.9
+lib/libX11.so.6  libx11-6  2:1.8.7-1ubuntu0.1
+lib/libXau.so.6  libxau6  1:1.0.9-1build6
+lib/libXcomposite.so.1  libxcomposite1  1:0.4.5-1build3
+lib/libXdamage.so.1  libxdamage1  1:1.1.6-1build1
+lib/libXdmcp.so.6  libxdmcp6  1:1.1.3-0ubuntu6
+lib/libXext.so.6  libxext6  2:1.3.4-1build2
+lib/libXfixes.so.3  libxfixes3  1:6.0.0-2build1
+lib/libXi.so.6  libxi6  2:1.8.1-1build1
+lib/libXrandr.so.2  libxrandr2  2:1.5.2-2build1
+lib/libXrender.so.1  libxrender1  1:0.9.10-1.1build1
+lib/libasound.so.2  libasound2t64  1.2.11-1ubuntu0.3
+lib/libatk-1.0.so.0  libatk1.0-0t64  2.52.0-1build1
+lib/libatk-bridge-2.0.so.0  libatk-bridge2.0-0t64  2.52.0-1build1
+lib/libatspi.so.0  libatspi2.0-0t64  2.52.0-1build1
+lib/libblkid.so.1  libblkid1  2.39.3-9ubuntu6.6
+lib/libbsd.so.0  libbsd0  0.12.1-1build1.1
+lib/libc.so.6  libc6  2.39-0ubuntu8.9
+lib/libcap.so.2  libcap2  1:2.66-5ubuntu2.4
+lib/libdbus-1.so.3  libdbus-1-3  1.14.10-4ubuntu4.1
+lib/libdl.so.2  libc6  2.39-0ubuntu8.9
+lib/libdrm.so.2  libdrm2  2.4.125-1ubuntu0.1~24.04.2
+lib/libexpat.so.1  libexpat1  2.6.1-2ubuntu0.6
+lib/libffi.so.8  libffi8  3.4.6-1build1
+lib/libfreebl3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libfreeblpriv3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libgbm.so.1  libgbm1  25.2.8-0ubuntu0.24.04.4
+lib/libgcc_s.so.1  libgcc-s1  14.2.0-4ubuntu2~24.04.1
+lib/libgcrypt.so.20  libgcrypt20  1.10.3-2ubuntu0.2
+lib/libgio-2.0.so.0  libglib2.0-0t64  2.80.0-6ubuntu3.10
+lib/libglib-2.0.so.0  libglib2.0-0t64  2.80.0-6ubuntu3.10
+lib/libgmodule-2.0.so.0  libglib2.0-0t64  2.80.0-6ubuntu3.10
+lib/libgobject-2.0.so.0  libglib2.0-0t64  2.80.0-6ubuntu3.10
+lib/libgpg-error.so.0  libgpg-error0  1.47-3build2.1
+lib/liblz4.so.1  liblz4-1  1.9.4-1build1.1
+lib/liblzma.so.5  liblzma5  5.6.1+really5.4.5-1ubuntu0.4
+lib/libm.so.6  libc6  2.39-0ubuntu8.9
+lib/libmd.so.0  libmd0  1.1.0-2build1.1
+lib/libmount.so.1  libmount1  2.39.3-9ubuntu6.6
+lib/libnspr4.so  libnspr4  2:4.35-1.1build1
+lib/libnss3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libnssckbi.so  libnss3  2:3.98-1ubuntu0.3
+lib/libnssdbm3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libnssutil3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libpcre2-8.so.0  libpcre2-8-0  10.42-4ubuntu2.2
+lib/libplc4.so  libnspr4  2:4.35-1.1build1
+lib/libplds4.so  libnspr4  2:4.35-1.1build1
+lib/libpthread.so.0  libc6  2.39-0ubuntu8.9
+lib/libselinux.so.1  libselinux1  3.5-2ubuntu2.1
+lib/libsoftokn3.so  libnss3  2:3.98-1ubuntu0.3
+lib/libsqlite3.so.0  libsqlite3-0  3.45.1-1ubuntu2.9
+lib/libsystemd.so.0  libsystemd0  255.4-1ubuntu8.18
+lib/libudev.so.1  libudev1  255.4-1ubuntu8.18
+lib/libxcb.so.1  libxcb1  1.15-1ubuntu2
+lib/libxkbcommon.so.0  libxkbcommon0  1.6.0-1build1
+lib/libz.so.1  zlib1g  1:1.3.dfsg-3.1ubuntu2.3
+lib/libzstd.so.1  libzstd1  1.5.5+dfsg2-2build1.1
+
+Fonts (unmodified files of the same distribution):
+fonts/DejaVuSans-Bold.ttf  fonts-dejavu-core  2.37-8
+fonts/DejaVuSans.ttf  fonts-dejavu-core  2.37-8
+fonts/LiberationMono-Bold.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationMono-BoldItalic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationMono-Italic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationMono-Regular.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSans-Bold.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSans-BoldItalic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSans-Italic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSans-Regular.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSerif-Bold.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSerif-BoldItalic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSerif-Italic.ttf  fonts-liberation  1:2.1.5-3
+fonts/LiberationSerif-Regular.ttf  fonts-liberation  1:2.1.5-3
+
+Liberation fonts: SIL Open Font License 1.1. DejaVu fonts: Bitstream Vera / DejaVu licence (free to
+use and redistribute). No emoji and no CJK font is included (size): such characters show as boxes.

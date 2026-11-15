@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=g21-browser: web browser engine for THEiPlay (chrome-headless-shell, ctl socket for the app)
+RequiresMountsFor=/var/opt
+After=local-fs.target
+
+[Service]
+# root: picks the engine's uid for mgu-uplink and owns the ctl socket. The engine, its proxy and
+# the frame decoder run as that unprivileged uid, never as root.
+User=root
+ExecStartPre=-/bin/sh -c 'mkdir -p /var/opt/g21-browser/cache /var/opt/g21-browser/log /var/opt/g21-browser/state && chmod 0755 /var/opt/g21-browser && chmod 0711 /var/opt/g21-browser/cache && chmod 0700 /var/opt/g21-browser/state'
+ExecStart=/var/opt/jap-node22/current/bin/node /var/opt/g21-browser/current/g21-browserd.js
+# The app (group tm_oap_app) must traverse the dir; ctl.sock itself is 0660 root:tm_oap_app.
+RuntimeDirectory=g21-browser
+RuntimeDirectoryMode=0755
+# The daemon starts idle (no engine until the app opens "Przeglądarka") and stays active,
+# so the deploy health check sees it active.
+Restart=on-failure
+# 3 s keeps clear of systemd's 5-starts-in-10-s limit.
+RestartSec=3
+# SIGTERM stops the engine, then exits (4 s cap in g21-browserd.js).
+TimeoutStopSec=5
+# A page that eats memory: the kernel takes this tool's processes first, not a BMW process.
+OOMScoreAdjust=900
+# Below the HMI in the scheduler.
+Nice=5
+# As jap-ridetube-d: 1, not 0, so the crash handler never sees the engine's cores.
+LimitCORE=1
+
+[Install]
+WantedBy=multi-user.target

@@ -27,6 +27,7 @@ Cykl życia (log `start`): `load → construct → constructed → start-called 
 | RDP (FreeRDP 2.2 `g21-rdp`, GDI programowe 1920×720) | BROKEN w ostatnim logu: setki `g21-rdp status error|freerdp|` | `dev-logs/…170432` |
 | VNC (RFB 3.8, Raw/CopyRect, DES auth) | UNVERIFIED | `vnc_client.js`, test lokalny OK |
 | Windows Win+K (MS-MICE, `g21-mice`, `_display._tcp`) | UNVERIFIED (H28–H36) | |
+| Przeglądarka internetowa (przez `g21-browser`, od 0.1.136) | UNVERIFIED na aucie; lokalnie cały łańcuch z prawdziwym silnikiem przechodzi testy | `tools/test_browser_tool.js`, `tools/test_browser_app.js` |
 | YouTube (przez `jap-ridetube-d`) | UNVERIFIED, w trakcie (niezatwierdzone logowanie QR) | diff vs `origin/test` |
 | Panel konfiguracji HTTP :1235 | VERIFIED start (`config-panel :1235`) | log |
 | Bramka postoju | **BROKEN celowo**: `_parkFlag()` → `true`; test `test_display.js` asertuje „outputs stay on at any speed” | `main.js:1278`, wynik testu |
@@ -46,6 +47,10 @@ Usługa `g21-airplay-open.service` (`Restart=always`, `SupplementaryGroups=video
 | `stop` / brak | `idle()`: stop wszystkiego, usunięcie reguł nft i tras |
 
 Binaria: `uxplay.bin` (UxPlay 1.73.7 zmodyfikowany, Ubuntu 18.04), `avahi-daemon` 0.7, `g21-rdp`, `g21-present`, `g21-mice`, `g21-detach` (statyczny `setsid`), `g21-bind-wlan.so` (LD_PRELOAD: bind na IP wlan0), `gst-launch-1.0`, `run-elf`. Źródła C własne są obok binariów. — VERIFIED.
+
+## Narzędzie `g21-browser` 0.1.0 (GPL-3.0-or-later)
+
+Silnik przeglądarki dla pozycji „Przeglądarka” (THEiPlay 0.1.136): Google `chrome-headless-shell` pobierany przez auto z serwera Google i sprawdzany sumami z `engine/manifest.json`, demon `g21-browserd.js` na `jap-node22`, obraz strony w `/dev/shm/mgu-video-g21browser`. Wymaga `mgu-deploy` 0.7.0, `jap-node22` 22.23.4, `mgu-render` 0.6.11 i internetu (uid z `state/internet-uids`). UNVERIFIED na aucie. Szczegóły: `docs/ai/BROWSER_PLAN.md`.
 
 ## Narzędzie `jap-ridetube-d` 0.3.9 (GPL-3.0-or-later, autor zewnętrzny)
 

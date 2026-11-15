@@ -16,6 +16,16 @@ var QWERTY_ROWS = [
     ['SH', 'SPC', 'DEL', 'ANU', 'OK']
 ];
 
+// Przeglądarka: what an address and a web form need. Polish letters are the long press on a, c, e, l, n, o, s, z.
+var WEB_ROWS = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '@'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', '.', '-', '/'],
+    [':', '?', '=', '&', '%', '#', '_', '+', '!', ','],
+    ['SH', 'SPC', 'DEL', 'ANU', 'OK']
+];
+
 // Key widths in key units (a letter is 1): the renderer draws them and the knob's
 // up / down finds the key under the same spot of the next row.
 var KEY_WEIGHT = { SH: 1.6, SPC: 3.6, DEL: 1.8, ANU: 1.8, OK: 2.2 };
@@ -77,6 +87,28 @@ var MODES = {
         rows: QWERTY_ROWS,
         max: 24,
         mask: false,
+        shift: true
+    },
+    // Przeglądarka: an address, a text field of a page, a password field of a page
+    url: {
+        title: 'Adres',
+        rows: WEB_ROWS,
+        max: 512,
+        mask: false,
+        shift: true
+    },
+    text: {
+        title: 'Tekst',
+        rows: WEB_ROWS,
+        max: 256,
+        mask: false,
+        shift: true
+    },
+    webpass: {
+        title: 'Hasło',
+        rows: WEB_ROWS,
+        max: 128,
+        mask: true,
         shift: true
     }
 };
