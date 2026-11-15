@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.143
+
+- Przeglądarka: film nie powinien już kończyć się po chwili komunikatem odtwarzacza „Coś poszło nie tak”. Odczyt z auta: domyślne urządzenie dźwiękowe ALSA to kanał zestawu głośnomówiącego (`hw:0,0`, `root:audio`), którego użytkownik silnika nie może otworzyć, a samo wyciszenie (`--mute-audio`) nadal próbowało je otwierać. Narzędzie `g21-browser` 0.1.7 uruchamia silnik z `--disable-audio-output` (sztuczne wyjście dźwięku, zegar filmu działa dalej). Przyczyna wskazana odczytem konfiguracji auta; skutek poprawki na aucie jeszcze niesprawdzony. Dźwięku stron nadal nie ma.
+
 ## 0.1.142
 
 - Menu główne: ostatnia pozycja „Przeglądarka” to teraz „Aplikacje”. W środku: Przeglądarka, YouTube (ten sam co w menu głównym) i Ustawienia. Pozostałe pozycje menu głównego i ich kolejność bez zmian. Sklep z aplikacjami jest przewidziany na później.

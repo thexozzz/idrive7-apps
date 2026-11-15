@@ -119,6 +119,12 @@ VERIFIED na aucie (log 0.1.5, 11:22 UTC): `sandbox helper installed: …/chrome-
 
 **Menu:** `ROOT_ITEMS[6]` = `apps` („Aplikacje”); `APPS_ITEMS` = `browser`, `apps-youtube`, `apps-settings`, `apps-back`; `APPS_SET_ITEMS` = `aset-cluster`, `aset-hud`, `aset-picture`, `aset-sandbox`, `aset-memory`, `aset-back`; obsługa w `_onAppsChoice`. Reguły z menu: polecenie demona `{op:"policy", key, value}` (tylko `picture`, `memoryLimitMb`, `sandbox` = ask|required); stan demona niesie `pol`; klient ma `look()` (połączenie bez otwierania strony).
 
+### Film pada po chwili: „Coś poszło nie tak” (2026-11-15) — g21-browser 0.1.7, aplikacja 0.1.143
+
+- Zgłoszenie właściciela na 0.1.142: film w przeglądarce (YouTube) po chwili pokazuje komunikat odtwarzacza. Log demona bez awarii silnika; klatki dochodzą; proces strony 515 MB RSS, cały silnik ok. 950 MB RSS.
+- VERIFIED odczytem z auta: `/etc/asound.conf` definiuje tylko PCM-y HFP; `default` z `alsa.conf` = `hw:0,0` = `/dev/snd/pcmC0D0p` (`0:29 0660`, HFP sink); uid silnika go nie otworzy. W maszynie 18.04 silnik loguje `alsa_util.cc PcmOpen: default, No such file or directory` mimo `--mute-audio`.
+- Poprawka: `--disable-audio-output`. HIPOTEZA co do skutku: błąd odtwarzacza brał się z nieotwartego wyjścia dźwięku; próba odtworzenia w maszynie została przerwana na prośbę właściciela, więc ani przyczyna, ani skuteczność nie są potwierdzone pomiarem. Jeśli błąd wróci, następne tropy: pamięć procesu strony (`--js-flags=--max-old-space-size=512`, strażnik 900 MB), kodeki (Chrome for Testing nie ma H.264/AAC), proxy przy długich pobraniach.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

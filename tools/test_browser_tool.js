@@ -242,6 +242,9 @@ function testPolicy(base) {
     r = d.readPolicy(file);
     assert.deepStrictEqual([r.policy.sandbox, r.problems.length], ['ask', 1], 'a file that is not JSON changes nothing');
     fs.unlinkSync(file);
+    // the engine never opens a sound device of the head unit (its "default" is the hands-free telephone's)
+    const flags = d.Daemon.prototype.engineArgs.call({ zoom: 1.5, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75 }, { profile: '/p', major: '153' }, 'about:blank', true);
+    assert.ok(flags.indexOf('--disable-audio-output') >= 0 && flags.indexOf('--mute-audio') >= 0 && flags.indexOf('--no-sandbox') < 0);
     console.log('ok policy: defaults without a file, the owner\'s values taken, values not allowed keep their default and are named');
 }
 async function testProxy(port) {

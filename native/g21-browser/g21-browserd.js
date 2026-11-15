@@ -1123,7 +1123,10 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
         '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + cssSize.scale,
         '--disable-gpu', '--disable-software-rasterizer', '--disable-accelerated-video-decode', '--disable-accelerated-video-encode',
-        '--mute-audio', '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+        // No sound device for the engine: on the head unit ALSA's "default" is hw:0,0, the hands-free telephone's PCM
+        // (/dev/snd/pcmC0D0p, root:audio 0660), which the engine's uid cannot open. --mute-audio alone still opens the
+        // device; with --disable-audio-output the engine keeps a film's clock on a sink of its own.
+        '--mute-audio', '--disable-audio-output', '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
         '--autoplay-policy=user-gesture-required', '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',
