@@ -89,8 +89,37 @@ function release(why) {
     st.claimed = false;
     return sp.release().then(function () { log('speakers released (' + why + ')'); });
 }
+/*
+ * A player must never wait for the speakers. Its sound comes through a pipe; while no writer reads it (the device
+ * cannot be opened, the writer hangs in the open, it is being started again) the pipe fills in 85 ms and the
+ * player's audio thread stops in its write: a film then stalls and its page says "coś poszło nie tak". So
+ * without a working writer this daemon reads the stream itself, at the pace of real time, and drops it.
+ */
+let drain = null, drainAt = 0;
+const drainBuf = Buffer.alloc(65536);
+function stopDrain() { if (drain) { clearInterval(drain); drain = null; } }
+function startDrain(why) {
+    if (drain || st.fd < 0) return;
+    log('no writer (' + why + '): the stream is read and dropped, its player keeps its pace');
+    drainAt = Date.now();
+    drain = setInterval(function () {
+        const now = Date.now();
+        if (st.fd < 0 || st.writer) { stopDrain(); return; }
+        // 48 kHz stereo S16: 192 bytes a millisecond
+        let want = Math.min(drainBuf.length, Math.floor((now - drainAt) * 192)) & ~3;
+        drainAt = now;
+        while (want > 0) {
+            let n = 0;
+            try { n = fs.readSync(st.fd, drainBuf, 0, want, null); } catch (e) { break; }   // EAGAIN: nothing waits
+            if (!n) break;
+            want -= n;
+        }
+    }, 20);
+}
 function startWriter() {
     if (!st.holder || st.writer) return;
+    stopDrain();
+    let openWatch = null;
     const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
     if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
     const child = cp.spawn(OUT, ['play', device()], opts);
@@ -103,18 +132,24 @@ function startWriter() {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).replace(/^\[G21-AUDIO\] out: /, '');
             buf = buf.slice(i + 1);
-            if (l === 'active') { st.active = true; st.since = Date.now(); claim(); }
+            if (l === 'active') {
+                st.active = true; st.since = Date.now(); claim();
+                // the writer opens the device now; an open that does not come back would hold the player for ever
+                openWatch = setTimeout(function () { log('writer: the device did not open in 4 s, stopping it'); try { child.kill('SIGKILL'); } catch (e) { /* gone */ } }, 4000);
+            }
+            else if (/^open /.test(l)) { clearTimeout(openWatch); log('out: ' + l); }
             else if (/^frames /.test(l)) st.stats = l;
             else if (l !== 'waiting for sound') log('out: ' + l);
         }
     });
     child.on('error', function (e) { log('writer: ' + e.message); });
     child.on('exit', function (code, sig) {
+        clearTimeout(openWatch);
         if (st.writer !== child) return;
         st.writer = null;
         st.active = false;
-        if (code) log('writer exit ' + code + (sig ? ' ' + sig : ''));
-        release('no sound').then(function () { if (st.holder) setTimeout(startWriter, code ? 2000 : 100); });
+        if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
+        release('no sound').then(function () { if (st.holder) setTimeout(startWriter, code || sig ? 2000 : 100); });
     });
 }
 function closeStream(why) {
@@ -125,6 +160,7 @@ function closeStream(why) {
     st.writer = null;
     st.active = false;
     if (w) { try { w.kill('SIGKILL'); } catch (e) { /* gone */ } }
+    stopDrain();
     if (st.fd >= 0) { try { fs.closeSync(st.fd); } catch (e) { /* closed */ } st.fd = -1; }
     try { fs.unlinkSync(st.fifo); } catch (e) { /* none */ }
     st.fifo = '';

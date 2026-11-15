@@ -1268,7 +1268,11 @@ Daemon.prototype.openAudio = function () {
         c.setEncoding('utf8');
         c.on('connect', () => c.write(JSON.stringify({ op: 'open', name: 'chromium', uid: uid }) + '\n'));
         c.on('error', (e) => end(e.code || e.message));
-        c.on('close', () => { if (this.audio && this.audio.conn === c) { this.audio = null; this.log('sound: G21 Audio went away'); } end('closed'); });
+        c.on('close', () => { if (this.audio && this.audio.conn === c) {
+            this.audio = null; this.log('sound: G21 Audio went away');
+            // (the tool was updated or started again) the same stream under the same name: the page's next sound has it
+            setTimeout(() => { if (this.engine && !this.audio) this.guard(() => this.openAudio()); }, 2000);
+        } end('closed'); });
         c.on('data', (d) => {
             buf += d;
             const i = buf.indexOf('\n');
@@ -1446,7 +1450,10 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
         // No sound device for the engine: on the head unit ALSA's "default" is hw:0,0, the hands-free telephone's PCM
         // (/dev/snd/pcmC0D0p, root:audio 0660), which the engine's uid cannot open. --mute-audio alone still opens the
         // device; with --disable-audio-output the engine keeps a film's clock on a sink of its own.
-        '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+        '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling',
+        // a film keeps playing whatever the engine thinks of its window (it has none): no pausing of "hidden" media, no
+        // slowed timers
+        '--disable-background-media-suspend', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
         '--autoplay-policy=' + (this.policy && this.policy().autoplay === 'gesture' ? 'user-gesture-required' : 'no-user-gesture-required'), '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',

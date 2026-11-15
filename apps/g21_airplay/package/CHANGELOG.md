@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.154
+
+- Odtwarzanie multimediów w Przeglądarce: dźwięk nie może już zatrzymać odtwarzacza. Narzędzie `g21-audio` 0.1.1 samo odbiera i odrzuca strumień w tempie czasu rzeczywistego, gdy pisarz nie działa (urządzenia nie da się otworzyć, pisarz jest uruchamiany ponownie), i zabija pisarza, który w 4 s nie otworzył urządzenia. Wcześniej potok zapełniał się w 85 ms, wątek dźwięku silnika stawał w zapisie, film się zacinał i strona pokazywała „coś poszło nie tak”. To prawdopodobna, ale niepotwierdzona logiem przyczyna zgłoszonego błędu.
+- `g21-browser` 0.1.14: silnik nie wstrzymuje multimediów ani nie spowalnia timerów „niewidocznej” strony; po restarcie G21 Audio strumień dźwięku jest otwierany ponownie bez zamykania Przeglądarki.
+- Bez zmian: treści z DRM (Widevine) nie zadziałają w tym silniku; dekodowanie wideo jest programowe.
+- Niesprawdzone w aucie.
+
 ## 0.1.153
 
 - `g21-browser` 0.1.13 zapisuje w swoim logu błędy strony i odtwarzacza (CDP `Log` i `Media`, najwyżej 60 wierszy na uruchomienie silnika). Powód: odtwarzacz znów pokazał „coś poszło nie tak”, a auto było w tym czasie nieosiągalne i log nie mówił, dlaczego. Sama przyczyna nie jest ustalona ani naprawiona.
