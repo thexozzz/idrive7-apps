@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.179
+
+- Test GPU, trzecia budowa (g21-browser 0.1.33). Auto, 2026-11-15, 0.1.32: binarka nie startowała (blad programu ladujacego: nazwa biblioteki zmieniona w gotowym pliku nie zgadzala sie z tablica wersji symboli). Teraz biblioteka ma nazwy auta juz przy linkowaniu, a z FFmpeg usuniete sa dwa wywolania (vaSetErrorCallback, vaSetInfoCallback), ktorych biblioteka auta nie ma. Dekodowanie na GPU nadal niesprawdzone w aucie.
+
 ## 0.1.178
 
 - „Test GPU”, wynik z auta (2026-11-15, 0.1.177 / 0.1.31): z kafelka test nie ruszył (binarka miała ścieżkę programu ładującego z Ubuntu, której w aucie nie ma). Uruchomiony ręcznie: procesor dekoduje 600 klatek H.264 1280×720 w 3,1 s i zużywa 4,4 s czasu procesora na 20 s filmu (ok. 22% jednego rdzenia); na GPU test kończył się awarią („stack smashing detected”), bo nagłówki libva 1.8.3 nie pasują do biblioteki auta (Intel 0.99).
