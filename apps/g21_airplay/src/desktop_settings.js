@@ -234,6 +234,8 @@ function createDesktopSettings(stored) {
     var uiLang = data.uiLang === 'en' ? 'en' : 'pl';
     // G21 Input: the one switch for the mouse (the icon beside "Wyłącz aplikację"), and how fast the cursor goes.
     var mouseOn = data.mouseOn !== false;
+    // the cursor on THEiPlay's own pages (menus), not only inside an app: the owner's choice, off until asked for
+    var menuMouse = data.menuMouse === true;
     var mouseSpeed = [1, 2, 3, 4, 5].indexOf(data.mouseSpeed) >= 0 ? data.mouseSpeed : 3;
     var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
@@ -389,6 +391,8 @@ function createDesktopSettings(stored) {
         mouse: function () { return mouseOn; },
         setMouse: function (on) { mouseOn = !!on; return { ok: true }; },
         mouseSpeed: function () { return mouseSpeed; },
+        menuMouse: function () { return menuMouse; },
+        setMenuMouse: function (on) { menuMouse = !!on; return { ok: true }; },
         setMouseSpeed: function (n) { if ([1, 2, 3, 4, 5].indexOf(n) < 0) { return { ok: false }; } mouseSpeed = n; return { ok: true }; },
         uiLang: function () { return uiLang; },
         setUiLang: function (next) {
@@ -656,6 +660,7 @@ function createDesktopSettings(stored) {
                 uiLang: uiLang,
                 mouseOn: mouseOn,
                 mouseSpeed: mouseSpeed,
+                menuMouse: menuMouse,
                 uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,

@@ -47,6 +47,9 @@ function createInputClient(options) {
             options.onMove(Number(m.dx) || 0, Number(m.dy) || 0);
         } else if (m.ev === 'tap' && want && options && typeof options.onTap === 'function') {
             options.onTap();
+        } else if (m.ev === 's' && want && options && typeof options.onScroll === 'function') {
+            // two fingers moved together
+            options.onScroll(Number(m.dx) || 0, Number(m.dy) || 0);
         } else if (m.ev === 'state') {
             state = { connected: true, on: !!m.on, pad: Number(m.pad), speed: typeof m.speed === 'number' ? m.speed : null, moving: !!m.moving };
             tell();

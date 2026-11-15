@@ -146,6 +146,7 @@ var EN = {
     'Obszar na zegarach': 'Area on the gauges',
     'Mysz z gładzika': 'Touchpad mouse',
     'Szybkość myszy': 'Mouse speed',
+    'Kursor w menu': 'Cursor in the menu',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
     'Poziomo': 'Across',
     'Pionowo': 'Down',
@@ -701,6 +702,8 @@ var SYSTEM_ITEMS = [
     // the controller's touchpad as a mouse (the same switch as the icon in an app's bar) and how fast it moves
     { name: 'set-mouse', title: 'Mysz z gładzika', hint: 'włączona', icon: 'gear' },
     { name: 'set-mouse-speed', title: 'Szybkość myszy', hint: '3 z 5', icon: 'gear' },
+    // the cursor on THEiPlay's own pages too (menus, lists), not only inside an app
+    { name: 'set-menu-mouse', title: 'Kursor w menu', hint: 'wyłączony', icon: 'gear' },
     { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
@@ -1222,7 +1225,15 @@ FrameBuilder.prototype.atlases = function () {
 };
 
 /** the FRAME message of a drawing; its .atlases names the glyph atlases to upload first */
+// The touchpad's cursor over a page of THEiPlay itself (paint() sets it for the frame it builds).
+var POINTER = null;
 function packFrame(draw) {
+    if (POINTER) {
+        var cx = Math.round(POINTER.x);
+        var cy = Math.round(POINTER.y);
+        draw.quad([[cx - 2, cy - 4], [cx - 2, cy + 27], [cx + 21, cy + 19]], 0x101010FF);
+        draw.quad([[cx, cy], [cx, cy + 22], [cx + 16, cy + 16]], 0xFFFFFFFF);
+    }
     var out = message(FRAME, draw.bytes());
     out.atlases = draw.atlases();
     return out;
@@ -3315,6 +3326,13 @@ function buildWebFrame(width, height, web) {
         // Where: the window of Ustawienia > Pozycja (main.js gives it), as AirPlay's and YouTube's picture.
         var fsBox = info.fsBox && info.fsBox.w >= 320 && info.fsBox.h >= 200 ? info.fsBox : { x: 0, y: 0, w: width & ~3, h: height & ~1 };
         draw.video(fsBox.x, fsBox.y, fsBox.w, fsBox.h, 1);
+        // "Pełny ekran" at the picture's top right (inside the part of the screen the app gets touches from): the
+        // whole centre screen, 1920 x 720, in place of the Pozycja window; again: the window
+        var fsChip = { name: 'web-fs-full', x: Math.min(fsBox.x + fsBox.w, CONTENT.x + CONTENT.w) - 12 - CHIP_W, y: Math.max(fsBox.y, CONTENT.y) + 12, w: CHIP_W, h: CHIP_H };
+        if (fsChip.x < CONTENT.x + 12) {
+            fsChip.x = CONTENT.x + 12;
+        }
+        drawChip(draw, fsChip, !!info.fsFull, tr('Pełny ekran'));
         if (info.mouse) {
             var fx = fsBox.x + Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
             var fy = fsBox.y + Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
@@ -3324,7 +3342,7 @@ function buildWebFrame(width, height, web) {
         return {
             frame: packFrame(draw),
             rects: draw.rects,
-            layout: { webHits: [], webPage: fsBox, web: lay, video: true, fs: true }
+            layout: { webHits: [fsChip], webPage: fsBox, web: lay, video: true, fs: true }
         };
     }
     if (showVideo) {
@@ -3535,6 +3553,7 @@ function createMenuSurface(opts) {
     var lastFrame = null;
     var noted = false;
     var surfaced = false;
+    var pointer = null;
     var claimNoted = false;
     var detail = '';
     var streamInfo = null;
@@ -3745,6 +3764,16 @@ function createMenuSurface(opts) {
     }
 
     function paint() {
+        // (Przeglądarka draws its own cursor, inside the page)
+        POINTER = pointer && !(webView && webView.on && !edit) ? pointer : null;
+        try {
+            paintFrame();
+        } finally {
+            POINTER = null;
+        }
+    }
+
+    function paintFrame() {
         paintPending = false;
         if (!ready || !shown) {
             return;
@@ -3761,7 +3790,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, fsFull: !!webView.fsFull, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -3882,9 +3911,15 @@ function createMenuSurface(opts) {
     }
 
     function showSurface(reason) {
+        var wasFront = front;
         shown = true;
         front = true;
         note('menu-show ' + (reason || 'open'));
+        // (the app was told "not in front" when it was minimised; the renderer does not say "front" again
+        // for a surface the app itself puts back, so the touchpad's cursor stayed away: car, 2026-11-15)
+        if (!wasFront && typeof opts.onFront === 'function') {
+            opts.onFront(true);
+        }
         surfaced = false; // every entry puts the surface up again; the renderer may have closed it meanwhile
         armPulse();
         if (sock && ready) {
@@ -5180,6 +5215,21 @@ function createMenuSurface(opts) {
         repaint: function () {
             paint();
         },
+        /** the touchpad's cursor over THEiPlay's pages: { x, y } in screen pixels, or null for none */
+        setPointer: function (p) {
+            pointer = p ? { x: Number(p.x) || 0, y: Number(p.y) || 0 } : null;
+            paintSoon();
+        },
+        /** a tap of the touchpad where the cursor is: the same as a finger put down and lifted there */
+        tapAt: function (x, y) {
+            [1, 3].forEach(function (phase) {
+                var b = Buffer.alloc(12);
+                b.writeUInt32LE(phase, 0);
+                b.writeFloatLE(x, 4);
+                b.writeFloatLE(y, 8);
+                take(message(TOUCH, b));
+            });
+        },
         setScreen: setScreen,
         setItems: function (nextItems, nextHeading) {
             items = (nextItems || []).map(function (item) {
@@ -5231,7 +5281,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }

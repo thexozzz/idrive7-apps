@@ -81,22 +81,35 @@ function Pad(emit) {
 }
 Pad.prototype.feed = function (v, now) {
     now = now || Date.now();
-    const x = v ? v.touchCoordinatesX1FrontSide : 0, y = v ? v.touchCoordinatesY1FrontSide : 0;
+    let x = v ? v.touchCoordinatesX1FrontSide : 0, y = v ? v.touchCoordinatesY1FrontSide : 0;
     const finger = !!v && v.statusSystemModeFrontSide === PAD_MODE && v.touchCoordinatesZ1FrontSide === 0 && (x > 0 || y > 0);
+    // a second finger (the same three fields with a 2): the two move the page, not the cursor, and make no tap.
+    // A pad that does not report it leaves these fields away or at rest: then nothing changes.
+    const x2 = v ? v.touchCoordinatesX2FrontSide : 0, y2 = v ? v.touchCoordinatesY2FrontSide : 0;
+    const second = finger && v.touchCoordinatesZ2FrontSide === 0 && (x2 > 0 || y2 > 0);
     if (!finger) {
         const d = this.down;
-        if (d && now - d.t <= TAP_MS && d.moved <= TAP_MOVE) this.emit({ ev: 'tap' });
+        if (d && !d.multi && now - d.t <= TAP_MS && d.moved <= TAP_MOVE) this.emit({ ev: 'tap' });
+        this.two = false;
         this.last = null;
         this.down = null;
         return;
     }
     if (!this.down) this.down = { t: now, moved: 0 };
+    if (second !== !!this.two) {
+        // a finger more or less: the position jumps, the movement starts anew
+        this.two = second;
+        this.last = null;
+        if (second) { this.down.multi = true; if (!this.twoSeen) { this.twoSeen = true; this.emit({ ev: 'two' }); } }
+    }
+    if (second) { x = (x + x2) / 2; y = (y + y2) / 2; }
     if (this.last) {
         const dx = x - this.last.x, dy = y - this.last.y;
         if (Math.abs(dx) > JUMP || Math.abs(dy) > JUMP) { this.last = { x: x, y: y }; return; }
         this.down.moved += Math.abs(dx) + Math.abs(dy);
         // within a tap's wobble the cursor stays put
-        if (this.down.moved > TAP_MOVE && (dx || dy)) this.emit({ ev: 'm', dx: dx, dy: -dy });   // the pad's Y grows upwards
+        if (second) { if (dx || dy) this.emit({ ev: 's', dx: dx, dy: -dy }); }
+        else if (this.down.moved > TAP_MOVE && (dx || dy)) this.emit({ ev: 'm', dx: dx, dy: -dy });   // the pad's Y grows upwards
     }
     this.last = { x: x, y: y };
 };
@@ -114,7 +127,7 @@ function readSpeed() {
     return tick(function () { return st.veh.getValue('statusCarSpeed2', 3000); }).then(st.take, function (e) { log('speed not read: ' + e); });
 }
 function state() { send({ ev: 'state', on: st.on, pad: st.pad, speed: speedNow(), moving: moving() }); }
-const pad = new Pad(function (o) { if (st.on) send(o); });
+const pad = new Pad(function (o) { if (o.ev === 'two') { log('two fingers on the pad: scrolling'); return; } if (st.on) send(o); });
 
 function touchMode(on) {
     if (!st.ccu) return Promise.resolve(false);

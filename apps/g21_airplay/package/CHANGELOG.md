@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.162
+
+- Naprawa: po zminimalizowaniu aplikacji i powrocie nie było kursora myszy. Menu nie mówiło aplikacji, że znów jest na pierwszym planie (renderer nie powtarza tego dla powierzchni, którą aplikacja sama przywraca).
+- Nowa opcja Ustawienia > „Kursor w menu”: kursor z gładzika działa też na stronach samego THEiPlay (menu, listy); stuknięcie w gładzik to dotknięcie w miejscu kursora. Domyślnie wyłączona.
+- Przewijanie dwoma palcami na gładziku (`g21-input` 0.1.2): dwa palce przesuwają stronę w Przeglądarce, nie kursor. Oparte na polach drugiego palca z opisu sygnału (`touchCoordinatesX2/Y2/Z2FrontSide`); czy gładzik je faktycznie podaje, pokaże log demona („two fingers on the pad”) — niesprawdzone w aucie.
+- Naprawa dźwięku AirPlay (przerywanie, brzęczenie): `g21-audio` 0.1.2, pisarz `g21-audio-out` zbiera najpierw 80 ms dźwięku i dopiero wtedy gra (i ponownie po opróżnieniu bufora), bufor urządzenia 250 ms. AirPlay podaje dźwięk dokładnie w czasie rzeczywistym, bez zapasu, więc każda spóźniona porcja opróżniała głośniki. Binarka przebudowana na Ubuntu 18.04; w aucie niesprawdzone.
+- Naprawa: po AirPlay nie było dźwięku w YouTube. AirPlay trzymał jedyny strumień G21 Audio; teraz otwarcie YouTube albo Przeglądarki kończy AirPlay tak jak jego przełącznik Start.
+- Pełny ekran filmu w Przeglądarce ma pływający przycisk „Pełny ekran” w prawym górnym rogu obrazu: rozciąga go na cały ekran środkowy (1920×720, największy rozmiar tego ekranu) albo wraca do okna z Pozycji (`g21-browser` 0.1.21). AirPlay ma taki przycisk od dawna.
+
 ## 0.1.161
 
 - Aplikacje > Ustawienia ma pozycję „Strony przeglądarki”: otwiera Przeglądarkę na `chrome://about` (wersja, reguły, przełączniki, historia). `g21-browser` 0.1.20 przyjmuje pierwszą stronę od aplikacji.

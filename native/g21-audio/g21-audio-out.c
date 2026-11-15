@@ -54,12 +54,13 @@ enum { PLAYBACK = 0, NONBLOCK = 1, S16_LE = 2, RW_INTERLEAVED = 3 };
 #define RATE 48000
 #define CH 2
 #define CHUNK 480      /* frames: 10 ms */
+#define PREFILL 8      /* chunks gathered before the first one is played, and again after an underrun (80 ms) */
 #define IDLE_MS 3000   /* this long without sound: the speakers go back */
 
 static volatile sig_atomic_t stopping;
 static void on_stop(int s) { (void)s; stopping = 1; }
 static double mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000.0 + t.tv_nsec / 1e6; }
-static unsigned buffer_us(void) { const char *e = getenv("G21_AUDIO_US"); long v = e ? atol(e) : 0; return v >= 20000 && v <= 500000 ? (unsigned)v : 64000; }
+static unsigned buffer_us(void) { const char *e = getenv("G21_AUDIO_US"); long v = e ? atol(e) : 0; return v >= 20000 && v <= 500000 ? (unsigned)v : 250000; }
 static void leave(int code) { fflush(stderr); _exit(code); }
 
 static int alsa_load(void)
@@ -109,6 +110,8 @@ static int read_chunk(int16_t *buf, int wait_ms)
 static int play(const char *dev)
 {
     static int16_t buf[CHUNK * CH];
+    static int16_t pre[PREFILL][CHUNK * CH];
+    int need = PREFILL;
     snd_pcm_t *pcm;
     unsigned long frames = 0, dropped = 0, xruns = 0, late = 0, full = 0;
     const long drop_above_ms = (long)(buffer_us() / 1000) + 25;
@@ -128,14 +131,35 @@ static int play(const char *dev)
     for (;;) {
         long d = 0, w;
         double now;
-        if (A.delay(pcm, &d) < 0) d = 0;
-        last_delay = d;
-        if (d * 1000 / RATE > drop_above_ms) { dropped += CHUNK; late++; }
-        else {
-            w = A.writei(pcm, buf, CHUNK);
-            if (w == -EAGAIN) { dropped += CHUNK; full++; }
-            else if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); }
-            else { frames += (unsigned long)w; if (w < CHUNK) dropped += (unsigned long)(CHUNK - w); }
+        if (need > 0) {
+            /*
+             * A cushion. A player that sends its sound in step with the clock (AirPlay) has nothing ahead: played
+             * chunk by chunk as it comes, every late chunk empties the device and the speakers buzz (car,
+             * 2026-11-15). So some chunks are gathered first and played together; the device then holds that
+             * much ahead. The same again after an underrun.
+             */
+            int n = 1, i, got = 1;
+            memcpy(pre[0], buf, sizeof buf);
+            while (n < need && (got = read_chunk(pre[n], 200)) > 0) n++;
+            if (got < 0) { r = -1; break; }
+            for (i = 0; i < n; i++) {
+                w = A.writei(pcm, pre[i], CHUNK);
+                if (w == -EAGAIN) { dropped += CHUNK; full++; }
+                else if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); }
+                else { frames += (unsigned long)w; if (w < CHUNK) dropped += (unsigned long)(CHUNK - w); }
+            }
+            need = 0;
+            next = mono_ms();
+        } else {
+            if (A.delay(pcm, &d) < 0) d = 0;
+            last_delay = d;
+            if (d * 1000 / RATE > drop_above_ms) { dropped += CHUNK; late++; }
+            else {
+                w = A.writei(pcm, buf, CHUNK);
+                if (w == -EAGAIN) { dropped += CHUNK; full++; }
+                else if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); need = PREFILL; }
+                else { frames += (unsigned long)w; if (w < CHUNK) dropped += (unsigned long)(CHUNK - w); }
+            }
         }
         /* real time: one chunk every 10 ms of the clock; after a stall the schedule starts again from now */
         next += 10.0;

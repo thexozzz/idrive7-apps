@@ -1061,6 +1061,8 @@ Daemon.prototype.onCommand = async function (m) {
         // than the page area)
         const fsOk = fw >= 320 && fh >= 200;
         this.want = { w: w, h: h, fw: fsOk ? fw : 0, fh: fsOk ? fh : 0 };
+        // the app changed the window of a full screen that is on (its "Pełny ekran" button): fitted again
+        if (this.fs && (this.fs.w !== this.want.fw || this.fs.h !== this.want.fh)) this.fsStale = true;
         this.zoom = z;
         // an app from Sklep: its first page instead of the start page
         const appUrl = m.app ? await this.appUrl(String(m.app)) : null;
@@ -1427,7 +1429,8 @@ Daemon.prototype.closeAudio = function () {
 Daemon.prototype.applyFs = async function (e, on) {
     const w = this.want;
     const whole = on && w && w.fw > 0 && this.policy().fullscreen === 'screen';
-    if (whole === !!this.fs || this.fsBusy) return;
+    if ((whole === !!this.fs && !this.fsStale) || this.fsBusy) return;
+    this.fsStale = false;
     this.fsBusy = true;
     try {
     const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
