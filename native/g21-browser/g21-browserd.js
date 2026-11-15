@@ -217,7 +217,8 @@ function parseRepo(text) {
     if (m) { t = m[1]; ref = m[2]; }
     m = /^([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9_.-]{1,100})$/.exec(t);
     if (!m || /\.\./.test(ref) || /^\.+$/.test(m[2])) return null;
-    return { owner: m[1], repo: m[2], ref: ref, id: (m[1] + '-' + m[2]).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 60),
+    // (a branch other than the default one is an app of its own: one repository can hold several)
+    return { owner: m[1], repo: m[2], ref: ref, id: (m[1] + '-' + m[2] + (ref === 'HEAD' ? '' : '-' + ref)).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 60),
         url: 'https://codeload.github.com/' + m[1] + '/' + m[2] + '/tar.gz/' + ref };
 }
 // GitHub's tar.gz -> dir, without its top folder. Only plain files and folders; links, devices and anything

@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.156',
+        version: (this._packageJson && this._packageJson.version) || '0.1.157',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.156') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.157') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5478,6 +5478,9 @@ AirPlayApp.prototype._syncStoreMenu = function () {
         if (i.name === 'store-import') {
             i.hint = self._storeNote || 'adres repozytorium GitHub';
         }
+        if (i.name === 'store-demo') {
+            i.hint = apps.some(function (a) { return a.name === 'Hello THEiPlay'; }) ? 'zainstalowana: jest w Aplikacjach' : 'Hello THEiPlay';
+        }
         if (i.name === 'store-back') {
             apps.forEach(function (a) {
                 rows.push({ name: 'store-rm-' + a.id, title: a.name, hint: self._storeRm === a.id && Date.now() - self._storeRmAt < 4000 ? 'wybierz jeszcze raz, aby usunąć' : 'usuń · ' + a.repo, icon: 'stop' });
@@ -5615,6 +5618,19 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return true;
     }
     if (name === 'store-soon') {
+        return true;
+    }
+    if (name === 'store-demo') {
+        // the test app, without typing its address
+        if (this._storeBusy || !this._web) {
+            return true;
+        }
+        this._storeBusy = true;
+        this._storeNote = 'pobieram…';
+        noteStart('store-import ' + menuDraw.DEMO_APP);
+        this._webClient().look();
+        this._web.send({ op: 'app-install', repo: menuDraw.DEMO_APP });
+        this._syncStoreMenu();
         return true;
     }
     if (name === 'store-import') {

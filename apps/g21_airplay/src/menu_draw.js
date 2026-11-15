@@ -186,6 +186,8 @@ var EN = {
     'Ustawienia': 'Settings',
     'Sklep': 'Store',
     'Importuj z git': 'Import from git',
+    'Aplikacja testowa': 'Test app',
+    'Importuj z git': 'Import from git',
     'adres repozytorium GitHub': 'a GitHub repository address',
     'aplikacje z git': 'apps from git',
     'Renderowanie': 'Rendering',
@@ -704,7 +706,7 @@ var SYSTEM_ITEMS = [
 // Aplikacje: what runs inside THEiPlay. (A shop with more of them is to come.)
 var APPS_ITEMS = [
     { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' },
-    { name: 'apps-store', title: 'Sklep', hint: 'wkrótce', icon: 'grid' },
+    { name: 'apps-store', title: 'Sklep', hint: 'aplikacje z git', icon: 'grid' },
     { name: 'apps-settings', title: 'Ustawienia', hint: 'ekrany, obraz, piaskownica', icon: 'gear' },
     { name: 'apps-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
@@ -713,10 +715,12 @@ APPS_ITEMS.tiles = true;
 // Sklep: not built yet. The page says so instead of pretending.
 // Sklep: an app is a public GitHub repository with a web page in it (index.html); main.js puts the
 // imported ones between these two rows (to remove) and as tiles into APPS_ITEMS (to open).
-// (For now the page only says the shop is to come: 'store-soon'. The import itself is written, in g21-browserd.js
-// and main.js, and gets its row 'store-import' here when the owner wants the shop.)
+// 'store-demo' imports the test app without typing: DEMO_APP, a page that tries touch, the mouse, sound and the
+// screen.
+var DEMO_APP = 'thexozzz/idrive7-apps@theiplay-hello';
 var STORE_ITEMS = [
-    { name: 'store-soon', title: 'Import aplikacji z git', hint: 'w przygotowaniu', icon: 'grid' },
+    { name: 'store-import', title: 'Importuj z git', hint: 'adres repozytorium GitHub', icon: 'grid' },
+    { name: 'store-demo', title: 'Aplikacja testowa', hint: 'Hello THEiPlay', icon: 'play' },
     { name: 'store-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 
@@ -5452,6 +5456,7 @@ module.exports = {
     MEDIA_ITEMS: MEDIA_ITEMS,
     SYSTEM_ITEMS: SYSTEM_ITEMS,
     STORE_ITEMS: STORE_ITEMS,
+    DEMO_APP: DEMO_APP,
     APPS_ITEMS: APPS_ITEMS,
     APPS_SET_ITEMS: APPS_SET_ITEMS,
     WEB_FILE: WEB_FILE,

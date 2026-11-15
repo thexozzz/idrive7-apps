@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.157
+
+- Sklep działa: Aplikacje > Sklep ma „Importuj z git” (adres `wlasciciel/repo` albo `wlasciciel/repo@galaz`) i „Aplikacja testowa”, która importuje bez wpisywania stronę testową `Hello THEiPlay` (gałąź `theiplay-hello` tego repozytorium; źródło w `examples/theiplay-hello/`). Zaimportowana aplikacja jest kafelkiem w Aplikacjach i otwiera się w Przeglądarce; w Sklepie można ją usunąć (dwa wybory). `g21-browser` 0.1.16: gałąź inna niż domyślna jest osobną aplikacją.
+- Sprawdzone na komputerze skryptem `tools/e2e_store.js` na prawdziwym GitHubie: pobranie archiwum, rozpakowanie, lista, serwer plików, strona startowa, odmowa wyjścia poza folder, usunięcie. Niesprawdzone w aucie (menu, kafelek, otwarcie w silniku).
+
 ## 0.1.156
 
 - Pełny ekran odtwarzacza w Przeglądarce jest rysowany w oknie z Ustawienia > Pozycja (ekran środkowy), tak jak obraz AirPlay i YouTube, a nie zawsze na całym ekranie. `g21-browser` 0.1.15 przyjmuje okno mniejsze niż obszar strony i renderuje je piksel w piksel (duże okno nadal w 2/3). Zmiana Pozycji działa od następnego otwarcia Przeglądarki. Niesprawdzone w aucie.
