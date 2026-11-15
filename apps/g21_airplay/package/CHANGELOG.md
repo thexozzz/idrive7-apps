@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.194
+
+- Przeglądarka bez zewnętrznego odtwarzacza (decyzja właściciela, 2026-11-15): wideo na stronie nie jest już zakrywane kafelkiem „Odtwórz” ani przekazywane do THEiPlay Player / odtwarzacza YouTube; strona odtwarza film sama. Kod odtwarzacza zostaje wyłączony (reguła `player`: `on` w `state/policy.json` go przywraca).
+- Tryb mobilny (`g21-browser` 0.1.43, reguła `mobile`, domyślnie włączony, przełącznik Ustawienia > Przeglądarka > „Tryb mobilny”): strony dostają nagłówek przeglądarki telefonu i układ dla ekranu dotykowego (jak „tryb urządzenia” w Chrome), więc ładują lżejsze wersje i prostsze odtwarzacze.
+- Dźwięk Przeglądarki: silnik pisze dźwięk własnym zegarem i liczy czas filmu po tym, co zapisał – wstrzymywanie go przez nasz moduł wyjścia spowalniało film na stronie, dźwięk i obraz naraz (auto, 2026-11-15: ok. 25 000 próbek na sekundę zamiast 48 000). `g21-audio` 0.1.6: każde źródło jest odbierane natychmiast (tryb „live” z 0.1.4), nikt nie jest wstrzymywany. To ta sama zasada co w RideTube: zegarem jest odtwarzacz dźwięku, a obraz idzie za nim – tu zegar ma sam silnik strony i nie wolno mu go psuć.
+- Strefa czasowa stron: zegar auta jest w UTC bez strefy, więc strony pokazywały zimą godzinę mniej. Reguła `timezone` (domyślnie `Europe/Warsaw`) ustawia strefę silnika.
+- Wszystko z tej pozycji NIESPRAWDZONE w aucie.
+
 ## 0.1.193
 
 - AirPlay: przy włączeniu AirPlay (i pulpitu zdalnego) silnik Przeglądarki, jeśli jeszcze żyje w tle, jest zatrzymywany od razu. Auto, 2026-11-15: obraz AirPlay skakał przy obciążeniu jednostki 14, z pięcioma procesami pełnego Chrome w tle (silnik żyje 90 s po wyjściu z Przeglądarki). Niesprawdzone w aucie.

@@ -151,6 +151,7 @@ var EN = {
     'Zamknij': 'Close',
     'wyczyść': 'clear',
     'Silnik': 'Engine',
+    'Tryb mobilny': 'Mobile mode',
     'Lekkie wideo': 'Light video',
     'Wyłącznik': 'Kill switch',
     'Obszar zegarów': 'Gauge area',
@@ -806,6 +807,8 @@ var APPS_SET_ITEMS = [
     { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
     // the full Chrome (sites that refuse a browser made for programs; protected films) or the light headless shell
     { name: 'aset-engine', title: 'Silnik', hint: 'pełny Chrome', icon: 'gear' },
+    // pages in their phone form (a touch screen) or in their desktop form
+    { name: 'aset-mobile', title: 'Tryb mobilny', hint: 'włączony', icon: 'desktop' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)

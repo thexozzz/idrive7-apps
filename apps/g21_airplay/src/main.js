@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.193',
+        version: (this._packageJson && this._packageJson.version) || '0.1.194',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.193') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.194') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5567,6 +5567,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : (this._webFsFull ? 'cały ekran' : 'okno z Pozycji')) : '—');
     m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
     m.setItemHint('aset-car', pol ? (pol.carData === 'off' ? 'wyłączone' : 'aplikacje czytają, co zgłoszą') : '—');
+    m.setItemHint('aset-mobile', pol ? (pol.mobile === 'off' ? 'wyłączony: strony jak na komputerze' : 'włączony: strony jak na telefonie') : '—');
     m.setItemHint('aset-engine', pol ? (pol.engine === 'shell' ? 'lekki (headless shell)' : 'pełny Chrome') : '—');
     m.setItemHint('aset-video', pol ? (pol.video === 'any' ? 'wyłączone: każdy format' : 'H.264 do 720p, 30 kl/s') : '—');
     m.setItemHint('aset-diag', pol ? (pol.carDiag === 'off' ? 'wyłączona' : 'odczyt ze sterowników') : '—');
@@ -5919,7 +5920,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintApps();
         return true;
     }
-    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag' || name === 'aset-video' || name === 'aset-engine') {
+    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag' || name === 'aset-video' || name === 'aset-engine' || name === 'aset-mobile') {
         var selfSet = this;
         var ZOOMS = [1, 1.25, 1.5, 1.75, 2];
         s = this._web ? this._web.state() : null;
@@ -5935,6 +5936,8 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
             this._web.send({ op: 'policy', key: 'autoplay', value: pol.autoplay === 'gesture' ? 'allow' : 'gesture' });
         } else if (name === 'aset-car') {
             this._web.send({ op: 'policy', key: 'carData', value: pol.carData === 'off' ? 'apps' : 'off' });
+        } else if (name === 'aset-mobile') {
+            this._web.send({ op: 'policy', key: 'mobile', value: pol.mobile === 'off' ? 'on' : 'off' });
         } else if (name === 'aset-engine') {
             this._web.send({ op: 'policy', key: 'engine', value: pol.engine === 'shell' ? 'chrome' : 'shell' });
         } else if (name === 'aset-video') {

@@ -941,7 +941,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -949,7 +949,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, mobile: 1, timezone: 1, player: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -963,6 +963,9 @@ function readPolicy(file) {
         pick('carDiag', (v) => v === 'apps' || v === 'off');
         pick('video', (v) => v === 'light' || v === 'any');
         pick('engine', (v) => v === 'chrome' || v === 'shell');
+        pick('mobile', (v) => v === 'on' || v === 'off');
+        pick('timezone', (v) => typeof v === 'string' && /^(UTC|[A-Z][A-Za-z_]{1,20}\/[A-Za-z_\/+-]{1,40})$/.test(v));
+        pick('player', (v) => v === 'on' || v === 'off');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -1028,7 +1031,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine }, fs: !!this.fs, film: this.filmView() };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1230,13 +1233,13 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any', engine: (v) => v === 'chrome' || v === 'shell',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any', engine: (v) => v === 'chrome' || v === 'shell', mobile: (v) => v === 'on' || v === 'off',
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video, engineWas = this.policy().engine;
+        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video, engineWas = this.policy().engine, mobileWas = this.policy().mobile;
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -1246,7 +1249,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas || this.policy().mobile !== mobileWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
@@ -1822,7 +1825,9 @@ Daemon.prototype.filmStart = async function (e, o) {
         : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*', true)];
     const vf = f.fill ? 'scale=' + W + ':' + H + ',format=yuv420p'
         : 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
-    const bySound = !!this.audio && !!feeds[1];
+    // (the browser's stream is now written without ever being held, as AirPlay's: nothing would slow a decoder
+    // that is not slowed here, so it always reads at the film's own speed)
+    const bySound = false;
     const input = (name) => ['-thread_queue_size', '512'].concat(bySound ? [] : ['-re'], ['-i', name]);
     const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-nostats'].concat(feeds[1] ? ['-copyts'] : [], input('pipe:0'), feeds[1] ? input('pipe:3') : [],
         ['-map', '0:v:0', '-vsync', '0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
@@ -1999,14 +2004,14 @@ Daemon.prototype.applyFs = async function (e, on) {
         // JPEG), not on the film. A film's own lines are 360 to 480 here, so little is lost.
         const k = w.fw > 1280 ? 1 / 2 : 1;
         const cw = Math.round(w.fw * k) & ~3, ch = Math.round(w.fh * k) & ~1;
-        await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: false, screenWidth: cw, screenHeight: ch });
+        await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: this.policy().mobile !== 'off', screenWidth: cw, screenHeight: ch });
         this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
         this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');
         this.set({ w: w.fw, h: w.fh });
     } else {
         const css = pageCss(w.w, w.h, this.zoom, this.picture());
         this.fs = null;
-        await send({ width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: false, screenWidth: css.w, screenHeight: css.h });
+        await send({ width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h });
         this.log('full screen left: the page area again');
         this.set({ w: css.dw, h: css.dh });
     }
@@ -2145,7 +2150,7 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
         '--disable-background-media-suspend', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
         '--autoplay-policy=' + (this.policy && this.policy().autoplay === 'gesture' ? 'user-gesture-required' : 'no-user-gesture-required'), '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
-        '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',
+        '--user-agent=' + userAgent(dirs.major, this.policy && this.policy().mobile !== 'off'),
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
         '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--js-flags=--max-old-space-size=512'
     ];
@@ -2180,6 +2185,13 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
  * ordinary browser run without a window, with Google's Widevine module from the same zip. The rule "engine":
  * "shell" (Ustawienia > Przeglądarka > Silnik) is the way back. Both stay unpacked once fetched.
  */
+// What the engine calls itself. Phone form (the rule "mobile": "on", the default): pages come in the layout they
+// have for a touch screen held in the hand, which is what the centre screen is, and their film players are the
+// simple ones. Otherwise the desktop form, as before.
+function userAgent(major, phone) {
+    return phone ? 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + major + '.0.0.0 Mobile Safari/537.36'
+        : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + major + '.0.0.0 Safari/537.36';
+}
 Daemon.prototype.pickEngine = function () {
     const o = this.opts;
     if (o.engineShell === undefined) o.engineShell = o.engineSrc;
@@ -2294,7 +2306,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const o = this.opts;
     const env = { LD_LIBRARY_PATH: o.libDir + ':' + dirs.engine, HOME: dirs.profile, TMPDIR: dirs.tmp, XDG_CONFIG_HOME: path.join(dirs.profile, 'xdg'), XDG_CACHE_HOME: path.join(dirs.profile, 'xdg-cache'),
         FONTCONFIG_FILE: dirs.conf, DBUS_SESSION_BUS_ADDRESS: 'disabled:', DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=' + path.join(o.runDir, 'no-dbus') };
-    if (process.env.TZ) env.TZ = process.env.TZ;
+    env.TZ = this.policy().timezone || process.env.TZ || 'UTC';
     if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
     if (this.audio) env.ALSA_CONFIG_PATH = this.audio.conf;
     const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
@@ -2324,7 +2336,10 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     if (this.policy().video !== 'any') {
         try { await send('Page.addScriptToEvaluateOnNewDocument', { source: LIGHT_VIDEO }); } catch (x) { this.log('light video: ' + x.message); }
     }
-    try { await send('Page.addScriptToEvaluateOnNewDocument', { source: PLAYER_HOOK }); } catch (x) { this.log('player button: ' + x.message); }
+    // THEiPlay Player (a page's films covered and played outside the page) is out of the browser (owner,
+    // 2026-11-15): pages are asked for in their phone form and play their films themselves. The rule "player": "on"
+    // in state/policy.json brings it back.
+    if (this.policy().player === 'on') { try { await send('Page.addScriptToEvaluateOnNewDocument', { source: PLAYER_HOOK }); } catch (x) { this.log('player button: ' + x.message); } }
     try { await send('Media.enable', {}); } catch (x) { /* not in this engine */ }
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -2332,13 +2347,17 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     // goes full screen changed the picture's size (the car, 0.1.3). Now full screen fills the page area.
     try {
         const css = pageCss(this.want.w, this.want.h, this.zoom, this.picture());
-        await send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: false, screenWidth: css.w, screenHeight: css.h });
+        await send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h });
     } catch (x) { this.log('screen size: ' + x.message); }
     const major = dirs.major;
     try {
-        await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + major + '.0.0.0 Safari/537.36', acceptLanguage: 'pl-PL,pl,en-US,en', platform: 'Linux x86_64',
-            userAgentMetadata: { brands: [{ brand: 'Chromium', version: major }, { brand: 'Google Chrome', version: major }, { brand: 'Not?A_Brand', version: '99' }], platform: 'Linux', platformVersion: '', architecture: 'x86', model: '', mobile: false } });
+        const phone = this.policy().mobile !== 'off';
+        await send('Emulation.setUserAgentOverride', { userAgent: userAgent(major, phone), acceptLanguage: 'pl-PL,pl,en-US,en', platform: phone ? 'Linux armv81' : 'Linux x86_64',
+            userAgentMetadata: { brands: [{ brand: 'Chromium', version: major }, { brand: 'Google Chrome', version: major }, { brand: 'Not?A_Brand', version: '99' }], platform: phone ? 'Android' : 'Linux', platformVersion: phone ? '14.0.0' : '', architecture: phone ? '' : 'x86', model: '', mobile: phone } });
     } catch (x) { this.log('user agent: ' + x.message); }
+    // The page's clock: the head unit's own is UTC with no zone, so pages showed an hour less than it is in Poland
+    // in winter (owner, 2026-11-15). The rule "timezone" names the zone (default Europe/Warsaw).
+    try { await send('Emulation.setTimezoneOverride', { timezoneId: this.policy().timezone || 'Europe/Warsaw' }); } catch (x) { this.log('time zone: ' + x.message); }
     const tree = await send('Page.getFrameTree', {});
     e.mainFrame = tree.frameTree.frame.id;
     this.s.url = tree.frameTree.frame.url || '';

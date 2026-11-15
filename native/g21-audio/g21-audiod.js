@@ -122,8 +122,11 @@ function startWriter() {
     let openWatch = null;
     const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
     if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
-    // AirPlay passes on what a phone sends and throws away what is not taken at once: its writer never holds it
-    const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : []), opts);
+    // AirPlay passes on what a phone sends and throws away what is not taken at once: its writer never holds it.
+    // The browser's engine as well: it writes its sound by its own clock and counts a film's time by what it has
+    // written, so a writer that held it made the page's film run slow, sound and picture both (car, 2026-11-15:
+    // about 25 000 frames a second taken from it instead of 48 000). Every player now writes without being held.
+    const child = cp.spawn(OUT, ['play', device(), 'live'], opts);
     st.writer = child;
     let buf = '';
     child.stderr.setEncoding('utf8');
