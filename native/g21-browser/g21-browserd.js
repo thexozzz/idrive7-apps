@@ -56,6 +56,8 @@ function defaults() {
     return {
         here: here,
         engineSrc: env.G21_BROWSER_ENGINE || path.join(here, 'engine'),
+        // the full engine (Google Chrome for Testing), chosen with the rule "engine"; '' when another engine is named
+        engineSrcChrome: env.G21_BROWSER_ENGINE ? '' : path.join(here, 'engine-chrome'),
         libDir: env.G21_BROWSER_LIB || path.join(here, 'lib'),
         fontsDir: path.join(here, 'fonts'),
         webframe: path.join(here, 'g21-webframe'),
@@ -202,7 +204,7 @@ function pickEngineUid(o) {
  * interpreter path (/lib64/ld-linux-x86-64.so.2) becomes /run/g21-browser/ld.so, the loader in lib/,
  * so the engine runs on its own C library and not on the head unit's.
  */
-const SOURCE_RE = /^https:\/\/storage\.googleapis\.com\/chrome-for-testing-public\/[0-9.]+\/linux64\/chrome-headless-shell-linux64\.zip$/;
+const SOURCE_RE = /^https:\/\/storage\.googleapis\.com\/chrome-for-testing-public\/[0-9.]+\/linux64\/(chrome-headless-shell|chrome)-linux64\.zip$/;
 
 // ---------------------------------------------------------------- apps from git (Sklep)
 /*
@@ -342,11 +344,14 @@ function loadManifest(o) {
     const file = path.join(o.engineSrc, 'manifest.json');
     const m = readJson(file);
     if (!m || m.schema !== 1 || !Array.isArray(m.files) || !m.files.length || !Array.isArray(m.parts) || !/^[0-9a-f]{64}$/.test(String(m.binarySha256))) throw new UserError('brak opisu silnika w narzędziu (engine/manifest.json)');
-    m.files.forEach((f) => { if (!f || !/^[A-Za-z0-9._-]+$/.test(String(f.path)) || !isId(f.size) || !/^[0-9a-f]{64}$/.test(String(f.sha256))) throw new UserError('manifest silnika: zły wpis pliku'); });
+    m.files.forEach((f) => { if (!f || !/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+){0,4}$/.test(String(f.path)) || /(^|\/)\.\.?(\/|$)/.test(String(f.path)) || !isId(f.size) || !/^[0-9a-f]{64}$/.test(String(f.sha256))) throw new UserError('manifest silnika: zły wpis pliku'); });
     const ip = m.interp;
     if (!ip || !isId(ip.offset) || !isId(ip.size) || typeof ip.from !== 'string' || typeof ip.to !== 'string' || ip.to.length + 1 > ip.size) throw new UserError('manifest silnika: brak opisu loadera');
     m.id = String(m.binarySha256).slice(0, 16);
     m.sha = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    // the program itself is the first file; "kind": "chrome" is the full Chrome (run with --headless=new)
+    m.binary = String(m.files[0].path);
+    m.kind = m.kind === 'chrome' ? 'chrome' : 'shell';
     return m;
 }
 function engineDir(o, m) { return path.join(o.cacheDir, 'engine-' + m.id); }
@@ -368,6 +373,7 @@ function sourceUrl(o, m) {
 }
 // one file of the engine, written while hashed; refuses more bytes than the manifest names
 function fileSink(dir, f) {
+    if (f.path.indexOf('/') >= 0) mkdirp(path.dirname(path.join(dir, f.path)), 0o755);
     const fd = fs.openSync(path.join(dir, f.path), 'wx', 0o600);
     const h = crypto.createHash('sha256');
     let left = f.size;
@@ -565,7 +571,7 @@ async function installEngine(o, m, ids, set) {
     const total = m.files.reduce((a, f) => a + f.size, 0);
     const pack = havePack(o, m);
     mkdirp(o.cacheDir, 0o711);
-    list(o.cacheDir).filter((n) => /^engine-/.test(n) && n !== path.basename(dest)).forEach((n) => { try { rmrf(path.join(o.cacheDir, n)); } catch (e) { o.log('old engine: ' + e.message); } });
+    list(o.cacheDir).filter((n) => /^engine-/.test(n) && n !== path.basename(dest) && (o.keepEngines || []).indexOf(n) < 0).forEach((n) => { try { rmrf(path.join(o.cacheDir, n)); } catch (e) { o.log('old engine: ' + e.message); } });
     rmrf(tmp); rmrf(dest); rmrf(dl);
     const st = fs.statfsSync(o.cacheDir);
     const free = Number(st.bavail) * Number(st.bsize), need = total + (pack ? 32 << 20 : 200 << 20);
@@ -586,7 +592,7 @@ async function installEngine(o, m, ids, set) {
         if (pack) await fillFromPack(o, m, tmp, (pct) => set('unpacking', pct));
         else await fillFromZip(m, zip, tmp, (pct) => set('unpacking', pct));
         const ip = m.interp;
-        const fd = fs.openSync(path.join(tmp, 'chrome-headless-shell'), 'r+');
+        const fd = fs.openSync(path.join(tmp, m.binary), 'r+');
         try {
             const was = Buffer.alloc(ip.size);
             fs.readSync(fd, was, 0, ip.size, ip.offset);
@@ -929,7 +935,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -937,7 +943,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -950,6 +956,7 @@ function readPolicy(file) {
         pick('carData', (v) => v === 'apps' || v === 'off');
         pick('carDiag', (v) => v === 'apps' || v === 'off');
         pick('video', (v) => v === 'light' || v === 'any');
+        pick('engine', (v) => v === 'chrome' || v === 'shell');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -1015,7 +1022,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video }, fs: !!this.fs, film: this.filmView() };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1217,13 +1224,13 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any', engine: (v) => v === 'chrome' || v === 'shell',
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video;
+        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video, engineWas = this.policy().engine;
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -1233,7 +1240,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
@@ -2132,6 +2139,9 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
         '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--js-flags=--max-old-space-size=512'
     ];
+    // The full Chrome: its windowless mode (the headless shell knows no other), and none of the things a desktop
+    // browser does on its own (asking to be the default browser, its extensions, its crash reports).
+    if (dirs.kind === 'chrome') args.push('--headless=new', '--no-default-browser-check', '--disable-extensions', '--disable-component-extensions-with-background-pages', '--disable-crash-reporter', '--noerrdialogs');
     // Sound: with G21 Audio the engine plays into its own ALSA device "g21out" (asound.conf made by openAudio: a file
     // device that writes S16LE 48 kHz stereo into G21 Audio's FIFO). Without it: no device at all (see above).
     if (this.audio) args.push('--alsa-output-device=g21out');
@@ -2148,8 +2158,25 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     args.push(url);
     return args;
 };
+/*
+ * Which engine. The headless shell (engine/) is Chrome built to be driven by programs: light, but sites that
+ * check for exactly that refuse it (car, 2026-11-15: Crunchyroll's check answered 403 every time), and it has no
+ * module for protected films. The full Chrome (engine-chrome/, the rule "engine": "chrome", the default) is the
+ * ordinary browser run without a window, with Google's Widevine module from the same zip. The rule "engine":
+ * "shell" (Ustawienia > Przeglądarka > Silnik) is the way back. Both stay unpacked once fetched.
+ */
+Daemon.prototype.pickEngine = function () {
+    const o = this.opts;
+    if (o.engineShell === undefined) o.engineShell = o.engineSrc;
+    // (tests name their own engine, or run without the engine's uid: they keep the one they named)
+    const full = !!o.engineSrcChrome && !o.noSetuid && !this.engineFallback && o.engineShell === path.join(o.here, 'engine') && this.policy().engine !== 'shell' && fs.existsSync(path.join(o.engineSrcChrome, 'manifest.json'));
+    this.fullEngine = full;
+    o.engineSrc = full ? o.engineSrcChrome : o.engineShell;
+    o.keepEngines = [o.engineShell, o.engineSrcChrome].filter(Boolean).map((d) => { try { return path.basename(engineDir(o, loadManifest({ engineSrc: d }))); } catch (e) { return ''; } }).filter(Boolean);
+};
 Daemon.prototype.prepare = async function () {
     const o = this.opts;
+    this.pickEngine();
     const m = loadManifest(o);
     if (this.uid === null && !o.noSetuid) {
         this.uid = pickEngineUid(o);
@@ -2182,7 +2209,7 @@ Daemon.prototype.prepare = async function () {
         + [['sans-serif', 'Liberation Sans'], ['serif', 'Liberation Serif'], ['monospace', 'Liberation Mono'], ['system-ui', 'Liberation Sans']].map((a) => '  <alias><family>' + a[0] + '</family><prefer><family>' + a[1] + '</family><family>DejaVu Sans</family></prefer></alias>\n').join('')
         + [['Arial', 'Liberation Sans'], ['Helvetica', 'Liberation Sans'], ['Times New Roman', 'Liberation Serif'], ['Times', 'Liberation Serif'], ['Courier New', 'Liberation Mono'], ['Courier', 'Liberation Mono']].map((a) => '  <alias binding="same"><family>' + a[0] + '</family><accept><family>' + a[1] + '</family></accept></alias>\n').join('')
         + '</fontconfig>\n', 0o644);
-    return { engine: engineDir(o, m), profile: profile, tmp: tmp, conf: conf, major: ((/(\d+)\.\d+\.\d+\.\d+/.exec(m.product) || [0, '0'])[1]) };
+    return { engine: engineDir(o, m), binary: m.binary, kind: m.kind, profile: profile, tmp: tmp, conf: conf, major: ((/(\d+)\.\d+\.\d+\.\d+/.exec(m.product) || [0, '0'])[1]) };
 };
 Daemon.prototype.startEngine = function (url) {
     if (this.starting) return this.starting;
@@ -2190,6 +2217,15 @@ Daemon.prototype.startEngine = function (url) {
         this.starting = null;
         this.log('engine start failed: ' + e.message);
         this.killEngine();
+        // The full Chrome did not come up (not a question to the owner, not a refusal with its own words): the light
+        // engine takes over until this tool starts again, so that a browser is there either way.
+        if (this.fullEngine && !this.engineFallback && !e.ask && !e.user && this.want) {
+            this.engineFallback = true;
+            this.log('the full engine did not start: the headless shell is used until the tool starts again');
+            this.set({ engine: 'starting', err: 'pełny Chrome nie wystartował: działa lekki silnik', ask: '', loading: true, live: false });
+            setTimeout(() => { if (this.want && !this.engine && !this.starting) this.startEngine(url); }, 200);
+            return;
+        }
         this.set({ engine: 'failed', err: e.user ? e.message : 'silnik nie wystartował', ask: e.ask || '', loading: false, live: false });
     });
     return this.starting;
@@ -2240,7 +2276,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     if (process.env.TZ) env.TZ = process.env.TZ;
     if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
     if (this.audio) env.ALSA_CONFIG_PATH = this.audio.conf;
-    const child = cp.spawn(path.join(dirs.engine, 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
+    const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
     const e = { child: child, cdp: null, session: '', target: '', mainFrame: '', down: null, err: '', product: '' };
     this.engine = e;
     child.stderr.on('data', (d) => { e.err = (e.err + d).slice(-2000); });
@@ -2542,8 +2578,8 @@ Daemon.prototype.start = async function () {
     try { fs.unlinkSync(path.join(o.stateDir, 'sandbox')); this.log('removed state/sandbox (0.1.2 kept the answer; now every opening asks)'); } catch (e) { /* none */ }
     if (!o.noSetuid) { try { this.uid = pickEngineUid(o); } catch (e) { this.log('engine uid: ' + e.message); } }
     let m = null;
-    try { m = loadManifest(o); } catch (e) { this.log(e.message); }
     this.loadPolicy();
+    try { this.pickEngine(); m = loadManifest(o); } catch (e) { this.log(e.message); }
     this.log('g21-browserd started' + (m ? ', engine ' + m.product + (engineReady(o, m) ? ' (installed)' : ' (not installed yet)') : ''));
 };
 Daemon.prototype.close = async function () {

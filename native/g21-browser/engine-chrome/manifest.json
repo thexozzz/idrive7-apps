@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "product": "Google Chrome for Testing 153.0.8010.12",
+  "binarySha256": "8c599d43aec53f2460a31ae2f4af6bd863f8258b34ff519564bc5d4726bfaa1e",
+  "source": {
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.12/linux64/chrome-linux64.zip",
+    "prefix": "chrome-linux64/"
+  },
+  "format": "g21pack1+brotli",
+  "kind": "chrome",
+  "interp": {
+    "offset": 736,
+    "size": 28,
+    "from": "/lib64/ld-linux-x86-64.so.2",
+    "to": "/run/g21-browser/ld.so"
+  },
+  "files": [
+    {
+      "path": "chrome",
+      "mode": 493,
+      "size": 293285184,
+      "sha256": "8c599d43aec53f2460a31ae2f4af6bd863f8258b34ff519564bc5d4726bfaa1e"
+    },
+    {
+      "path": "chrome_crashpad_handler",
+      "mode": 493,
+      "size": 1976032,
+      "sha256": "86248c0ffc3f31f8fd596839ea1cc0319414fba27919d55ef65e001e47766539"
+    },
+    {
+      "path": "icudtl.dat",
+      "mode": 420,
+      "size": 10823536,
+      "sha256": "a3c6d7824935e87fed17e94c2d84b7683ef360ebc5c4ea92e2ca70f361bc9314"
+    },
+    {
+      "path": "v8_context_snapshot.bin",
+      "mode": 420,
+      "size": 747232,
+      "sha256": "2c8872dd6615b15d192d9b49a6c9da63bcdc9649ee0b1b4a5d1e49b0151fa381"
+    },
+    {
+      "path": "resources.pak",
+      "mode": 420,
+      "size": 22961380,
+      "sha256": "872ece3b3e5b019abcca4cf723afbb97eb831348da72823d17aac4fb9d03f998"
+    },
+    {
+      "path": "chrome_100_percent.pak",
+      "mode": 420,
+      "size": 737730,
+      "sha256": "82db3dc5c0b5cc0bc84e7538881cffbe7ca7907386fdd1c6da3d3c6abd167459"
+    },
+    {
+      "path": "chrome_200_percent.pak",
+      "mode": 420,
+      "size": 1287286,
+      "sha256": "63dd82a15448b2846126fe0b3595f28e80f866c01be1919f2f77c39ca1e13086"
+    },
+    {
+      "path": "locales/pl.pak",
+      "mode": 420,
+      "size": 726901,
+      "sha256": "d41618a648260d8ca23fc02f4cb475d6fc90ff5ec0188e829511dc9d2f523cab"
+    },
+    {
+      "path": "locales/en-US.pak",
+      "mode": 420,
+      "size": 573103,
+      "sha256": "6c9279571de66fddf8e16ef6eadc9d245c8669cb1977bbd3ab13ad068c62a559"
+    },
+    {
+      "path": "libEGL.so",
+      "mode": 493,
+      "size": 230712,
+      "sha256": "532800b1f5882fb0034a72582233edaf50ed6433e3911c43f88cbcfcb24708d1"
+    },
+    {
+      "path": "libGLESv2.so",
+      "mode": 493,
+      "size": 230712,
+      "sha256": "17370d7cc22d0bc4048cc851b7f8fdbb5e51c4f4b0f53d6c68b8770fb6a8ab00"
+    },
+    {
+      "path": "libvk_swiftshader.so",
+      "mode": 493,
+      "size": 3980504,
+      "sha256": "1d5d7ab9c4c1499041aa44ea7a2ae3da3ca9812cd8bda9b5ac920ae158adb163"
+    },
+    {
+      "path": "libvulkan.so.1",
+      "mode": 493,
+      "size": 689840,
+      "sha256": "c53295a113b0bb075be6624ced1a5056acabefc4d49c2d2ff3fbbc76854880ea"
+    },
+    {
+      "path": "vk_swiftshader_icd.json",
+      "mode": 420,
+      "size": 107,
+      "sha256": "c9eef28b6b984fec220ef0abfecc40b502d46946706e47bfe97707027cb818bd"
+    },
+    {
+      "path": "WidevineCdm/manifest.json",
+      "mode": 420,
+      "size": 841,
+      "sha256": "106559aa573088d9436609452fd0ec85d19a4475a500526950d2ef4fae2a7ca4"
+    },
+    {
+      "path": "WidevineCdm/LICENSE",
+      "mode": 420,
+      "size": 473,
+      "sha256": "20de375707692099b3132084695377ce5fec0aec05813dedcce094b8eda44386"
+    },
+    {
+      "path": "WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so",
+      "mode": 493,
+      "size": 21965296,
+      "sha256": "cd250e8177183add7029ccc3057217b978779f9c7af800c45083f3cc0139020e"
+    }
+  ],
+  "parts": []
+}

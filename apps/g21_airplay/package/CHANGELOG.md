@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.187
+
+- Drugi silnik Przeglądarki: pełny Google Chrome for Testing 153.0.8010.12 (ta sama wersja co dotychczasowy), uruchamiany bez okna (`--headless=new`), domyślny. Powód: dotychczasowy „headless shell” to Chrome zbudowany do sterowania przez programy i strony, które to sprawdzają, odrzucają go (auto, 2026-11-15: weryfikacja Crunchyroll odpowiadała 403 za każdym razem); nie ma też modułu do filmów chronionych. Pełny Chrome ma w tej samej paczce od Google moduł Widevine.
+- `g21-browser` 0.1.39: opis silnika w `engine-chrome/manifest.json` (17 plików, 360 MB po rozpakowaniu; auto pobiera `chrome-linux64.zip`, ok. 196 MB, z magazynu Google i sprawdza SHA-256 każdego pliku), 35 dodatkowych bibliotek w `lib/` (Ubuntu 24.04, lista w `LIBS.txt`, +15 MB). Reguła `engine`: `chrome` albo `shell`; przełącznik w Ustawienia > Przeglądarka > „Silnik” – to droga powrotu do lekkiego silnika. Oba silniki zostają rozpakowane, więc zmiana nie pobiera od nowa.
+- NIESPRAWDZONE: pełny Chrome nie był uruchamiany ani w aucie, ani poza nim (sprawdzone jest tylko, że program ładujący znajduje wszystkie jego biblioteki w `lib/`). Nie wiadomo jeszcze, czy wystartuje w aucie, ile zajmie pamięci i procesora, czy Crunchyroll go przepuści i czy Widevine zadziała. Jeśli nie wystartuje: Ustawienia > Przeglądarka > Silnik > lekki.
+
 ## 0.1.186
 
 - Mysz (gładzik) w odtwarzaczu YouTube (RideTube): kursor jest rysowany na jego ekranie, a kliknięcie działa jak dotknięcie – lista filmów, przyciski odtwarzacza, Wstecz. Auto, 2026-11-15: po przekazaniu filmu ze strony do odtwarzacza YouTube przycisk Wstecz nie działał, bo gładzik i gałka zostawały przechwycone dla kursora menu, którego na tym ekranie nie było; teraz kursor przechodzi razem z ekranem (menu ↔ YouTube).
