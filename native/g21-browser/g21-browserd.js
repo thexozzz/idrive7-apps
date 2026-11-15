@@ -81,7 +81,9 @@ function defaults() {
         policyFile: path.join(root, 'state', 'policy.json'),   // the owner's rules; see POLICY_DEFAULT
         policyOut: path.join(run, 'policy.json'),              // the rules in force, for reading (0644)
         audioSock: env.G21_BROWSER_AUDIO_SOCK || '/run/g21-audio/ctl.sock', // G21 Audio (the tool g21-audio), when it is installed
-        appsDir: path.join(root, 'apps'),                                  // apps imported from git (Sklep): one folder each
+        appsDir: path.join(root, 'apps'),
+        carNode: env.G21_BROWSER_CAR_NODE || '/usr/bin/node',                // the head unit's Node 8: g21-car.js needs its someip.node
+        carEnv: env.G21_CAR_CATALOG ? { G21_CAR_CATALOG: env.G21_CAR_CATALOG, G21_CAR_SOMEIP: env.G21_CAR_SOMEIP || '' } : {},                                  // apps imported from git (Sklep): one folder each
         idleMs: 90000,        // the engine stays this long after the app went away
         frameGapMs: 50,       // at most 20 page frames a second
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
@@ -268,9 +270,30 @@ function runApps(dir) {
         mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', mp4: 'video/mp4', webm: 'video/webm' };
     let root;
     try { root = fs.realpathSync(dir); } catch (e) { process.stderr.write('no apps folder\n'); process.exit(1); }
+    // A request for a signal goes to the daemon (a line on stdout) and its answer comes back (a line on stdin): this
+    // server runs as the engine's user and cannot reach the car itself. Only an app's own page may ask, and only
+    // as that app: the address must be this server's (no other name that points here), the page one of the app's.
+    const waiting = {};
+    let carSeq = 0;
+    const car = (q, r, app, op, query) => {
+        const json = (code, o) => { r.statusCode = code; r.setHeader('content-type', 'application/json; charset=utf-8'); r.setHeader('cache-control', 'no-store'); r.end(JSON.stringify(o)); };
+        const self = '127.0.0.1:' + srv.address().port;
+        if (String(q.headers.host || '') !== self) return json(403, { ok: false, err: 'wrong host' });
+        if (String(q.headers.referer || '').indexOf('http://' + self + '/' + app + '/') !== 0) return json(403, { ok: false, err: 'only the app itself may ask' });
+        let qs;
+        try { qs = new URLSearchParams(query.replace(/^\?/, '')); } catch (e) { return json(400, { ok: false, err: 'bad query' }); }
+        const id = ++carSeq;
+        const t = setTimeout(() => { if (waiting[id]) { delete waiting[id]; json(504, { ok: false, err: 'no answer' }); } }, 6000);
+        waiting[id] = (o) => { clearTimeout(t); const code = o && o.ok ? 200 : ((o && o.code) || 502); if (o) { delete o.rid; delete o.code; } json(code, o || { ok: false }); };
+        process.stdout.write('car ' + JSON.stringify({ rid: id, app: app, op: op, iface: qs.get('i') || '', name: qs.get('n') || '' }) + '\n');
+        return undefined;
+    };
     const srv = http.createServer((q, r) => {
         const no = (code) => { r.statusCode = code; r.setHeader('content-type', 'text/plain; charset=utf-8'); r.end(code === 404 ? 'nie ma takiego pliku' : ''); };
         if (q.method !== 'GET' && q.method !== 'HEAD') return no(405);
+        // the car's signals, read only (g21-car.js through the daemon): /_car/<app>/list, /_car/<app>/get?i=<interface>&n=<field>
+        const carM = /^\/_car\/([a-z0-9-]{1,60})\/(list|get)(\?.*)?$/.exec(String(q.url));
+        if (carM) return car(q, r, carM[1], carM[2], carM[3] || '');
         let p;
         try { p = decodeURIComponent(String(q.url).split('?')[0].split('#')[0]); } catch (e) { return no(400); }
         try {
@@ -293,6 +316,18 @@ function runApps(dir) {
         } catch (e) { return no(404); }
     });
     srv.listen(0, '127.0.0.1', () => process.stdout.write('port ' + srv.address().port + '\n'));
+    let inbuf = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (d) => {
+        inbuf += d;
+        let i;
+        while ((i = inbuf.indexOf('\n')) >= 0) {
+            const l = inbuf.slice(0, i);
+            inbuf = inbuf.slice(i + 1);
+            if (l.indexOf('car ') !== 0) continue;
+            try { const o = JSON.parse(l.slice(4)); const w = waiting[o.rid]; if (w) { delete waiting[o.rid]; w(o); } } catch (e) { /* not an answer */ }
+        }
+    });
     process.stdin.on('end', () => process.exit(0));
     process.stdin.on('close', () => process.exit(0));
     process.stdin.resume();
@@ -806,6 +841,8 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *             "gesture"   only after a touch or a click on the page
  *   fullscreen "screen"   a player that goes full screen gets the whole centre screen, the toolbar hidden (default)
  *             "page"      it fills the page area under the toolbar
+ *   carData   "apps"      an app from Sklep may read the car signals it declares, read only (default)
+ *             "off"       no app reads anything of the car
  *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
  *                         the car's speakers while a page plays and gives them back after (default)
  *             "off"       pages are silent
@@ -814,7 +851,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -822,7 +859,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -832,6 +869,7 @@ function readPolicy(file) {
         pick('homepage', (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)));
         pick('autoplay', (v) => v === 'allow' || v === 'gesture');
         pick('fullscreen', (v) => v === 'screen' || v === 'page');
+        pick('carData', (v) => v === 'apps' || v === 'off');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -897,7 +935,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen }, fs: !!this.fs };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData }, fs: !!this.fs };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1099,7 +1137,7 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off',
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
@@ -1345,9 +1383,12 @@ Daemon.prototype.installApp = async function (text) {
         const name = String(meta.name || man.short_name || man.name || r.repo).replace(/[\u0000-\u001f]/g, '').slice(0, 40) || r.repo;
         rmrf(dest);
         fs.renameSync(tmp, dest);
+        // the car signals the app says it reads (the owner sees them in the log; nothing else is given to it)
+        const carDecl = Array.isArray(meta.car) ? meta.car.filter((c) => typeof c === 'string' && /^(\*|[A-Za-z][A-Za-z0-9_.]{0,159}(\.\*)?)$/.test(c)).slice(0, 80) : [];
         const apps = this.appsList().filter((a) => a.id !== r.id);
-        apps.push({ id: r.id, name: name, repo: r.owner + '/' + r.repo, ref: r.ref, start: start, mouse: meta.mouse === 'yes' ? 'yes' : 'no', files: got.files, bytes: got.bytes, at: new Date().toISOString() });
+        apps.push({ id: r.id, name: name, repo: r.owner + '/' + r.repo, ref: r.ref, start: start, mouse: meta.mouse === 'yes' ? 'yes' : 'no', car: carDecl, files: got.files, bytes: got.bytes, at: new Date().toISOString() });
         this.saveApps(apps);
+        if (carDecl.length) this.log('app: ' + r.id + ' reads car signals: ' + carDecl.join(', ').slice(0, 400));
         this.log('app: installed ' + r.id + ' (' + got.files + ' files, ' + Math.round(got.bytes / 1024) + ' KiB, mouse ' + (meta.mouse === 'yes' ? 'yes' : 'no') + ')');
         return { id: r.id, name: name };
     } catch (e) {
@@ -1370,10 +1411,92 @@ Daemon.prototype.startApps = function () {
         let out = '', done = false;
         const end = (port) => { if (done) return; done = true; clearTimeout(t); resolve(port); };
         const t = setTimeout(() => { this.log('apps server: no port'); try { child.kill('SIGKILL'); } catch (e) { /* gone */ } end(0); }, 4000);
-        child.stdout.on('data', (d) => { out += d; const m = /port (\d+)/.exec(out); if (m) { this.appsProc = child; this.appsPort = Number(m[1]); this.log('apps server on 127.0.0.1:' + this.appsPort); end(this.appsPort); } });
+        child.stdout.on('data', (d) => {
+            out += d;
+            let i;
+            while ((i = out.indexOf('\n')) >= 0) {
+                const l = out.slice(0, i);
+                out = out.slice(i + 1);
+                const m = /^port (\d+)$/.exec(l);
+                if (m) { this.appsProc = child; this.appsPort = Number(m[1]); this.log('apps server on 127.0.0.1:' + this.appsPort); end(this.appsPort); }
+                else if (l.indexOf('car ') === 0) this.guard(() => this.carRequest(child, l.slice(4)));
+            }
+        });
         child.stderr.on('data', (d) => this.log('apps server: ' + String(d).trim().slice(0, 200)));
         child.on('error', (e) => { this.log('apps server: ' + e.message); end(0); });
         child.on('exit', () => { if (this.appsProc === child) { this.appsProc = null; this.appsPort = 0; } end(0); });
+    });
+};
+/*
+ * The car's signals for an app from Sklep: READ ONLY, and only what the app says it reads.
+ *   theiplay.json  "car": ["de.bmw.infotainment.vehicle.Vehicle2.statusCarSpeed2", "<interface>.*", "*"]
+ * The app's page asks its own server (/_car/<app>/...), the server asks here, and g21-car.js (root, the head
+ * unit's Node 8) reads the field over SOME/IP. Nothing on this road sets a field or calls a method. Signals that
+ * name a person or a place are never given out (g21-car.js). The owner switches all of it off with the rule
+ * "carData": "off".
+ */
+Daemon.prototype.carRequest = async function (child, text) {
+    let q;
+    try { q = JSON.parse(text); } catch (e) { return; }
+    if (!q || typeof q !== 'object') return;
+    const reply = (o) => { try { child.stdin.write('car ' + JSON.stringify(Object.assign({ rid: q.rid }, o)) + '\n'); } catch (e) { /* the server is gone */ } };
+    const app = this.appsList().filter((a) => a.id === q.app)[0];
+    if (!app) return reply({ ok: false, code: 404, err: 'no such app' });
+    if (this.policy().carData === 'off') return reply({ ok: false, code: 403, err: 'the owner switched car data off' });
+    const decl = Array.isArray(app.car) ? app.car : [];
+    if (!decl.length) return reply({ ok: false, code: 403, err: 'the app declares no car signals (theiplay.json "car")' });
+    const may = (iface, name) => decl.some((d) => d === '*' || d === iface + '.*' || d === iface + '.' + name);
+    try {
+        if (q.op === 'list') {
+            const all = await this.carAsk({ op: 'list' });
+            if (!all.ok) return reply({ ok: false, code: 502, err: all.err });
+            const out = {};
+            Object.keys(all.ifaces || {}).forEach((i) => { const f = all.ifaces[i].filter((n) => may(i, n)); if (f.length) out[i] = f; });
+            return reply({ ok: true, ifaces: out });
+        }
+        if (!may(String(q.iface), String(q.name))) return reply({ ok: false, code: 403, err: 'not declared by the app' });
+        const got = await this.carAsk({ op: 'get', iface: String(q.iface), name: String(q.name) });
+        return reply(got.ok ? { ok: true, value: got.value } : { ok: false, code: 502, err: got.err });
+    } catch (e) { return reply({ ok: false, code: 502, err: String((e && e.message) || e).slice(0, 200) }); }
+};
+// one request to g21-car.js (started when first needed)
+Daemon.prototype.carAsk = function (msg) {
+    return new Promise((resolve, reject) => {
+        if (!this.carProc) {
+            const child = cp.spawn(this.opts.carNode, [path.join(this.opts.here, 'g21-car.js')], { cwd: '/', env: this.opts.carEnv || {}, stdio: ['pipe', 'pipe', 'pipe'] });
+            let buf = '';
+            this.carProc = child;
+            this.carWait = {};
+            this.carSeq = 0;
+            const gone = (why) => {
+                if (this.carProc !== child) return;
+                const w = this.carWait;
+                this.carProc = null;
+                this.carWait = {};
+                Object.keys(w).forEach((k) => w[k]({ ok: false, err: 'the car reader stopped' }));
+                this.log('car reader stopped' + (why ? ': ' + why : ''));
+            };
+            child.stdout.setEncoding('utf8');
+            child.stdout.on('data', (d) => {
+                buf += d;
+                let i;
+                while ((i = buf.indexOf('\n')) >= 0) {
+                    let m = null;
+                    try { m = JSON.parse(buf.slice(0, i)); } catch (e) { m = null; }
+                    buf = buf.slice(i + 1);
+                    if (m && this.carWait[m.id]) { const w = this.carWait[m.id]; delete this.carWait[m.id]; w(m); }
+                }
+            });
+            child.stderr.on('data', (d) => this.log('car: ' + String(d).trim().slice(0, 200)));
+            child.stdin.on('error', () => { /* it is gone: 'exit' says so */ });
+            child.on('error', (e) => gone(e.message));
+            child.on('exit', () => gone(''));
+            this.log('car reader started (read only)');
+        }
+        const id = ++this.carSeq;
+        const t = setTimeout(() => { if (this.carWait && this.carWait[id]) { delete this.carWait[id]; reject(new Error('the car did not answer')); } }, 5000);
+        this.carWait[id] = (m) => { clearTimeout(t); resolve(m); };
+        try { this.carProc.stdin.write(JSON.stringify(Object.assign({ id: id }, msg)) + '\n'); } catch (e) { clearTimeout(t); delete this.carWait[id]; reject(e); }
     });
 };
 // the address of an app's first page, or null (unknown app, no server)

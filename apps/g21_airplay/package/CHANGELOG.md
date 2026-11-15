@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.168
+
+- Dane auta dla aplikacji ze Sklepu, tylko odczyt (`g21-browser` 0.1.23). Aplikacja zgłasza w `theiplay.json` sygnały (`"car": [...]`), a jej strona czyta je z własnego serwera: `/_car/<aplikacja>/list` i `/_car/<aplikacja>/get?i=<interfejs>&n=<pole>`. Czyta je nowy proces `g21-car.js` (root, Node 8 jednostki, SOME/IP z katalogu jednostki); nie ma w nim kodu, który cokolwiek ustawia albo wywołuje. Bramki: pyta tylko strona tej aplikacji i tylko jako ta aplikacja, wydawane jest tylko to, co zgłosiła, nigdy sygnały o osobie i miejscu (VIN, pozycja, cele, telefon, kontakty, profile), a właściciel wyłącza całość w Aplikacje > Ustawienia > „Dane auta” (reguła `carData`). Droga i bramki sprawdzone testem `tools/test_car_bridge.js` z udawanym SOME/IP; odczyt z prawdziwego auta niesprawdzony.
+- To nie są dane diagnostyczne sterowników (to, co Engine Config czy aplikacja 8HP czytają przez UDS) — tej drogi do auta narzędzie nie ma.
+- Hello THEiPlay ma trzy karty: „Test” (dotyk, mysz, przewijanie, dźwięk, klawiatura, ekran), „Auto” (prędkość na żywo i przeglądarka wszystkich sygnałów do odczytu) i „Co aplikacja może” (lista możliwości, `theiplay.json`, przykład odczytu). Obraz aplikacji na zegarach i HUD włącza się w Aplikacje > Ustawienia.
+- Gładzik, dwa palce: w lewo — wstecz, w prawo — dalej; w górę i w dół — przewijanie. W Przeglądarce to poprzednia / następna strona (w aplikacji krok wstecz, potem wyjście; w pełnym ekranie wyjście z niego), w menu („Kursor w menu”) poprzednia strona menu / wejście w zaznaczoną pozycję, a góra–dół przesuwa zaznaczenie.
+
 ## 0.1.167
 
 - Naprawa: w Przeglądarce kursor z gładzika był zamknięty w obszarze strony i nie dało się nim sięgnąć paska ani przycisków. Teraz chodzi po całym ekranie: w stronie jest myszą strony, poza nią stuknięcie to dotknięcie w tym miejscu (pasek adresu, wstecz, pływające przyciski).

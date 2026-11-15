@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.167',
+        version: (this._packageJson && this._packageJson.version) || '0.1.168',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.167') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.168') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5527,6 +5527,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-zoom', s && s.connected && s.zoom ? Math.round(s.zoom * 100) + '%' : '—');
     m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : (this._webFsFull ? 'cały ekran' : 'okno z Pozycji')) : '—');
     m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
+    m.setItemHint('aset-car', pol ? (pol.carData === 'off' ? 'wyłączone' : 'aplikacje czytają, co zgłoszą') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
     if (typeof m.repaint === 'function') {
@@ -5824,7 +5825,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintApps();
         return true;
     }
-    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay') {
+    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car') {
         var selfSet = this;
         var ZOOMS = [1, 1.25, 1.5, 1.75, 2];
         s = this._web ? this._web.state() : null;
@@ -5838,6 +5839,8 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
             this._web.send({ op: 'policy', key: 'fullscreen', value: pol.fullscreen === 'page' ? 'screen' : 'page' });
         } else if (name === 'aset-autoplay') {
             this._web.send({ op: 'policy', key: 'autoplay', value: pol.autoplay === 'gesture' ? 'allow' : 'gesture' });
+        } else if (name === 'aset-car') {
+            this._web.send({ op: 'policy', key: 'carData', value: pol.carData === 'off' ? 'apps' : 'off' });
         } else if (m && typeof m.startEdit === 'function') {
             // an address, or nothing for the built-in start page
             m.startEdit({
@@ -6015,9 +6018,7 @@ AirPlayApp.prototype._padClient = function () {
                 }
             },
             onScroll: function (dx, dy) {
-                if (self._mouseActive) {
-                    self._mouseScroll(dx, dy);
-                }
+                self._padTwo(dx, dy);
             },
             onState: function (st) {
                 if (st.moving && (self._mouseActive || self._menuMouseActive)) {
@@ -6077,6 +6078,79 @@ AirPlayApp.prototype._menuMouseTap = function () {
     }
     this._menuTapAt = Date.now();
     this._menu.tapAt(Math.round(this._menuX), Math.round(this._menuY));
+};
+
+/*
+ * Two fingers on the pad, in a page and in the menu alike:
+ *   up / down          the page scrolls; in the menu the selection goes on / back
+ *   a swipe left       back: the page before (an app: a step back, then out of it); the menu's page before
+ *   a swipe right      forward: the next page; in the menu into the selected item
+ * A swipe is 110 pad units sideways, clearly more than up or down, once for a gesture (a gesture ends when the
+ * fingers rest for a quarter of a second).
+ */
+AirPlayApp.prototype._padTwo = function (dx, dy) {
+    var now = Date.now();
+    var web = !!this._mouseActive;
+    if (!web && !this._menuMouseActive) {
+        return;
+    }
+    if (!this._gAt || now - this._gAt > 250) {
+        this._gX = 0;
+        this._gY = 0;
+        this._gStep = 0;
+        this._gDone = false;
+    }
+    this._gAt = now;
+    this._gX += dx;
+    this._gY += dy;
+    if (this._gDone) {
+        return;
+    }
+    if (Math.abs(this._gX) >= 110 && Math.abs(this._gX) > 2 * Math.abs(this._gY)) {
+        this._gDone = true;
+        this._padSwipe(this._gX < 0 ? 'left' : 'right');
+        return;
+    }
+    // sideways movement waits to become a swipe; up and down acts at once
+    if (Math.abs(dy) < Math.abs(dx)) {
+        return;
+    }
+    if (web) {
+        this._mouseScroll(0, dy);
+        return;
+    }
+    this._gStep += dy;
+    while (Math.abs(this._gStep) >= 45 && this._menu && typeof this._menu.step === 'function') {
+        this._menu.step(this._gStep > 0 ? 1 : -1);
+        this._gStep -= this._gStep > 0 ? 45 : -45;
+    }
+};
+
+AirPlayApp.prototype._padSwipe = function (dir) {
+    var st;
+    noteStart('[G21-INPUT] swipe ' + dir);
+    if (this._mouseActive && this._web) {
+        st = this._web.state();
+        if (dir === 'left') {
+            if (st && st.fs) {
+                this._web.send({ op: 'key', k: 'Escape' });
+            } else if (st && st.back) {
+                this._web.send({ op: 'back' });
+            } else if (this._webApp) {
+                this._closeBrowser();
+            }
+        } else if (st && st.fwd) {
+            this._web.send({ op: 'fwd' });
+        }
+        return;
+    }
+    if (this._menuMouseActive && this._menu) {
+        if (dir === 'left' && typeof this._menu.back === 'function') {
+            this._menu.back();
+        } else if (dir === 'right' && typeof this._menu.enter === 'function') {
+            this._menu.enter();
+        }
+    }
 };
 
 // two fingers on the pad: the page scrolls with them (fingers up = further down the page)

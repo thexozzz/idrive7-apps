@@ -1,5 +1,6 @@
 {
   "name": "Hello THEiPlay",
   "start": "index.html",
-  "mouse": "yes"
+  "mouse": "yes",
+  "car": ["*"]
 }

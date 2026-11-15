@@ -31,6 +31,7 @@ var tools = [
     path.join(__dirname, 'test_config_panel.js'),
     path.join(__dirname, 'test_browser_app.js'),
     path.join(__dirname, 'test_browser_tool.js'),
+    path.join(__dirname, 'test_car_bridge.js'),
     path.join(__dirname, 'check_calls.js'),
 ];
 

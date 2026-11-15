@@ -152,6 +152,7 @@ var EN = {
     'Wyłącznik': 'Kill switch',
     'Obszar zegarów': 'Gauge area',
     'Strony chrome': 'Chrome pages',
+    'Dane auta': 'Car data',
     'Wyjdź': 'Exit',
     'Przycisk wyłączenia': 'Kill button',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
@@ -751,6 +752,8 @@ var APPS_SET_ITEMS = [
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
+    // whether apps from Sklep may read the car's signals (read only, what each declares)
+    { name: 'aset-car', title: 'Dane auta', hint: 'dla aplikacji', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
     { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
     { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
@@ -5404,6 +5407,33 @@ function createMenuSurface(opts) {
                         return { name: item.name, title: tr(String(item.title || '')), hint: tr(String(item.hint || '')), on: !!item.on };
                     })
             };
+        },
+        /** the touchpad's two fingers in the menu: the selection a step on or back */
+        step: function (delta) {
+            if (shown && !edit && !(webView && webView.on)) {
+                move(delta > 0 ? 1 : -1);
+            }
+        },
+        /** two fingers to the right: into the item that is selected */
+        enter: function () {
+            var it = items[selected];
+            if (shown && !edit && !(webView && webView.on) && it) {
+                choose(it.name);
+            }
+        },
+        /** two fingers to the left: the page's way back, when it has one */
+        back: function () {
+            var i;
+            if (!shown || edit || (webView && webView.on)) {
+                return false;
+            }
+            for (i = items.length - 1; i >= 0; i -= 1) {
+                if (/(^|-)back$/.test(String(items[i].name))) {
+                    choose(items[i].name);
+                    return true;
+                }
+            }
+            return false;
         },
         /** a choice made on the panel: the same as a tap on the item */
         pick: function (name) {
