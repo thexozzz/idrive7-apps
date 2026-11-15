@@ -1318,12 +1318,14 @@ start_ux() {
     # 0.1.54: first G21 Audio. Car 2026-11-15: a connect of CarLifeMedia alone stays CS_CONNECTING for ever (the
     # source has to be marked available first), which is why 0.1.132/0.1.133 were silent; G21 Audio does that, and
     # its tone is heard from the speakers. UxPlay then writes S16LE 48 kHz stereo into G21 Audio's FIFO, in step
-    # with the stream's clock (sync=true), and needs no ALSA device of the car at all.
+    # as it comes (sync=false: with sync=true the sink waited for time stamps that were sometimes wrong, and
+    # UxPlay's leaking queue before it threw the sound away meanwhile: car, 2026-11-15, no sound at all), and
+    # needs no ALSA device of the car at all. G21 Audio evens it out ("live" writer).
     g21_audio_open >/dev/null 2>&1
     audio_fifo=$(head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null)
     if [ -n "$audio_fifo" ] && [ -p "$audio_fifo" ]; then
         audio_dev=g21-audio
-        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=true buffer-mode=unbuffered"
+        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=false async=false buffer-mode=unbuffered"
         printf '%s g21-airplay-open: sound through G21 Audio (%s)\n' "$(date '+%F %T')" "$audio_fifo" >>"$AUDIOLOG"
     else
         g21_audio_close

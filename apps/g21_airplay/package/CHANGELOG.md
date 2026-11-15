@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.189
+
+- Dźwięk AirPlay, przyczyna znaleziona w logu UxPlay z auta (2026-11-15): jego tor dźwięku ma kolejkę 8 buforów, która „cieknie” – gdy odbiornik nie odbierze dźwięku od razu, UxPlay go wyrzuca. Nasz moduł wyjścia wstrzymywał potok, kiedy urządzenie było pełne (zmiana z 0.1.3), więc dźwięk ginął właśnie tam: ok. 11 s na 29 s bez żadnej straty policzonej u nas. Do tego wyjście UxPlay czekało na znaczniki czasu, które bywały błędne – wtedy nie było dźwięku wcale (stan po 0.1.60).
+- `g21-audio` 0.1.4: dla AirPlay osobny tryb „live” – potok jest opróżniany natychmiast, zawsze, do magazynu 2 s; urządzenie dostaje dźwięk z magazynu, gdy ma miejsce. Odtwarzanie rusza po zebraniu 180 ms (wyrównuje to, co przychodzi paczkami), a zapas ponad 600 ms jest przycinany do 180 ms, więc dźwięk nie odstaje od obrazu bardziej niż o tyle. Pozostałe źródła (Przeglądarka, THEiPlay Player) działają jak dotąd. `g21-airplay-open` 0.1.61: wyjście UxPlay pisze dźwięk od razu (`sync=false`). Niesprawdzone w aucie.
+- Sprostowanie do 0.1.60: powiększony bufor odbioru UDP nie był przyczyną ani lekarstwem; liczniki systemu, na których się oparłem, liczyły pakiety wszystkich programów auta.
+
 ## 0.1.188
 
 - Pełny Chrome, wynik z auta (2026-11-15, `g21-browser` 0.1.39): pobrał się z Google w 36 s i zainstalował (wszystkie biblioteki znalezione), ale kończył pracę 160 ms po starcie; demon uznawał to za problem z piaskownicą i przy regule „wymagana” pokazywał „reguły wymagają piaskownicy, a silnik nie może jej użyć”, więc nie zadziałał też powrót do lekkiego silnika. Powodu awarii nie było w logu (zapisywane były tylko trzy ostatnie linie, czyli zrzut rejestrów).

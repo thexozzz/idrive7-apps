@@ -122,7 +122,8 @@ function startWriter() {
     let openWatch = null;
     const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
     if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
-    const child = cp.spawn(OUT, ['play', device()], opts);
+    // AirPlay passes on what a phone sends and throws away what is not taken at once: its writer never holds it
+    const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : []), opts);
     st.writer = child;
     let buf = '';
     child.stderr.setEncoding('utf8');
