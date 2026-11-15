@@ -2,10 +2,14 @@
 
 ## Unreleased
 
+## 0.1.147
+
+- Narzędzie `g21-browser` 0.1.10 i aplikacja mają napisany import aplikacji z git dla Sklepu (publiczne repozytorium GitHub ze stroną `index.html`, rozpakowane do `apps/` i serwowane silnikowi z lokalnego serwera plików tylko do odczytu; kafelek aplikacji w „Aplikacjach”). Na życzenie właściciela nie jest to jeszcze podpięte do menu: Sklep pozostaje kafelkiem z zapowiedzią. Kod nie był uruchamiany.
+
 ## 0.1.146
 
 - Menu główne to teraz duże kafelki w rzędzie, który się przesuwa (pokrętło, strzałki, palec w poziomie): Multimedia, Aplikacje, Ustawienia. Multimedia: YouTube i AirPlay. Aplikacje: Przeglądarka, Sklep, Ustawienia aplikacji. Ustawienia: Napis, Język, Renderowanie, Pozycja (to, co było wierszami starego menu). „Wstecz” z YouTube i AirPlay wraca do Multimediów, z Napisu, Renderowania i Pozycji do Ustawień. Gdy kafelków jest więcej, niż się mieści, rząd przesuwa się tak, żeby wybrany był widoczny.
-- Sklep jest na razie zapowiedzią: kafelek otwiera stronę z pozycją „Import aplikacji z git — w przygotowaniu”. Importu jeszcze nie ma.
+- Sklep jest na razie zapowiedzią: kafelek otwiera stronę z pozycją „Import aplikacji z git — w przygotowaniu”. Kod importu (publiczne repozytorium GitHub ze stroną `index.html`, serwowane silnikowi z lokalnego serwera plików) jest napisany w `g21-browser` 0.1.10 i w aplikacji, ale nie jest podpięty do menu i nie był uruchamiany.
 - Na aucie jeszcze niesprawdzone.
 
 ## 0.1.145

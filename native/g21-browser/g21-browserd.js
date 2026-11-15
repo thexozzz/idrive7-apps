@@ -81,6 +81,7 @@ function defaults() {
         policyFile: path.join(root, 'state', 'policy.json'),   // the owner's rules; see POLICY_DEFAULT
         policyOut: path.join(run, 'policy.json'),              // the rules in force, for reading (0644)
         audioSock: env.G21_BROWSER_AUDIO_SOCK || '/run/g21-audio/ctl.sock', // G21 Audio (the tool g21-audio), when it is installed
+        appsDir: path.join(root, 'apps'),                                  // apps imported from git (Sklep): one folder each
         idleMs: 90000,        // the engine stays this long after the app went away
         frameGapMs: 50,       // at most 20 page frames a second
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
@@ -192,6 +193,106 @@ function pickEngineUid(o) {
  * so the engine runs on its own C library and not on the head unit's.
  */
 const SOURCE_RE = /^https:\/\/storage\.googleapis\.com\/chrome-for-testing-public\/[0-9.]+\/linux64\/chrome-headless-shell-linux64\.zip$/;
+
+// ---------------------------------------------------------------- apps from git (Sklep)
+/*
+ * An app is a public GitHub repository with a web page in it: index.html at its top (or the page a manifest
+ * names). It is fetched as GitHub's tarball of a branch (the head unit has no git), unpacked into
+ * apps/<owner>-<repo>/ as plain files owned by root, and shown by the engine from a file server on 127.0.0.1
+ * that only reads that folder. For the engine it is a web page like any other: inside the sandbox, and with no
+ * way to the car's services (the proxy lets it reach its own server and nothing else that is local).
+ *
+ * Optional theiplay.json at the repository's top: { "name": "...", "start": "page.html", "mouse": "yes" }.
+ * Without it: the name and start_url of manifest.json / manifest.webmanifest, then the repository's name.
+ */
+const APPS_RE = /^https:\/\/codeload\.github\.com\/[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}\/tar\.gz\/[A-Za-z0-9_.\/-]{1,120}$/;
+const APP_LIMITS = { files: 4000, bytes: 150 << 20, archive: 60 << 20 };
+// "owner/repo", "github.com/owner/repo", "https://github.com/owner/repo.git", with "@branch" or "/tree/branch"
+function parseRepo(text) {
+    let t = String(text || '').trim().replace(/^https?:\/\//i, '').replace(/^(www\.)?github\.com\//i, '').replace(/\/+$/, '').replace(/\.git$/i, '');
+    let ref = 'HEAD';
+    let m = /^([^@\s]+)@([A-Za-z0-9_.\/-]{1,100})$/.exec(t);
+    if (m) { t = m[1]; ref = m[2]; }
+    m = /^([^\/]+\/[^\/]+)\/tree\/([A-Za-z0-9_.\/-]{1,100})$/.exec(t);
+    if (m) { t = m[1]; ref = m[2]; }
+    m = /^([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9_.-]{1,100})$/.exec(t);
+    if (!m || /\.\./.test(ref) || /^\.+$/.test(m[2])) return null;
+    return { owner: m[1], repo: m[2], ref: ref, id: (m[1] + '-' + m[2]).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 60),
+        url: 'https://codeload.github.com/' + m[1] + '/' + m[2] + '/tar.gz/' + ref };
+}
+// GitHub's tar.gz -> dir, without its top folder. Only plain files and folders; links, devices and anything
+// that would leave dir are not taken. Limits on the number of files and their bytes.
+function untarGz(file, dir, limits) {
+    const raw = zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: limits.bytes + (16 << 20) });
+    const str = (o, n) => { const b = raw.subarray(o, o + n); const z = b.indexOf(0); return b.toString('utf8', 0, z < 0 ? n : z); };
+    let at = 0, files = 0, bytes = 0, longName = null;
+    while (at + 512 <= raw.length) {
+        const name0 = str(at, 100);
+        if (!name0 && raw[at] === 0) break;
+        const size = parseInt(str(at + 124, 12).trim() || '0', 8);
+        const type = raw[at + 156] ? String.fromCharCode(raw[at + 156]) : '0';
+        const prefix = str(at + 345, 155);
+        if (!(size >= 0) || at + 512 + size > raw.length) throw new UserError('archiwum repozytorium jest uszkodzone');
+        const data = raw.subarray(at + 512, at + 512 + size);
+        at += 512 + Math.ceil(size / 512) * 512;
+        if (type === 'L') { longName = data.toString('utf8').replace(/\0+$/, ''); continue; }
+        if (type === 'x') { const p = /\d+ path=([^\n]+)\n/.exec(data.toString('utf8')); if (p) longName = p[1]; continue; }
+        if (type === 'g') continue;
+        const name = longName || (prefix ? prefix + '/' + name0 : name0);
+        longName = null;
+        const parts = name.split('/').filter((p) => p !== '' && p !== '.');
+        parts.shift(); // the archive's own top folder (repo-branch)
+        if (!parts.length || parts[0] === '.git' || parts.some((p) => p === '..' || /[\\\0]/.test(p))) continue;
+        const out = path.join.apply(path, [dir].concat(parts));
+        if (type === '5') { mkdirp(out, 0o755); continue; }
+        if (type !== '0') continue;
+        files += 1;
+        bytes += size;
+        if (files > limits.files || bytes > limits.bytes) throw new UserError('aplikacja jest za duża (najwyżej ' + limits.files + ' plików, ' + Math.round(limits.bytes / 1e6) + ' MB)');
+        mkdirp(path.dirname(out), 0o755);
+        fs.writeFileSync(out, data, { mode: 0o644 });
+    }
+    return { files: files, bytes: bytes };
+}
+// --apps DIR: the file server for the apps (a child, as the engine's uid). GET and HEAD of files under DIR only.
+function runApps(dir) {
+    const http = require('http');
+    const TYPES = { html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8',
+        css: 'text/css; charset=utf-8', json: 'application/json', webmanifest: 'application/manifest+json', map: 'application/json', txt: 'text/plain; charset=utf-8', xml: 'application/xml',
+        png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon', avif: 'image/avif',
+        woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', wasm: 'application/wasm',
+        mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', mp4: 'video/mp4', webm: 'video/webm' };
+    let root;
+    try { root = fs.realpathSync(dir); } catch (e) { process.stderr.write('no apps folder\n'); process.exit(1); }
+    const srv = http.createServer((q, r) => {
+        const no = (code) => { r.statusCode = code; r.setHeader('content-type', 'text/plain; charset=utf-8'); r.end(code === 404 ? 'nie ma takiego pliku' : ''); };
+        if (q.method !== 'GET' && q.method !== 'HEAD') return no(405);
+        let p;
+        try { p = decodeURIComponent(String(q.url).split('?')[0].split('#')[0]); } catch (e) { return no(400); }
+        try {
+            let file = path.join(root, path.normalize('/' + p));
+            let st = fs.statSync(file);
+            if (st.isDirectory()) {
+                if (!/\/$/.test(p)) { r.statusCode = 301; r.setHeader('location', p + '/'); return r.end(); }
+                file = path.join(file, 'index.html');
+                st = fs.statSync(file);
+            }
+            const real = fs.realpathSync(file);
+            if (real.indexOf(root + path.sep) !== 0 || !st.isFile()) return no(404);
+            r.setHeader('content-type', TYPES[path.extname(real).slice(1).toLowerCase()] || 'application/octet-stream');
+            r.setHeader('content-length', st.size);
+            r.setHeader('cache-control', 'no-cache');
+            r.setHeader('x-content-type-options', 'nosniff');
+            if (q.method === 'HEAD') return r.end();
+            fs.createReadStream(real).on('error', () => r.destroy()).pipe(r);
+            return undefined;
+        } catch (e) { return no(404); }
+    });
+    srv.listen(0, '127.0.0.1', () => process.stdout.write('port ' + srv.address().port + '\n'));
+    process.stdin.on('end', () => process.exit(0));
+    process.stdin.on('close', () => process.exit(0));
+    process.stdin.resume();
+}
 
 function loadManifest(o) {
     const file = path.join(o.engineSrc, 'manifest.json');
@@ -383,7 +484,7 @@ function uplinkLookup(leaseFile) {
 }
 function runFetch(url, dest, leaseFile, anyHost) {
     const fail = (code, msg) => { process.stderr.write(msg + '\n'); try { fs.unlinkSync(dest); } catch (e) { /* none */ } process.exit(code); };
-    if (!anyHost && !SOURCE_RE.test(url)) fail(2, 'not a Chrome for Testing address');
+    if (!anyHost && !SOURCE_RE.test(url) && !APPS_RE.test(url)) fail(2, 'not a Chrome for Testing or GitHub archive address');
     const mod = /^https:/.test(url) ? require('https') : require('http');
     let got = 0, last = -1, idle = null;
     const watchdog = () => { clearTimeout(idle); idle = setTimeout(() => fail(3, 'no data for 60 s'), 60000); };
@@ -830,8 +931,18 @@ Daemon.prototype.onCommand = async function (m) {
         if (this.engine && this.want && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
         this.want = { w: w, h: h };
         this.zoom = z;
-        if (this.engine) { await this.cast(true); this.push(true); return; }
-        await this.startEngine(null);
+        // an app from Sklep: its first page instead of the start page
+        const appUrl = m.app ? await this.appUrl(String(m.app)) : null;
+        if (m.app && !appUrl) { this.set({ engine: 'failed', err: 'nie ma takiej aplikacji', loading: false, live: false }); return; }
+        // (the proxy that runs was started before the apps' server: it does not let the engine reach it)
+        if (this.engine && appUrl && String(this.proxyKey || '').indexOf('127.0.0.1:' + this.appsPort) < 0) await this.stopEngine('an app is opened');
+        if (this.engine) {
+            await this.cast(true);
+            if (appUrl) { this.set({ err: '', loading: true }); await this.engine.cdp.send('Page.navigate', { url: appUrl }, this.engine.session); }
+            this.push(true);
+            return;
+        }
+        await this.startEngine(appUrl);
         return;
     }
     case 'close': this.want = null; this.sandboxOff = false; await this.stopEngine('closed by the app'); return;
@@ -866,6 +977,21 @@ Daemon.prototype.onCommand = async function (m) {
         if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
+    if (m.op === 'apps') { this.tellApps(); return; }
+    if (m.op === 'app-install') {
+        if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
+        this.appBusy = true;
+        try {
+            const done = await this.installApp(m.repo);
+            this.emit({ ev: 'app', phase: 'done', id: done.id, name: done.name });
+        } catch (x) {
+            this.log('app: import failed: ' + x.message);
+            this.emit({ ev: 'app', phase: 'failed', err: x.user ? x.message : 'import się nie udał' });
+        } finally { this.appBusy = false; }
+        this.tellApps();
+        return;
+    }
+    if (m.op === 'app-remove') { this.removeApp(m.id); this.tellApps(); return; }
     if (m.op === 'sandbox-off') {
         // the owner's answer on the screen; only to the question this daemon asked
         if (this.s.ask !== 'sandbox' || !this.want || this.starting || this.policy().sandbox !== 'ask') return;
@@ -981,12 +1107,14 @@ Daemon.prototype.picture = function () { return this.opts.picture || this.policy
 Daemon.prototype.startProxy = function () {
     // (the network rules changed: the proxy that runs has the old ones)
     const net1 = this.policy().network;
-    const want = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net1.blockPrivate ? ['--allow-local'] : []).concat(net1.allow.length ? ['--allow=' + net1.allow.join(',')] : []).join(' ');
+    const allow1 = net1.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : []);
+    const want = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net1.blockPrivate ? ['--allow-local'] : []).concat(allow1.length ? ['--allow=' + allow1.join(',')] : []).join(' ');
     if (this.proxy && this.proxyKey !== want) { const old = this.proxy; this.proxy = null; this.proxyPort = 0; this.log('proxy: network rules changed, starting it again'); try { old.kill('SIGKILL'); } catch (e) { /* gone */ } }
     if (this.proxy) return Promise.resolve(this.proxyPort);
     return new Promise((resolve, reject) => {
         const net0 = this.policy().network;
-        const args = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net0.blockPrivate ? ['--allow-local'] : []).concat(net0.allow.length ? ['--allow=' + net0.allow.join(',')] : []);
+        const allow0 = net0.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : []);
+        const args = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net0.blockPrivate ? ['--allow-local'] : []).concat(allow0.length ? ['--allow=' + allow0.join(',')] : []);
         this.proxyKey = args.join(' ');
         const child = cp.spawn(process.execPath, args, Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'pipe'] }));
         let out = '', settled = false;
@@ -1030,6 +1158,89 @@ Daemon.prototype.adoptRing = function (ino) {
  * Audio stays open while the engine runs; closing it closes the stream. No G21 Audio, or policy "audio": "off":
  * the engine has no sound device (this.audio = null).
  */
+// ---- apps from git
+Daemon.prototype.appsList = function () {
+    const j = readJson(path.join(this.opts.stateDir, 'apps.json'));
+    return (j && Array.isArray(j.apps) ? j.apps : []).filter((a) => a && /^[a-z0-9-]{1,60}$/.test(a.id) && fs.existsSync(path.join(this.opts.appsDir, a.id)));
+};
+Daemon.prototype.saveApps = function (apps) {
+    mkdirp(this.opts.stateDir, 0o700);
+    writeIfChanged(path.join(this.opts.stateDir, 'apps.json'), JSON.stringify({ apps: apps }, null, 2) + '\n', 0o600);
+};
+Daemon.prototype.tellApps = function () {
+    this.emit({ ev: 'apps', list: this.appsList().map((a) => ({ id: a.id, name: String(a.name || a.id), repo: String(a.repo || ''), mouse: a.mouse === 'yes' ? 'yes' : 'no' })) });
+};
+Daemon.prototype.installApp = async function (text) {
+    const o = this.opts, r = parseRepo(text);
+    if (!r) throw new UserError('podaj repozytorium GitHub: właściciel/nazwa');
+    if (this.uid === null && !o.noSetuid) {
+        this.uid = pickEngineUid(o);
+        if (this.uid === null) throw new UserError('brak wolnego uid dla silnika (zobacz log)');
+    }
+    const dl = path.join(o.cacheDir, 'download-app'), tgz = path.join(dl, 'app.tgz'), tmp = path.join(o.appsDir, r.id + '.new'), dest = path.join(o.appsDir, r.id);
+    const ids = this.ids();
+    mkdirp(o.cacheDir, 0o711);
+    rmrf(dl); rmrf(tmp);
+    fs.mkdirSync(dl, { mode: 0o700 });
+    if (ids.uid !== undefined) fs.chownSync(dl, ids.uid, ids.gid);
+    try {
+        this.log('app: downloading ' + r.owner + '/' + r.repo + ' (' + r.ref + ')');
+        this.emit({ ev: 'app', phase: 'downloading', pct: 0 });
+        try { await fetchEngine(o, r.url, tgz, ids, (pct) => this.emit({ ev: 'app', phase: 'downloading', pct: pct })); }
+        catch (e) { throw new UserError('nie udało się pobrać repozytorium: czy jest publiczne i czy auto ma internet?'); }
+        const st = fs.lstatSync(tgz);
+        if (!st.isFile() || st.size > APP_LIMITS.archive) throw new UserError('repozytorium jest za duże');
+        mkdirp(o.appsDir, 0o755);
+        fs.mkdirSync(tmp, { mode: 0o755 });
+        this.emit({ ev: 'app', phase: 'unpacking', pct: 0 });
+        const got = untarGz(tgz, tmp, APP_LIMITS);
+        const meta = readJson(path.join(tmp, 'theiplay.json')) || {};
+        const man = readJson(path.join(tmp, 'manifest.json')) || readJson(path.join(tmp, 'manifest.webmanifest')) || {};
+        let start = typeof meta.start === 'string' ? meta.start : (typeof man.start_url === 'string' ? man.start_url : '');
+        start = start.split('?')[0].split('#')[0].replace(/^[.\/]+/, '');
+        if (/\.\.|\\|^[a-z]+:/i.test(start) || (start && !fs.existsSync(path.join(tmp, start)))) start = '';
+        if (!start && !fs.existsSync(path.join(tmp, 'index.html'))) throw new UserError('w repozytorium nie ma strony index.html');
+        const name = String(meta.name || man.short_name || man.name || r.repo).replace(/[\u0000-\u001f]/g, '').slice(0, 40) || r.repo;
+        rmrf(dest);
+        fs.renameSync(tmp, dest);
+        const apps = this.appsList().filter((a) => a.id !== r.id);
+        apps.push({ id: r.id, name: name, repo: r.owner + '/' + r.repo, ref: r.ref, start: start, mouse: meta.mouse === 'yes' ? 'yes' : 'no', files: got.files, bytes: got.bytes, at: new Date().toISOString() });
+        this.saveApps(apps);
+        this.log('app: installed ' + r.id + ' (' + got.files + ' files, ' + Math.round(got.bytes / 1024) + ' KiB, mouse ' + (meta.mouse === 'yes' ? 'yes' : 'no') + ')');
+        return { id: r.id, name: name };
+    } catch (e) {
+        rmrf(tmp);
+        throw e;
+    } finally { rmrf(dl); }
+};
+Daemon.prototype.removeApp = function (id) {
+    if (!/^[a-z0-9-]{1,60}$/.test(String(id))) return;
+    rmrf(path.join(this.opts.appsDir, String(id)));
+    this.saveApps(this.appsList().filter((a) => a.id !== id));
+    this.log('app: removed ' + id);
+};
+// the apps' file server (a child, as the engine's uid); resolves to its port, 0 when there is none
+Daemon.prototype.startApps = function () {
+    if (this.appsProc) return Promise.resolve(this.appsPort);
+    if (!this.appsList().length) return Promise.resolve(0);
+    return new Promise((resolve) => {
+        const child = cp.spawn(process.execPath, [__filename, '--apps', this.opts.appsDir], Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'pipe'] }));
+        let out = '', done = false;
+        const end = (port) => { if (done) return; done = true; clearTimeout(t); resolve(port); };
+        const t = setTimeout(() => { this.log('apps server: no port'); try { child.kill('SIGKILL'); } catch (e) { /* gone */ } end(0); }, 4000);
+        child.stdout.on('data', (d) => { out += d; const m = /port (\d+)/.exec(out); if (m) { this.appsProc = child; this.appsPort = Number(m[1]); this.log('apps server on 127.0.0.1:' + this.appsPort); end(this.appsPort); } });
+        child.stderr.on('data', (d) => this.log('apps server: ' + String(d).trim().slice(0, 200)));
+        child.on('error', (e) => { this.log('apps server: ' + e.message); end(0); });
+        child.on('exit', () => { if (this.appsProc === child) { this.appsProc = null; this.appsPort = 0; } end(0); });
+    });
+};
+// the address of an app's first page, or null (unknown app, no server)
+Daemon.prototype.appUrl = async function (id) {
+    const a = this.appsList().filter((x) => x.id === id)[0];
+    if (!a) return null;
+    const port = await this.startApps();
+    return port ? 'http://127.0.0.1:' + port + '/' + a.id + '/' + (a.start || '') : null;
+};
 Daemon.prototype.openAudio = function () {
     this.closeAudio();
     if (this.policy().audio !== 'on') return Promise.resolve();
@@ -1267,6 +1478,7 @@ Daemon.prototype.startEngine2 = async function (url) {
     const dirs = await this.prepare();
     if (!this.want) return;
     this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
+    await this.startApps();
     await this.startProxy();
     this.startFrame();
     await this.openAudio();
@@ -1475,6 +1687,7 @@ Daemon.prototype.stopEngine = async function (why) {
         this.killStrays();
     }
     if (this.frame) { const f = this.frame; this.frame = null; try { f.stdin.end(); f.kill('SIGTERM'); } catch (x) { /* gone */ } }
+    if (this.appsProc) { const a = this.appsProc; this.appsProc = null; this.appsPort = 0; try { a.kill('SIGTERM'); } catch (x) { /* gone */ } }
     if (this.proxy) { const p = this.proxy; this.proxy = null; this.proxyPort = 0; try { p.kill('SIGTERM'); } catch (x) { /* gone */ } }
     this.frameBusy = false;
     this.pendingAck = null;
@@ -1506,6 +1719,7 @@ Daemon.prototype.close = async function () {
 };
 
 module.exports = {
+    parseRepo: parseRepo, untarGz: untarGz, APPS_RE: APPS_RE, APP_LIMITS: APP_LIMITS,
     pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
@@ -1513,6 +1727,8 @@ if (require.main === module && process.argv[2] === '--fetch') {
 } else if (require.main === module && process.argv[2] === '--proxy') {
     runProxy({ leaseFile: process.argv[3] || '/run/mgu-uplink/lease.json', allowLocal: process.argv.indexOf('--allow-local') >= 4,
         allow: process.argv.slice(4).filter((a) => a.indexOf('--allow=') === 0).map((a) => a.slice(8).split(',')).reduce((x, y) => x.concat(y), []) });
+} else if (require.main === module && process.argv[2] === '--apps') {
+    runApps(String(process.argv[3]));
 } else if (require.main === module && process.argv[2] === '--check') {
     // mgu-deploy "check" (offline): the manifest reads and names Google's address, this Node can unpack and inflate
     const o = defaults();

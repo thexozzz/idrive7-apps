@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.146',
+        version: (this._packageJson && this._packageJson.version) || '0.1.147',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.146') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.147') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5217,6 +5217,12 @@ AirPlayApp.prototype._webClient = function () {
             },
             onEdit: function (ev) {
                 self._onWebEdit(ev);
+            },
+            onApps: function (list) {
+                self._onStoreApps(list);
+            },
+            onApp: function (ev) {
+                self._onStoreProgress(ev);
             }
         });
     }
@@ -5234,7 +5240,7 @@ AirPlayApp.prototype._openBrowser = function () {
     this._webIno = 0;
     this._webOpenAt = Date.now();
     noteStart('web-open ' + page.w + 'x' + page.h);
-    this._webClient().open(page.w, page.h);
+    this._webClient().open(page.w, page.h, this._webApp || '');
     this._paintWeb();
     // no daemon after 3 s: the screen says the tool is missing (until then: "Uruchamiam")
     setTimeout(function () {
@@ -5247,6 +5253,7 @@ AirPlayApp.prototype._closeBrowser = function () {
         return;
     }
     this._webOn = false;
+    this._webApp = '';
     noteStart('web-close');
     this._dropWebFaces();
     this._syncMouse('browser closed');
@@ -5427,6 +5434,68 @@ AirPlayApp.prototype._paintApps = function () {
     }
 };
 
+// ---- Sklep: apps imported from git -----------------------------------------------------------
+AirPlayApp.prototype._storeMouse = function (id) {
+    var hit = (this._storeApps || []).filter(function (a) { return a.id === id; })[0];
+    return hit && hit.mouse === 'yes' ? 'yes' : 'no';
+};
+
+// the imported apps as tiles of Aplikacje (after Przeglądarka) and as rows of Sklep (to remove)
+AirPlayApp.prototype._syncStoreMenu = function () {
+    var self = this;
+    var apps = this._storeApps || [];
+    var tiles = menuDraw.APPS_ITEMS;
+    var rows = menuDraw.STORE_ITEMS;
+    var fixedTiles = tiles.filter(function (i) { return i.name.indexOf('app-') !== 0; });
+    var fixedRows = rows.filter(function (i) { return i.name.indexOf('store-rm-') !== 0; });
+    tiles.length = 0;
+    fixedTiles.forEach(function (i, at) {
+        tiles.push(i);
+        if (at === 0) {
+            apps.forEach(function (a) {
+                tiles.push({ name: 'app-' + a.id, title: a.name, hint: a.repo, icon: 'grid' });
+            });
+        }
+    });
+    rows.length = 0;
+    fixedRows.forEach(function (i) {
+        if (i.name === 'store-import') {
+            i.hint = self._storeNote || 'adres repozytorium GitHub';
+        }
+        if (i.name === 'store-back') {
+            apps.forEach(function (a) {
+                rows.push({ name: 'store-rm-' + a.id, title: a.name, hint: self._storeRm === a.id && Date.now() - self._storeRmAt < 4000 ? 'wybierz jeszcze raz, aby usunąć' : 'usuń · ' + a.repo, icon: 'stop' });
+            });
+        }
+        rows.push(i);
+    });
+    if (this._menu && typeof this._menu.repaint === 'function') {
+        this._menu.repaint();
+    }
+};
+
+AirPlayApp.prototype._onStoreApps = function (list) {
+    this._storeApps = list;
+    this._syncStoreMenu();
+};
+
+AirPlayApp.prototype._onStoreProgress = function (ev) {
+    if (ev.phase === 'downloading') {
+        this._storeNote = ev.pct ? 'pobieram ' + ev.pct + '%' : 'pobieram…';
+    } else if (ev.phase === 'unpacking') {
+        this._storeNote = 'rozpakowuję…';
+    } else if (ev.phase === 'done') {
+        this._storeBusy = false;
+        this._storeNote = 'dodano: ' + ev.name;
+        noteStart('store-imported ' + ev.id);
+    } else if (ev.phase === 'failed') {
+        this._storeBusy = false;
+        this._storeNote = ev.err || 'import się nie udał';
+        noteStart('store-import failed');
+    }
+    this._syncStoreMenu();
+};
+
 /** true: the choice was of Aplikacje or its Ustawienia */
 AirPlayApp.prototype._onAppsChoice = function (name) {
     var m = this._menu;
@@ -5442,7 +5511,10 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         }
     };
     if (name === 'apps') {
+        this._syncStoreMenu();
         go('apps');
+        this._webClient().look();
+        this._web.send({ op: 'apps' });
         return true;
     }
     if (name === 'multimedia' || name === 'system') {
@@ -5454,7 +5526,11 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return true;
     }
     if (name === 'apps-store') {
+        this._storeNote = '';
+        this._syncStoreMenu();
         go('apps-store');
+        this._webClient().look();
+        this._web.send({ op: 'apps' });
         return true;
     }
     if (name === 'store-back') {
@@ -5462,6 +5538,51 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return true;
     }
     if (name === 'store-soon') {
+        return true;
+    }
+    if (name === 'store-import') {
+        var selfStore = this;
+        if (this._storeBusy || !this._menu || typeof this._menu.startEdit !== 'function') {
+            return true;
+        }
+        this._menu.startEdit({
+            mode: 'url',
+            field: 'store-repo',
+            title: 'Repozytorium',
+            value: '',
+            onDone: function (value) {
+                var repoText = String(value == null ? '' : value).trim();
+                if (!repoText || !selfStore._web) {
+                    return;
+                }
+                selfStore._storeBusy = true;
+                selfStore._storeNote = 'pobieram…';
+                noteStart('store-import ' + repoText.slice(0, 80));
+                selfStore._webClient().look();
+                selfStore._web.send({ op: 'app-install', repo: repoText });
+                selfStore._syncStoreMenu();
+            }
+        });
+        return true;
+    }
+    if (name.indexOf('store-rm-') === 0) {
+        // the first choice asks, the second within 4 s removes
+        var rmId = name.slice(9);
+        if (this._storeRm === rmId && Date.now() - this._storeRmAt < 4000 && this._web) {
+            this._storeRm = '';
+            noteStart('store-remove ' + rmId);
+            this._web.send({ op: 'app-remove', id: rmId });
+        } else {
+            this._storeRm = rmId;
+            this._storeRmAt = Date.now();
+            this._syncStoreMenu();
+        }
+        return true;
+    }
+    if (name.indexOf('app-') === 0 && name !== 'app-exit') {
+        // an imported app: Przeglądarka on its first page
+        this._webApp = name.slice(4);
+        this._openBrowser();
         return true;
     }
     if (name === 'apps-back') {
@@ -5605,8 +5726,9 @@ AirPlayApp.APPS = {
 AirPlayApp.prototype._syncMouse = function (why) {
     var self = this;
     var s = this._web ? this._web.state() : null;
-    var app = this._webOn ? 'chromium' : '';
-    var conf = app ? AirPlayApp.APPS[app] : null;
+    var app = this._webOn ? (this._webApp || 'chromium') : '';
+    // an app from Sklep says in its theiplay.json whether it takes the mouse; without it: no
+    var conf = !app ? null : (this._webApp ? { mouse: this._storeMouse(this._webApp) } : AirPlayApp.APPS[app]);
     var ready = !!(s && s.connected && s.engine === 'ready' && s.live);
     var want = !!(this._mouseOn && conf && conf.mouse === 'yes' && this._appFront !== false && ready && !this._exiting);
     var page;

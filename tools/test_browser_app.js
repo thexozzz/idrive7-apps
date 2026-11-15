@@ -146,7 +146,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -158,7 +158,8 @@ function glueApp() {
     assert.ok(g._onAppsChoice('system') && g.screen === 'system' && g._onAppsChoice('system-back') && g.screen === 'root', 'Ustawienia opens and goes back');
     assert.ok(g._onAppsChoice('apps') && g._onAppsChoice('apps-store') && g.screen === 'apps-store' && g._onAppsChoice('store-soon') && g._onAppsChoice('store-back') && g.screen === 'apps', 'Sklep says it is to come and goes back');
     assert.ok(g._onAppsChoice('apps-settings') && g.screen === 'apps-settings');
-    assert.deepStrictEqual(g.calls, ['look'], 'the settings only look at the daemon: no page is opened');
+    assert.ok(g.calls.length > 0 && g.calls.every(function (c) { return c === 'look'; }), 'the settings only look at the daemon: no page is opened');
+    g.sent.length = 0;
     assert.strictEqual(g.hints['aset-picture'], '—', 'no daemon yet: a dash, not a made-up value');
     g._onAppsChoice('aset-picture');
     assert.strictEqual(g.sent.length, 0, 'and nothing is sent');
@@ -416,7 +417,7 @@ renderer.listen(RSOCK, async function () {
         assert.strictEqual(web.send({ op: 'back' }), false, 'not connected: nothing is sent');
         web.open(1920, 636);
         await sleep(200);
-        assert.deepStrictEqual(dgot, [{ op: 'open', w: 1920, h: 636 }], 'connecting says the page area');
+        assert.deepStrictEqual(dgot, [{ op: 'open', w: 1920, h: 636 }, { op: 'apps' }], 'connecting says the page area and asks for the apps from Sklep');
         assert.ok(states.length === 1 && states[0].connected && states[0].engine === 'off');
         dconn.write(JSON.stringify({ ev: 'state', engine: 'ready', url: 'https://wp.pl/', title: 'WP', live: true, w: 1920, h: 636, ino: 5, zoom: 1.5, ring: '/dev/shm/mgu-video-g21browser' }) + '\n{"ev":"edit","kind":"search","value":"a","submit":true}\nnot json\n');
         await sleep(100);
@@ -424,7 +425,7 @@ renderer.listen(RSOCK, async function () {
         assert.deepStrictEqual(edits, [{ kind: 'search', value: 'a', submit: true, multi: false }]);
         assert.strictEqual(web.send({ op: 'nav', url: 'onet.pl' }), true);
         await sleep(60);
-        assert.deepStrictEqual(dgot[1], { op: 'nav', url: 'onet.pl' });
+        assert.deepStrictEqual(dgot[2], { op: 'nav', url: 'onet.pl' });
         var closed = false;
         dconn.on('close', function () { closed = true; });
         web.shutdown();

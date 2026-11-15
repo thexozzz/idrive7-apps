@@ -94,6 +94,13 @@ function createBrowserClient(opts) {
                 pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0 } : null
             };
             tell();
+        } else if (m.ev === 'apps' && typeof options.onApps === 'function') {
+            // the apps imported from git (Sklep): [{ id, name, repo, mouse }]
+            options.onApps((Array.isArray(m.list) ? m.list : []).filter(function (a) { return a && /^[a-z0-9-]{1,60}$/.test(String(a.id)); }).map(function (a) {
+                return { id: String(a.id), name: String(a.name || a.id).slice(0, 40), repo: String(a.repo || ''), mouse: a.mouse === 'yes' ? 'yes' : 'no' };
+            }));
+        } else if (m.ev === 'app' && typeof options.onApp === 'function') {
+            options.onApp({ phase: String(m.phase || ''), pct: m.pct | 0, err: String(m.err || ''), id: String(m.id || ''), name: String(m.name || '') });
         } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {
             options.onEdit({ kind: String(m.kind || 'text'), value: String(m.value || ''), submit: !!m.submit, multi: !!m.multi });
         }
@@ -118,8 +125,9 @@ function createBrowserClient(opts) {
             failNoted = false;
             note('web-up');
             if (want.w) {
-                send({ op: 'open', w: want.w, h: want.h });
+                send(want.app ? { op: 'open', w: want.w, h: want.h, app: want.app } : { op: 'open', w: want.w, h: want.h });
             }
+            send({ op: 'apps' });
         });
         s.on('data', function (d) {
             var i;
@@ -184,10 +192,10 @@ function createBrowserClient(opts) {
 
     return {
         /** show the browser in a page area of w x h screen pixels */
-        open: function (w, h) {
-            want = { w: w | 0, h: h | 0 };
+        open: function (w, h, app) {
+            want = { w: w | 0, h: h | 0, app: app ? String(app) : '' };
             if (up) {
-                send({ op: 'open', w: want.w, h: want.h });
+                send(want.app ? { op: 'open', w: want.w, h: want.h, app: want.app } : { op: 'open', w: want.w, h: want.h });
             } else {
                 connect();
             }

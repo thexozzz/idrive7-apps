@@ -182,7 +182,9 @@ var EN = {
     'Aplikacje': 'Apps',
     'Ustawienia': 'Settings',
     'Sklep': 'Store',
-    'wkrótce': 'soon',
+    'Importuj z git': 'Import from git',
+    'adres repozytorium GitHub': 'a GitHub repository address',
+    'aplikacje z git': 'apps from git',
     'Renderowanie': 'Rendering',
     'Przeglądarka': 'Browser',
     'Zegary': 'Gauges',
@@ -691,6 +693,10 @@ var APPS_ITEMS = [
 APPS_ITEMS.tiles = true;
 
 // Sklep: not built yet. The page says so instead of pretending.
+// Sklep: an app is a public GitHub repository with a web page in it (index.html); main.js puts the
+// imported ones between these two rows (to remove) and as tiles into APPS_ITEMS (to open).
+// (For now the page only says the shop is to come: 'store-soon'. The import itself is written, in g21-browserd.js
+// and main.js, and gets its row 'store-import' here when the owner wants the shop.)
 var STORE_ITEMS = [
     { name: 'store-soon', title: 'Import aplikacji z git', hint: 'w przygotowaniu', icon: 'grid' },
     { name: 'store-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
