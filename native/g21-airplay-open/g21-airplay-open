@@ -396,10 +396,15 @@ g21_audio_open() {
 }
 
 g21_audio_close() {
-    [ -f /run/g21-airplay/g21-audio.pid ] || return 0
     p=$(cat /run/g21-airplay/g21-audio.pid 2>/dev/null)
     rm -f /run/g21-airplay/g21-audio.pid /run/g21-airplay/g21-audio.fifo
     [ -n "$p" ] && kill "$p" 2>/dev/null || true
+    # The pid above is the subshell's; the client itself (node) is its child and outlived it, holding the one
+    # stream: the next Start then got "busy (held by airplay)" and fell back to a route with no sound (car,
+    # 2026-11-15). So: every client of ours that holds AirPlay's stream, whoever started it.
+    for p in $(procs_matching '*g21-audio-client.js*hold*airplay*'); do
+        kill "$p" 2>/dev/null || true
+    done
 }
 
 stop_ux() {
