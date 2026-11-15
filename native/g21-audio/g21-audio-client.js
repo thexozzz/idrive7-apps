@@ -51,13 +51,13 @@ if (op === 'hold') {
     process.on('SIGTERM', end);
     process.on('SIGINT', end);
     setTimeout(function () { if (!held) { say('no answer'); process.exit(1); } }, 4000);
-} else if (op === 'status' || op === 'tone' || op === 'probe') {
-    connect(op === 'tone' ? { op: 'tone', seconds: Number(process.argv[3]) || 2 } : { op: op }, function (m) {
+} else if (op === 'status' || op === 'tone' || op === 'probe' || op === 'backend') {
+    connect(op === 'tone' ? { op: 'tone', seconds: Number(process.argv[3]) || 2 } : (op === 'backend' ? { op: 'backend', value: String(process.argv[3] || ''), leadMs: process.argv[4] ? Number(process.argv[4]) : undefined } : { op: op }), function (m) {
         process.stdout.write(JSON.stringify(m) + '\n');
         process.exit(m.ok === false ? 1 : 0);
     });
     setTimeout(function () { say('no answer'); process.exit(1); }, op === 'probe' ? 80000 : 20000);
 } else {
-    process.stderr.write('usage: g21-audio-client.js hold NAME UID | status | tone [SECONDS] | probe\n');
+    process.stderr.write('usage: g21-audio-client.js hold NAME UID | status | tone [SECONDS] | probe | backend smartx|media-http|media-file [LEAD_MS]\n');
     process.exit(2);
 }

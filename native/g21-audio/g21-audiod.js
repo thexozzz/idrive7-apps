@@ -116,8 +116,115 @@ function startDrain(why) {
         }
     }, 20);
 }
+/*
+ * The other way out, as RideTube's: BMW's media player plays the stream (mediaout.js). Chosen in
+ * /var/opt/g21-audio/config.json, {"backend": "media-http" | "media-file" | "smartx", "leadMs": 600}, or with
+ * `g21-audio-client.js backend <name> [leadMs]`; "smartx" (the writer above) is the default until the media
+ * player's way has been heard to work on the car.
+ * Here this daemon reads the pipe itself: all of it at once for AirPlay (it throws away what is not taken), at
+ * the pace of the clock for the others (the browser's engine has no clock of its own for its sound).
+ */
+function conf() {
+    try { const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); return j && typeof j === 'object' ? j : {}; } catch (e) { return {}; }
+}
+let mediaBroken = false;       // the media player's way failed in this run: the SmartX writer until the tool starts again
+function backend() {
+    const b = String(conf().backend || '');
+    return !mediaBroken && (b === 'media-http' || b === 'media-file') ? b : 'smartx';
+}
+let media = null;
+function stopMedia(why, again) {
+    const m = media;
+    if (!m) return;
+    media = null;
+    clearInterval(m.timer);
+    if (st.writer === m.handle) st.writer = null;
+    st.active = false;
+    log('media: ' + why + (m.out ? ', ' + m.out.stats() : ''));
+    const done = function () { if (again && st.holder) setTimeout(startWriter, 100); };
+    if (m.out) m.out.stop().then(done, done); else done();
+}
+function startMedia(kind) {
+    if (!st.holder || st.writer || media) return;
+    stopDrain();
+    const greedy = st.name === 'airplay';
+    const MediaOut = require(path.join(__dirname, 'mediaout.js')).MediaOut;
+    const m = { out: null, ready: false, lastData: 0, last: Date.now(), budget: 0, pend: [], pendBytes: 0, part: null, timer: null, said: 0, handle: null };
+    m.handle = { kill: function () { stopMedia('the stream is closed', false); } };
+    media = m;
+    st.writer = m.handle;
+    const buf = Buffer.alloc(65536);
+    const feed = function (chunk) {
+        let b = m.part ? Buffer.concat([m.part, chunk]) : chunk;
+        const whole = b.length - (b.length % 4);
+        m.part = whole < b.length ? Buffer.from(b.slice(whole)) : null;
+        if (!whole) return;
+        b = b.slice(0, whole);
+        if (!m.out) {
+            // the first sound: the media player is asked to play; what comes meanwhile is kept (a second at most)
+            st.active = true; st.since = Date.now();
+            m.out = new MediaOut({ log: log, mode: kind === 'media-file' ? 'file' : 'http', leadMs: Number(conf().leadMs) || 600, dir: path.join(ROOT, 'media') });
+            const t0 = Date.now();
+            m.out.start().then(function () {
+                if (media !== m) return;
+                m.ready = true;
+                log('media: started in ' + (Date.now() - t0) + ' ms for "' + st.name + '"');
+                m.pend.forEach(function (p) { m.out.write(p); });
+                m.pend = []; m.pendBytes = 0;
+            }, function (e) {
+                log('media: did not start (' + (e && e.message || e) + '): the SmartX writer takes over until the tool starts again');
+                mediaBroken = true;
+                if (media === m) stopMedia('failed', true);
+            });
+        }
+        if (m.ready) { m.out.write(b); return; }
+        m.pend.push(b); m.pendBytes += b.length;
+        while (m.pendBytes > 192000 && m.pend.length > 1) m.pendBytes -= m.pend.shift().length;
+    };
+    m.timer = setInterval(function () {
+        if (media !== m || st.fd < 0) return;
+        const now = Date.now();
+        m.budget = Math.min(19200, m.budget + (now - m.last) * 192);      // bytes the clock allows; no catching up after a pause
+        m.last = now;
+        let got = 0;
+        for (;;) {
+            let want = buf.length;
+            if (!greedy) { want = Math.min(want, Math.floor(m.budget / 4) * 4); if (want < 4) break; }
+            let n = 0;
+            try { n = fs.readSync(st.fd, buf, 0, want, null); } catch (e) { break; }      // EAGAIN: nothing waits
+            if (!n) break;
+            got += n;
+            m.budget -= n;
+            feed(Buffer.from(buf.slice(0, n)));
+            if (n < want) break;
+        }
+        if (got) m.lastData = now;
+        if (m.out && now - m.said > 10000) { m.said = now; st.stats = m.out.stats(); log(st.stats); }
+        // three seconds without sound: the speakers go back, and the next sound starts it again
+        if (m.out && m.lastData && now - m.lastData > 3000) stopMedia('no sound', true);
+    }, 10);
+}
+function setBackend(m) {
+    const value = String(m.value || '');
+    if (['smartx', 'media-http', 'media-file'].indexOf(value) < 0) return { ev: 'backend', ok: false, err: 'smartx | media-http | media-file' };
+    const next = conf();
+    next.backend = value;
+    if (m.leadMs !== undefined) { const l = Number(m.leadMs); if (l > 50 && l < 5000) next.leadMs = Math.round(l); }
+    try {
+        const f = path.join(ROOT, 'config.json');
+        fs.writeFileSync(f + '.new', JSON.stringify(next, null, 2) + '\n');
+        fs.renameSync(f + '.new', f);
+    } catch (e) { return { ev: 'backend', ok: false, err: e.message }; }
+    mediaBroken = false;
+    log('backend: ' + value + (next.leadMs ? ', lead ' + next.leadMs + ' ms' : ''));
+    // what plays now goes on in the new way
+    if (media) stopMedia('another backend', true);
+    else if (st.writer && typeof st.writer.kill === 'function') { try { st.writer.kill('SIGKILL'); } catch (e) { /* gone */ } }
+    return { ev: 'backend', ok: true, backend: backend(), leadMs: next.leadMs || 600 };
+}
 function startWriter() {
     if (!st.holder || st.writer) return;
+    { const kind = backend(); if (kind !== 'smartx') { startMedia(kind); return; } }
     stopDrain();
     let openWatch = null;
     const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
@@ -280,7 +387,7 @@ function caps() {
     };
 }
 function status() {
-    return { ev: 'status', version: VERSION, backend: 'smartx', device: device(), stream: st.name || null, active: st.active, claimed: st.claimed,
+    return { ev: 'status', version: VERSION, backend: backend(), device: device(), stream: st.name || null, active: st.active, claimed: st.claimed,
         activeMs: st.active ? Date.now() - st.since : 0, stats: st.stats, lost: st.lost };
 }
 
@@ -307,6 +414,7 @@ function serve() {
                 else if (m.op === 'close') { if (st.holder === c) closeStream('closed by its player').then(function () { send({ ev: 'closed' }); }); else send({ ev: 'closed' }); }
                 else if (m.op === 'tone') tone(m).then(send);
                 else if (m.op === 'probe') probe().then(send);
+                else if (m.op === 'backend') send(setBackend(m));
             }
         });
         c.on('error', function () { /* close follows */ });

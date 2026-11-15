@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.199
+
+- Próby w aucie z odtwarzaczem multimediów BMW, którym RideTube puszcza dźwięk (2026-11-15, cichy ton, postój): plik WAV gra – start 0,8 s po `playFile`, czas biegnie równo; potok (FIFO) nie jest czytany wcale; plik dopisywany w trakcie zatrzymuje się tam, gdzie kończył się przy otwarciu. Konfiguracja silnika multimediów (Cinemo) ma „strumienie na żywo” z buforem 350 ms.
+- `g21-audio` 0.1.11: druga droga wyjścia dźwięku, wzorem RideTube – strumień odtwarza odtwarzacz multimediów auta (źródło 1046 → głośniki 1024), nie urządzenie CarLifeMedia, które pobiera dźwięk tylko przez trzy czwarte czasu. Dwa warianty: `media-http` (odtwarzacz dostaje adres strumienia WAV bez końca z `127.0.0.1`) i `media-file` (plik WAV o pełnej zadeklarowanej długości, dźwięk zapisywany z wyprzedzeniem `leadMs` przed głowicą). Demon sam czyta potok: AirPlay w całości od razu, pozostałe źródła w tempie zegara. Gdy droga zawiedzie, wraca pisanie do SmartX.
+- Droga jest WYŁĄCZONA domyślnie (`smartx`) i NIEURUCHOMIONA w aucie: nie wiadomo jeszcze, który wariant odtwarzacz przyjmie ani jakie będzie opóźnienie dźwięku. Przełączanie bez instalacji: `g21-audio-client.js backend media-http` (albo `media-file 600`, `smartx`).
+
 ## 0.1.198
 
 - Cofniete: przeliczanie dzwieku do 36 000 probek na sekunde (g21-audio 0.1.9). Auto, 2026-11-15: dzwiek byl za wysoki i za szybki (efekt wiewiorki), z przerwami. Urzadzenie gra wiec probki w tempie 48 kHz, a jedynie pobiera je przez trzy czwarte czasu; w logu: odebrane 1 982 464 probki, oddane 1 489 531 w ok. 41 s. Tej wady urzadzenia (plug:smartx:CarLifeMedia_CF_48_STEREO) zaden sposob pisania nie usuwa. g21-audio 0.1.10: AirPlay jak w 0.1.8 (calosc dzwieku, lekkie ciecia), Przegladarka jak przed 0.1.6.
