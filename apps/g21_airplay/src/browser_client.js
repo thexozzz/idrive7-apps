@@ -92,7 +92,7 @@ function createBrowserClient(opts) {
                 ask: String(m.ask || ''),
                 // the daemon's rules that the menu shows and sets (g21-browser's policy)
                 pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0,
-                    homepage: String(m.pol.homepage || ''), autoplay: String(m.pol.autoplay || ''), fullscreen: String(m.pol.fullscreen || ''), carData: String(m.pol.carData || ''), audio: String(m.pol.audio || ''), sound: String(m.pol.sound || '') } : null,
+                    homepage: String(m.pol.homepage || ''), autoplay: String(m.pol.autoplay || ''), fullscreen: String(m.pol.fullscreen || ''), carData: String(m.pol.carData || ''), carDiag: String(m.pol.carDiag || ''), audio: String(m.pol.audio || ''), sound: String(m.pol.sound || '') } : null,
                 // a player of the page is in full screen and the picture is the whole centre screen
                 fs: !!m.fs
             };

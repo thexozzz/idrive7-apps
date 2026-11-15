@@ -23,12 +23,33 @@ fs.writeFileSync(catalog, JSON.stringify({
             vehicleIdentificationNumber: { dataRef: 'Utf8', getter: { id: 9 } },
             writeOnly: { dataRef: 'UInt8', setter: { id: 10 } } } },
         'de.bmw.test.Climate': { name: 'Climate', serviceId: 2, version: 1, fields: { temperature: { dataRef: 'UInt8', getter: { id: 1 } } } },
+        'com.harman.infotainment.systemfunctions.tasu.tasu.InternalTasu': { name: 'InternalTasu', serviceId: 9, version: 1,
+            methods: { sendTasuRequest: { methodId: 1, inputs: [], outputs: [] } }, events: { sendTasuResponse: { eventId: 2, outputs: [] } } },
         'de.bmw.test.Navigation': { name: 'Navigation', serviceId: 3, version: 1, fields: { currentPosition: { dataRef: 'UInt8', getter: { id: 1 } } } }
     }
 }));
-fs.writeFileSync(fake, "'use strict';\nmodule.exports = { buildProxy: function (cfg) { return Promise.resolve({ init: function () { return Promise.resolve(); }, subscribeToAvailability: function () {},\n"
-    + "    getValue: function (name) { return Promise.resolve(name === 'statusCarSpeed2' ? { speedVehicleCentreOfGravity: 3200 } : { of: cfg.name, field: name }); },\n"
-    + "    setValue: function () { throw new Error('a write reached the car'); } }); } };\n");
+// the stand-in for someip.node: fields answer; the diagnostic transport answers a read of unit 0x12 and refuses
+// one of unit 0x18 ("not supported"); anything that is not a read service throws
+fs.writeFileSync(fake, String.raw`'use strict';
+module.exports = { buildProxy: function (cfg) {
+    var onFrame = null;
+    return Promise.resolve({
+        init: function () { return Promise.resolve(); },
+        subscribeToAvailability: function () {},
+        isAvailable: function () { return true; },
+        subscribe: function (o) { if (o.name === 'sendTasuResponse') { onFrame = o.onReceive; } return Promise.resolve(); },
+        getValue: function (name) { return Promise.resolve(name === 'statusCarSpeed2' ? { speedVehicleCentreOfGravity: 3200 } : { of: cfg.name, field: name }); },
+        setValue: function () { throw new Error('a write reached the car'); },
+        callMethod: function (name, a) {
+            if (name !== 'sendTasuRequest' || (a.serviceID !== 0x22 && a.serviceID !== 0x01) || a.targetAddress === 0xDF) { throw new Error('something other than a read reached the car'); }
+            var id = Array.prototype.slice.call(a.udsData);
+            var uds = a.targetAddress === 0x12 ? [a.serviceID + 0x40].concat(id, [0x5A, 0x01]) : [0x7F, a.serviceID, 0x31];
+            setTimeout(function () { if (onFrame) { onFrame({ udsResponse: [0, 0, 0, 0, 0, 0, a.targetAddress, 0, 0].concat(uds) }); } }, 20);
+            return Promise.resolve({ TasuErrorEnum: 'NO_ERROR' });
+        }
+    });
+} };
+`);
 process.env.G21_CAR_CATALOG = catalog;
 process.env.G21_CAR_SOMEIP = fake;
 process.env.G21_BROWSER_CAR_NODE = process.execPath;
@@ -54,7 +75,7 @@ function get(port, p, headers) {
             fs.mkdirSync(path.join(base, 'apps', a[0]), { recursive: true });
             fs.writeFileSync(path.join(base, 'apps', a[0], 'index.html'), '<!doctype html><title>' + a[0] + '</title>');
         });
-        daemon.saveApps([{ id: 'all', name: 'All', repo: 'x/all', start: '', mouse: 'no', car: ['*'] }, { id: 'speed', name: 'Speed', repo: 'x/speed', start: '', mouse: 'no', car: ['de.bmw.test.Vehicle2.statusCarSpeed2'] },
+        daemon.saveApps([{ id: 'all', name: 'All', repo: 'x/all', start: '', mouse: 'no', car: ['*'], uds: ['12'] }, { id: 'speed', name: 'Speed', repo: 'x/speed', start: '', mouse: 'no', car: ['de.bmw.test.Vehicle2.statusCarSpeed2'] },
             { id: 'none', name: 'None', repo: 'x/none', start: '', mouse: 'no', car: [] }]);
         const url = await daemon.appUrl('all');
         const port = Number(/:(\d+)\//.exec(url)[1]);
@@ -86,6 +107,28 @@ function get(port, p, headers) {
         r = await get(port, '/_car/all/list', Object.assign({ Host: 'evil.example:' + port }, from('all')));
         assert.strictEqual(r.code, 403, 'another name that points at this server: refused');
 
+        // diagnostic reads of a control unit: only read services, only a unit the app declares
+        r = await get(port, '/_car/all/uds?e=12&s=01&d=05', from('all'));
+        assert.deepStrictEqual(r.json, { ok: true, data: '5A01' }, 'OBD current data of the engine unit');
+        r = await get(port, '/_car/all/uds?e=12&s=22&d=4300', from('all'));
+        assert.deepStrictEqual(r.json, { ok: true, data: '5A01' }, 'ReadDataByIdentifier');
+        r = await get(port, '/_car/all/uds?e=18&s=22&d=4300', from('all'));
+        assert.ok(r.code === 403 && r.json.ok === false, 'a unit the app did not declare');
+        r = await get(port, '/_car/all/uds?e=12&s=2E&d=4300', from('all'));
+        assert.ok(r.code === 400 && r.json.ok === false, 'a write service is not even passed on');
+        r = await get(port, '/_car/all/uds?e=12&s=22&d=F190', from('all'));
+        assert.ok(r.json.ok === false && /VIN/.test(r.json.err), 'the VIN is not read');
+        r = await get(port, '/_car/speed/uds?e=12&s=01&d=05', from('speed'));
+        assert.strictEqual(r.code, 403, 'an app that declares no unit asks none');
+        assert.strictEqual(carMod.udsCheck(0xDF, 0x22, 0x4300), 'bad control unit address', 'never all units at once');
+        [0x10, 0x11, 0x14, 0x19, 0x27, 0x2E, 0x2F, 0x31, 0x3E].forEach(function (sid) { assert.strictEqual(typeof carMod.udsCheck(0x12, sid, 1), 'string', 'service ' + sid.toString(16) + ' is refused'); });
+        fs.mkdirSync(path.join(base, 'state'), { recursive: true });
+        fs.writeFileSync(path.join(base, 'state', 'policy.json'), JSON.stringify({ carDiag: 'off' }));
+        daemon.loadPolicy();
+        r = await get(port, '/_car/all/uds?e=12&s=01&d=05', from('all'));
+        assert.strictEqual(r.code, 403, 'carDiag off: no unit is asked');
+        r = await get(port, '/_car/all/get?i=de.bmw.test.Vehicle2&n=statusCarSpeed2', from('all'));
+        assert.strictEqual(r.json.ok, true, 'and the signals the car sends are still read');
         // the owner's switch
         fs.mkdirSync(path.join(base, 'state'), { recursive: true });
         fs.writeFileSync(path.join(base, 'state', 'policy.json'), JSON.stringify({ carData: 'off' }));

@@ -153,6 +153,7 @@ var EN = {
     'Obszar zegarów': 'Gauge area',
     'Strony chrome': 'Chrome pages',
     'Dane auta': 'Car data',
+    'Diagnostyka': 'Diagnostics',
     'O systemie': 'About the system',
     'Obraz i ekrany': 'Picture and screens',
     'Sterowanie': 'Controls',
@@ -742,6 +743,8 @@ var SET_APPS_ITEMS = [
     { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
     { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
     { name: 'aset-car', title: 'Dane auta', hint: 'dla aplikacji', icon: 'gear' },
+    // whether apps may also ask the control units (diagnostic reads only)
+    { name: 'aset-diag', title: 'Diagnostyka', hint: 'odczyt ze sterowników', icon: 'gear' },
     { name: 'sga-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 // Ogólne

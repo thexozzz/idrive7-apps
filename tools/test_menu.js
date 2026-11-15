@@ -21,7 +21,7 @@ assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), [
 // the picture's settings are in one place
 assert.deepStrictEqual(menu.SET_DISPLAY_ITEMS.map(function (i) { return i.name; }), ['position', 'air-quality', 'cluster-place', 'settings', 'sgd-back']);
 assert.deepStrictEqual(menu.SET_INPUT_ITEMS.map(function (i) { return i.name; }), ['set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'set-kill', 'sgi-back']);
-assert.deepStrictEqual(menu.SET_APPS_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-car', 'sga-back']);
+assert.deepStrictEqual(menu.SET_APPS_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-car', 'aset-diag', 'sga-back']);
 assert.deepStrictEqual(menu.SET_GENERAL_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'sys-info', 'sgg-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-import', 'store-demo', 'store-back']);
 assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-pages', 'aset-back']);

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.173
+
+- Odczyty diagnostyczne sterowników dla aplikacji ze Sklepu (`g21-browser` 0.1.27), drogą, której używają Live Data i ZF 8HP z `cauliflowermossgrape/idrive7-apps` (MIT): zapytania UDS przez TASU, własny transport diagnostyczny jednostki. Na sztywno w czytniku `g21-car.js`: tylko usługi odczytu 22 (ReadDataByIdentifier) i 01 (OBD, dane bieżące), tylko jeden sterownik naraz (nigdy adres „wszystkie”), nigdy identyfikator VIN, jedno zapytanie naraz co najmniej co 120 ms. Nie ma zmiany sesji, zapisu, kodowania, testów elementów, resetu ani kasowania błędów. Aplikacja zgłasza sterowniki w `theiplay.json` (`"uds"`), pyta przez `/_car/<aplikacja>/uds?e=<adres>&s=<22|01>&d=<identyfikator>`; wyłącznik: Ustawienia > Aplikacje > „Diagnostyka” (reguła `carDiag`).
+- Hello THEiPlay: karta „Sterowniki” z katalogami `diag.json` (OBD-II 51 pozycji, identyfikacja 9, silnik benzynowy DME8 118, skrzynia ZF 8HP 41), odczyt jednej pozycji albo całego katalogu, z dekodowaniem i surową odpowiedzią. Katalog silnika jest dla benzynowych B38/B48/B58; dla diesla zostają OBD-II i identyfikacja.
+- Sprawdzone tylko testem z udawanym sterownikiem (`tools/test_car_bridge.js`). Na aucie NIE: uruchomienie zapytań diagnostycznych z sesji programisty zostało zablokowane przez zabezpieczenia narzędzia; pierwszy prawdziwy odczyt zrobi właściciel z aplikacji Hello.
+
 ## 0.1.172
 
 - Hello THEiPlay: karta „Auto” rysuje katalog 60 sygnałów w 5 grupach (Silnik, Paliwo i podróż, Jazda, Opony, Podwozie) z przeliczeniami — `signals.json`, wygenerowany skryptem `tools/gen_hello_signals.js` z aplikacji Live Data z `cauliflowermossgrape/idrive7-apps` (MIT). Katalog jest w naszym repozytorium, nic nie trzeba doinstalowywać. Sprawdzone na aucie 2026-11-15 przy pracującym silniku: odpowiada 47 z 60 (m.in. obroty 778, moment, płyn i olej 67 °C, paliwo 19 l, zasięg 231 km, przebieg, opony 2,0 / 1,9 / 2,3 / 2,2 bar, akumulator 83%, poziom oleju).

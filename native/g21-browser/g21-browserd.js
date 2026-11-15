@@ -283,16 +283,16 @@ function runApps(dir) {
         let qs;
         try { qs = new URLSearchParams(query.replace(/^\?/, '')); } catch (e) { return json(400, { ok: false, err: 'bad query' }); }
         const id = ++carSeq;
-        const t = setTimeout(() => { if (waiting[id]) { delete waiting[id]; json(504, { ok: false, err: 'no answer' }); } }, 6000);
+        const t = setTimeout(() => { if (waiting[id]) { delete waiting[id]; json(504, { ok: false, err: 'no answer' }); } }, op === 'uds' ? 16000 : 6000);
         waiting[id] = (o) => { clearTimeout(t); const code = o && o.ok ? 200 : ((o && o.code) || 502); if (o) { delete o.rid; delete o.code; } json(code, o || { ok: false }); };
-        process.stdout.write('car ' + JSON.stringify({ rid: id, app: app, op: op, iface: qs.get('i') || '', name: qs.get('n') || '' }) + '\n');
+        process.stdout.write('car ' + JSON.stringify({ rid: id, app: app, op: op, iface: qs.get('i') || '', name: qs.get('n') || '', ecu: qs.get('e') || '', sid: qs.get('s') || '', did: qs.get('d') || '' }) + '\n');
         return undefined;
     };
     const srv = http.createServer((q, r) => {
         const no = (code) => { r.statusCode = code; r.setHeader('content-type', 'text/plain; charset=utf-8'); r.end(code === 404 ? 'nie ma takiego pliku' : ''); };
         if (q.method !== 'GET' && q.method !== 'HEAD') return no(405);
         // the car's signals, read only (g21-car.js through the daemon): /_car/<app>/list, /_car/<app>/get?i=<interface>&n=<field>
-        const carM = /^\/_car\/([a-z0-9-]{1,60})\/(list|get)(\?.*)?$/.exec(String(q.url));
+        const carM = /^\/_car\/([a-z0-9-]{1,60})\/(list|get|uds)(\?.*)?$/.exec(String(q.url));
         if (carM) return car(q, r, carM[1], carM[2], carM[3] || '');
         let p;
         try { p = decodeURIComponent(String(q.url).split('?')[0].split('#')[0]); } catch (e) { return no(400); }
@@ -894,6 +894,8 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *             "page"      it fills the page area under the toolbar
  *   carData   "apps"      an app from Sklep may read the car signals it declares, read only (default)
  *             "off"       no app reads anything of the car
+ *   carDiag   "apps"      an app may also ask the control units it declares (diagnostic READS: services 22 and 01 only)
+ *             "off"       no app asks a control unit anything
  *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
  *                         the car's speakers while a page plays and gives them back after (default)
  *             "off"       pages are silent
@@ -902,7 +904,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -910,7 +912,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -921,6 +923,7 @@ function readPolicy(file) {
         pick('autoplay', (v) => v === 'allow' || v === 'gesture');
         pick('fullscreen', (v) => v === 'screen' || v === 'page');
         pick('carData', (v) => v === 'apps' || v === 'off');
+        pick('carDiag', (v) => v === 'apps' || v === 'off');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -986,7 +989,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData }, fs: !!this.fs };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag }, fs: !!this.fs };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1188,7 +1191,7 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off',
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
@@ -1437,9 +1440,11 @@ Daemon.prototype.installApp = async function (text) {
         fs.renameSync(tmp, dest);
         // the car signals the app says it reads (the owner sees them in the log; nothing else is given to it)
         const carDecl = Array.isArray(meta.car) ? meta.car.filter((c) => typeof c === 'string' && /^(\*|[A-Za-z][A-Za-z0-9_.]{0,159}(\.\*)?)$/.test(c)).slice(0, 80) : [];
+        const udsDecl = Array.isArray(meta.uds) ? meta.uds.filter((c) => typeof c === 'string' && /^(\*|[0-9A-Fa-f]{2})$/.test(c)).map((c) => c.toUpperCase()).slice(0, 40) : [];
         const apps = this.appsList().filter((a) => a.id !== r.id);
-        apps.push({ id: r.id, name: name, repo: r.owner + '/' + r.repo, ref: r.ref, start: start, mouse: meta.mouse === 'yes' ? 'yes' : 'no', car: carDecl, files: got.files, bytes: got.bytes, at: new Date().toISOString() });
+        apps.push({ id: r.id, name: name, repo: r.owner + '/' + r.repo, ref: r.ref, start: start, mouse: meta.mouse === 'yes' ? 'yes' : 'no', car: carDecl, uds: udsDecl, files: got.files, bytes: got.bytes, at: new Date().toISOString() });
         this.saveApps(apps);
+        if (udsDecl.length) this.log('app: ' + r.id + ' asks control units (diagnostic reads): ' + udsDecl.join(', '));
         if (carDecl.length) this.log('app: ' + r.id + ' reads car signals: ' + carDecl.join(', ').slice(0, 400));
         this.log('app: installed ' + r.id + ' (' + got.files + ' files, ' + Math.round(got.bytes / 1024) + ' KiB, mouse ' + (meta.mouse === 'yes' ? 'yes' : 'no') + ')');
         return { id: r.id, name: name };
@@ -1495,6 +1500,18 @@ Daemon.prototype.carRequest = async function (child, text) {
     const app = this.appsList().filter((a) => a.id === q.app)[0];
     if (!app) return reply({ ok: false, code: 404, err: 'no such app' });
     if (this.policy().carData === 'off') return reply({ ok: false, code: 403, err: 'the owner switched car data off' });
+    if (q.op === 'uds') {
+        // a diagnostic read of a control unit: its own rule, its own declaration (theiplay.json "uds": the units' addresses)
+        if (this.policy().carDiag === 'off') return reply({ ok: false, code: 403, err: 'the owner switched diagnostic reads off' });
+        const units = Array.isArray(app.uds) ? app.uds : [];
+        const ecu = String(q.ecu).toUpperCase();
+        if (!/^[0-9A-F]{2}$/.test(ecu) || !/^(22|01)$/.test(String(q.sid)) || !/^[0-9A-Fa-f]{2,4}$/.test(String(q.did))) return reply({ ok: false, code: 400, err: 'bad request' });
+        if (units.indexOf('*') < 0 && units.indexOf(ecu) < 0) return reply({ ok: false, code: 403, err: 'the app does not declare this control unit (theiplay.json "uds")' });
+        try {
+            const got = await this.carAsk({ op: 'uds', ecu: ecu, sid: String(q.sid), did: String(q.did) }, 14000);
+            return reply(got.ok ? { ok: true, data: got.data } : { ok: false, code: 502, err: got.err, nrc: got.nrc });
+        } catch (e) { return reply({ ok: false, code: 502, err: String((e && e.message) || e).slice(0, 200) }); }
+    }
     const decl = Array.isArray(app.car) ? app.car : [];
     if (!decl.length) return reply({ ok: false, code: 403, err: 'the app declares no car signals (theiplay.json "car")' });
     const may = (iface, name) => decl.some((d) => d === '*' || d === iface + '.*' || d === iface + '.' + name);
@@ -1512,7 +1529,7 @@ Daemon.prototype.carRequest = async function (child, text) {
     } catch (e) { return reply({ ok: false, code: 502, err: String((e && e.message) || e).slice(0, 200) }); }
 };
 // one request to g21-car.js (started when first needed)
-Daemon.prototype.carAsk = function (msg) {
+Daemon.prototype.carAsk = function (msg, waitMs) {
     return new Promise((resolve, reject) => {
         if (!this.carProc) {
             const child = cp.spawn(this.opts.carNode, [path.join(this.opts.here, 'g21-car.js')], { cwd: '/', env: this.opts.carEnv || {}, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -1546,7 +1563,7 @@ Daemon.prototype.carAsk = function (msg) {
             this.log('car reader started (read only)');
         }
         const id = ++this.carSeq;
-        const t = setTimeout(() => { if (this.carWait && this.carWait[id]) { delete this.carWait[id]; reject(new Error('the car did not answer')); } }, 5000);
+        const t = setTimeout(() => { if (this.carWait && this.carWait[id]) { delete this.carWait[id]; reject(new Error('the car did not answer')); } }, waitMs || 5000);
         this.carWait[id] = (m) => { clearTimeout(t); resolve(m); };
         try { this.carProc.stdin.write(JSON.stringify(Object.assign({ id: id }, msg)) + '\n'); } catch (e) { clearTimeout(t); delete this.carWait[id]; reject(e); }
     });
