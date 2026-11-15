@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.149
+
+- Naprawa: AirPlay przestał być wykrywany przez iPhone’a. Narzędzie `g21-airplay-open` 0.1.54 otwierało G21 Audio wewnątrz `$(...)`; klient dźwięku działający w tle trzymał potok podstawienia otwarty i start zatrzymywał się na zawsze przed uruchomieniem UxPlay (stan z auta 2026-11-15: avahi i strumień dźwięku działają, UxPlay nie ma). 0.1.55 otwiera dźwięk bez podstawienia i czyta nazwę FIFO z pliku. Poprawka nie była jeszcze sprawdzana w aucie.
+
 ## 0.1.148
 
 - Aplikacje > Ustawienia ma nowe opcje Przeglądarki: „Strona startowa” (adres albo pusto = wbudowana), „Powiększenie” (100–200%), „Rozdzielczość” (dawniej „Jakość obrazu”), „Pełny ekran” (cały ekran / obszar strony) i „Autoodtwarzanie” (dozwolone / po dotknięciu). Autoodtwarzanie jest teraz domyślnie dozwolone.

@@ -383,14 +383,16 @@ g21_audio_open() {
     mkdir -p /run/g21-airplay
     g21_audio_close
     : > /run/g21-airplay/g21-audio.fifo
-    ( audio_node "$js" hold airplay 0 >/run/g21-airplay/g21-audio.fifo 2>>"$AUDIOLOG" ) &
+    # (never call this inside $(...): the client in the background would keep the substitution's pipe open and
+    # the start would wait for ever, with no UxPlay and so no AirPlay to find: 0.1.54)
+    ( audio_node "$js" hold airplay 0 </dev/null >/run/g21-airplay/g21-audio.fifo 2>>"$AUDIOLOG" ) &
     printf '%s\n' "$!" > /run/g21-airplay/g21-audio.pid
     i=0
     while [ "$i" -lt 40 ] && [ ! -s /run/g21-airplay/g21-audio.fifo ] && kill -0 "$(cat /run/g21-airplay/g21-audio.pid)" 2>/dev/null; do
         usleep 100000 2>/dev/null || sleep 1
         i=$((i + 1))
     done
-    head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null
+    return 0
 }
 
 g21_audio_close() {
@@ -1312,7 +1314,8 @@ start_ux() {
     # source has to be marked available first), which is why 0.1.132/0.1.133 were silent; G21 Audio does that, and
     # its tone is heard from the speakers. UxPlay then writes S16LE 48 kHz stereo into G21 Audio's FIFO, in step
     # with the stream's clock (sync=true), and needs no ALSA device of the car at all.
-    audio_fifo=$(g21_audio_open)
+    g21_audio_open >/dev/null 2>&1
+    audio_fifo=$(head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null)
     if [ -n "$audio_fifo" ] && [ -p "$audio_fifo" ]; then
         audio_dev=g21-audio
         audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=true"
