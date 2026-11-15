@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.142
+
+- Menu główne: ostatnia pozycja „Przeglądarka” to teraz „Aplikacje”. W środku: Przeglądarka, YouTube (ten sam co w menu głównym) i Ustawienia. Pozostałe pozycje menu głównego i ich kolejność bez zmian. Sklep z aplikacjami jest przewidziany na później.
+- Przeglądarka na zegarach i na HUD: Aplikacje > Ustawienia > „Zegary” i „HUD” (włącz/wyłącz, zapamiętane). Strona idzie na te same warstwy cluster-render co AirPlay i YouTube, w rozmiarze profilu KOMBI i w miejscu ustawionym w „Pozycja”; najwyżej 8 obrazów na sekundę, bo każdy jest czytany i skalowany na procesorze. AirPlay i film z YouTube mają pierwszeństwo (jeden obraz naraz). Po zamknięciu przeglądarki jej obraz znika z zegarów i HUD. Środek pokazuje przeglądarkę zawsze — tam się ją obsługuje.
+- Aplikacje > Ustawienia, reguły silnika (zapisywane przez narzędzie w `state/policy.json`): „Jakość obrazu” 100% / 75% / 50% (zmiana uruchamia silnik ponownie na tej samej stronie), „Piaskownica” pytaj / wymagana, „Limit pamięci” 600 / 900 / 1200 / 1500 MB. Wyłączenia piaskownicy i reguł sieci nie da się ustawić z menu — tylko w pliku reguł. Narzędzie `g21-browser` 0.1.6 (polecenie `policy`, reguły w stanie demona).
+- Sprawdzone na aucie (odczyt logów, 0.1.141 / 0.1.5): silnik działa w piaskownicy przez pomocnika setuid, bez pytania. Nowe menu, zegary i HUD dla przeglądarki oraz ustawienia: sprawdzone testami lokalnie i na Ubuntu 18.04 z jądrem 4.14.195, na aucie jeszcze nie.
+
 ## 0.1.141
 
 - Przeglądarka działa w piaskownicy Chromium także na aucie. Jądro MGU nie ma przestrzeni nazw użytkownika, więc narzędzie `g21-browser` 0.1.5 niesie pomocnika piaskownicy Chromium (`g21-chrome-sandbox`: niezmienione źródła Chromium 153.0.8010.12 z `sandbox/linux/suid`, zbudowane statycznie na Ubuntu 18.04; źródła w `native/g21-browser/sandbox-src`). Demon kładzie go obok silnika jako plik roota z bitem setuid (4755), tak jak wymaga tego Chromium. Procesy stron dostają osobną przestrzeń PID i sieci oraz filtr seccomp. Pytanie „Uruchom bez piaskownicy” pojawia się już tylko wtedy, gdy piaskownica mimo to nie wstanie.

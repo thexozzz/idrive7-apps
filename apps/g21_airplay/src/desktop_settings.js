@@ -222,6 +222,11 @@ function createDesktopSettings(stored) {
         cluster: !!(data.ytScreens && data.ytScreens.cluster === true),
         hud: !!(data.ytScreens && data.ytScreens.hud === true)
     };
+    // Przeglądarka on the cluster and the HUD (the centre always has it: that is where it is used).
+    var webScreens = {
+        cluster: !!(data.webScreens && data.webScreens.cluster === true),
+        hud: !!(data.webScreens && data.webScreens.hud === true)
+    };
     var airDisplay = data.airDisplay === 'cluster' || data.airDisplay === 'both' || data.airDisplay === 'off'
         ? data.airDisplay
         : 'central';
@@ -362,6 +367,11 @@ function createDesktopSettings(stored) {
                 cluster: !!(next && next.cluster),
                 hud: !!(next && next.hud)
             };
+            return { ok: true };
+        },
+        webScreens: function () { return { cluster: webScreens.cluster, hud: webScreens.hud }; },
+        setWebScreens: function (next) {
+            webScreens = { cluster: !!(next && next.cluster), hud: !!(next && next.hud) };
             return { ok: true };
         },
         airDisplay: function () { return airDisplay; },
@@ -634,6 +644,7 @@ function createDesktopSettings(stored) {
                 qualityCentral: qualityCentral,
                 qualityKombi: qualityKombi,
                 ytScreens: { central: ytScreens.central, cluster: ytScreens.cluster, hud: ytScreens.hud },
+                webScreens: { cluster: webScreens.cluster, hud: webScreens.hud },
                 airDisplay: airDisplay,
                 uiLang: uiLang,
                 uiRender: uiRender,

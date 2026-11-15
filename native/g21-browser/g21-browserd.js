@@ -735,7 +735,8 @@ Daemon.prototype.push = function (force) {
     const s = this.s;
     const start = /^data:/.test(s.url);
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? '' : s.url, title: start ? 'Strona startowa' : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
-        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '' };
+        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
+        pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb } };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -838,6 +839,27 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     default: break;
+    }
+    if (m.op === 'policy') {
+        // A rule set from THEiPlay's menu (Aplikacje > Ustawienia). Only these three, and never "sandbox": "off" or a
+        // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
+        const ok = { picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
+        const key = String(m.key);
+        if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
+        const next = readPolicy(this.opts.policyFile).policy;
+        if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
+        const pictureWas = this.picture();
+        next[key] = m.value;
+        mkdirp(this.opts.stateDir, 0o700);
+        const tmp = this.opts.policyFile + '.new';
+        fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+        fs.renameSync(tmp, this.opts.policyFile);
+        this.log('policy: "' + key + '" set to ' + JSON.stringify(m.value) + ' from the app');
+        this.loadPolicy();
+        this.push(true);
+        // a new picture size needs the engine started again, on the page it shows
+        if (e && this.want && this.picture() !== pictureWas) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        return;
     }
     if (m.op === 'sandbox-off') {
         // the owner's answer on the screen; only to the question this daemon asked

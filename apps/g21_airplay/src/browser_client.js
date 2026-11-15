@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: ''
+        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null
     };
 }
 
@@ -89,7 +89,9 @@ function createBrowserClient(opts) {
                 pct: m.pct | 0,
                 ring: String(m.ring || ''),
                 // what the daemon needs the owner to decide ("sandbox"), or ''
-                ask: String(m.ask || '')
+                ask: String(m.ask || ''),
+                // the daemon's rules that the menu shows and sets (g21-browser's policy)
+                pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0 } : null
             };
             tell();
         } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {
@@ -115,7 +117,9 @@ function createBrowserClient(opts) {
             buf = '';
             failNoted = false;
             note('web-up');
-            send({ op: 'open', w: want.w, h: want.h });
+            if (want.w) {
+                send({ op: 'open', w: want.w, h: want.h });
+            }
         });
         s.on('data', function (d) {
             var i;
@@ -188,6 +192,16 @@ function createBrowserClient(opts) {
                 connect();
             }
         },
+        /** only the daemon's state (its rules), no page: for Aplikacje > Ustawienia */
+        look: function () {
+            if (want && want.w) {
+                return;
+            }
+            want = { w: 0, h: 0 };
+            if (!up) {
+                connect();
+            }
+        },
         /** leave the screen: the socket closes, the daemon stops the engine a little later */
         leave: function () {
             drop(null);
@@ -201,7 +215,7 @@ function createBrowserClient(opts) {
             return state;
         },
         isOpen: function () {
-            return !!want;
+            return !!(want && want.w);
         }
     };
 }

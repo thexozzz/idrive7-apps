@@ -12,7 +12,14 @@ assert.ok(built.layout);
 assert.ok(built.layout.bubbles.length <= menu.ROOT_ITEMS.length);
 assert.strictEqual(built.layout.count, menu.ROOT_ITEMS.length);
 assert.strictEqual(menu.ROOT_ITEMS.length, 7);
-assert.strictEqual(menu.ROOT_ITEMS[6].name, 'browser');
+// the last item is "Aplikacje" (Przeglądarka, YouTube, Ustawienia inside); the others and their order stay
+assert.strictEqual(menu.ROOT_ITEMS[6].name, 'apps');
+assert.strictEqual(menu.ROOT_ITEMS[6].title, 'Aplikacje');
+assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-youtube', 'apps-settings', 'apps-back']);
+assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-picture', 'aset-sandbox', 'aset-memory', 'aset-back']);
+assert.strictEqual(menu.SCREENS.apps, menu.APPS_ITEMS);
+assert.strictEqual(menu.SCREENS['apps-settings'], menu.APPS_SET_ITEMS);
+assert.ok(menu.buildFrame(menu.APPS_ITEMS, 0, 1920, 720).layout.count === 4 && menu.buildFrame(menu.APPS_SET_ITEMS, 0, 1920, 720).layout.count === 6);
 assert.strictEqual(menu.ROOT_ITEMS[5].name, 'position');
 assert.strictEqual(menu.ROOT_ITEMS[1].name, 'youtube');
 assert.strictEqual(menu.ROOT_ITEMS[1].hint, '');

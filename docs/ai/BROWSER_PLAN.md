@@ -109,6 +109,16 @@ Decyzja właściciela: piaskownica z regułami, które można sprawdzać i zmien
 
 **GPU — nie da się przełącznikiem (VERIFIED odczytami).** `chrome-headless-shell` importuje `gbm_bo_get_fd_for_plane` (i jest linkowany z rozwiązywaniem symboli przy starcie); `libgbm.so.1` auta (Mesa 19.0.6) tej funkcji nie eksportuje → z bibliotekami auta binarka nie wstanie. Z naszym `libgbm` (Mesa 25, bez sterowników DRI) `libEGL` auta nie zadziała (prywatne ABI między `libEGL` i `libgbm` tej samej Mesy). Dalsze przeszkody: `libEGL` auta ma tylko platformy `gbm` i `wayland` (bez `EGL_EXT_platform_device`), a na jądrze 4.14 klient bez roota na `/dev/dri/card0` nie jest uwierzytelniony do renderowania; `libva.so.1` zamiast `.so.2`. Możliwa droga (duża, tylko z próbami na aucie): własna cienka `libgbm.so.1`, która przekazuje wywołania do biblioteki auta i dodaje brakującą funkcję, plus dostęp do `renderD128`.
 
+## Aplikacje, zegary i HUD (2026-11-15) — aplikacja 0.1.142, g21-browser 0.1.6
+
+VERIFIED na aucie (log 0.1.5, 11:22 UTC): `sandbox helper installed: …/chrome-sandbox (root, 4755)`, `engine up: … sandbox (setuid helper beside the engine)`, proces `chrome-sandbox` działa, nikt nie był pytany; `/run/g21-browser/policy.json` pokazuje reguły domyślne.
+
+**Jak działa rysowanie na zegarach i HUD (VERIFIED odczytem `/run/cluster-render/status.txt` i z kodu):** narzędzie `cluster-render` (użytkownik `hmi_5000`) ma cele `map` 1088×480 (kieszeń między zegarami), `panel` 1920×720 (cały KOMBI), `hud` 800×480; wysyłka ograniczona do 5500 KB/s. Aplikacja nie rysuje tam sama: `_placeMirrorFaces(i420, w, h, outs)` skaluje klatkę I420 do profilu KOMBI (`qualityKombi`, domyślnie 400×240) i daje ją warstwom cluster-render w miejscu z „Pozycja”. YouTube na wszystkich ekranach: VERIFIED przez właściciela (0.1.122).
+
+**Przeglądarka tam:** `_takeWeb()` (w tym samym zegarze co `_takeYoutube`, co 125 ms) czyta najnowszą klatkę z `/dev/shm/mgu-video-g21browser` (`youtube_file.js`, ten sam format MGVF) i woła `_placeMirrorFaces`. Włączniki `_webCluster` / `_webHud` (ustawienia `webScreens`), Aplikacje > Ustawienia. AirPlay i film YouTube mają pierwszeństwo; `_dropWebFaces` przy zamknięciu. UNVERIFIED na aucie. Uwaga z logu aplikacji: `rt parked check: speed error: no vehicle signals in THEiPlay` — aplikacja nadal nie zna prędkości (K-02/K-03), więc obraz na zegarach i HUD nie jest blokowany w ruchu.
+
+**Menu:** `ROOT_ITEMS[6]` = `apps` („Aplikacje”); `APPS_ITEMS` = `browser`, `apps-youtube`, `apps-settings`, `apps-back`; `APPS_SET_ITEMS` = `aset-cluster`, `aset-hud`, `aset-picture`, `aset-sandbox`, `aset-memory`, `aset-back`; obsługa w `_onAppsChoice`. Reguły z menu: polecenie demona `{op:"policy", key, value}` (tylko `picture`, `memoryLimitMb`, `sandbox` = ask|required); stan demona niesie `pol`; klient ma `look()` (połączenie bez otwierania strony).
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

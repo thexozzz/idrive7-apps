@@ -352,6 +352,25 @@ async function testChain(base, eng) {
         s = await c.until('test page', (x) => x.title === 'Strona testowa' && !x.loading);
         assert.strictEqual(s.url, site + '/');
         assert.strictEqual(s.back, true);
+        // rules set from THEiPlay's menu: three of them, never "sandbox": "off"; written to the rules file
+        const polFile = path.join(base, 'state', 'policy.json');
+        assert.deepStrictEqual(s.pol, { sandbox: 'ask', picture: 0.75, memoryLimitMb: 900 }, 'the state carries the rules');
+        c.send({ op: 'policy', key: 'memoryLimitMb', value: 1200 });
+        await c.until('memory limit set', (x) => x.pol && x.pol.memoryLimitMb === 1200);
+        assert.strictEqual(JSON.parse(fs.readFileSync(polFile, 'utf8')).memoryLimitMb, 1200);
+        assert.strictEqual(fs.statSync(polFile).mode & 0o777, 0o600);
+        c.send({ op: 'policy', key: 'sandbox', value: 'off' });
+        c.send({ op: 'policy', key: 'network', value: { blockPrivate: false } });
+        c.send({ op: 'policy', key: 'picture', value: 0.9 });
+        c.send({ op: 'policy', key: 'sandbox', value: 'required' });
+        await c.until('sandbox required', (x) => x.pol && x.pol.sandbox === 'required');
+        const pf = JSON.parse(fs.readFileSync(polFile, 'utf8'));
+        assert.deepStrictEqual([pf.sandbox, pf.picture, pf.network], ['required', 0.75, { blockPrivate: true, allow: [] }], 'what the app may not set stayed');
+        c.send({ op: 'policy', key: 'sandbox', value: 'ask' });
+        c.send({ op: 'policy', key: 'memoryLimitMb', value: 900 });
+        await c.until('rules back', (x) => x.pol && x.pol.sandbox === 'ask' && x.pol.memoryLimitMb === 900);
+        assert.ok(/policy: "sandbox" from the app refused/.test(fs.readFileSync(logFile, 'utf8')) && /policy: "network" from the app refused/.test(fs.readFileSync(logFile, 'utf8')));
+        console.log('ok policy from the menu: picture, memory limit and sandbox ask/required are set and written; "off" and network rules are refused');
         const tap = (x, y) => { c.send({ op: 'touch', p: 1, x: x * 1.5, y: y * 1.5 }); c.send({ op: 'touch', p: 3, x: x * 1.5, y: y * 1.5 }); };
         const seq0 = ring().seq;
         tap(140, 80);

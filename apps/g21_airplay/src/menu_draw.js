@@ -179,6 +179,12 @@ var EN = {
     'dalej': 'more',
     'strzalki, potem wybierz': 'arrows, then select',
     'Gdzie pokazać': 'Where to show',
+    'Aplikacje': 'Apps',
+    'Przeglądarka': 'Browser',
+    'Zegary': 'Gauges',
+    'Jakość obrazu': 'Picture quality',
+    'Piaskownica': 'Sandbox',
+    'Limit pamięci': 'Memory limit',
     'kliknij kafelek': 'tap a tile',
     'wlaczone': 'on',
     'wylaczone': 'off',
@@ -653,7 +659,26 @@ var ROOT_ITEMS = [
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'settings', title: 'Ustawienia', hint: 'GPU', icon: 'gear' },
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
-    { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' }
+    { name: 'apps', title: 'Aplikacje', hint: 'przeglądarka, YouTube', icon: 'globe' }
+];
+
+// Aplikacje: what runs inside THEiPlay. (A shop with more of them is to come.)
+var APPS_ITEMS = [
+    { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' },
+    { name: 'apps-youtube', title: 'YouTube', hint: '', icon: 'play' },
+    { name: 'apps-settings', title: 'Ustawienia', hint: 'ekrany, obraz, piaskownica', icon: 'gear' },
+    { name: 'apps-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+
+// Aplikacje > Ustawienia: where Przeglądarka shows besides the centre, and the engine's rules
+// (g21-browser's state/policy.json, set through its daemon).
+var APPS_SET_ITEMS = [
+    { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
+    { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
+    { name: 'aset-picture', title: 'Jakość obrazu', hint: '75%', icon: 'desktop' },
+    { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
+    { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
+    { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 
 var AIRPLAY_ITEMS = [
@@ -811,6 +836,8 @@ var SCREENS = {
     'air-box': AIR_BOX_ITEMS,
     label: LABEL_ITEMS,
     settings: SETTINGS_ITEMS,
+    apps: APPS_ITEMS,
+    'apps-settings': APPS_SET_ITEMS,
     youtube: YOUTUBE_ITEMS,
     'yt-login': YT_LOGIN_ITEMS,
     'yt-browse': YT_BROWSE_ITEMS,
@@ -5280,6 +5307,9 @@ function createMenuSurface(opts) {
 module.exports = {
     ITEMS: ITEMS,
     ROOT_ITEMS: ROOT_ITEMS,
+    APPS_ITEMS: APPS_ITEMS,
+    APPS_SET_ITEMS: APPS_SET_ITEMS,
+    WEB_FILE: WEB_FILE,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     AIR_OUT_ITEMS: AIR_OUT_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,

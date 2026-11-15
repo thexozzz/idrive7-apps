@@ -407,7 +407,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.141',
+        version: (this._packageJson && this._packageJson.version) || '0.1.142',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -466,11 +466,17 @@ function AirPlayApp() {
     this._ytHud = !!ytScreens.hud;
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
+    // Przeglądarka on the cluster and the HUD: the same reader on the browser's video file
+    var webScreens = this._desk.webScreens ? this._desk.webScreens() : { cluster: false, hud: false };
+    this._webCluster = !!webScreens.cluster;
+    this._webHud = !!webScreens.hud;
+    this._webFile = youtubeFile.createYoutubeFile(menuDraw.WEB_FILE);
     this._bindRideTube();
     // 42 ms: at most 24 film frames a second for the cluster/HUD. Without
     // gauges _takeYoutube itself keeps to one look every 200 ms.
     this._ytTimer = setInterval(function () {
         self._takeYoutube();
+        self._takeWeb();
     }, YT_GAUGE_MS);
     if (this._ytTimer.unref) {
         this._ytTimer.unref();
@@ -546,7 +552,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.141') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.142') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2876,6 +2882,9 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._exitApp();
         return;
     }
+    if (this._onAppsChoice(name)) {
+        return;
+    }
     if (this._onWebChoice(name)) {
         return;
     }
@@ -3786,6 +3795,9 @@ AirPlayApp.prototype._gaugeFrame = function () {
     // YouTube and AirPlay never run together; the faces show whichever is live.
     if (this._ytGaugeFrame && !(this._sessions && this._sessions.active() === 'airplay')) {
         return this._ytGaugeFrame;
+    }
+    if (this._webFaces && this._webFrame && !(this._sessions && this._sessions.active() === 'airplay')) {
+        return this._webFrame;
     }
     return this._lastFrame || null;
 };
@@ -5208,6 +5220,7 @@ AirPlayApp.prototype._closeBrowser = function () {
     }
     this._webOn = false;
     noteStart('web-close');
+    this._dropWebFaces();
     if (this._web) {
         this._web.leave();
     }
@@ -5250,6 +5263,9 @@ AirPlayApp.prototype._paintWeb = function () {
 };
 
 AirPlayApp.prototype._onWebState = function (state) {
+    if (this._menuScreen() === 'apps-settings') {
+        this._paintApps();
+    }
     if (!this._webOn) {
         return;
     }
@@ -5286,6 +5302,172 @@ AirPlayApp.prototype._onWebEdit = function (ev) {
             }
         }
     });
+};
+
+// ---- Przeglądarka on the cluster and the HUD -------------------------------------------------
+// The page picture is in the browser's video file (the renderer draws it in the centre). For the
+// cluster and the HUD this reads the newest frame from that file and gives it to the same layers
+// AirPlay and YouTube use (_placeMirrorFaces: scaled to the KOMBI profile, at the place set in
+// THEiPlay's "Pozycja"). AirPlay and a YouTube film come first: one picture at a time there.
+AirPlayApp.prototype._dropWebFaces = function () {
+    var held = this._webFaces;
+    this._webFaces = false;
+    this._webFrame = null;
+    this._webGaugeOuts = '';
+    if (!held) {
+        return;
+    }
+    if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay') || this._ytGaugeFrame) {
+        return;
+    }
+    noteStart('web-faces off');
+    this._dropMirrorFace('cluster');
+    this._dropMirrorFace('hud');
+};
+
+AirPlayApp.prototype._takeWeb = function () {
+    var now = Date.now();
+    var outs = [];
+    var frame;
+    var s;
+    if (!this._webOn || (!this._webCluster && !this._webHud) || !this._webFile) {
+        this._dropWebFaces();
+        return;
+    }
+    if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay') || this._ytGaugeFrame) {
+        return;
+    }
+    // at most 8 pages a second: each one is read and scaled on the CPU
+    if (this._webGaugeAt && (now - this._webGaugeAt) < 125) {
+        return;
+    }
+    this._webGaugeAt = now;
+    s = this._web ? this._web.state() : null;
+    if (!s || !s.live) {
+        this._dropWebFaces();
+        return;
+    }
+    frame = this._webFile.pull(false);
+    if (frame === null) {
+        this._dropWebFaces();
+        return;
+    }
+    if (frame) {
+        this._webFrame = frame;
+    }
+    if (!this._webFrame) {
+        return;
+    }
+    if (this._webCluster) {
+        outs.push('cluster');
+    }
+    if (this._webHud) {
+        outs.push('hud');
+    }
+    // the same page as last time on the same screens: the layers keep it
+    if (!frame && this._webFaces && this._webGaugeOuts === outs.join(',')) {
+        return;
+    }
+    if (!this._webFaces) {
+        noteStart('web-faces ' + outs.join(',') + ' ' + this._webFrame.w + 'x' + this._webFrame.h);
+    }
+    this._webFaces = true;
+    this._webGaugeOuts = this._placeMirrorFaces(this._webFrame.i420, this._webFrame.w, this._webFrame.h, outs) ? outs.join(',') : '';
+};
+
+// ---- Aplikacje ---------------------------------------------------------------------------------
+AirPlayApp.prototype._paintApps = function () {
+    var m = this._menu;
+    var s = this._web ? this._web.state() : null;
+    var pol = s && s.connected ? s.pol : null;
+    if (!m || typeof m.setItemHint !== 'function') {
+        return;
+    }
+    m.setItemHint('aset-cluster', this._webCluster ? 'włączone' : 'wyłączone');
+    m.setItemHint('aset-hud', this._webHud ? 'włączone' : 'wyłączone');
+    // the engine's rules: from the tool's daemon; a dash while it does not answer
+    m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
+    m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
+    m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
+    if (typeof m.repaint === 'function') {
+        m.repaint();
+    }
+};
+
+/** true: the choice was of Aplikacje or its Ustawienia */
+AirPlayApp.prototype._onAppsChoice = function (name) {
+    var m = this._menu;
+    var s;
+    var pol;
+    var at;
+    var APPS_PICTURES = [1, 0.75, 0.5];
+    var APPS_SANDBOX = ['ask', 'required'];
+    var APPS_MEMORY = [600, 900, 1200, 1500];
+    var go = function (screen) {
+        if (m && typeof m.setScreen === 'function') {
+            m.setScreen(screen);
+        }
+    };
+    if (name === 'apps') {
+        go('apps');
+        return true;
+    }
+    if (name === 'apps-back') {
+        go('root');
+        return true;
+    }
+    if (name === 'apps-youtube') {
+        this._onMenuChoice('youtube');
+        return true;
+    }
+    if (name === 'apps-settings') {
+        go('apps-settings');
+        this._webClient().look();
+        this._paintApps();
+        return true;
+    }
+    if (name === 'aset-back') {
+        if (this._web && !this._webOn) {
+            this._web.leave();
+        }
+        go('apps');
+        return true;
+    }
+    if (name === 'aset-cluster' || name === 'aset-hud') {
+        if (name === 'aset-cluster') {
+            this._webCluster = !this._webCluster;
+        } else {
+            this._webHud = !this._webHud;
+        }
+        if (this._desk.setWebScreens) {
+            this._desk.setWebScreens({ cluster: !!this._webCluster, hud: !!this._webHud });
+            this._saveDesk();
+        }
+        noteStart('web-screens' + (this._webCluster ? ' cluster' : '') + (this._webHud ? ' hud' : ''));
+        this._webGaugeOuts = '';
+        this._paintApps();
+        return true;
+    }
+    if (name === 'aset-picture' || name === 'aset-sandbox' || name === 'aset-memory') {
+        s = this._web ? this._web.state() : null;
+        pol = s && s.connected ? s.pol : null;
+        if (!pol) {
+            return true;
+        }
+        if (name === 'aset-picture') {
+            at = APPS_PICTURES.indexOf(pol.picture);
+            this._web.send({ op: 'policy', key: 'picture', value: APPS_PICTURES[(at + 1) % APPS_PICTURES.length] });
+        } else if (name === 'aset-sandbox') {
+            // "off" is not offered here: that one is set in the tool's rules file only
+            at = APPS_SANDBOX.indexOf(pol.sandbox);
+            this._web.send({ op: 'policy', key: 'sandbox', value: APPS_SANDBOX[(at + 1) % APPS_SANDBOX.length] });
+        } else {
+            at = APPS_MEMORY.indexOf(pol.memoryLimitMb);
+            this._web.send({ op: 'policy', key: 'memoryLimitMb', value: APPS_MEMORY[(at + 1) % APPS_MEMORY.length] });
+        }
+        return true;
+    }
+    return false;
 };
 
 /** true: the choice was Przeglądarka's */

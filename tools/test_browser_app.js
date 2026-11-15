@@ -33,8 +33,9 @@ function ops(frame) {
 }
 
 // ---- the menu: one new item at the end, nothing else moved
-assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['airplay', 'youtube', 'label-toggle', 'lang-toggle', 'settings', 'position', 'browser']);
-assert.strictEqual(menu.ROOT_ITEMS[6].title, 'Przeglądarka');
+assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['airplay', 'youtube', 'label-toggle', 'lang-toggle', 'settings', 'position', 'apps']);
+assert.strictEqual(menu.ROOT_ITEMS[6].title, 'Aplikacje');
+assert.strictEqual(menu.APPS_ITEMS[0].title, 'Przeglądarka');
 var rootFrame = menu.buildFrame(menu.ROOT_ITEMS, 6, 1920, 720, '', 'THEiPlay', '0.1.136', null, null, null, 'THEiPlay', null, null);
 assert.ok(rootFrame.layout.count === 7 && rootFrame.rects > 20);
 
@@ -77,6 +78,15 @@ assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).la
     assert.ok(/web\.send\(\{ op: 'sandbox-off' \}\)/.test(fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8')), 'main.js sends the answer');
 }());
 
+// ---- Aplikacje: the browser's place in the menu, its screens, the client that only looks
+(function () {
+    var mainSrc = fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8');
+    assert.ok(menu.ROOT_ITEMS.every(function (i) { return i.name !== 'browser'; }) && menu.APPS_ITEMS[0].name === 'browser', 'Przeglądarka is inside Aplikacje');
+    assert.ok(/self\._takeWeb\(\);/.test(mainSrc) && /_placeMirrorFaces\(this\._webFrame\.i420, this\._webFrame\.w, this\._webFrame\.h, outs\)/.test(mainSrc), 'the page goes to the cluster and HUD layers AirPlay and YouTube use');
+    assert.ok(/createYoutubeFile\(menuDraw\.WEB_FILE\)/.test(mainSrc) && menu.WEB_FILE === '/dev/shm/mgu-video-g21browser');
+    assert.ok(/op: 'policy', key: 'picture'/.test(mainSrc) && !/op: 'policy', key: 'sandbox', value: 'off'/.test(mainSrc), 'the menu sets rules through the daemon, never the sandbox off');
+}());
+
 // ---- the keyboard's web layouts
 ['url', 'text', 'webpass'].forEach(function (mode) {
     var e = kb.createEdit({ mode: mode, value: '' });
@@ -105,7 +115,7 @@ function glueApp() {
     var deps = {
         blank: client.blank,
         createBrowserClient: function (opts) {
-            var c = { opts: opts, open: function (w, h) { calls.push('open ' + w + 'x' + h); }, leave: function () { calls.push('leave'); }, shutdown: function () { calls.push('shutdown'); },
+            var c = { opts: opts, open: function (w, h) { calls.push('open ' + w + 'x' + h); }, look: function () { calls.push('look'); }, leave: function () { calls.push('leave'); }, shutdown: function () { calls.push('shutdown'); },
                 send: function (o) { sent.push(o); return true; }, state: function () { return state; } };
             made.push(c);
             return c;
@@ -113,19 +123,76 @@ function glueApp() {
     };
     var app = {
         _web: null, _webOn: false, _webIno: 0, _webOpenAt: 0, sent: sent, calls: calls, made: made, web: [], edits: [], rebinds: 0, editing: false,
+        screen: 'root', hints: {}, faces: [], dropped: [], saved: 0, chosen: [], ring: null,
+        _menuScreen: function () { return app.screen; },
+        _onMenuChoice: function (n) { app.chosen.push(n); },
+        _desk: { setWebScreens: function (v) { app.deskWeb = v; } },
+        _saveDesk: function () { app.saved += 1; },
+        _placeMirrorFaces: function (i420, w, h, outs) { app.faces.push([w, h, outs.join(',')]); return true; },
+        _dropMirrorFace: function (n) { app.dropped.push(n); },
+        _webFile: { pull: function () { var r = app.ring; app.ring = false; return r; } },
         setState: function (patch) { state = Object.assign({}, state, patch); },
         tell: function () { made[0].opts.onState(state); },
         _menu: {
             setWeb: function (info) { app.web.push(info); },
+            setScreen: function (n) { app.screen = n; },
+            setItemHint: function (n, h) { app.hints[n] = h; },
+            repaint: function () {},
             webPage: function () { return menu.webLayout(1920, 720).page; },
             rebindVideo: function () { app.rebinds += 1; },
             startEdit: function (o) { app.edits.push(o); app.editing = true; return true; },
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
+// ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
+(function () {
+    var g = glueApp();
+    assert.strictEqual(g._onAppsChoice('settings'), false, 'another screen\'s choice is not taken');
+    assert.ok(g._onAppsChoice('apps') && g.screen === 'apps');
+    assert.ok(g._onAppsChoice('apps-youtube'));
+    assert.deepStrictEqual(g.chosen, ['youtube'], 'YouTube inside Aplikacje is the YouTube of the main menu');
+    assert.ok(g._onAppsChoice('apps-settings') && g.screen === 'apps-settings');
+    assert.deepStrictEqual(g.calls, ['look'], 'the settings only look at the daemon: no page is opened');
+    assert.strictEqual(g.hints['aset-picture'], '—', 'no daemon yet: a dash, not a made-up value');
+    g._onAppsChoice('aset-picture');
+    assert.strictEqual(g.sent.length, 0, 'and nothing is sent');
+    g.setState({ connected: true, pol: { sandbox: 'ask', picture: 0.75, memoryLimitMb: 900 } });
+    g.tell();
+    assert.deepStrictEqual([g.hints['aset-picture'], g.hints['aset-sandbox'], g.hints['aset-memory']], ['75%', 'pytaj, gdy się nie da', '900 MB']);
+    g._onAppsChoice('aset-picture'); g._onAppsChoice('aset-sandbox'); g._onAppsChoice('aset-memory');
+    assert.deepStrictEqual(g.sent, [{ op: 'policy', key: 'picture', value: 0.5 }, { op: 'policy', key: 'sandbox', value: 'required' }, { op: 'policy', key: 'memoryLimitMb', value: 1200 }]);
+    g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 1500 } });
+    g.sent.length = 0;
+    g._onAppsChoice('aset-picture'); g._onAppsChoice('aset-sandbox'); g._onAppsChoice('aset-memory');
+    assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [1, 'ask', 600], 'the choices go round; the sandbox is never set to off from here');
+    // cluster and HUD for the page
+    g._onAppsChoice('aset-cluster');
+    assert.deepStrictEqual([g._webCluster, !!g._webHud, g.deskWeb, g.saved, g.hints['aset-cluster'], g.hints['aset-hud']], [true, false, { cluster: true, hud: false }, 1, 'włączone', 'wyłączone']);
+    g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 };
+    g._takeWeb();
+    assert.deepStrictEqual(g.faces, [], 'the browser is not open: nothing goes to the cluster');
+    g._webOn = true;
+    g.setState({ live: true });
+    g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 };
+    g._takeWeb();
+    assert.deepStrictEqual(g.faces, [[1332, 396, 'cluster']], 'the page goes to the cluster layer');
+    g._webGaugeAt = 0; g._takeWeb();
+    assert.strictEqual(g.faces.length, 1, 'the same page is not sent again');
+    g._onAppsChoice('aset-hud');
+    g._webGaugeAt = 0; g._takeWeb();
+    assert.deepStrictEqual(g.faces[1], [1332, 396, 'cluster,hud'], 'HUD switched on: the page goes there too');
+    g._ytGaugeFrame = {}; g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 }; g._webGaugeAt = 0; g._takeWeb();
+    assert.strictEqual(g.faces.length, 2, 'a YouTube film has the cluster and the HUD first');
+    g._ytGaugeFrame = null;
+    g._webOn = false; g._webGaugeAt = 0; g._takeWeb();
+    assert.deepStrictEqual(g.dropped, ['cluster', 'hud'], 'the browser closed: its picture leaves the cluster and the HUD');
+    g._onAppsChoice('aset-back');
+    assert.ok(g.screen === 'apps' && g.calls.indexOf('leave') !== -1, 'leaving the settings lets the daemon go');
+    console.log('ok Aplikacje: Przeglądarka, YouTube, Ustawienia; rules through the daemon; the page on the cluster and the HUD');
+}());
 var a = glueApp();
 assert.strictEqual(a._onWebChoice('settings'), false, 'another screen\'s choice is not taken');
 assert.strictEqual(a._onWebChoice('web-back'), true);
