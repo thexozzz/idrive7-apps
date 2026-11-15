@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.137
+
+- Przeglądarka: naprawione pobieranie silnika. Narzędzie `g21-browser` 0.1.0 miało w `engine/manifest.json` sumę SHA-256 kopii silnika, która różniła się od pliku Google (607 bajtów w czterech miejscach), więc auto odrzuciłoby pobrany silnik z błędem „zła suma SHA-256” i przeglądarka by się nie otworzyła. `g21-browser` 0.1.1 ma manifest zrobiony z prawdziwego pliku Google (Chrome for Testing 153.0.8010.12). Sprawdzone lokalnie na tym pliku: pobranie, sumy, start z piaskownicą, dotyk, klawiatura, przewijanie, nawigacja, zoom. Na aucie nadal niesprawdzone.
+
 ## 0.1.136
 
 - Nowa pozycja „Przeglądarka” na końcu menu głównego (pozostałe pozycje i ich kolejność bez zmian). Otwiera przeglądarkę internetową na środkowym ekranie. Na górze pasek: Menu (powrót), wstecz, dalej, odśwież (w trakcie ładowania: zatrzymaj), strona startowa, pole adresu z tytułem strony, klawiatura, Enter, A– i A+ (powiększenie 100, 125, 150, 175, 200%) oraz „Wyłącz aplikację”. Pod paskiem strona w pełnej rozdzielczości 1920×636.

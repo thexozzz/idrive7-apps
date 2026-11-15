@@ -171,10 +171,16 @@ async function testZip(base, eng) {
     fs.rmSync(dir, { recursive: true, force: true });
     // a link instead of the zip (the download directory belongs to the engine uid): not followed
     const link = path.join(base, 'link.zip');
-    fs.symlinkSync(eng.zip, link);
-    fs.mkdirSync(dir);
-    await assert.rejects(d.fillFromZip(eng.m, link, dir, null));
-    fs.rmSync(dir, { recursive: true, force: true });
+    let linked = true;
+    try { fs.symlinkSync(eng.zip, link); } catch (e) {
+        if (e.code !== 'EPERM' || os.platform() !== 'win32') throw e; // Windows without Developer Mode: no symlinks for a plain user
+        linked = false; skip('engine zip: link in place of the file', 'this Windows account cannot create symlinks');
+    }
+    if (linked) {
+        fs.mkdirSync(dir);
+        await assert.rejects(d.fillFromZip(eng.m, link, dir, null));
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
     // a cut file
     const cut = path.join(base, 'cut.zip');
     const whole = fs.statSync(eng.zip).size;
@@ -186,7 +192,7 @@ async function testZip(base, eng) {
     await assert.rejects(d.fillFromZip(eng.m, cut, dir, null), /zip/);
     fs.rmSync(dir, { recursive: true, force: true });
     assert.ok(whole > part.length);
-    console.log('ok engine zip: another SHA-256, a link in place of the file and a cut download are all refused');
+    console.log('ok engine zip: another SHA-256, ' + (linked ? 'a link in place of the file ' : '') + 'and a cut download are ' + (linked ? 'all ' : '') + 'refused');
 }
 
 function client(sock) {
@@ -299,7 +305,8 @@ async function testChain(base, eng) {
             // no library of this machine: only the tool's own
             const foreign = {};
             pids.forEach((pid) => fs.readFileSync('/proc/' + pid + '/maps', 'utf8').split('\n').forEach((l) => { const f = l.split(/\s+/)[5]; if (f && /\.so(\.|$)/.test(f) && f.indexOf(tool) !== 0 && f.indexOf(base) !== 0) foreign[f] = 1; }));
-            const must = Object.keys(foreign).filter((f) => /\/(libc|libm|libglib|libnss3|libnspr4|libX11|libdbus|ld-linux)[.-]/.test(f));
+            // (libX11-xcb is not libX11: the engine opens it by name when the machine has it, the tool does not carry it)
+            const must = Object.keys(foreign).filter((f) => /\/(libc|libm|libglib|libnss3|libnspr4|libX11|libdbus|ld-linux)[.-]/.test(f) && !/\/libX11-xcb\./.test(f));
             assert.deepStrictEqual(must, [], 'engine loaded system libraries');
             console.log('ok engine: runs as uid 65534 with the tool\'s own loader and libraries' + (Object.keys(foreign).length ? ' (optional, opened by name: ' + Object.keys(foreign).map((f) => path.basename(f)).join(', ') + ')' : ''));
         }

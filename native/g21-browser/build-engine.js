@@ -99,7 +99,13 @@ async function main() {
     }
     br.end(); await done;
     let product = '';
-    try { product = require('child_process').execFileSync(bin.from, ['--version'], { encoding: 'utf8' }).trim(); } catch (e) { product = 'unknown (' + e.message.split('\n')[0] + ')'; }
+    // the machine's own loader and libraries first, then the ones the head unit gets (lib/): a development machine need not have Chrome's libraries
+    const run = require('child_process').execFileSync, libs = path.join(__dirname, 'lib');
+    try { product = run(bin.from, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e) {
+        try { product = run(path.join(libs, 'ld-linux-x86-64.so.2'), ['--library-path', libs, bin.from, '--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e2) { product = ''; }
+    }
+    // no version means no address of the same build at Google: a manifest like that would send the head unit to a file that is not there
+    if (!/\d+\.\d+\.\d+\.\d+/.test(product)) throw new Error('cannot read the engine version (' + bin.from + ' --version did not run here); the manifest was not written');
     const manifest = {
         schema: 1, product: product, binarySha256: bin.sha256,
         // where the head unit fetches the engine itself (Google's Chrome for Testing storage); the packed parts below stay on the development machine

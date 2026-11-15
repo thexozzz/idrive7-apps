@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "product": "Google Chrome for Testing 153.0.8010.12",
-  "binarySha256": "ea2a24583bb006c2cacc192750c9bd1e053c4fb291ae2186190eb459b115d94c",
+  "binarySha256": "ded93a9c9a53a1ae040f08124badcca95c938e9d5015ff340c3b5538c41bf39e",
   "source": {
     "url": "https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.12/linux64/chrome-headless-shell-linux64.zip",
     "prefix": "chrome-headless-shell-linux64/"
@@ -18,7 +18,7 @@
       "path": "chrome-headless-shell",
       "mode": 493,
       "size": 197422408,
-      "sha256": "ea2a24583bb006c2cacc192750c9bd1e053c4fb291ae2186190eb459b115d94c"
+      "sha256": "ded93a9c9a53a1ae040f08124badcca95c938e9d5015ff340c3b5538c41bf39e"
     },
     {
       "path": "icudtl.dat",
@@ -85,12 +85,12 @@
     {
       "name": "engine.pack.br.00",
       "size": 46137344,
-      "sha256": "494466fb647701bfacbe969b9b83099d4a1fd48fef760c6e0b84577d42b9d319"
+      "sha256": "6f04ad01e66de62328d79c45604944c6bcba1cefae2e319db6f2add432ec56fa"
     },
     {
       "name": "engine.pack.br.01",
-      "size": 23355488,
-      "sha256": "caea2b38bcb10deed9c2e4773e2f99cb71fa37f06055370ffe2c1af21f2d0154"
+      "size": 23354506,
+      "sha256": "d17905b5511fe6dd833ff060ad15b1ad56f687a10dcc72f21ef673fd0571d5fe"
     }
   ]
 }

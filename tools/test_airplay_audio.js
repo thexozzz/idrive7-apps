@@ -27,10 +27,18 @@ var an = tool.slice(tool.indexOf('audio_node() {'), tool.indexOf('audio_route_co
 ['LD_LIBRARY_PATH', 'LD_PRELOAD', 'G21_BIND_IP'].forEach(function (v) { assert.ok(new RegExp('unset[^)]*' + v).test(an), 'audio_node clears ' + v); });
 assert.ok(/audio_node "\$js" connect/.test(tool) && /audio_node "\$js" disconnect/.test(tool), 'both calls go through audio_node');
 // the clean environment really drops them (run the helper as the tool has it)
-var envOut = cp.spawnSync('sh', ['-c', an.replace('exec /usr/bin/node "$@"', 'exec env') + '\naudio_node'], {
-    encoding: 'utf8', env: Object.assign({}, process.env, { LD_PRELOAD: '/x/g21-bind-wlan.so', G21_BIND_IP: '172.20.10.3', LD_LIBRARY_PATH: '/x/lib' })
-}).stdout;
-assert.ok(!/^(LD_PRELOAD|G21_BIND_IP|LD_LIBRARY_PATH)=/m.test(envOut), 'clean env: ' + envOut.split('\n').filter(function (l) { return /^(LD_|G21_)/.test(l); }).join(' '));
+// (the two shell parts need a POSIX sh with /proc: on Windows they say SKIP, nothing is reported as passed untested)
+var posix = os.platform() !== 'win32';
+var skipped = 0;
+if (posix) {
+    var envRun = cp.spawnSync('sh', ['-c', an.replace('exec /usr/bin/node "$@"', 'exec env') + '\naudio_node'], {
+        encoding: 'utf8', env: Object.assign({}, process.env, { LD_PRELOAD: '/x/g21-bind-wlan.so', G21_BIND_IP: '172.20.10.3', LD_LIBRARY_PATH: '/x/lib' })
+    });
+    assert.ok(!envRun.error, 'sh runs: ' + (envRun.error && envRun.error.message));
+    var envOut = envRun.stdout;
+    assert.ok(/^PATH=/m.test(envOut), 'env printed something');
+    assert.ok(!/^(LD_PRELOAD|G21_BIND_IP|LD_LIBRARY_PATH)=/m.test(envOut), 'clean env: ' + envOut.split('\n').filter(function (l) { return /^(LD_|G21_)/.test(l); }).join(' '));
+} else { skipped += 1; console.log('SKIP audio_node clean environment: needs a POSIX sh'); }
 assert.ok(/alsasink device=smartx:\$audio_dev/.test(tool), 'sink follows the routed device');
 
 // Fake audio manager: records calls in calls.json.
@@ -72,10 +80,12 @@ r = cp.spawnSync(process.execPath, [js, 'disconnect'], { env: env, encoding: 'ut
 assert.strictEqual(JSON.parse(fs.readFileSync(calls, 'utf8')).length, 2, 'no state: nothing touched');
 
 // procs_matching from the tool itself finds a sleeping process by its command line.
-var helper = tool.slice(tool.indexOf('procs_matching() {'), tool.indexOf('our_uxplay_pids() {'));
-var sl = cp.spawn('sleep', ['30']);
-var out = cp.spawnSync('sh', ['-c', helper + "\nprocs_matching '*sleep*30*'"], { encoding: 'utf8' }).stdout;
-sl.kill();
-assert.ok(out.split('\n').indexOf(String(sl.pid)) >= 0, 'procs_matching finds the pid: ' + out);
+if (posix) {
+    var helper = tool.slice(tool.indexOf('procs_matching() {'), tool.indexOf('our_uxplay_pids() {'));
+    var sl = cp.spawn('sleep', ['30']);
+    var out = cp.spawnSync('sh', ['-c', helper + "\nprocs_matching '*sleep*30*'"], { encoding: 'utf8' }).stdout;
+    sl.kill();
+    assert.ok(out.split('\n').indexOf(String(sl.pid)) >= 0, 'procs_matching finds the pid: ' + out);
+} else { skipped += 1; console.log('SKIP procs_matching: needs a POSIX sh and /proc'); }
 
-console.log('test_airplay_audio OK');
+console.log('test_airplay_audio OK' + (skipped ? ' (' + skipped + ' part(s) skipped, see SKIP above)' : ''));
