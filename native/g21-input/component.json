@@ -1,0 +1,43 @@
+{
+  "id": "g21-input",
+  "kind": "tool",
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "title": "G21 Input",
+  "description": "Mysz dla aplikacji THEiPlay: fizyczny touchpad na pokrętle iDrive porusza kursorem. Sterowanie przez /run/g21-input/ctl.sock.",
+  "requires": {
+    "mgu-deploy": "0.7.0"
+  },
+  "uninstallable": true,
+  "mguHmi": [
+    "ID7"
+  ],
+  "files": [
+    { "path": "LICENSE", "mode": "0644" },
+    { "path": "NOTICE.md", "mode": "0644" },
+    { "path": "check.sh", "mode": "0755" },
+    { "path": "g21-inputd.js", "mode": "0644" },
+    { "path": "someip_iface.js", "mode": "0644" }
+  ],
+  "check": [
+    "check.sh"
+  ],
+  "units": [
+    {
+      "name": "g21-input.service",
+      "from": "g21-input.service"
+    }
+  ],
+  "enable": [
+    {
+      "unit": "g21-input.service",
+      "target": "multi-user.target"
+    }
+  ],
+  "recmgr": [
+    "g21-input"
+  ],
+  "restart": [
+    "g21-input.service"
+  ]
+}

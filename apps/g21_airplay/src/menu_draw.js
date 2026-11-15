@@ -1510,6 +1510,19 @@ function drawSpinner(draw, cx, cy) {
     }
 }
 
+// G21 Input's switch as the menu shows it (createMenuSurface().setMouse): the icon beside "Wyłącz aplikację".
+var MOUSE_UI = { on: true };
+
+// a mouse: the body, the line between its buttons, the wheel; struck through when off
+function mouseSign(draw, cx, cy, ink, off) {
+    draw.stroke(cx - 10, cy - 15, 20, 30, 10, 2.5, ink);
+    draw.line(cx - 10, cy - 3, cx + 10, cy - 3, 2, ink);
+    draw.line(cx, cy - 15, cx, cy - 3, 2, ink);
+    if (off) {
+        draw.line(cx - 17, cy + 17, cx + 17, cy - 17, 3, ink);
+    }
+}
+
 // exit: the right button closes the app (menu pages). Without it the
 // button is "wybierz" (the knob keyboard still needs it).
 function drawNav(draw, lay, onTop, exit, hot) {
@@ -1552,6 +1565,16 @@ function drawNav(draw, lay, onTop, exit, hot) {
         right: { x: rightX, y: y, w: arrow, h: h },
         ok: { x: okX, y: y, w: okW, h: h, exit: !!exit }
     };
+    if (exit) {
+        // the mouse switch: lit when apps may have the cursor, dim and struck through when not
+        var mouseX = leftX - gap - arrow;
+        draw.round(mouseX, y, arrow, h, 28, CARD_HI);
+        if (MOUSE_UI.on) {
+            draw.stroke(mouseX, y, arrow, h, 28, 2, ACCENT);
+        }
+        mouseSign(draw, mouseX + arrow / 2, cy, MOUSE_UI.on ? ACCENT : LINE, !MOUSE_UI.on);
+        lay.nav.mouse = { x: mouseX, y: y, w: arrow, h: h };
+    }
     if (onTop) {
         lay.framesTop = y + h + 22;
     }
@@ -3330,6 +3353,16 @@ function buildWebFrame(width, height, web) {
     c = webButton(draw, hits, lay.power, true, RED_CARD);
     powerSign(draw, c.cx, c.cy + 1, 12, 3, INK);
 
+    // G21 Input's cursor: a white arrow with a dark edge, only over the page area
+    if (info.mouse && ready) {
+        var ax = lay.page.x + Math.max(0, Math.min(lay.page.w - 1, Math.round(info.cx || 0)));
+        var ay = lay.page.y + Math.max(0, Math.min(lay.page.h - 1, Math.round(info.cy || 0)));
+        draw.quad([[ax - 2, ay - 4], [ax - 2, ay + 27], [ax + 21, ay + 19]], 0x101010FF);
+        draw.quad([[ax + 4, ay + 14], [ax + 11, ay + 12], [ax + 18, ay + 29], [ax + 11, ay + 31]], 0x101010FF);
+        draw.quad([[ax, ay], [ax, ay + 22], [ax + 16, ay + 16]], 0xFFFFFFFF);
+        draw.quad([[ax + 6, ay + 15], [ax + 10, ay + 14], [ax + 16, ay + 27], [ax + 12, ay + 28]], 0xFFFFFFFF);
+    }
+
     // what the daemon has to say over a page that shows (a bad address, a page that stopped)
     if (showVideo && info.err) {
         tw = draw.textWidth(tr(info.err), 3);
@@ -3641,7 +3674,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -3832,6 +3865,9 @@ function createMenuSurface(opts) {
         if (pointIn(navBoxes.ok, x, y)) {
             return 'ok';
         }
+        if (navBoxes.mouse && pointIn(navBoxes.mouse, x, y)) {
+            return 'mouse';
+        }
         if (pointIn(navBoxes.left, x, y)) {
             return 'left';
         }
@@ -3881,6 +3917,10 @@ function createMenuSurface(opts) {
     }
 
     function useNav(which) {
+        if (which === 'mouse') {
+            choose('mouse-toggle');
+            return;
+        }
         if ((which === 'left' || which === 'right') && navAdjusts()) {
             opts.adjust(armed, which === 'left' ? -1 : 1);
             paintSoon();
@@ -4231,7 +4271,12 @@ function createMenuSurface(opts) {
             } else if (tilted && tilt === 'e') {
                 choose('web-fwd');
             }
-            if (push === 1 && lastPush !== 1) {
+            if (webView.mouse && typeof opts.onWebMouseButton === 'function') {
+                // G21 Input: the press is the left mouse button where the cursor is, and nothing else
+                if ((push === 1) !== (lastPush === 1)) {
+                    opts.onWebMouseButton(push === 1);
+                }
+            } else if (push === 1 && lastPush !== 1) {
                 choose('web-url');
             }
             lastPush = push;
@@ -4722,6 +4767,9 @@ function createMenuSurface(opts) {
                 if (onScreen !== front) {
                     front = onScreen;
                     note(front ? 'menu-front' : 'menu-away');
+                    if (typeof opts.onFront === 'function') {
+                        opts.onFront(front);
+                    }
                 }
             } else if (type === CLOSED) {
                 // the renderer took the surface down (the HMI was touched): show, grab, claim and the video are
@@ -5027,6 +5075,14 @@ function createMenuSurface(opts) {
         move: move,
         press: press,
         lang: function () { return uiLang; },
+        /** G21 Input's switch, as the navigation row shows it */
+        setMouse: function (on) {
+            if (MOUSE_UI.on === !!on) {
+                return;
+            }
+            MOUSE_UI.on = !!on;
+            paintSoon();
+        },
         setLang: function (next) {
             uiLang = next === 'en' ? 'en' : 'pl';
             paint();
@@ -5086,7 +5142,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0)].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -5310,6 +5366,7 @@ module.exports = {
     APPS_ITEMS: APPS_ITEMS,
     APPS_SET_ITEMS: APPS_SET_ITEMS,
     WEB_FILE: WEB_FILE,
+    MOUSE_UI: MOUSE_UI,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
     AIR_OUT_ITEMS: AIR_OUT_ITEMS,
     STREAM_ITEMS: STREAM_ITEMS,

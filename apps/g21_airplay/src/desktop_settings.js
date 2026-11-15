@@ -232,6 +232,9 @@ function createDesktopSettings(stored) {
         : 'central';
     var airClusterTarget = data.airClusterTarget === 'panel' ? 'panel' : 'map';
     var uiLang = data.uiLang === 'en' ? 'en' : 'pl';
+    // G21 Input: the one switch for the mouse (the icon beside "Wyłącz aplikację"), and how fast the cursor goes.
+    var mouseOn = data.mouseOn !== false;
+    var mouseSpeed = [1, 2, 3, 4, 5].indexOf(data.mouseSpeed) >= 0 ? data.mouseSpeed : 3;
     var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
     var airClusterFps = data.airClusterFps | 0;
@@ -383,6 +386,10 @@ function createDesktopSettings(stored) {
             }
             return { ok: true, mode: airDisplay };
         },
+        mouse: function () { return mouseOn; },
+        setMouse: function (on) { mouseOn = !!on; return { ok: true }; },
+        mouseSpeed: function () { return mouseSpeed; },
+        setMouseSpeed: function (n) { if ([1, 2, 3, 4, 5].indexOf(n) < 0) { return { ok: false }; } mouseSpeed = n; return { ok: true }; },
         uiLang: function () { return uiLang; },
         setUiLang: function (next) {
             uiLang = next === 'en' ? 'en' : 'pl';
@@ -647,6 +654,8 @@ function createDesktopSettings(stored) {
                 webScreens: { cluster: webScreens.cluster, hud: webScreens.hud },
                 airDisplay: airDisplay,
                 uiLang: uiLang,
+                mouseOn: mouseOn,
+                mouseSpeed: mouseSpeed,
                 uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,

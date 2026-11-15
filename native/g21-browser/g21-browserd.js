@@ -913,6 +913,22 @@ Daemon.prototype.onCommand = async function (m) {
         }
         return;
     }
+    case 'mouse': {
+        // G21 Input: a real mouse for the page (the cursor is the app's; here are the events). x, y in the page area's
+        // screen pixels, as touch. Hover, links, buttons, text selection and dragging are the engine's own.
+        const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / z;
+        if (m.t === 'move') await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x, y: y, button: m.down ? 'left' : 'none', buttons: m.down ? 1 : 0 });
+        else if (m.t === 'down') { e.mouseDown = { x: x, y: y }; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x, y: y, button: 'left', buttons: 1, clickCount: 1 }); }
+        else if (m.t === 'up') {
+            const d = e.mouseDown;
+            e.mouseDown = null;
+            await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x, y: y, button: 'left', buttons: 0, clickCount: 1 });
+            // a click (not a drag) on a text field: the app's keyboard, as after a tap
+            if (d && Math.abs(x - d.x) + Math.abs(y - d.y) <= 12) setTimeout(() => this.guard(() => this.probeEdit(e, x, y)), 180);
+            setTimeout(() => this.guard(() => this.refresh(e)), 350);
+        }
+        return;
+    }
     case 'scroll':
         await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: Math.round(this.want.w / z / 2), y: Math.round(this.want.h / z / 2), deltaX: (Number(m.dx) || 0) / z, deltaY: (Number(m.dy) || 0) / z });
         return;

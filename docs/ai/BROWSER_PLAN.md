@@ -144,6 +144,18 @@ Decyzja właściciela (2026-11-15): wspólny moduł dźwięku na sprawdzonych ro
 
 **Dalej wg specyfikacji właściciela:** backend plikowy (klasa `Audio` z `ytd.js`) do `g21-audio` i YouTube przez niego; AirPlay (zamiast `g21-audio-route.js`); sekcja „G21 Audio” w ustawieniach; pomiary CPU/RAM i opóźnienia.
 
+## G21 Input (2026-11-15) — narzędzie g21-input 0.1.0, g21-browser 0.1.9, aplikacja 0.1.145
+
+**VERIFIED na aucie (root, `/usr/bin/node` 8, opisy interfejsów z `/etc/oap/someip/someip-interfaces.json`):**
+- `de.bmw.infotainment.ControllerElements.ZBETouchFrontSide`: bez trybu dotyku `statusSystemModeFrontSide` 0, X1=Y1=0, Z1=1.
+- `FrontCCU.ccsControlTouchCCU = {controlTouchActiveFrontSide: TOUCH_AKTIV, controlIcon: 15, aliveControlTouchZBEFrontSide}` przyjęte; tryb 3, 60 próbek/s, palec: `touchCoordinatesX1FrontSide` 1..497, `Y1` (z pojedynczymi skokami do ~2974 — odrzucane jako skok), `touchCoordinatesZ1FrontSide` 0 z palcem, 1 bez. 20 kontaktów w 12 s, najkrótszy 204 ms. `TOUCH_NICHT_AKTIV` przyjęte, tryb znów 0.
+- W trybie dotyku `FrontCCU.statusRotaryEncoderState` nie dał zdarzeń w próbie (pokrętło aplikacja dostaje od renderera).
+- `Vehicle2.statusCarSpeed2`: „Service unavailable” dla roota przy pierwszym odczycie → prędkość nieznana; demon włącza mysz bez sprawdzenia postoju (odstępstwo od wymagania właściciela, zapisane w logu demona).
+
+**Budowa:** `native/g21-input`: `g21-inputd.js` (gniazdo `/run/g21-input/ctl.sock` 0660 root:tm_oap_app; `on`/`off`/`status`; zdarzenia `m` dx,dy, `tap`, `state`), `someip_iface.js` (generator Vizualyse z polami i zdarzeniami). Aplikacja: `input_client.js`, `_syncMouse` (warunki), `_mouseMove` (wzmocnienie i przyspieszenie, wysyłka co 25 ms), `_mouseButton`, `_mouseTap`; `AirPlayApp.APPS` = konfiguracja `mouse: yes`. Menu: `MOUSE_UI`, `mouseSign`, `lay.nav.mouse`, wybór `mouse-toggle`; kursor w `buildWebFrame`. Demon przeglądarki: polecenie `mouse` → `Input.dispatchMouseEvent`.
+
+**Odczyt z auta:** `tail -n 30 /var/opt/g21-input/log/inputd.log`; w `/tmp/g21-airplay-start.log` wiersze `[G21-INPUT]`.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

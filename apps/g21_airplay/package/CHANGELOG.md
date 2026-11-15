@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.145
+
+- G21 Input: nowe narzędzie `g21-input` 0.1.0 — fizyczny touchpad na pokrętle iDrive jako mysz. Demon włącza w kontrolerze tryb dotyku tylko wtedy, gdy aplikacja o to prosi, czyta położenie palca i wysyła aplikacji ruch oraz stuknięcia; po zamknięciu aplikacji, jej awarii, ruszeniu auta albo zatrzymaniu demona tryb dotyku jest wyłączany. Sprawdzone na aucie: tryb dotyku przyjęty, 60 próbek na sekundę ze współrzędnymi palca, po próbie kontroler wrócił do zwykłego trybu.
+- Kursor w Przeglądarce: biała strzałka z ciemnym obrysem, tylko nad stroną. Ruch względny jak na touchpadzie laptopa (szybszy palec = dalej), kursor startuje na środku strony. Wciśnięcie pokrętła = lewy przycisk myszy (wciśnięcie i zwolnienie osobno, więc działa też przeciąganie) i nic poza tym; lekkie stuknięcie touchpada = kliknięcie. Do silnika idą prawdziwe zdarzenia myszy (`g21-browser` 0.1.9), bez wstrzykiwania skryptów w strony. Obrót i wychylenie pokrętła działają jak dotąd.
+- Przełącznik myszy: ikona myszy w rzędzie nawigacji stron menu, na lewo od strzałek obok „Wyłącz aplikację”. Włączona: podświetlona; wyłączona: wygaszona i przekreślona. Stan jest zapisywany. Kursor pojawia się tylko, gdy przełącznik jest włączony, otwarta jest aplikacja z `mouse: yes` (Przeglądarka), aplikacja jest na pierwszym planie i strona jest gotowa; w menu kursora nie ma nigdy.
+- Czego jeszcze nie ma: kursora w ekranach YouTube (własny interfejs, bez adaptera myszy), sekcji „G21 Input” w ustawieniach (czułość jest stała), blokady na czas jazdy — demon nie dostał prędkości z auta przy próbie, więc włącza mysz bez sprawdzenia postoju i zapisuje to w logu. Nowe elementy na aucie jeszcze niesprawdzone.
+
 ## 0.1.144
 
 - G21 Audio: nowe narzędzie `g21-audio` 0.1.0, wspólna droga dźwięku THEiPlay do głośników auta dla dźwięku, który przychodzi jako strumień. Strumień PCM (S16LE, 48 kHz, stereo) trafia do urządzenia SmartX `CarLifeMedia`, a AudioManager BMW łączy to źródło (287) z przednimi głośnikami (1024); głośność reguluje iDrive. Głośniki są przejmowane dopiero, gdy płynie dźwięk (około 1,4 s), i oddawane poprzedniemu źródłu (CarPlay, radio) po 3 s ciszy albo po zamknięciu. Sprawdzone na aucie: ton testowy 440 Hz słychać z głośników, po próbie CarPlay wraca.

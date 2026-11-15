@@ -107,12 +107,14 @@ assert.ok(menu.buildKeyboardFrame(kb.createEdit({ mode: 'url', value: 'wp.pl', t
 function method(name, deps) {
     var m = new RegExp('AirPlayApp\\.prototype\\.' + name + ' = (function \\([^)]*\\) \\{[\\s\\S]*?\\r?\\n\\});').exec(main);
     assert.ok(m, name + ' found');
-    return new Function('noteStart', 'browserClient', 'menuDraw', 'return ' + m[1])(function () {}, deps, menu);
+    return new Function('noteStart', 'browserClient', 'menuDraw', 'inputClient', 'AirPlayApp', 'return ' + m[1])(function () {}, deps, menu, deps.input, { APPS: { chromium: { mouse: 'yes' }, youtube: { mouse: 'yes' } } });
 }
 function glueApp() {
     var sent = [], calls = [], made = [];
     var state = client.blank();
+    var inputLog = [];
     var deps = {
+        input: { createInputClient: function (o) { inputLog.push('create'); return { opts: o, on: function (a) { inputLog.push('on ' + a); }, off: function () { inputLog.push('off'); } }; } },
         blank: client.blank,
         createBrowserClient: function (opts) {
             var c = { opts: opts, open: function (w, h) { calls.push('open ' + w + 'x' + h); }, look: function () { calls.push('look'); }, leave: function () { calls.push('leave'); }, shutdown: function () { calls.push('shutdown'); },
@@ -123,10 +125,10 @@ function glueApp() {
     };
     var app = {
         _web: null, _webOn: false, _webIno: 0, _webOpenAt: 0, sent: sent, calls: calls, made: made, web: [], edits: [], rebinds: 0, editing: false,
-        screen: 'root', hints: {}, faces: [], dropped: [], saved: 0, chosen: [], ring: null,
+        screen: 'root', hints: {}, faces: [], dropped: [], saved: 0, chosen: [], ring: null, inputLog: inputLog, _mouseOn: true, _appFront: true,
         _menuScreen: function () { return app.screen; },
         _onMenuChoice: function (n) { app.chosen.push(n); },
-        _desk: { setWebScreens: function (v) { app.deskWeb = v; } },
+        _desk: { setWebScreens: function (v) { app.deskWeb = v; }, mouseSpeed: function () { return 3; } },
         _saveDesk: function () { app.saved += 1; },
         _placeMirrorFaces: function (i420, w, h, outs) { app.faces.push([w, h, outs.join(',')]); return true; },
         _dropMirrorFace: function (n) { app.dropped.push(n); },
@@ -144,7 +146,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -192,6 +194,57 @@ function glueApp() {
     g._onAppsChoice('aset-back');
     assert.ok(g.screen === 'apps' && g.calls.indexOf('leave') !== -1, 'leaving the settings lets the daemon go');
     console.log('ok Aplikacje: Przeglądarka, YouTube, Ustawienia; rules through the daemon; the page on the cluster and the HUD');
+}());
+// ---- G21 Input: the cursor only in an app with mouse: yes, in front, with the switch on
+(function () {
+    var g = glueApp();
+    g._syncMouse('start');
+    assert.ok(!g._mouseActive && g.inputLog.length === 0, 'the menu: no cursor, the daemon is not asked');
+    g._onWebChoice('browser');
+    assert.ok(!g._mouseActive, 'the engine is not up yet: no cursor');
+    g.setState({ connected: true, engine: 'ready', live: true, w: 1776, h: 528 });
+    g.tell();
+    assert.ok(g._mouseActive, 'the page shows: the cursor is on');
+    assert.deepStrictEqual(g.inputLog, ['create', 'on chromium']);
+    assert.deepStrictEqual([g._mouseX, g._mouseY], [888, 264], 'it starts in the middle of the page');
+    var last = g.web[g.web.length - 1];
+    assert.ok(last.mouse && last.cx === 888 && last.cy === 264, 'the screen is told where the cursor is');
+    var withCursor = menu.buildWebFrame(1920, 720, Object.assign({}, last, { video: true }));
+    var without = menu.buildWebFrame(1920, 720, Object.assign({}, last, { video: true, mouse: false }));
+    assert.ok(withCursor.rects > without.rects, 'the cursor is drawn over the page');
+    // the finger moves: relative, faster for a fast finger, held inside the page
+    g._mouseMove(10, 0);
+    assert.ok(g._mouseX > 888 + 10 && g._mouseY === 264, 'the cursor moved right by more than the pad units');
+    g._mouseMove(-5000, -5000);
+    assert.deepStrictEqual([g._mouseX, g._mouseY], [0, 0], 'held at the page edge');
+    g._mouseMove(100000, 100000);
+    assert.deepStrictEqual([g._mouseX, g._mouseY], [1775, 527]);
+    // the knob: down and up, one of each; a tap right after the knob is not a second click
+    g.sent.length = 0;
+    g._mouseButton(true); g._mouseButton(true); g._mouseTap(); g._mouseButton(false); g._mouseTap();
+    assert.deepStrictEqual(g.sent.map(function (o) { return o.op + ' ' + o.t; }), ['mouse down', 'mouse up'], 'one press of the knob is one click');
+    g._mouseTapAt = 0; g.sent.length = 0;
+    g._mouseTap();
+    assert.deepStrictEqual(g.sent.map(function (o) { return o.t; }), ['down', 'up'], 'a tap is a click');
+    // the switch off: the cursor goes, the daemon is told; on again: it comes back
+    g._mouseOn = false; g._syncMouse('switch');
+    assert.ok(!g._mouseActive && g.inputLog[g.inputLog.length - 1] === 'off');
+    g._mouseButton(true);
+    assert.strictEqual(g.sent.length, 2, 'with the mouse off the knob sends no mouse event');
+    g._mouseOn = true; g._syncMouse('switch');
+    assert.ok(g._mouseActive);
+    // not in front, then the browser closed: off both times
+    g._appFront = false; g._syncMouse('away');
+    assert.ok(!g._mouseActive);
+    g._appFront = true; g._syncMouse('front');
+    assert.ok(g._mouseActive);
+    g._closeBrowser();
+    assert.ok(!g._mouseActive && g.inputLog[g.inputLog.length - 1] === 'off', 'the browser closed: the controller is given back');
+    // the menu's switch beside "Wyłącz aplikację"
+    var root = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720);
+    assert.ok(root.layout.nav && root.layout.nav.mouse && root.layout.nav.ok.exit, 'the mouse switch is in the navigation row of a menu page');
+    assert.ok(root.layout.nav.mouse.x + root.layout.nav.mouse.w <= root.layout.nav.left.x && root.layout.nav.mouse.w >= 64, 'left of the arrows, a finger wide');
+    console.log('ok G21 Input: cursor only in a mouse: yes app that is in front and ready; relative movement; one click per press; the switch');
 }());
 var a = glueApp();
 assert.strictEqual(a._onWebChoice('settings'), false, 'another screen\'s choice is not taken');

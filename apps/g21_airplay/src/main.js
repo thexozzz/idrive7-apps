@@ -12,6 +12,7 @@ var mirrorVideo = require('./mirror_video.js');
 var youtubeFile = require('./youtube_file.js');
 var youtubeClient = require('./youtube_client.js');
 var browserClient = require('./browser_client.js');
+var inputClient = require('./input_client.js');
 var frameFit = require('./frame_fit.js');
 var videoRouter = require('./video_router.js');
 var adapterFactory = require('./cluster_render_adapter.js');
@@ -407,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.144',
+        version: (this._packageJson && this._packageJson.version) || '0.1.145',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -416,6 +417,13 @@ function AirPlayApp() {
         },
         onWebScroll: function (dx, dy) {
             self._webScroll(dx, dy);
+        },
+        onWebMouseButton: function (down) {
+            self._mouseButton(down);
+        },
+        onFront: function (front) {
+            self._appFront = !!front;
+            self._syncMouse(front ? 'front' : 'not in front');
         },
         onTilt: function (dir) {
             return self._tiltBox(dir);
@@ -471,6 +479,13 @@ function AirPlayApp() {
     this._webCluster = !!webScreens.cluster;
     this._webHud = !!webScreens.hud;
     this._webFile = youtubeFile.createYoutubeFile(menuDraw.WEB_FILE);
+    // G21 Input: one switch for the whole app (the icon beside "Wyłącz aplikację"); the cursor only in apps with mouse: yes
+    this._mouseOn = this._desk.mouse ? this._desk.mouse() : true;
+    this._appFront = true;
+    if (this._menu && typeof this._menu.setMouse === 'function') {
+        this._menu.setMouse(this._mouseOn);
+    }
+    noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' (saved setting)');
     this._bindRideTube();
     // 42 ms: at most 24 film frames a second for the cluster/HUD. Without
     // gauges _takeYoutube itself keeps to one look every 200 ms.
@@ -552,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.144') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.145') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2880,6 +2895,19 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
     if (name === 'app-exit') {
         this._exitApp();
+        return;
+    }
+    if (name === 'mouse-toggle') {
+        this._mouseOn = !this._mouseOn;
+        if (this._desk.setMouse) {
+            this._desk.setMouse(this._mouseOn);
+            this._saveDesk();
+        }
+        if (this._menu && typeof this._menu.setMouse === 'function') {
+            this._menu.setMouse(this._mouseOn);
+        }
+        noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' by the menu icon');
+        this._syncMouse('switch');
         return;
     }
     if (this._onAppsChoice(name)) {
@@ -5221,6 +5249,7 @@ AirPlayApp.prototype._closeBrowser = function () {
     this._webOn = false;
     noteStart('web-close');
     this._dropWebFaces();
+    this._syncMouse('browser closed');
     if (this._web) {
         this._web.leave();
     }
@@ -5258,11 +5287,15 @@ AirPlayApp.prototype._paintWeb = function () {
         ring: s.ring,
         ask: s.ask,
         w: s.w,
-        h: s.h
+        h: s.h,
+        mouse: !!this._mouseActive,
+        cx: this._mouseX,
+        cy: this._mouseY
     });
 };
 
 AirPlayApp.prototype._onWebState = function (state) {
+    this._syncMouse('browser state');
     if (this._menuScreen() === 'apps-settings') {
         this._paintApps();
     }
@@ -5540,6 +5573,110 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         });
     }
     return true;
+};
+
+// ---- G21 Input: the controller's touchpad as a mouse ----------------------------------------
+// Apps started from "Aplikacje" say whether they take the mouse (mouse: 'yes'); nothing else gets a cursor.
+AirPlayApp.APPS = {
+    chromium: { mouse: 'yes' },   // Przeglądarka: real mouse events into the engine (g21-browserd op "mouse")
+    youtube: { mouse: 'yes' }     // (its own screens have no mouse adapter yet: the cursor shows only where one is ready)
+};
+
+/* mouseActive = switch on && an app from Aplikacje with mouse: yes is open && it is in front && its adapter is ready */
+AirPlayApp.prototype._syncMouse = function (why) {
+    var self = this;
+    var s = this._web ? this._web.state() : null;
+    var app = this._webOn ? 'chromium' : '';
+    var conf = app ? AirPlayApp.APPS[app] : null;
+    var ready = !!(s && s.connected && s.engine === 'ready' && s.live);
+    var want = !!(this._mouseOn && conf && conf.mouse === 'yes' && this._appFront !== false && ready && !this._exiting);
+    var page;
+    if (want === !!this._mouseActive) {
+        return;
+    }
+    if (want) {
+        if (!this._input) {
+            this._input = inputClient.createInputClient({
+                note: noteStart,
+                onMove: function (dx, dy) {
+                    self._mouseMove(dx, dy);
+                },
+                onTap: function () {
+                    self._mouseTap();
+                },
+                onState: function (st) {
+                    if (st.moving && self._mouseActive) {
+                        noteStart('[G21-INPUT] the car moves: mouse off');
+                    }
+                }
+            });
+        }
+        page = this._menu && this._menu.webPage ? this._menu.webPage() : { w: 1796, h: 548 };
+        this._mousePage = { w: s.w > 0 ? s.w : page.w, h: s.h > 0 ? s.h : page.h };
+        this._mouseX = Math.floor(this._mousePage.w / 2);
+        this._mouseY = Math.floor(this._mousePage.h / 2);
+        this._mouseDown = false;
+        this._mouseActive = true;
+        noteStart('[G21-INPUT] active: ' + app + ' mouse=' + conf.mouse + ' (' + why + '), adapter chromium');
+        this._input.on(app);
+    } else {
+        this._mouseActive = false;
+        noteStart('[G21-INPUT] inactive (' + why + '): switch ' + (this._mouseOn ? 'on' : 'off') + ', app ' + (app || 'none') + ', front ' + (this._appFront !== false) + ', adapter ' + (ready ? 'ready' : 'not ready'));
+        if (this._mouseDown && this._web && this._webOn) {
+            this._web.send({ op: 'mouse', t: 'up', x: this._mouseX, y: this._mouseY });
+        }
+        this._mouseDown = false;
+        if (this._input) {
+            this._input.off();
+        }
+    }
+    this._paintWeb();
+};
+
+// the finger moved on the pad: the cursor goes by that much, faster for a fast finger (as a laptop's pad)
+AirPlayApp.prototype._mouseMove = function (dx, dy) {
+    var self = this;
+    var speed = [0.7, 1.0, 1.4, 1.9, 2.5][(this._desk.mouseSpeed ? this._desk.mouseSpeed() : 3) - 1] || 1.4;
+    var mag = Math.abs(dx) + Math.abs(dy);
+    var gain = speed * (1 + Math.min(2, mag / 30));
+    var p = this._mousePage;
+    if (!this._mouseActive || !p) {
+        return;
+    }
+    this._mouseX = Math.max(0, Math.min(p.w - 1, this._mouseX + dx * gain));
+    this._mouseY = Math.max(0, Math.min(p.h - 1, this._mouseY + dy * gain));
+    // to the engine and to the screen at most every 25 ms: the pad sends 60 samples a second
+    if (this._mouseTimer) {
+        return;
+    }
+    this._mouseTimer = setTimeout(function () {
+        self._mouseTimer = null;
+        if (!self._mouseActive || !self._web) {
+            return;
+        }
+        self._web.send({ op: 'mouse', t: 'move', x: Math.round(self._mouseX), y: Math.round(self._mouseY), down: !!self._mouseDown });
+        self._paintWeb();
+    }, 25);
+};
+
+// the knob pressed / let go: the left button where the cursor is, and only that
+AirPlayApp.prototype._mouseButton = function (down) {
+    if (!this._mouseActive || !this._web || !!down === !!this._mouseDown) {
+        return;
+    }
+    this._mouseDown = !!down;
+    this._mouseTapAt = Date.now();
+    this._web.send({ op: 'mouse', t: down ? 'down' : 'up', x: Math.round(this._mouseX), y: Math.round(this._mouseY) });
+};
+
+// a light tap on the pad: one click. Not while the knob holds the button, nor right after it (one click, not two).
+AirPlayApp.prototype._mouseTap = function () {
+    if (!this._mouseActive || !this._web || this._mouseDown || (this._mouseTapAt && Date.now() - this._mouseTapAt < 350)) {
+        return;
+    }
+    this._mouseTapAt = Date.now();
+    this._web.send({ op: 'mouse', t: 'down', x: Math.round(this._mouseX), y: Math.round(this._mouseY) });
+    this._web.send({ op: 'mouse', t: 'up', x: Math.round(this._mouseX), y: Math.round(this._mouseY) });
 };
 
 AirPlayApp.prototype._webTouch = function (phase, x, y) {

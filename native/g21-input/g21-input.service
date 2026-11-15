@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=g21-input: G21 Input, the iDrive controller's touchpad as a mouse for THEiPlay's apps
+RequiresMountsFor=/var/opt
+After=local-fs.target
+
+[Service]
+# root: the controller's interfaces are not among those BMW's main app gives an app.
+User=root
+ExecStartPre=-/bin/sh -c 'mkdir -p /var/opt/g21-input/log && chmod 0755 /var/opt/g21-input'
+# The head unit's own Node 8: /usr/lib/someip.node is built for it.
+ExecStart=/usr/bin/node /var/opt/g21-input/current/g21-inputd.js
+RuntimeDirectory=g21-input
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=3
+# SIGTERM: the controller leaves touch mode (4 s cap in the daemon).
+TimeoutStopSec=6
+LimitCORE=1
+
+[Install]
+WantedBy=multi-user.target
