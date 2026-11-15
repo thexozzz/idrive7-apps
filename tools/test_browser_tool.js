@@ -24,6 +24,11 @@ function skip(what, why) { skipped += 1; console.log('SKIP ' + what + ': ' + why
 
 function testUrls() {
     assert.strictEqual(d.toUrl('wp.pl'), 'https://wp.pl/');
+    // Ustawienia > O systemie: every line is a short text, whatever the system lets be read
+    (function () {
+        const si = d.sysInfo();
+        ['cpu', 'mem', 'gpu', 'apps', 'disk', 'tmp', 'os', 'usb'].forEach(function (k) { assert.ok(typeof si[k] === 'string' && si[k].length > 0 && si[k].length <= 120, 'sysinfo ' + k); });
+    }());
     // chrome:// addresses: read from the address bar, never taken for a search or a web address
     assert.deepStrictEqual(d.chromeAddr('chrome://version'), { name: 'version', url: 'chrome://version/' });
     assert.deepStrictEqual(d.chromeAddr(' CHROME://GPU/ '), { name: 'gpu', url: 'chrome://gpu/' });

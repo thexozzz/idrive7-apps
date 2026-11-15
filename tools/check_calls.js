@@ -65,7 +65,7 @@ const menu = require(path.join(root, 'apps/g21_airplay/src/menu_draw.js'));
 const items = {};
 Object.keys(menu.SCREENS).forEach(function (k) { const it = menu.SCREENS[k]; (Array.isArray(it) ? it : []).forEach(function (i) { items[i.name] = k; }); });
 Object.keys(items).forEach(function (name) {
-    if (/^(qc-|qk-|pos-out-|stream-)/.test(name)) return;
+    if (/^(qc-|qk-|pos-out-|stream-|si-)/.test(name)) return;   // answered by their prefix
     if (main.indexOf("'" + name + "'") < 0 && read('apps/g21_airplay/src/menu_draw.js').split("'" + name + "'").length < 3) report('menu', 0, 'item "' + name + '" (screen ' + items[name] + ') is not answered in main.js');
 });
 

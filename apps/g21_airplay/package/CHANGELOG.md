@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.169
+
+- Ustawienia > „O systemie”: wolne miejsce (pamięć aplikacji `/var/opt`, dysk `/var/opt/hdshare`), pamięć RAM, procesor, grafika, system i USB. Czyta to demon `g21-browser` 0.1.24 (Node 8 aplikacji nie umie zapytać o wolne miejsce); dotknięcie kafelka odświeża.
+- Stan auta odczytany 2026-11-15: Atom A3960 (4 rdzenie, do 2,4 GHz), 5,5 GB RAM, Intel HD 505 (Broxton, i915), `/var/opt` 10,8 GB (wolne 6,9), dysk danych 89 GB (wolne 83), BMW MGU P18_23w44.2-1-3, Linux 4.14.198-apl.
+
 ## 0.1.168
 
 - Dane auta dla aplikacji ze Sklepu, tylko odczyt (`g21-browser` 0.1.23). Aplikacja zgłasza w `theiplay.json` sygnały (`"car": [...]`), a jej strona czyta je z własnego serwera: `/_car/<aplikacja>/list` i `/_car/<aplikacja>/get?i=<interfejs>&n=<pole>`. Czyta je nowy proces `g21-car.js` (root, Node 8 jednostki, SOME/IP z katalogu jednostki); nie ma w nim kodu, który cokolwiek ustawia albo wywołuje. Bramki: pyta tylko strona tej aplikacji i tylko jako ta aplikacja, wydawane jest tylko to, co zgłosiła, nigdy sygnały o osobie i miejscu (VIN, pozycja, cele, telefon, kontakty, profile), a właściciel wyłącza całość w Aplikacje > Ustawienia > „Dane auta” (reguła `carData`). Droga i bramki sprawdzone testem `tools/test_car_bridge.js` z udawanym SOME/IP; odczyt z prawdziwego auta niesprawdzony.

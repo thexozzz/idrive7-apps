@@ -97,6 +97,13 @@ function createBrowserClient(opts) {
                 fs: !!m.fs
             };
             tell();
+        } else if (m.ev === 'sysinfo' && typeof options.onSys === 'function') {
+            // the head unit, for Ustawienia > O systemie: short texts
+            var sys = {};
+            ['cpu', 'mem', 'gpu', 'apps', 'disk', 'tmp', 'os', 'usb'].forEach(function (k) {
+                sys[k] = String((m.info && m.info[k]) || '').slice(0, 120);
+            });
+            options.onSys(sys);
         } else if (m.ev === 'apps' && typeof options.onApps === 'function') {
             // the apps imported from git (Sklep): [{ id, name, repo, mouse }]
             options.onApps((Array.isArray(m.list) ? m.list : []).filter(function (a) { return a && /^[a-z0-9-]{1,60}$/.test(String(a.id)); }).map(function (a) {

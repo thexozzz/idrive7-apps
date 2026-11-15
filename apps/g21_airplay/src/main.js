@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.168',
+        version: (this._packageJson && this._packageJson.version) || '0.1.169',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.168') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.169') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5265,6 +5265,10 @@ AirPlayApp.prototype._webClient = function () {
             onEdit: function (ev) {
                 self._onWebEdit(ev);
             },
+            onSys: function (info) {
+                self._sysInfo = info;
+                self._paintSysInfo();
+            },
             onApps: function (list) {
                 self._onStoreApps(list);
             },
@@ -5600,6 +5604,21 @@ AirPlayApp.prototype._onStoreProgress = function (ev) {
     this._syncStoreMenu();
 };
 
+// Ustawienia > O systemie: what the browser tool's daemon read (a dash until it answers)
+AirPlayApp.prototype._paintSysInfo = function () {
+    var m = this._menu;
+    var info = this._sysInfo || {};
+    if (!m || typeof m.setItemHint !== 'function' || this._menuScreen() !== 'sys-info') {
+        return;
+    }
+    ['apps', 'disk', 'mem', 'cpu', 'gpu', 'os', 'usb'].forEach(function (k) {
+        m.setItemHint('si-' + k, info[k] || '—');
+    });
+    if (typeof m.repaint === 'function') {
+        m.repaint();
+    }
+};
+
 // the hints of the main Ustawienia
 AirPlayApp.prototype._paintSystem = function () {
     var m = this._menu;
@@ -5682,6 +5701,21 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' in Ustawienia');
         this._syncMouse('switch');
         this._paintSystem();
+        return true;
+    }
+    if (name === 'sys-info' || name.indexOf('si-') === 0) {
+        // the page, and on any of its tiles: read again
+        if (name === 'si-back') {
+            go('system');
+            this._paintSystem();
+            return true;
+        }
+        if (name === 'sys-info') {
+            go('sys-info');
+        }
+        this._paintSysInfo();
+        this._webClient().look();
+        this._web.send({ op: 'sysinfo' });
         return true;
     }
     if (name === 'set-kill') {

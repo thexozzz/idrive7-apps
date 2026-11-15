@@ -153,6 +153,13 @@ var EN = {
     'Obszar zegarów': 'Gauge area',
     'Strony chrome': 'Chrome pages',
     'Dane auta': 'Car data',
+    'O systemie': 'About the system',
+    'Miejsce: aplikacje': 'Room: apps',
+    'Miejsce: dysk': 'Room: disk',
+    'Pamięć': 'Memory',
+    'Procesor': 'Processor',
+    'Grafika': 'Graphics',
+    'System': 'System',
     'Wyjdź': 'Exit',
     'Przycisk wyłączenia': 'Kill button',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
@@ -716,6 +723,7 @@ var SYSTEM_ITEMS = [
     { name: 'set-mouse-speed', title: 'Szybkość myszy', hint: '3 z 5', icon: 'gear' },
     // the cursor on THEiPlay's own pages too (menus, lists), not only inside an app
     { name: 'set-menu-mouse', title: 'Kursor w menu', hint: 'wyłączony', icon: 'gear' },
+    { name: 'sys-info', title: 'O systemie', hint: 'miejsce, procesor, pamięć', icon: 'tag' },
     { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
@@ -742,6 +750,18 @@ var STORE_ITEMS = [
 
 // Aplikacje > Ustawienia: where Przeglądarka shows besides the centre, and the engine's rules
 // (g21-browser's state/policy.json, set through its daemon).
+// Ustawienia > O systemie: what the head unit is and how much room it has (read by the browser tool's daemon)
+var SYSINFO_ITEMS = [
+    { name: 'si-apps', title: 'Miejsce: aplikacje', hint: '—', icon: 'grid' },
+    { name: 'si-disk', title: 'Miejsce: dysk', hint: '—', icon: 'grid' },
+    { name: 'si-mem', title: 'Pamięć', hint: '—', icon: 'gear' },
+    { name: 'si-cpu', title: 'Procesor', hint: '—', icon: 'gear' },
+    { name: 'si-gpu', title: 'Grafika', hint: '—', icon: 'desktop' },
+    { name: 'si-os', title: 'System', hint: '—', icon: 'tag' },
+    { name: 'si-usb', title: 'USB', hint: '—', icon: 'tag' },
+    { name: 'si-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
+];
+
 var APPS_SET_ITEMS = [
     { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
     { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
@@ -910,6 +930,7 @@ var SCREENS = {
     'apps-store': STORE_ITEMS,
     apps: APPS_ITEMS,
     'apps-settings': APPS_SET_ITEMS,
+    'sys-info': SYSINFO_ITEMS,
     youtube: YOUTUBE_ITEMS,
     'yt-login': YT_LOGIN_ITEMS,
     'yt-browse': YT_BROWSE_ITEMS,
@@ -5700,6 +5721,7 @@ module.exports = {
     DEMO_APP: DEMO_APP,
     APPS_ITEMS: APPS_ITEMS,
     APPS_SET_ITEMS: APPS_SET_ITEMS,
+    SYSINFO_ITEMS: SYSINFO_ITEMS,
     WEB_FILE: WEB_FILE,
     MOUSE_UI: MOUSE_UI,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,

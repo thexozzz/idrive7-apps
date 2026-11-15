@@ -780,6 +780,57 @@ function toUrl(text) {
 function originOf(url) { try { const u = new URL(url); return u.protocol === 'data:' ? 'start page' : u.protocol + '//' + u.host; } catch (e) { return '?'; } }
 
 
+// ---------------------------------------------------------------- the head unit, for Ustawienia > O systemie
+/*
+ * Read from the system as it is (the app's own Node 8 cannot ask for a disk's free room): processor, memory,
+ * graphics, the room on the disks THEiPlay uses, the system's name and version, the USB host. All of it reading.
+ */
+const GPU_NAMES = { '8086:5a84': 'Intel HD Graphics 505 (Apollo Lake)', '8086:5a85': 'Intel HD Graphics 500 (Apollo Lake)' };
+function gb(bytes) { return bytes >= 100 * 1073741824 ? Math.round(bytes / 1073741824) + ' GB' : (Math.round(bytes / 107374182.4) / 10) + ' GB'; }
+function sysInfo() {
+    const os = require('os');
+    const text = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } };
+    const out = { cpu: '', mem: '', gpu: '', apps: '', disk: '', tmp: '', os: '', usb: '' };
+    try {
+        const cpus = os.cpus() || [];
+        const max = Number(text('/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq')) || 0;
+        out.cpu = (cpus[0] ? String(cpus[0].model).replace(/\(R\)|\(TM\)|Processor|CPU/g, '').replace(/\s+/g, ' ').trim() : '?') + ', ' + cpus.length + ' rdzenie'
+            + (max ? ', do ' + (Math.round(max / 100000) / 10) + ' GHz' : '') + ', obciążenie ' + (Math.round(os.loadavg()[0] * 10) / 10);
+    } catch (e) { out.cpu = '?'; }
+    try {
+        const mi = text('/proc/meminfo');
+        const kb = (k) => { const m = new RegExp('^' + k + ':\\s+(\\d+)', 'm').exec(mi); return m ? Number(m[1]) * 1024 : 0; };
+        const total = kb('MemTotal') || os.totalmem(), avail = kb('MemAvailable') || os.freemem();
+        out.mem = gb(total) + ', wolne ' + gb(avail);
+    } catch (e) { out.mem = '?'; }
+    try {
+        list('/sys/bus/pci/devices').forEach((d) => {
+            const base = path.join('/sys/bus/pci/devices', d);
+            if (out.gpu || text(path.join(base, 'class')).indexOf('0x03') !== 0) return;
+            const id = text(path.join(base, 'vendor')).trim().replace(/^0x/, '') + ':' + text(path.join(base, 'device')).trim().replace(/^0x/, '');
+            const drv = /DRIVER=(\S+)/.exec(text(path.join(base, 'uevent')));
+            out.gpu = (GPU_NAMES[id] || 'układ ' + id) + (drv ? ', sterownik ' + drv[1] : '');
+        });
+    } catch (e) { /* none read */ }
+    if (!out.gpu) out.gpu = 'nie odczytano';
+    const room = (dir) => { try { const st = fs.statfsSync(dir); const size = Number(st.blocks) * Number(st.bsize), free = Number(st.bavail) * Number(st.bsize); return size ? 'wolne ' + gb(free) + ' z ' + gb(size) : ''; } catch (e) { return ''; } };
+    out.apps = room('/var/opt') || 'nie odczytano';
+    out.disk = room('/var/opt/hdshare') || 'brak';
+    out.tmp = room('/tmp') || 'nie odczytano';
+    try {
+        const rel = text('/etc/os-release');
+        const v = (k) => { const m = new RegExp('^' + k + '="?([^"\\n]*)', 'm').exec(rel); return m ? m[1] : ''; };
+        out.os = ((v('NAME') + ' ' + v('VERSION')).trim() || os.type()) + ', Linux ' + os.release();
+    } catch (e) { out.os = '?'; }
+    try {
+        const devs = list('/sys/bus/usb/devices').filter((d) => /^\d+-[\d.]+$/.test(d)).map((d) => (text(path.join('/sys/bus/usb/devices', d, 'product')).trim() || 'urządzenie')).filter(Boolean);
+        const hosts = list('/sys/bus/usb/devices').filter((d) => /^usb\d+$/.test(d)).length;
+        out.usb = hosts ? 'host (' + hosts + ' szyny), podłączone: ' + (devs.length ? devs.slice(0, 4).join(', ') : 'nic') : 'brak';
+    } catch (e) { out.usb = '?'; }
+    Object.keys(out).forEach((k) => { out[k] = String(out[k]).slice(0, 120); });
+    return out;
+}
+
 // ---------------------------------------------------------------- chrome:// pages
 /*
  * The engine is Chrome's headless shell: it has none of Chrome's own pages a person expects (chrome://version,
@@ -1157,6 +1208,7 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
+    if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: sysInfo() }); return; }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -2105,7 +2157,7 @@ Daemon.prototype.close = async function () {
 
 module.exports = {
     parseRepo: parseRepo, untarGz: untarGz, APPS_RE: APPS_RE, APP_LIMITS: APP_LIMITS,
-    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, chromeAddr: chromeAddr, recentUrl: recentUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
+    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, sysInfo: sysInfo, chromeAddr: chromeAddr, recentUrl: recentUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
     runFetch(String(process.argv[3]), String(process.argv[4]), process.argv[5] || '/run/mgu-uplink/lease.json', process.argv[6] === '--any-host');
