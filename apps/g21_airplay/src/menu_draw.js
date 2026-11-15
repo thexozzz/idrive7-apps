@@ -728,7 +728,7 @@ var APPS_SET_ITEMS = [
     { name: 'aset-home', title: 'Strona startowa', hint: 'wbudowana', icon: 'globe' },
     { name: 'aset-zoom', title: 'Powiększenie', hint: '150%', icon: 'desktop' },
     { name: 'aset-picture', title: 'Rozdzielczość', hint: '75%', icon: 'desktop' },
-    { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
+    { name: 'aset-fs', title: 'Pełny ekran', hint: 'okno z Pozycji', icon: 'desktop' },
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
@@ -3305,11 +3305,12 @@ function buildWebFrame(width, height, web) {
     if (showVideo && info.fs) {
         // a player in full screen: its picture over the whole centre screen, the toolbar hidden. The way out: the
         // player's own button, or the knob pushed left (main.js sends Escape).
-        var fsBox = { x: 0, y: 0, w: width & ~3, h: height & ~1 };
+        // Where: the window of Ustawienia > Pozycja (main.js gives it), as AirPlay's and YouTube's picture.
+        var fsBox = info.fsBox && info.fsBox.w >= 320 && info.fsBox.h >= 200 ? info.fsBox : { x: 0, y: 0, w: width & ~3, h: height & ~1 };
         draw.video(fsBox.x, fsBox.y, fsBox.w, fsBox.h, 1);
         if (info.mouse) {
-            var fx = Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
-            var fy = Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
+            var fx = fsBox.x + Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
+            var fy = fsBox.y + Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
             draw.quad([[fx - 2, fy - 4], [fx - 2, fy + 27], [fx + 21, fy + 19]], 0x101010FF);
             draw.quad([[fx, fy], [fx, fy + 22], [fx + 16, fy + 16]], 0xFFFFFFFF);
         }
@@ -3753,7 +3754,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);

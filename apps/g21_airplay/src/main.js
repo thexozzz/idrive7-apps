@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.155',
+        version: (this._packageJson && this._packageJson.version) || '0.1.156',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.155') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.156') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5228,7 +5228,7 @@ AirPlayApp.prototype._openBrowser = function () {
     this._webIno = 0;
     this._webOpenAt = Date.now();
     noteStart('web-open ' + page.w + 'x' + page.h);
-    var whole = this._menu.webScreen ? this._menu.webScreen() : { w: 0, h: 0 };
+    var whole = this._webFsBox();
     this._webClient().open(page.w, page.h, this._webApp || '', whole.w, whole.h);
     this._paintWeb();
     // no daemon after 3 s: the screen says the tool is missing (until then: "Uruchamiam")
@@ -5287,8 +5287,24 @@ AirPlayApp.prototype._paintWeb = function () {
         mouse: !!this._mouseActive,
         cx: this._mouseX,
         cy: this._mouseY,
-        fs: !!s.fs
+        fs: !!s.fs,
+        fsBox: this._webFsBox()
     });
+};
+
+// Where a page's full screen is drawn on the centre screen: the window of Ustawienia > Pozycja, as everything
+// else THEiPlay shows there; the whole screen when that window is not usable.
+AirPlayApp.prototype._webFsBox = function () {
+    var scr = this._menu && this._menu.webScreen ? this._menu.webScreen() : { w: 1920, h: 720 };
+    var box = this._settings && this._settings.picture ? this._settings.picture('central') : null;
+    var x = box && box.x > 0 ? (box.x | 0) : 0;
+    var y = box && box.y > 0 ? (box.y | 0) : 0;
+    var w = box && box.w ? Math.min(box.w | 0, scr.w - x) & ~3 : 0;
+    var h = box && box.h ? Math.min(box.h | 0, scr.h - y) & ~1 : 0;
+    if (w < 320 || h < 200) {
+        return { x: 0, y: 0, w: scr.w, h: scr.h };
+    }
+    return { x: x, y: y, w: w, h: h };
 };
 
 AirPlayApp.prototype._onWebState = function (state) {
@@ -5425,7 +5441,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
     m.setItemHint('aset-home', pol ? (pol.homepage ? pol.homepage.replace(/^https?:\/\//, '').slice(0, 40) : 'wbudowana') : '—');
     m.setItemHint('aset-zoom', s && s.connected && s.zoom ? Math.round(s.zoom * 100) + '%' : '—');
-    m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : 'cały ekran') : '—');
+    m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : 'okno z Pozycji') : '—');
     m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');

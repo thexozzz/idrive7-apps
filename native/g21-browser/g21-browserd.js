@@ -940,7 +940,10 @@ Daemon.prototype.onCommand = async function (m) {
         if (this.engine && this.want && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
         // fw x fh: the whole centre screen, for a player that goes full screen
         const fw = Math.max(0, Math.min(3840, Number(m.fw) | 0)) & ~3, fh = Math.max(0, Math.min(2160, Number(m.fh) | 0)) & ~1;
-        this.want = { w: w, h: h, fw: fw >= w && fh >= h ? fw : 0, fh: fw >= w && fh >= h ? fh : 0 };
+        // (the app's window for full screen: the whole screen or the owner's "Pozycja" window, which may be smaller
+        // than the page area)
+        const fsOk = fw >= 320 && fh >= 200;
+        this.want = { w: w, h: h, fw: fsOk ? fw : 0, fh: fsOk ? fh : 0 };
         this.zoom = z;
         // an app from Sklep: its first page instead of the start page
         const appUrl = m.app ? await this.appUrl(String(m.app)) : null;
@@ -1310,7 +1313,9 @@ Daemon.prototype.applyFs = async function (e, on) {
     try {
     const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
     if (whole) {
-        const cw = Math.round(w.fw * 2 / 3) & ~3, ch = Math.round(w.fh * 2 / 3) & ~1;
+        // a large window is rendered at two thirds, a small one pixel for pixel
+        const k = w.fw > 1280 ? 2 / 3 : 1;
+        const cw = Math.round(w.fw * k) & ~3, ch = Math.round(w.fh * k) & ~1;
         await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: false, screenWidth: cw, screenHeight: ch });
         this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
         this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');

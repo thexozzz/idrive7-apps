@@ -146,7 +146,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.156
+
+- Pełny ekran odtwarzacza w Przeglądarce jest rysowany w oknie z Ustawienia > Pozycja (ekran środkowy), tak jak obraz AirPlay i YouTube, a nie zawsze na całym ekranie. `g21-browser` 0.1.15 przyjmuje okno mniejsze niż obszar strony i renderuje je piksel w piksel (duże okno nadal w 2/3). Zmiana Pozycji działa od następnego otwarcia Przeglądarki. Niesprawdzone w aucie.
+
 ## 0.1.155
 
 - Przegląd ustawień ekranów. „Gdzie rysować” (mapa albo cały panel zegarów) było w AirPlay > Ekrany > Zegary, choć dotyczy też YouTube i Przeglądarki; jest teraz w głównych Ustawieniach jako „Obszar na zegarach”. Do Ustawień doszły też „Mysz z gładzika” (ten sam przełącznik co ikona w pasku aplikacji) i „Szybkość myszy” (1–5; ustawienie istniało bez pozycji w menu).
