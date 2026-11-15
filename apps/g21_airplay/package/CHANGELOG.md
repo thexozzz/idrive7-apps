@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.185
+
+- Dźwięk AirPlay, pomiar w aucie (2026-11-15): do głośników docierało ok. 11 s dźwięku na 29 s sesji, choć moduł wyjścia nic nie gubił (0 opróżnień, bufor urządzenia prawie pusty). Przyczyna: auto odrzucało pakiety UDP z dźwiękiem, zanim UxPlay je odczytał – licznik systemu „RcvbufErrors” 52 178 wobec 53 046 wpisów „resent audio packet” w logu UxPlay.
+- `g21-airplay-open` 0.1.60: gniazda UDP UxPlay dostają bufor odbioru 4 MiB zamiast systemowych 208 KiB (tylko jego gniazda, ustawienia systemu nietknięte; log UxPlay zapisuje uzyskany rozmiar), a UxPlay działa z nieco wyższym priorytetem. Niesprawdzone w aucie.
+
 ## 0.1.184
 
 - Film na stronie (`g21-browser` 0.1.38): całe miejsce wideo jest zakryte czarnym kafelkiem – nie widać ani nie da się nacisnąć żadnych przycisków odtwarzacza strony – z dużym przyciskiem „▶ Odtwórz” na środku (kafelek stoi w miejscu, nie przesuwa się pod kursorem). Naciśnięcie: obracające się kółko i „Ładowanie…”; gdy film jest gotowy, przycisk zmienia kolor i pyta jeszcze raz „▶ Odtwórz” – dopiero to naciśnięcie pokazuje film na pełnym ekranie. Wideo chronione DRM (EME) nie jest zatrzymywane ani zakrywane.

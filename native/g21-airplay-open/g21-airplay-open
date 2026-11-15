@@ -1379,6 +1379,8 @@ start_ux() {
         if [ -f /usr/lib/libasound.so.2 ]; then
             printf '%s\n' 'export LD_PRELOAD=/usr/lib/libasound.so.2${LD_PRELOAD:+:$LD_PRELOAD}'
         fi
+        # UxPlay a little above the ordinary priority: it must read the phone's packets in time on a busy head unit
+        printf '%s\n' 'renice -n -5 -p $$ >/dev/null 2>&1 || true'
         printf '%s\n' 'bin="$1"; shift'
         printf '%s\n' 'if command -v stdbuf >/dev/null 2>&1; then'
         printf '%s\n' '  exec stdbuf -oL -eL "$bin" "$@"'
