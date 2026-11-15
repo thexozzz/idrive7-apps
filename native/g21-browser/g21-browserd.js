@@ -2141,6 +2141,11 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     ];
     // The full Chrome: its windowless mode (the headless shell knows no other), and none of the things a desktop
     // browser does on its own (asking to be the default browser, its extensions, its crash reports).
+    // (Without a graphics chip its compositor still runs in the graphics process, in software: with the software
+    // rasterizer forbidden as well it has nothing left and ends itself at once, "GPU process isn't usable". The
+    // car, 2026-11-15: the full engine died 160 ms after its start; the reason was not in the log, this is the
+    // likeliest one.)
+    if (dirs.kind === 'chrome') { const i = args.indexOf('--disable-software-rasterizer'); if (i >= 0) args.splice(i, 1); }
     if (dirs.kind === 'chrome') args.push('--headless=new', '--no-default-browser-check', '--disable-extensions', '--disable-component-extensions-with-background-pages', '--disable-crash-reporter', '--noerrdialogs');
     // Sound: with G21 Audio the engine plays into its own ALSA device "g21out" (asound.conf made by openAudio: a file
     // device that writes S16LE 48 kHz stereo into G21 Audio's FIFO). Without it: no device at all (see above).
@@ -2255,8 +2260,14 @@ Daemon.prototype.startEngine2 = async function (url) {
             // what the engine itself said (a missing library, a kernel it cannot run on): the only trace of a start that failed
             const said = this.engine ? String(this.engine.err).split('\n').filter((l) => l.trim() && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 600) : '';
             if (said) this.log('engine said: ' + said);
+            // (and the lines that name the reason, wherever they stand: the last three of a start that died are its
+            // register dump, car 2026-11-15)
+            if (this.engine) String(this.engine.err).split('\n').filter((l) => /FATAL|Check failed|Goodbye|error while loading|No usable|cannot open|not permitted|denied|Received signal|sandbox/i.test(l) && !/dbus|Floss|bluez/i.test(l)).slice(0, 8).forEach((l) => this.log('engine said: ' + l.trim().slice(0, 300)));
             this.killEngine();
             if (!sandbox) throw x;
+            // The full engine: the same sandbox helper runs the headless shell, so this is not put to the owner as a
+            // question about the sandbox; startEngine() goes on with the headless shell.
+            if (dirs.kind === 'chrome') throw new Error('the full engine did not start (' + x.message + ')');
             // it may be the sandbox, it may be something else: only a start without it tells, and that is the owner's to allow
             throw refuse('engine did not start with its sandbox (' + x.message + ')');
         }

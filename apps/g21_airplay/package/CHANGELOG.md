@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.188
+
+- Pełny Chrome, wynik z auta (2026-11-15, `g21-browser` 0.1.39): pobrał się z Google w 36 s i zainstalował (wszystkie biblioteki znalezione), ale kończył pracę 160 ms po starcie; demon uznawał to za problem z piaskownicą i przy regule „wymagana” pokazywał „reguły wymagają piaskownicy, a silnik nie może jej użyć”, więc nie zadziałał też powrót do lekkiego silnika. Powodu awarii nie było w logu (zapisywane były tylko trzy ostatnie linie, czyli zrzut rejestrów).
+- `g21-browser` 0.1.40: pełny silnik nie dostaje już zakazu programowego rysowania (bez układu graficznego i bez niego kończy pracę sam – najbardziej prawdopodobna przyczyna, niepotwierdzona); nieudany start pełnego silnika nie jest już pytaniem o piaskownicę – przeglądarka przechodzi na lekki silnik; log zapisuje linie z przyczyną awarii. Piaskownica pozostaje włączona. Niesprawdzone w aucie.
+
 ## 0.1.187
 
 - Drugi silnik Przeglądarki: pełny Google Chrome for Testing 153.0.8010.12 (ta sama wersja co dotychczasowy), uruchamiany bez okna (`--headless=new`), domyślny. Powód: dotychczasowy „headless shell” to Chrome zbudowany do sterowania przez programy i strony, które to sprawdzają, odrzucają go (auto, 2026-11-15: weryfikacja Crunchyroll odpowiadała 403 za każdym razem); nie ma też modułu do filmów chronionych. Pełny Chrome ma w tej samej paczce od Google moduł Widevine.
