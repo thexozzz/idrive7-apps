@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.175
+
+- Płynność filmu w Przeglądarce, po pomiarze na aucie podczas odtwarzania (2026-11-15, 0.1.174): procesor zajęty w 92–98%, obciążenie ok. 11 na 4 rdzeniach; procesy THEiPlay ok. 40%, z czego połowa to przenoszenie obrazu strony (silnik koduje każdą klatkę jako JPEG, `g21-webframe` ją dekoduje), a nie dekodowanie filmu; reszta to kilkadziesiąt procesów systemu po 2–5%. Dźwięk czysty (0 opróżnień bufora). `g21-browser` 0.1.29: pełny ekran jest renderowany w połowie rozmiaru (960×360 zamiast 1280×480, o 44% mniej pikseli na klatkę), JPEG o jakości 64, usługa ma priorytet `Nice=-4`. Log zapisuje, jakiego dekodera, rozmiaru i liczby klatek używa odtwarzacz. Niesprawdzone w aucie.
+- Przeglądarka pokazuje film przez zrzuty ekranu silnika i na tej jednostce nie będzie w pełni płynna; do filmów z YouTube służy Multimedia > YouTube, gdzie film jest dekodowany bez przeglądarki.
+
 ## 0.1.174
 
 - Lekkie wideo (`g21-browser` 0.1.28, reguła `video`, Ustawienia > Przeglądarka > „Lekkie wideo”, domyślnie włączone): strona dowiaduje się, zanim ruszą jej skrypty, że silnik odtwarza tylko H.264, do 720 linii i 30 klatek na sekundę. YouTube i podobne serwisy podają silnikowi najpierw VP9 albo AV1, których programowe dekodowanie kosztuje kilka razy więcej niż H.264 — na czterech wolnych rdzeniach tej jednostki obraz się zacinał, a po chwili dźwięk. Gdy silnik nie ma H.264, nic nie jest zmieniane. Niesprawdzone w aucie: nie zmierzono, o ile spada obciążenie.

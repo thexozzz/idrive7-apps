@@ -25,7 +25,9 @@ OOMScoreAdjust=900
 # The scheduler's ordinary priority. It was Nice=5 ("below the HMI"), and the head unit is busy all the time
 # (load 9-10 on 4 cores, car 2026-11-15): a film decoded in software at a lower priority than everything else
 # stuttered, and its sound after it. OOMScoreAdjust above still makes this tool the first to go when memory is short.
-Nice=0
+# Above the ordinary priority: with a film on, the head unit runs at 92-98 % (car 2026-11-15, load 11 on 4 cores,
+# dozens of the system's processes at 2-5 % each) and a film at the same priority as all of them stuttered.
+Nice=-4
 # As jap-ridetube-d: 1, not 0, so the crash handler never sees the engine's cores.
 LimitCORE=1
 

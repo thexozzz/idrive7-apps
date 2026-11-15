@@ -1651,8 +1651,11 @@ Daemon.prototype.applyFs = async function (e, on) {
     try {
     const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
     if (whole) {
-        // a large window is rendered at two thirds, a small one pixel for pixel
-        const k = w.fw > 1280 ? 2 / 3 : 1;
+        // A large window is rendered at half its size each way (960 x 360 for the whole 1920 x 720), a small one
+        // pixel for pixel. Car, 2026-11-15, a film in full screen at two thirds (1280 x 480): the head unit at
+        // 92-98 % with half of this tool's share spent on carrying the picture (each frame coded and decoded as a
+        // JPEG), not on the film. A film's own lines are 360 to 480 here, so little is lost.
+        const k = w.fw > 1280 ? 1 / 2 : 1;
         const cw = Math.round(w.fw * k) & ~3, ch = Math.round(w.fh * k) & ~1;
         await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: false, screenWidth: cw, screenHeight: ch });
         this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
@@ -1971,7 +1974,7 @@ Daemon.prototype.cast = async function (on) {
     const e = this.engine;
     if (!e || !e.session) return;
     try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* was off */ }
-    if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 72, everyNthFrame: 1 }, e.session);
+    if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 64, everyNthFrame: 1 }, e.session);
 };
 // title, address, back / forward
 /*
@@ -2070,6 +2073,18 @@ Daemon.prototype.onEvent = function (e, m) {
         e.cdp.send('Page.handleJavaScriptDialog', { accept: p.type === 'alert' || p.type === 'beforeunload' }, e.session).catch(() => {});
         return;
     case 'Log.entryAdded': { const en = p.entry || {}; if (en.level === 'error') this.pageNote(e, 'page ' + (en.source || '') + ': ' + en.text + (en.url ? ' (' + String(en.url).slice(0, 120) + ')' : '')); return; }
+    case 'Media.playerPropertiesChanged': {
+        const want = { kVideoDecoderName: 'decoder', kResolution: 'size', kFramerate: 'frames/s', kVideoTracks: 'track' };
+        (p.properties || []).forEach((pr) => {
+            if (!want[pr.name] || !pr.value) return;
+            const text = 'player ' + want[pr.name] + ': ' + String(pr.value).replace(/\s+/g, ' ').slice(0, 160);
+            e.playerSeen = e.playerSeen || {};
+            if (e.playerSeen[text] || Object.keys(e.playerSeen).length >= 24) return;
+            e.playerSeen[text] = true;
+            this.log(text);
+        });
+        return;
+    }
     case 'Media.playerErrorsRaised': (p.errors || []).forEach((er) => this.pageNote(e, 'player error: ' + JSON.stringify(er).slice(0, 500))); return;
     case 'Media.playerMessagesLogged': (p.messages || []).forEach((ms) => { if (ms.level === 'error' || ms.level === 'warning') this.pageNote(e, 'player ' + ms.level + ': ' + ms.message); }); return;
     case 'Inspector.targetCrashed': if (m.sessionId === e.session) { this.log('page crashed'); this.set({ err: 'strona przestała działać: odśwież', loading: false }); } return;
