@@ -24,6 +24,27 @@ function skip(what, why) { skipped += 1; console.log('SKIP ' + what + ': ' + why
 
 function testUrls() {
     assert.strictEqual(d.toUrl('wp.pl'), 'https://wp.pl/');
+    // chrome:// addresses: read from the address bar, never taken for a search or a web address
+    assert.deepStrictEqual(d.chromeAddr('chrome://version'), { name: 'version', url: 'chrome://version/' });
+    assert.deepStrictEqual(d.chromeAddr(' CHROME://GPU/ '), { name: 'gpu', url: 'chrome://gpu/' });
+    assert.deepStrictEqual(d.chromeAddr('about:flags'), { name: 'flags', url: 'chrome://flags/' });
+    assert.strictEqual(d.chromeAddr('about:blank'), null);
+    assert.strictEqual(d.chromeAddr('chrome://x y'), null);
+    assert.strictEqual(d.chromeAddr('https://chrome.com'), null);
+    (function () {
+        const dm = new d.Daemon({ noSetuid: true, testUid: null });
+        dm.log = function () {};
+        const page = (u) => Buffer.from(String(dm.resolve(u)).split(',')[1], 'base64').toString('utf8');
+        ['about', 'version', 'settings', 'flags', 'policy', 'history', 'downloads', 'extensions', 'bookmarks', 'password-manager'].forEach(function (n) {
+            const html = page('chrome://' + n);
+            assert.ok(html.indexOf('<title>chrome://' + n + '</title>') > 0 && /<body>.{80,}<\/body>/.test(html), 'chrome://' + n + ' has a page');
+        });
+        assert.ok(page('chrome://about').indexOf('href="#chrome://gpu"') > 0, 'the engine\'s pages are linked');
+        assert.strictEqual(dm.resolve('chrome://gpu'), 'chrome://gpu/', 'a page the daemon does not make goes to the engine');
+        assert.ok(/chrome:\/\/nosuch/.test(Buffer.from(dm.chromePage('nosuch', true).split(',')[1], 'base64').toString('utf8')));
+        assert.strictEqual(dm.resolve('wp.pl'), 'https://wp.pl/');
+        assert.strictEqual(dm.resolve('javascript:alert(1)'), null);
+    }());
     // "Ostatnio otwierane": the link opens the same page again, a login's secrets are not kept
     assert.strictEqual(d.recentUrl('https://www.youtube.com/watch?v=abc123&t=42s'), 'https://www.youtube.com/watch?v=abc123&t=42s');
     assert.strictEqual(d.recentUrl('https://www.google.com/search?q=bmw+g21#ip=1'), 'https://www.google.com/search?q=bmw+g21#ip=1');

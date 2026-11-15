@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.160
+
+- Adresy `chrome://` w Przeglądarce. Dotąd pole adresu je odrzucało, a silnik (Chrome headless shell) i tak nie ma stron takich jak `chrome://version` czy `chrome://settings`. `g21-browser` 0.1.19: własne strony `chrome://about` (lista), `version`, `settings`, `policy`, `flags`, `history`, `downloads`, `extensions`, `bookmarks`, `password-manager`; pozostałe adresy `chrome://` idą do silnika (np. `chrome://gpu`), a gdy silnik strony nie ma, przeglądarka to pisze zamiast pustego ekranu. `about:nazwa` działa tak samo. Link do listy jest na stronie startowej. Strony własne sprawdzone testem jednostkowym; strony silnika i całość w aucie niesprawdzone.
+
 ## 0.1.159
 
 - Logowania w Przeglądarce zostają. `g21-browser` 0.1.18: (1) silnik dostaje do 4 s na zamknięcie i zapis profilu, zamiast być ubijany 0,1 s po poleceniu zamknięcia; (2) demon trzyma kopię wszystkich ciasteczek w `state/cookies.json` (root, 0600), zapisywaną w trakcie pracy i przy zatrzymaniu, i oddaje je następnemu silnikowi — także ciasteczka sesyjne, które silnik sam gubił przy każdym restarcie. Nie ma menedżera haseł: zapamiętywane jest zalogowanie, a nie hasła do formularzy. Nieuruchamiane w aucie ani na silniku (testy na Windows nie startują silnika).

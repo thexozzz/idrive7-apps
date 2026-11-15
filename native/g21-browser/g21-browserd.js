@@ -726,7 +726,7 @@ function startPage(recent) {
         + '.r b{display:block;font-weight:400;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r span{display:block;color:#8c7d6c;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
         + 'p{color:#8c7d6c;font-size:14px;margin:18px 0 0}</style></head><body><h1><b>THE</b>iPlay · Przeglądarka</h1><div class="g">' + tiles + '</div>'
         + (rec ? '<h2>Ostatnio otwierane</h2>' + rec : '')
-        + '<p>Adres albo szukane słowa: pole adresu na górze.</p></body></html>';
+        + '<p>Adres albo szukane słowa: pole adresu na górze. Strony przeglądarki: <a style="color:#e6a15c" href="#chrome://about">chrome://about</a></p></body></html>';
     return 'data:text/html;charset=utf-8;base64,' + Buffer.from(html, 'utf8').toString('base64');
 }
 // what the user typed -> an http(s) URL (a search for anything that is not an address); null: refused
@@ -741,6 +741,41 @@ function toUrl(text) {
 }
 function originOf(url) { try { const u = new URL(url); return u.protocol === 'data:' ? 'start page' : u.protocol + '//' + u.host; } catch (e) { return '?'; } }
 
+
+// ---------------------------------------------------------------- chrome:// pages
+/*
+ * The engine is Chrome's headless shell: it has none of Chrome's own pages a person expects (chrome://version,
+ * chrome://settings, chrome://flags, chrome://history ...), only a few diagnostic ones (chrome://gpu ...). So:
+ *   - the pages in CHROME_OWN are made here, from what the daemon knows (a data: page, shown under its chrome:// name),
+ *   - any other chrome://name goes to the engine; when the engine has no such page, a page here says so,
+ *   - chrome://about lists both kinds.
+ * A web page cannot open any of them: only the address bar (the app's "nav") and the links of these pages themselves.
+ */
+const CHROME_OWN = { about: 'Strony chrome://', 'chrome-urls': 'Strony chrome://', help: 'Strony chrome://', version: 'Wersja', settings: 'Ustawienia', flags: 'Przełączniki silnika',
+    history: 'Historia', downloads: 'Pobrane', extensions: 'Rozszerzenia', bookmarks: 'Zakładki', apps: 'Aplikacje', 'password-manager': 'Hasła', policy: 'Reguły', newtab: '', 'new-tab-page': '' };
+const CHROME_ENGINE = ['gpu', 'media-internals', 'histograms', 'process-internals', 'indexeddb-internals', 'serviceworker-internals', 'quota-internals', 'webrtc-internals', 'network-errors', 'tracing'];
+// "chrome://name/...", "about:name" -> { name, url }; null: not such an address
+function chromeAddr(text) {
+    const t = String(text == null ? '' : text).trim();
+    let m = /^chrome:\/\/([a-z0-9-]{1,40})(\/[A-Za-z0-9_.\/?=&%#-]{0,200})?$/i.exec(t);
+    if (!m) { m = /^about:([a-z0-9-]{1,40})$/i.exec(t); if (m && m[1].toLowerCase() === 'blank') return null; }
+    if (!m) return null;
+    const name = m[1].toLowerCase();
+    return { name: name, url: 'chrome://' + name + (m[2] || '/') };
+}
+function chromeDoc(name, body) {
+    const html = '<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>chrome://' + esc(name) + '</title><style>'
+        + 'html{background:#090807;color:#f7f2ea;font-family:"Liberation Sans",Arial,sans-serif}body{margin:0;padding:22px 34px;font-size:18px;line-height:1.4}'
+        + 'h1{font-size:26px;font-weight:400;margin:0 0 16px}h1 b{color:#e6a15c;font-weight:700}h2{font-size:15px;font-weight:400;color:#c4b5a4;margin:22px 0 10px;letter-spacing:.08em;text-transform:uppercase}'
+        + 'a{color:#e6a15c;text-decoration:none}table{border-collapse:collapse;width:100%;max-width:1500px}td{padding:7px 14px 7px 0;vertical-align:top;border-bottom:1px solid #2b231b}'
+        + 'td:first-child{color:#c4b5a4;white-space:nowrap;width:1%}code{font-family:"Liberation Mono",monospace;font-size:15px;word-break:break-all}'
+        + '.l a{display:inline-block;background:#14100d;border:1px solid #2b231b;border-radius:12px;padding:12px 18px;margin:0 10px 10px 0;color:#f7f2ea}.l a:active{border-color:#e6a15c}'
+        + 'p{color:#c4b5a4;max-width:1100px}</style></head><body><h1><b>chrome://</b>' + esc(name) + '</h1>' + body + '</body></html>';
+    return 'data:text/html;charset=utf-8;base64,' + Buffer.from(html, 'utf8').toString('base64');
+}
+function chromeRows(rows) { return '<table>' + rows.map((r) => '<tr><td>' + esc(r[0]) + '</td><td>' + (r[2] ? r[1] : esc(r[1])) + '</td></tr>').join('') + '</table>'; }
+function chromeLinks(names) { return '<div class="l">' + names.map((n) => '<a href="#chrome://' + n + '">chrome://' + n + '</a>').join('') + '</div>'; }
+// the page for chrome://name made here; null: the engine's own page (or none)
 const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===document.body)return "";var t=e.tagName,k="";'
     + 'if(t==="TEXTAREA"||e.isContentEditable)k="text";else if(t==="INPUT"){var y2=(e.type||"text").toLowerCase();if(["text","search","url","email","tel","password","number"].indexOf(y2)>=0)k=y2;}'
     + 'if(!k)return "";var r=e.getBoundingClientRect();var inside=x>=r.left-8&&x<=r.right+8&&y>=r.top-8&&y<=r.bottom+8;'
@@ -854,7 +889,9 @@ Daemon.prototype.emit = function (o) {
 Daemon.prototype.push = function (force) {
     const s = this.s;
     const start = /^data:/.test(s.url);
-    const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? '' : s.url, title: start ? 'Strona startowa' : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
+    // (a page made here: the start page, or one that stands for a chrome:// address, named in its title)
+    const own = start && /^chrome:\/\/[a-z0-9-]+$/.test(String(s.title || '')) ? s.title : '';
+    const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
             homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen }, fs: !!this.fs };
@@ -865,6 +902,65 @@ Daemon.prototype.push = function (force) {
 };
 Daemon.prototype.set = function (patch) { Object.assign(this.s, patch); this.push(); };
 
+// the page for chrome://name made here; null: the engine's own page (or none)
+Daemon.prototype.chromePage = function (name, missing) {
+    const o = this.opts, pol = this.policy(), e = this.engine;
+    const back = '<h2>Więcej</h2>' + chromeLinks(['about']);
+    if (missing) return chromeDoc(name, '<p>Silnik tej przeglądarki (Chrome headless shell) nie ma strony <code>chrome://' + esc(name) + '</code>.</p>' + back);
+    if (!Object.prototype.hasOwnProperty.call(CHROME_OWN, name)) return null;
+    if (name === 'newtab' || name === 'new-tab-page') return this.home();
+    if (name === 'about' || name === 'chrome-urls' || name === 'help') {
+        return chromeDoc(name, '<h2>Strony tej przeglądarki</h2>' + chromeLinks(['version', 'settings', 'flags', 'policy', 'history', 'downloads', 'extensions', 'bookmarks', 'password-manager'])
+            + '<h2>Strony diagnostyczne silnika</h2>' + chromeLinks(CHROME_ENGINE)
+            + '<p>Inne adresy <code>chrome://</code> można wpisać w polu adresu; jeśli silnik takiej strony nie ma, przeglądarka to powie.</p>');
+    }
+    if (name === 'version') {
+        let tool = '';
+        try { tool = String((readJson(path.join(o.here, 'component.json')) || {}).version || ''); } catch (x) { tool = ''; }
+        return chromeDoc(name, chromeRows([
+            ['Silnik', e && e.product ? e.product : 'nie działa'], ['Narzędzie', 'g21-browser ' + tool], ['Node', process.version],
+            ['Piaskownica', e ? (this.lastSandbox === false ? 'wyłączona' : 'włączona') : '—'], ['Dźwięk', this.audio ? 'G21 Audio (' + this.audio.fifo + ')' : 'brak (strony są nieme)'],
+            ['Okno strony', this.want ? this.want.w + ' × ' + this.want.h + ', powiększenie ' + Math.round(this.zoom * 100) + '%, rozdzielczość ' + Math.round(this.picture() * 100) + '%' : '—'],
+            ['Profil', path.join(o.cacheDir, 'profile')], ['Reguły', o.policyFile || ''], ['Log', o.logDir || '']
+        ]) + back);
+    }
+    if (name === 'settings' || name === 'policy') {
+        return chromeDoc(name, '<p>Ustawienia przeglądarki zmienia się w THEiPlay: Aplikacje &gt; Ustawienia. Wszystkie reguły są też w pliku <code>' + esc(o.policyFile || '') + '</code>.</p>'
+            + chromeRows([['Strona startowa', pol.homepage || 'wbudowana'], ['Powiększenie', Math.round(this.zoom * 100) + '%'], ['Rozdzielczość', Math.round(pol.picture * 100) + '%'],
+                ['Pełny ekran', pol.fullscreen === 'page' ? 'obszar strony' : 'okno z Pozycji'], ['Autoodtwarzanie', pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone'],
+                ['Dźwięk', pol.audio], ['Piaskownica', pol.sandbox], ['GPU', pol.gpu], ['Limit pamięci', pol.memoryLimitMb + ' MB'],
+                ['Sieć lokalna', pol.network && pol.network.blockPrivate ? 'zablokowana' + (pol.network.allow.length ? ', wyjątki: ' + pol.network.allow.join(', ') : '') : 'dozwolona']]) + back);
+    }
+    if (name === 'flags') {
+        return chromeDoc(name, '<p>Przełączniki, z którymi uruchomiono silnik. Zmienia się je regułami (chrome://settings), nie tutaj.</p>'
+            + chromeRows((this.lastArgs || []).filter((a) => /^--/.test(a)).map((a) => { const i = a.indexOf('='); return [i < 0 ? a : a.slice(0, i), i < 0 ? '' : '<code>' + esc(a.slice(i + 1).slice(0, 300)) + '</code>', true]; })) + back);
+    }
+    if (name === 'history') {
+        const rec = readJson(path.join(o.stateDir, 'recent.json'));
+        const list = (Array.isArray(rec) ? rec : []).filter((r) => r && typeof r.url === 'string' && /^https?:\/\//i.test(r.url));
+        return chromeDoc(name, (list.length ? chromeRows(list.map((r) => [String(r.title || '').slice(0, 60) || '—', '<a href="' + esc(r.url) + '">' + esc(shownUrl(r.url).slice(0, 160)) + '</a>', true]))
+            : '<p>Nic jeszcze nie otwierano.</p>') + '<p>Przeglądarka pamięta 12 ostatnich stron.</p>' + back);
+    }
+    const none = { downloads: 'Pobieranie plików jest w tej przeglądarce wyłączone.', extensions: 'Ten silnik nie obsługuje rozszerzeń Chrome. Własne aplikacje (strony z git) dodaje się w THEiPlay: Aplikacje > Sklep.',
+        bookmarks: 'Zakładek nie ma; ostatnio otwierane strony są na stronie startowej i w chrome://history.', apps: 'Aplikacje są w THEiPlay: Aplikacje (kafelki) i Aplikacje > Sklep.',
+        'password-manager': 'Menedżera haseł nie ma. Zalogowanie na stronach jest pamiętane (ciasteczka), haseł przeglądarka nie zapisuje.' };
+    return chromeDoc(name, '<p>' + esc(none[name] || '') + '</p>' + back);
+};
+// what the address bar got -> the address to open: a chrome:// page (ours or the engine's) or toUrl()
+Daemon.prototype.resolve = function (text) {
+    const c = chromeAddr(text);
+    if (!c) return toUrl(text);
+    return this.chromePage(c.name) || c.url;
+};
+// open an address in the running engine; a chrome:// page the engine does not have gets a page that says so
+Daemon.prototype.go = async function (e, url) {
+    const r = await e.cdp.send('Page.navigate', { url: url }, e.session);
+    const c = /^chrome:\/\//.test(url) ? chromeAddr(url) : null;
+    if (c && r && r.errorText) {
+        this.log('chrome://' + c.name + ': ' + r.errorText);
+        await e.cdp.send('Page.navigate', { url: this.chromePage(c.name, true) }, e.session);
+    }
+};
 Daemon.prototype.settings = function () { return readJson(path.join(this.opts.stateDir, 'settings.json')) || {}; };
 Daemon.prototype.saveSettings = function (patch) {
     try { mkdirp(this.opts.stateDir, 0o700); writeIfChanged(path.join(this.opts.stateDir, 'settings.json'), JSON.stringify(Object.assign(this.settings(), patch)) + '\n', 0o600); } catch (e) { this.log('settings: ' + e.message); }
@@ -1039,7 +1135,7 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     if (!e) {
-        if ((m.op === 'reload' || m.op === 'home' || m.op === 'nav') && this.want && !this.starting) await this.startEngine(m.op === 'nav' ? toUrl(m.url) : null);
+        if ((m.op === 'reload' || m.op === 'home' || m.op === 'nav') && this.want && !this.starting) await this.startEngine(m.op === 'nav' ? this.resolve(m.url) : null);
         return;
     }
     const send = (method, params) => e.cdp.send(method, params, e.session);
@@ -1047,11 +1143,11 @@ Daemon.prototype.onCommand = async function (m) {
     const z = this.fs ? this.fs.scale : this.zoom;
     switch (m.op) {
     case 'nav': {
-        const url = toUrl(m.url);
+        const url = this.resolve(m.url);
         if (!url) { this.set({ err: 'zły adres' }); return; }
-        this.log('nav ' + originOf(url));
+        this.log('nav ' + (/^chrome:/.test(url) ? url : originOf(url)));
         this.set({ err: '', loading: true });
-        await send('Page.navigate', { url: url });
+        await this.go(e, url);
         return;
     }
     case 'home': this.set({ err: '', loading: true }); await send('Page.navigate', { url: this.home() }); return;
@@ -1465,7 +1561,8 @@ function pageCss(w, h, z, q) {
     const cw = Math.max(sw, Math.floor(w / z / sw) * sw), ch = Math.max(sh, Math.floor(h / z / sh) * sh);
     return { w: cw, h: ch, scale: k / 16, pw: cw * k / 16, ph: ch * k / 16, dw: Math.round(cw * z), dh: Math.round(ch * z) };
 }
-Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
+Daemon.prototype.engineArgs = function (dirs, url, sandbox) { const a = Daemon.prototype.engineArgs2.call(this, dirs, url, sandbox); this.lastArgs = a.slice(); this.lastSandbox = !!sandbox; return a; };
+Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
     // height even (what the renderer's video layer takes): never larger than the page area the app has.
     const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z, this.picture()), w = cssSize.w, h = cssSize.h;
@@ -1729,7 +1826,13 @@ Daemon.prototype.onEvent = function (e, m) {
     case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) this.set({ loading: true, err: '', editable: false }); return;
     case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
     case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.mainFrame = p.frame.id; this.set({ url: p.frame.url + (p.frame.urlFragment || '') }); this.guard(() => this.refresh(e)); } return;
-    case 'Page.navigatedWithinDocument': if (p.frameId === e.mainFrame) { this.set({ url: p.url }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.navigatedWithinDocument':
+        if (p.frameId === e.mainFrame) {
+            const link = /^data:/.test(p.url) ? /#(chrome:\/\/[a-z0-9-]{1,40})$/.exec(p.url) : null;
+            if (link) { const to = this.resolve(link[1]); if (to) { this.set({ loading: true }); this.guard(() => this.go(e, to)); } return; }
+            this.set({ url: p.url }); this.guard(() => this.refresh(e));
+        }
+        return;
     case 'Page.javascriptDialogOpening':
         // nobody can answer a dialog on this screen: alerts are closed, questions answered "no"
         e.cdp.send('Page.handleJavaScriptDialog', { accept: p.type === 'alert' || p.type === 'beforeunload' }, e.session).catch(() => {});
@@ -1871,7 +1974,7 @@ Daemon.prototype.close = async function () {
 
 module.exports = {
     parseRepo: parseRepo, untarGz: untarGz, APPS_RE: APPS_RE, APP_LIMITS: APP_LIMITS,
-    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, recentUrl: recentUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
+    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, chromeAddr: chromeAddr, recentUrl: recentUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
     runFetch(String(process.argv[3]), String(process.argv[4]), process.argv[5] || '/run/mgu-uplink/lease.json', process.argv[6] === '--any-host');
