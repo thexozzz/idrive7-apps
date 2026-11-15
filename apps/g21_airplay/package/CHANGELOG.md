@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Pełny ekran AirPlay ma pływający przycisk „Rozciągnij” w prawym górnym rogu: obraz wypełnia cały ekran środkowy 1920×720, kosztem proporcji; drugi raz — z powrotem z proporcjami. Renderer zawsze zachowuje kształt klatki, więc rozciąganie robi `g21-yuvring` (`g21-airplay-open` 0.1.59): gdy aplikacja poda kształt ekranu w pliku `airplay-size.stretch`, klatka jest robiona w tym kształcie. Działa na ścieżce pierścienia (ta, której używa auto). Poza pełnym ekranem obraz zawsze ma swoje proporcje. Niesprawdzone w aucie.
+
+## 0.1.166
+
+- Ustawienia > Rozdzielczość treści > Ekran centralny ma dwie nowe wartości obok 600×400: 960×640 i 1280×720. To ramka, w którą wpisywany jest obraz (AirPlay i film YouTube), z zachowaniem proporcji i bez powiększania: obraz iPhone’a 1080×498 wychodzi jako 600×276, 960×442 albo bez zmniejszania. Większa ramka to ostrzejszy obraz i więcej pracy procesora; YouTube pobiera i dekoduje wtedy 720p. Domyślnie zostaje 600×400. Zmiana działa od następnego Startu AirPlay i następnego filmu. Niesprawdzone w aucie.
+
 ## 0.1.165
 
 - Naprawa przerywania dźwięku AirPlay, tym mocniejszego, im większy obraz przysyłał iPhone. Log z auta 2026-11-15: w jednej sesji pisarz `g21-audio-out` odrzucił 1 461 888 z 5 772 480 próbek (25%), 3045 razy „urządzenie pełne”, ani jednego opróżnienia. Urządzenie SmartX trzyma 3072 próbki (64 ms) niezależnie od tego, o co się prosi; zapas 80 ms z 0.1.2 go przepełniał, a dźwięk przychodzący porcjami (procesor zajęty dekodowaniem obrazu, obciążenie 8,6 na 4 rdzeniach) był wyrzucany, gdy brakowało miejsca. `g21-audio` 0.1.3: pisarz nigdy nie odrzuca, tylko czeka na miejsce (odtwarzacz czeka wtedy w potoku), nie odmierza już czasu własnym zegarem, a zapas dobiera do faktycznej pojemności urządzenia (SmartX: 40 ms). Binarka przebudowana na Ubuntu 18.04; w aucie niesprawdzone.

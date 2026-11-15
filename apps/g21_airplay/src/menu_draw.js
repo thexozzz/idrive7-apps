@@ -147,6 +147,7 @@ var EN = {
     'Mysz z gładzika': 'Touchpad mouse',
     'Szybkość myszy': 'Mouse speed',
     'Kursor w menu': 'Cursor in the menu',
+    'Rozciągnij': 'Stretch',
     'Przycisk wyłączenia': 'Kill button',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
     'Poziomo': 'Across',
@@ -2308,6 +2309,9 @@ function drawWhereSheet(draw, lay, air) {
 
 // Full screen: black over the whole menu, only the picture; a tap shows the way out.
 var FULL_EXIT = { name: 'air-full', x: 560, y: 590, w: 800, h: 72 };
+// the floating button of the full screen, top right of the part of the screen the app gets touches from: the
+// picture over the whole 1920 x 720, its shape given up
+var FULL_STRETCH = { name: 'air-stretch', x: 104 + 1796 - 12 - 200, y: 88 + 12, w: 200, h: 40 };
 function drawFullScreen(draw, lay, air) {
     draw.rect(0, 0, 1920, 720, 0x000000FF);
     draw.video(0, 0, 1920, 720, 1);
@@ -2316,6 +2320,7 @@ function drawFullScreen(draw, lay, air) {
     lay.hits = [];
     lay.airBadge = null;
     lay.airStrip = null;
+    drawChip(draw, FULL_STRETCH, !!air.stretch, tr('Rozciągnij'));
     if (air.fullUi) {
         draw.grad(0, 520, 1920, 200, 0x00000000, 0x000000D8);
         draw.round(FULL_EXIT.x, FULL_EXIT.y, FULL_EXIT.w, FULL_EXIT.h, 36, 0x1C1612F0);
@@ -4966,7 +4971,7 @@ function createMenuSurface(opts) {
                 if (airState && airState.full && !edit) {
                     // full screen: a tap shows "Wyjdź z trybu pełnoekranowego"; on it, it leaves
                     if (phase === 3) {
-                        choose(airState.fullUi && pointIn(FULL_EXIT, tx, ty) ? 'air-full' : 'air-full-tap');
+                        choose(pointIn(FULL_STRETCH, tx, ty) ? 'air-stretch' : (airState.fullUi && pointIn(FULL_EXIT, tx, ty) ? 'air-full' : 'air-full-tap'));
                     }
                     touchDown = null;
                     return;
@@ -5529,6 +5534,7 @@ function createMenuSurface(opts) {
                 mirrored: !!(info && info.mirrored),
                 full: !!(info && info.full),
                 fullUi: !!(info && info.fullUi),
+                stretch: !!(info && info.stretch),
                 window: win ? {
                     x: win.x | 0,
                     y: win.y | 0,
@@ -5564,7 +5570,7 @@ function createMenuSurface(opts) {
                 next.status,
                 next.screens.map(function (row) { return row.key + (row.on ? '1' : '0'); }).join(','),
                 next.mirrored ? 1 : 0,
-                (next.full ? 1 : 0) + '/' + (next.fullUi ? 1 : 0),
+                (next.full ? 1 : 0) + '/' + (next.fullUi ? 1 : 0) + '/' + (next.stretch ? 1 : 0),
                 next.window ? (next.window.x + ',' + next.window.y + ',' + next.window.w + ',' + next.window.h) : '',
                 next.tune ? (next.tune.name + '/' + next.tune.tool + '/' + next.tune.axis + '/' + next.tune.x + '/' + next.tune.y + '/' + next.tune.w + '/' + next.tune.h + '/' + (next.tune.saved ? 1 : 0)) : ''
             ].join('|');

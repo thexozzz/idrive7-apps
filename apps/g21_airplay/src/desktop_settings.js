@@ -5,11 +5,15 @@ var INPUT_MODES = ['auto', 'touchpad', 'knob', 'screen'];
 var MAX_PROFILES = 6;
 
 // Picture quality, two profiles that never share a value.
-// Centre screen (mgu-render): what the iPhone is asked for. 600x400 is the
-// only size the frame reader takes today (_takeFrame drops bigger frames).
+// Centre screen (mgu-render): the box the picture is fitted into (aspect kept,
+// never enlarged), for AirPlay's mirror and YouTube's film alike. The iPhone is
+// asked for it but sends what it likes (car, 2026-11-15: 1080x498 landscape,
+// 332x720 portrait, with 600x400 asked); the frame is scaled down to the box.
+// A larger box is a sharper picture and more work: more pixels copied for every
+// frame, and YouTube downloads and decodes 720p for the two larger ones.
 // Cluster and HUD (cluster-render): the frame size sent to the KOMBI, the
 // same for both, whatever the size of the window drawn there.
-var QUALITY_CENTRAL = ['600x400'];
+var QUALITY_CENTRAL = ['600x400', '960x640', '1280x720'];
 var QUALITY_KOMBI = ['240x144', '240x180', '320x192', '400x240', '480x288', '600x360'];
 var QUALITY_DEFAULT = { central: '600x400', kombi: '400x240' };
 var QUALITY_NAMES = {
@@ -19,7 +23,9 @@ var QUALITY_NAMES = {
     '400x240': 'wysoka',
     '480x288': 'bardzo wysoka',
     '600x360': 'maksymalna',
-    '600x400': 'iPhone, 24 kl/s'
+    '600x400': 'oszczędna, 24 kl/s',
+    '960x640': 'wyższa, więcej pracy procesora',
+    '1280x720': 'najwyższa, duże obciążenie'
 };
 
 function qualityValue(kind, value) {

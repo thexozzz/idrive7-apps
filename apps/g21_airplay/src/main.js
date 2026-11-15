@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.165',
+        version: (this._packageJson && this._packageJson.version) || '0.1.166',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -579,7 +579,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.165') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.166') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2104,7 +2104,28 @@ AirPlayApp.prototype._setAirFull = function (on) {
     }
     this._airFull = on;
     noteStart(on ? 'air-full on' : 'air-full off');
+    this._syncAirStretch();
     this._refreshAirBadge();
+};
+
+// "Rozciągnij" of the full screen: the ring makes the frame in the screen's shape while this file names it
+// (g21-yuvring reads it for every frame). Only in full screen: a window keeps the picture's own shape.
+AirPlayApp.prototype._syncAirStretch = function () {
+    var file = this._paths && this._paths.airplaySize ? this._paths.airplaySize + '.stretch' : '';
+    var scr;
+    if (!file) {
+        return;
+    }
+    try {
+        if (this._airFull && this._airStretchOn) {
+            scr = this._menu && this._menu.webScreen ? this._menu.webScreen() : { w: 1920, h: 720 };
+            fs.writeFileSync(file, scr.w + 'x' + scr.h + '\n');
+        } else if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+        }
+    } catch (err) {
+        noteStart('air-stretch ' + (err && err.message));
+    }
 };
 
 AirPlayApp.prototype._showAirFullUi = function () {
@@ -3293,6 +3314,13 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
         this._refreshAirBadge();
         return;
     }
+    if (name === 'air-stretch') {
+        this._airStretchOn = !this._airStretchOn;
+        noteStart('air-stretch ' + (this._airStretchOn ? 'on' : 'off'));
+        this._syncAirStretch();
+        this._refreshAirBadge();
+        return;
+    }
     if (name === 'air-full') {
         // Full screen is a state of this visit, not a saved window: the saved
         // 1920x720 came back after reopening as a black screen with no way out.
@@ -3641,6 +3669,7 @@ AirPlayApp.prototype._refreshAirBadge = function () {
         window: picture,
         full: !!(this._airFull && online && picture),
         fullUi: !!(this._airFull && Date.now() < (this._airFullUiUntil || 0)),
+        stretch: !!this._airStretchOn,
         tune: live.on ? this._tuneView() : null
     });
 };

@@ -74,6 +74,21 @@ static int read_size(const char *file, int *pw, int *ph)
     return 1;
 }
 
+/*
+ * Stretch. The renderer always keeps a frame's shape, so a picture "stretched over the whole screen" has to
+ * come as a frame in the screen's shape. While <size file>.stretch names that shape ("1920x720"), the frame
+ * fitted to the profile is made narrower or lower until it has it; the renderer then fills the screen with it.
+ */
+static void stretch_dims(int *dw, int *dh)
+{
+    char path[512];
+    int a, b;
+    if (snprintf(path, sizeof path, "%s.stretch", size_path) >= (int)sizeof path) return;
+    if (!read_size(path, &a, &b)) return;
+    if ((long)*dw * b < (long)*dh * a) { int h = (int)((long)*dw * b / a); h -= h % 4; if (h < 32) h = 32; if (h < *dh) *dh = h; }
+    else { int w = (int)((long)*dh * a / b); w -= w % 4; if (w < 64) w = 64; if (w < *dw) *dw = w; }
+}
+
 static void profile(int *pw, int *ph)
 {
     char buf[64];
@@ -248,6 +263,7 @@ static int one_frame(void)
     if ((size_t)got < need) return 0;
     profile(&pw, &ph);
     fit_dims(sw, sh, pw, ph, &dw, &dh);
+    stretch_dims(&dw, &dh);
     frame = (size_t)dw * dh * 3 / 2;
     if (outcap < frame) { free(outbuf); outcap = frame; outbuf = malloc(outcap); if (!outbuf) { outcap = 0; return 0; } }
     {
