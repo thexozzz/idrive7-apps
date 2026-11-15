@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.191
+
+- Pełny Chrome działa w aucie (2026-11-15, `g21-browser` 0.1.41: „engine up: Chrome/153.0.8010.12”, z piaskownicą). Crunchyroll odpowiada 403 na weryfikację także jemu.
+- AirPlay bez dźwięku, przyczyna z logu auta (2026-11-15): strumień głośników trzymała jeszcze Przeglądarka (jej silnik żyje jakiś czas po wyjściu) i AirPlay dostał odpowiedź „busy (held by chromium)”. `g21-audio` 0.1.5: odtwarzacz, który prosi o strumień celowo (włączany AirPlay, start Przeglądarki, start filmu), dostaje go od innego, który w tej chwili milczy; ten, który tylko ponawia prośbę po utracie, już nie – dwa milczące nie przerzucają się strumieniem.
+- THEiPlay Player zacinał się (auto, film z cda.pl: 694 klatki w 51 s, dźwięk w paczkach po 6 s z przerwami): każdy megabajt filmu był pobierany nowym połączeniem (nowe wyszukanie nazwy i nowe TLS), bez zapasu. `g21-browser` 0.1.42: jedno utrzymywane połączenie, pobieranie z wyprzedzeniem w osobnym wątku (do 8 zakresów czeka w pamięci), zakresy po 4 MB poza YouTube; film prosi o strumień głośników, jeśli w międzyczasie go stracił.
+- Pełny Chrome był zatrzymywany przez limit pamięci lekkiego silnika („engine uses 1238 MB (limit 1200)”): dla pełnego silnika limit to co najmniej 2000 MB. Wideo strony jest teraz także wyciszane, nie tylko zatrzymywane (YouTube zdążył zagrać kilka sekund dźwięku przed przejęciem przez odtwarzacz).
+- Wszystko z tej pozycji NIESPRAWDZONE w aucie. Nowy tryb dźwięku AirPlay z 0.1.4 nie był jeszcze użyty (AirPlay nie dostał strumienia).
+
 ## 0.1.190
 
 - Pełny Chrome, przyczyna awarii przy starcie znaleziona (auto 2026-11-15 z `g21-browser` 0.1.40: nadal kończył pracę po 160 ms, przeglądarka przeszła na lekki silnik, a Crunchyroll dalej odpowiadał 403). Odtworzone na komputerze z bibliotekami i przełącznikami z auta: Chrome przy starcie uruchamia własny program pomocniczy `chrome_crashpad_handler`, który miał wpisaną ścieżkę programu ładującego z Ubuntu (poprawiana była tylko w głównym pliku); pomocnik nie startował i Chrome sam się zatrzymywał. Z poprawioną ścieżką w obu plikach Chrome startuje (sprawdzone na komputerze, nie w aucie).

@@ -168,6 +168,23 @@ function closeStream(why) {
     st.name = '';
     return release(why);
 }
+/*
+ * One stream at a time. A player that asks for it on purpose ("take": true: AirPlay being switched on, the browser
+ * starting, a film starting) gets it from another player that is silent at that moment; the other one is told by
+ * its connection closing. The browser keeps its stream as long as its engine lives, also when nothing plays:
+ * AirPlay switched on meanwhile was answered "busy" and had no sound at all (car, 2026-11-15). A player that
+ * only asks again after losing the stream does not say "take", so two silent players do not pass it back and
+ * forth.
+ */
+function openAsk(c, m, send) {
+    const other = st.holder && st.holder !== c ? st.holder : null;
+    if (!other || !m.take || st.active) { send(openStream(c, m)); return; }
+    log('stream "' + st.name + '" is silent: given to "' + String(m.name || '').slice(0, 24) + '"');
+    closeStream('taken by another player').then(function () {
+        try { other.destroy(); } catch (e) { /* gone */ }
+        send(openStream(c, m));
+    }, function () { send(openStream(c, m)); });
+}
 function openStream(c, m) {
     const name = String(m.name || '');
     const uid = Number(m.uid);
@@ -253,7 +270,7 @@ function serve() {
                 if (!m || typeof m.op !== 'string') continue;
                 if (m.op === 'caps') send(caps());
                 else if (m.op === 'status') send(status());
-                else if (m.op === 'open') send(openStream(c, m));
+                else if (m.op === 'open') openAsk(c, m, send);
                 else if (m.op === 'close') { if (st.holder === c) closeStream('closed by its player').then(function () { send({ ev: 'closed' }); }); else send({ ev: 'closed' }); }
                 else if (m.op === 'tone') tone(m).then(send);
             }

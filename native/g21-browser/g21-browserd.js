@@ -1688,7 +1688,7 @@ Daemon.prototype.appUrl = async function (id) {
  * against 11 ms for decoding and scaling on the processor.
  */
 // (the text of this script is kept readable in the repository's history: one statement a line)
-const PLAYER_HOOK = "(function(){try{if(window.__g21Film)return;window.__g21Film=1;\nvar T=\"▶ Odtwórz\",L=\"Ładowanie…\",map=new WeakMap(),all=[],last=0;\nvar st=document.createElement(\"style\");st.textContent=\"@keyframes g21spin{to{transform:rotate(360deg)}}\";\nfunction root(){return document.body||document.documentElement;}\nfunction hold(ev){var v=ev.target;if(v&&v.tagName===\"VIDEO\"&&!v.mediaKeys){try{v.pause();}catch(e){}}}\ndocument.addEventListener(\"play\",hold,true);document.addEventListener(\"playing\",hold,true);\nfunction send(v,step){var q=JSON.stringify({src:String(v.currentSrc||v.src||\"\"),page:String(location.href),step:step});\ntry{if(window.top===window.self)window.prompt(\"theiplay-player:\"+q);else window.open(\"about:blank#theiplay-player:\"+encodeURIComponent(q));}catch(e){}}\nfunction paint(c){var b=c.firstChild,sp;while(b.firstChild)b.removeChild(b.firstChild);\nif(c.g21===\"load\"){sp=document.createElement(\"span\");sp.style.cssText=\"display:inline-block;width:34px;height:34px;margin-right:18px;vertical-align:-8px;border:5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:g21spin 1s linear infinite\";b.appendChild(sp);b.appendChild(document.createTextNode(L));}\nelse b.appendChild(document.createTextNode(T));\nb.style.background=c.g21===\"ready\"?\"#e8762c\":\"rgba(28,28,28,.96)\";}\nfunction press(v,c){var now=Date.now();if(now-last<700)return;last=now;if(c.g21===\"load\")return;\nif(c.g21===\"ready\"){c.g21=\"idle\";paint(c);send(v,\"play\");return;}\nc.g21=\"load\";paint(c);setTimeout(function(){send(v,\"load\");},300);\nclearTimeout(c.t);c.t=setTimeout(function(){if(c.g21===\"load\"){c.g21=\"ready\";paint(c);}},20000);}\nwindow.__g21FilmReady=function(){all.forEach(function(c){if(c.g21===\"load\"){clearTimeout(c.t);c.g21=\"ready\";paint(c);}});};\nwindow.__g21FilmIdle=function(){all.forEach(function(c){clearTimeout(c.t);if(c.g21!==\"idle\"){c.g21=\"idle\";paint(c);}});};\nfunction make(v){var c=document.createElement(\"div\"),b=document.createElement(\"div\");c.g21=\"idle\";c.v=v;\nc.style.cssText=\"position:fixed;z-index:2147483647;display:none;margin:0;padding:0;border:0;background:#000;cursor:pointer;overflow:hidden\";\nb.style.cssText=\"position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:22px 46px;border-radius:48px;color:#fff;font:700 32px/1.15 sans-serif;white-space:nowrap;box-shadow:0 0 0 2px rgba(255,255,255,.7)\";\nc.appendChild(b);paint(c);\nvar go=function(ev){ev.preventDefault();ev.stopPropagation();if(ev.type===\"click\"||ev.type===\"touchend\")press(v,c);};\n[\"click\",\"touchend\",\"touchstart\",\"mousedown\",\"mouseup\",\"pointerdown\",\"pointerup\",\"dblclick\",\"contextmenu\"].forEach(function(n){c.addEventListener(n,go,true);});\nroot().appendChild(c);all.push(c);return c;}\nfunction place(){var vs=document.querySelectorAll(\"video\"),i,v,c,r;\nif(!st.isConnected){try{(document.head||root()).appendChild(st);}catch(e){}}\nfor(i=0;i<all.length;i++){if(!all[i].v.isConnected)all[i].style.display=\"none\";}\nfor(i=0;i<vs.length;i++){v=vs[i];c=map.get(v);if(!c){c=make(v);map.set(v,c);}\nif(v.mediaKeys){c.style.display=\"none\";continue;}\nif(!v.paused){try{v.pause();}catch(e){}}\nif(!c.isConnected)root().appendChild(c);r=v.getBoundingClientRect();\nif(r.width<160||r.height<90||r.bottom<=0||r.right<=0||r.top>=window.innerHeight||r.left>=window.innerWidth||document.fullscreenElement){c.style.display=\"none\";continue;}\nc.style.left=r.left+\"px\";c.style.top=r.top+\"px\";c.style.width=r.width+\"px\";c.style.height=r.height+\"px\";c.style.display=\"block\";}}\nsetInterval(place,400);window.addEventListener(\"scroll\",place,true);window.addEventListener(\"resize\",place,true);\n}catch(e){}})();";
+const PLAYER_HOOK = "(function(){try{if(window.__g21Film)return;window.__g21Film=1;\nvar T=\"▶ Odtwórz\",L=\"Ładowanie…\",map=new WeakMap(),all=[],last=0;\nvar st=document.createElement(\"style\");st.textContent=\"@keyframes g21spin{to{transform:rotate(360deg)}}\";\nfunction root(){return document.body||document.documentElement;}\nfunction hold(ev){var v=ev.target;if(v&&v.tagName===\"VIDEO\"&&!v.mediaKeys){try{v.muted=true;v.pause();}catch(e){}}}\ndocument.addEventListener(\"play\",hold,true);document.addEventListener(\"playing\",hold,true);\nfunction send(v,step){var q=JSON.stringify({src:String(v.currentSrc||v.src||\"\"),page:String(location.href),step:step});\ntry{if(window.top===window.self)window.prompt(\"theiplay-player:\"+q);else window.open(\"about:blank#theiplay-player:\"+encodeURIComponent(q));}catch(e){}}\nfunction paint(c){var b=c.firstChild,sp;while(b.firstChild)b.removeChild(b.firstChild);\nif(c.g21===\"load\"){sp=document.createElement(\"span\");sp.style.cssText=\"display:inline-block;width:34px;height:34px;margin-right:18px;vertical-align:-8px;border:5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:g21spin 1s linear infinite\";b.appendChild(sp);b.appendChild(document.createTextNode(L));}\nelse b.appendChild(document.createTextNode(T));\nb.style.background=c.g21===\"ready\"?\"#e8762c\":\"rgba(28,28,28,.96)\";}\nfunction press(v,c){var now=Date.now();if(now-last<700)return;last=now;if(c.g21===\"load\")return;\nif(c.g21===\"ready\"){c.g21=\"idle\";paint(c);send(v,\"play\");return;}\nc.g21=\"load\";paint(c);setTimeout(function(){send(v,\"load\");},300);\nclearTimeout(c.t);c.t=setTimeout(function(){if(c.g21===\"load\"){c.g21=\"ready\";paint(c);}},20000);}\nwindow.__g21FilmReady=function(){all.forEach(function(c){if(c.g21===\"load\"){clearTimeout(c.t);c.g21=\"ready\";paint(c);}});};\nwindow.__g21FilmIdle=function(){all.forEach(function(c){clearTimeout(c.t);if(c.g21!==\"idle\"){c.g21=\"idle\";paint(c);}});};\nfunction make(v){var c=document.createElement(\"div\"),b=document.createElement(\"div\");c.g21=\"idle\";c.v=v;\nc.style.cssText=\"position:fixed;z-index:2147483647;display:none;margin:0;padding:0;border:0;background:#000;cursor:pointer;overflow:hidden\";\nb.style.cssText=\"position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:22px 46px;border-radius:48px;color:#fff;font:700 32px/1.15 sans-serif;white-space:nowrap;box-shadow:0 0 0 2px rgba(255,255,255,.7)\";\nc.appendChild(b);paint(c);\nvar go=function(ev){ev.preventDefault();ev.stopPropagation();if(ev.type===\"click\"||ev.type===\"touchend\")press(v,c);};\n[\"click\",\"touchend\",\"touchstart\",\"mousedown\",\"mouseup\",\"pointerdown\",\"pointerup\",\"dblclick\",\"contextmenu\"].forEach(function(n){c.addEventListener(n,go,true);});\nroot().appendChild(c);all.push(c);return c;}\nfunction place(){var vs=document.querySelectorAll(\"video\"),i,v,c,r;\nif(!st.isConnected){try{(document.head||root()).appendChild(st);}catch(e){}}\nfor(i=0;i<all.length;i++){if(!all[i].v.isConnected)all[i].style.display=\"none\";}\nfor(i=0;i<vs.length;i++){v=vs[i];c=map.get(v);if(!c){c=make(v);map.set(v,c);}\nif(v.mediaKeys){c.style.display=\"none\";continue;}\nif(!v.muted){try{v.muted=true;}catch(e){}}if(!v.paused){try{v.pause();}catch(e){}}\nif(!c.isConnected)root().appendChild(c);r=v.getBoundingClientRect();\nif(r.width<160||r.height<90||r.bottom<=0||r.right<=0||r.top>=window.innerHeight||r.left>=window.innerWidth||document.fullscreenElement){c.style.display=\"none\";continue;}\nc.style.left=r.left+\"px\";c.style.top=r.top+\"px\";c.style.width=r.width+\"px\";c.style.height=r.height+\"px\";c.style.display=\"block\";}}\nsetInterval(place,400);window.addEventListener(\"scroll\",place,true);window.addEventListener(\"resize\",place,true);\n}catch(e){}})();";
 const TUBE_RE = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
 Daemon.prototype.filmAsk = function (e, text) {
     let q = null;
@@ -1775,6 +1775,9 @@ Daemon.prototype.filmStart = async function (e, o) {
         this.set({ err: 'Odtwarzacz THEiPlay: brak ' + (missing.length ? path.basename(missing[0]) : 'g21-webframe') });
         return;
     }
+    // (the stream of the speakers may have gone to another player meanwhile: asked for again, for the film)
+    if (!this.audio) await this.openAudio(true);
+    if (this.engine !== e) return;
     const opt = this.filmOpt || (this.filmOpt = { q: 'auto', fill: false });
     const page = o.page, src = o.src;
     let host = '';
@@ -1933,7 +1936,7 @@ Daemon.prototype.filmStop = function (why, err, keep) {
     if (err) this.set({ err: err });
     else this.push(true);
 };
-Daemon.prototype.openAudio = function () {
+Daemon.prototype.openAudio = function (take) {
     this.closeAudio();
     if (this.policy().audio !== 'on') return Promise.resolve();
     const uid = this.opts.noSetuid ? (process.getuid ? process.getuid() : 0) : this.uid;
@@ -1943,7 +1946,8 @@ Daemon.prototype.openAudio = function () {
         const end = (why) => { if (done) return; done = true; clearTimeout(t); if (why) { this.log('sound: no G21 Audio (' + why + '): pages are silent'); try { c.destroy(); } catch (e) { /* gone */ } } resolve(); };
         const t = setTimeout(() => end('no answer'), 3000);
         c.setEncoding('utf8');
-        c.on('connect', () => c.write(JSON.stringify({ op: 'open', name: 'chromium', uid: uid }) + '\n'));
+        // (take: asked on purpose, when the engine or a film starts; not when asking again after the stream was lost)
+        c.on('connect', () => c.write(JSON.stringify({ op: 'open', name: 'chromium', uid: uid, take: !!take }) + '\n'));
         c.on('error', (e) => end(e.code || e.message));
         c.on('close', () => { if (this.audio && this.audio.conn === c) {
             this.audio = null; this.log('sound: G21 Audio went away');
@@ -2251,7 +2255,7 @@ Daemon.prototype.startEngine2 = async function (url) {
     await this.startApps();
     await this.startProxy();
     this.startFrame();
-    await this.openAudio();
+    await this.openAudio(true);
     const mode = this.policy().sandbox;
     const refuse = (why) => {
         if (mode === 'required') { this.log(why + ': policy "sandbox": "required", the engine is not started'); return new UserError('reguły wymagają piaskownicy, a silnik nie może jej użyć'); }
@@ -2549,7 +2553,10 @@ Daemon.prototype.checkMemory = function () {
         else kb += Number(((/VmRSS:\s+(\d+)/.exec(lines(path.join(this.opts.procDir, String(pid), 'status')).join('\n')) || [0, 0])[1])) / 2;
     });
     const limit = Number((lines(path.join(this.opts.stateDir, 'mem-limit-mb'))[0] || '').trim()) || (this.opts.memLimitMb !== 900 ? this.opts.memLimitMb : this.policy().memoryLimitMb);
-    if (kb / 1024 > limit) {
+    // (the full Chrome is several hundred MB larger than the headless shell: with the shell's limit it was stopped
+    // in the middle of ordinary pages, car 2026-11-15: "engine uses 1238 MB (limit 1200)")
+    const cap = this.fullEngine ? Math.max(limit, 2000) : limit;
+    if (kb / 1024 > cap) {
         this.log('engine uses ' + Math.round(kb / 1024) + ' MB (limit ' + limit + '): stopped');
         this.killEngine();
         this.set({ engine: 'failed', err: 'strona zużyła za dużo pamięci', loading: false, live: false });

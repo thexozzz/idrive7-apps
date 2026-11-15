@@ -29,8 +29,6 @@ import struct
 import sys
 import time
 import types
-import urllib.error
-import urllib.request
 
 CA = '/var/opt/mgu-python/current/ssl/cacert.pem'
 TUBE = ('youtube.com', 'youtu.be', 'youtube-nocookie.com')
@@ -227,33 +225,73 @@ def find(a, host):
 
 
 # ---------------------------------------------------------------- the file in ranges
-def opener():
-    ctx = ssl.create_default_context(cafile=CA) if os.path.isfile(CA) else ssl.create_default_context()
-    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+class Net:
+    """Ranges of one file over a connection that is kept (a new connection for every megabyte cost a name lookup and
+    a TLS handshake each time: car, 2026-11-15, a film came in bursts of 6 s with pauses between them)."""
 
+    def __init__(self, rec):
+        self.url = rec['url']
+        self.headers = dict(rec.get('headers') or {})
+        self.conn = None
+        self.at = None
+        self.ctx = ssl.create_default_context(cafile=CA) if os.path.isfile(CA) else ssl.create_default_context()
 
-def get_range(op, rec, first, last):
-    """bytes first..last (last None: to the end of what the server gives); -> (data, total size or 0)"""
-    err = None
-    for attempt in range(4):
-        try:
-            headers = dict(rec.get('headers') or {})
-            headers['Range'] = 'bytes=%d-%s' % (first, '' if last is None else last)
-            with op.open(urllib.request.Request(rec['url'], headers=headers), timeout=30) as r:
+    def _connect(self):
+        from urllib.parse import urlsplit
+        import http.client
+        u = urlsplit(self.url)
+        key = (u.scheme, u.netloc)
+        if self.conn is None or self.at != key:
+            self.close()
+            self.conn = (http.client.HTTPSConnection(u.netloc, timeout=30, context=self.ctx) if u.scheme == 'https'
+                         else http.client.HTTPConnection(u.netloc, timeout=30))
+            self.at = key
+        return (u.path or '/') + ('?' + u.query if u.query else '')
+
+    def close(self):
+        if self.conn is not None:
+            try:
+                self.conn.close()
+            except OSError:
+                pass
+        self.conn = None
+
+    def get(self, first, last):
+        """bytes first..last (last None: to the end of what the server gives); -> (data, total size or 0)"""
+        import http.client
+        from urllib.parse import urljoin
+        err = None
+        for attempt in range(5):
+            try:
+                path = self._connect()
+                headers = dict(self.headers)
+                headers['Range'] = 'bytes=%d-%s' % (first, '' if last is None else last)
+                headers['Connection'] = 'keep-alive'
+                self.conn.request('GET', path, headers=headers)
+                r = self.conn.getresponse()
+                if r.status in (301, 302, 303, 307, 308) and r.getheader('Location'):
+                    r.read()
+                    self.url = urljoin(self.url, r.getheader('Location'))
+                    continue
+                if r.status == 416:
+                    r.read()
+                    return b'', 0
+                if r.status not in (200, 206):
+                    r.read()
+                    raise OSError('HTTP %d' % r.status)
                 data = r.read()
                 total = 0
-                cr = r.headers.get('Content-Range') or ''
+                cr = r.getheader('Content-Range') or ''
                 if '/' in cr and cr.rsplit('/', 1)[1].isdigit():
                     total = int(cr.rsplit('/', 1)[1])
+                if r.status == 200 and first > 0:
+                    raise OSError('the server does not give ranges')
                 return data, total
-        except urllib.error.HTTPError as e:
-            if e.code == 416:
-                return b'', 0
-            err = e
-        except (OSError, ValueError) as e:
-            err = e
-        time.sleep(0.4 * (attempt + 1))
-    raise err
+            except (OSError, ValueError, http.client.HTTPException) as e:
+                err = e
+                self.close()
+                time.sleep(0.3 * (attempt + 1))
+        raise err if err else OSError('too many redirects')
 
 
 def boxes(buf):
@@ -302,14 +340,18 @@ def seek_point(buf, sidx_at, sidx_end, second):
     return offset, t / float(timescale)
 
 
-def stream(rec, second, out):
-    op = opener()
+def stream(rec, second, out, chunk):
+    """The file to `out`, fetched ahead: a thread brings the ranges (up to 8 of them wait in memory), this one
+    writes them as the decoder takes them, so a slow moment of the network does not stop the film."""
+    import queue
+    import threading
+    net = Net(rec)
     first, total = 0, int(rec.get('size') or 0)
     begins = 0.0
     if second > 0:
         head = b''
         while len(head) < 4 * CHUNK:
-            more, tot = get_range(op, rec, len(head), len(head) + 262143)
+            more, tot = net.get(len(head), len(head) + 262143)
             total = total or tot
             if not more:
                 break
@@ -326,21 +368,42 @@ def stream(rec, second, out):
         if not first:
             begins = 0.0
     say('start %.3f' % begins)
-    while True:
-        last = first + CHUNK - 1
-        if total:
-            if first >= total:
+    ahead = queue.Queue(maxsize=8)
+    state = {'first': first, 'total': total, 'stop': False}
+
+    def bring():
+        try:
+            while not state['stop']:
+                a = state['first']
+                b = a + chunk - 1
+                if state['total']:
+                    if a >= state['total']:
+                        break
+                    b = min(b, state['total'] - 1)
+                data, tot = net.get(a, b)
+                state['total'] = state['total'] or tot
+                if not data:
+                    break
+                ahead.put(data)
+                state['first'] = a + len(data)
+                if len(data) < chunk and not state['total']:
+                    break
+            ahead.put(None)
+        except Exception as e:  # pylint: disable=broad-except
+            ahead.put(e)
+
+    threading.Thread(target=bring, daemon=True).start()
+    try:
+        while True:
+            item = ahead.get()
+            if item is None:
                 break
-            last = min(last, total - 1)
-        data, tot = get_range(op, rec, first, last)
-        total = total or tot
-        if not data:
-            break
-        out.write(data)
-        out.flush()
-        first += len(data)
-        if len(data) < CHUNK and not total:
-            break
+            if isinstance(item, Exception):
+                raise item
+            out.write(item)
+            out.flush()
+    finally:
+        state['stop'] = True
 
 
 def main():
@@ -370,7 +433,8 @@ def main():
         say('info ' + json.dumps({'duration': rec.get('duration') or 0, 'fps': rec.get('fps') or 0, 'height': rec.get('height') or 0,
                                   'title': rec.get('title') or '', 'seek': bool(plain)}))
         if plain:
-            stream(rec, max(0.0, a.at), sys.stdout.buffer)
+            # 1 MB ranges where one long request is slowed down (YouTube); larger ones elsewhere
+            stream(rec, max(0.0, a.at), sys.stdout.buffer, CHUNK if any(host == t or host.endswith('.' + t) for t in TUBE) else 4 * CHUNK)
             return 0
         say('start 0.000')
         if ydl is None:

@@ -39,7 +39,7 @@ function connect(first, onLine) {
 
 if (op === 'hold') {
     var held = false;
-    var conn = connect({ op: 'open', name: String(process.argv[3] || ''), uid: Number(process.argv[4]) || 0 }, function (m) {
+    var conn = connect({ op: 'open', name: String(process.argv[3] || ''), uid: Number(process.argv[4]) || 0, take: true }, function (m) {
         if (m.ev !== 'open') return;
         if (!m.ok) { say('no stream: ' + (m.err || 'refused') + (m.holder ? ' (held by ' + m.holder + ')' : '')); process.exit(1); }
         held = true;
