@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.200
+
+- Sesja w aucie 2026-11-15 z właścicielem (AirPlay grał). Odtwarzacz multimediów BMW jako wyjście na żywo odpada: adres strumienia odrzuca („ITEM_UNPLAYABLE”), a plik czyta ok. 52 s naprzód (odtwarzał 60. sekundę, przeczytane miał 112 s), więc dźwięk zapisywany tuż przed głowicą nie jest słyszany.
+- Znaleziona przyczyna cięć i „slow-mo”: wejście SmartX, do którego piszemy (CarLifeMedia), pobiera dźwięk w pełnym tempie tylko wtedy, gdy odtwarzacz multimediów BMW coś odtwarza. Bez tego: 36 000 z 48 000 próbek na sekundę (pięć raportów z rzędu po 180 000 na 5 s, ok. 12 300/s odrzucanych). Z odtwarzaczem grającym w tle plik ciszy: 240 000 na 5 s, 0 odrzuconych, sześć raportów z rzędu, i potwierdzenie właściciela, że dźwięk jest prawidłowy. Samo oddanie głośników źródłu odtwarzacza (bez odtwarzania) nie wystarcza. Dlaczego tak jest – nie wiadomo.
+- `g21-audio` 0.1.12: „zegar” – gdy strumień bierze głośniki, odtwarzacz multimediów BMW odtwarza w tle plik ciszy (rzadki plik WAV, nie zajmuje miejsca); startuje przed przejęciem głośników, kończy po ich oddaniu, a głośniki wracają do źródła, które miało je wcześniej. Wyłącznik: `"clock": false` w `config.json`. Dotyczy AirPlay, Przeglądarki i THEiPlay Player. Sama automatyka (kolejność start/stop, powrót głośników) NIESPRAWDZONA w aucie – sprawdzony jest ręcznie wywołany stan.
+
 ## 0.1.199
 
 - Próby w aucie z odtwarzaczem multimediów BMW, którym RideTube puszcza dźwięk (2026-11-15, cichy ton, postój): plik WAV gra – start 0,8 s po `playFile`, czas biegnie równo; potok (FIFO) nie jest czytany wcale; plik dopisywany w trakcie zatrzymuje się tam, gdzie kończył się przy otwarciu. Konfiguracja silnika multimediów (Cinemo) ma „strumienie na żywo” z buforem 350 ms.

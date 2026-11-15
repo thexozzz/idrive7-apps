@@ -149,6 +149,12 @@ MediaOut.prototype.write = function (buf) {
     try { fs.writeSync(this.fd, buf, 0, buf.length, pos); } catch (e) { this.err = e.message; }
     this.at += buf.length / BYTES_MS;
 };
+/** the item ended, or was stopped by something else: played again from its beginning */
+MediaOut.prototype.again = function () {
+    if (!this.started || !this.mp || !this.file) return Promise.resolve();
+    this.playMs = -1;
+    return this.mp.callMethod('playFile', { path: this.file, languageCode: 7695972 }, 5000).then(function () {}, function () {});
+};
 MediaOut.prototype.stats = function () {
     return 'media ' + this.mode + ': ' + Math.round(this.bytes / BYTES_MS) + ' ms of sound in, player ' + (this.state || '?') + ' at ' + Math.round(this.now()) + ' ms'
         + (this.mode === 'file' ? ', written to ' + Math.round(this.at) + ' ms, moved ' + this.jumps + ' times' : ', ' + this.clients.length + ' listening')

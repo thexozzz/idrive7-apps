@@ -77,17 +77,53 @@ const device = function () { return DEVICE || ('plug:' + mod.DEVICE); };
 const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, claimed: false, stats: '', since: 0, lost: 0 };
 sp.on('lost', function () { st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); });
 
+/*
+ * The clock. The SmartX input this tool writes into takes sound at the full pace only while BMW's media player is
+ * playing something; otherwise it takes 36 000 of 48 000 frames a second, whichever way it is written to, and the
+ * sound is cut (AirPlay) or slow (the browser, a film). Found on the car, 2026-11-15: the thirty seconds the owner
+ * called right were the ones after a test of the media player (frames 1413729, dropped 20392); then, with the
+ * media player playing a file of silence beside it, five reports in a row: 240 000 frames taken every 5 s, none
+ * dropped, and the owner: "w tym momencie jest prawidłowo". Why the player's playing drives that input is not
+ * known; that it does was seen twice.
+ * So while a stream has the speakers the media player plays silence (mediaout.js, a sparse file: it takes no
+ * room): started before the speakers are claimed, stopped after they are given back, and the speakers go back to
+ * the source that had them before. "clock": false in config.json switches it off.
+ */
+let keeper = null;
+function keeperStart() {
+    if (keeper || conf().clock === false || DEVICE) return Promise.resolve();
+    let K;
+    try { K = require(path.join(__dirname, 'mediaout.js')).MediaOut; } catch (e) { log('clock: ' + e.message); return Promise.resolve(); }
+    const k = new K({ log: log, mode: 'file', dir: path.join(ROOT, 'media') });
+    keeper = k;
+    const t0 = Date.now();
+    k.watch = setInterval(function () {
+        // (the file of silence is four hours long; and another program may have stopped the player)
+        if (keeper === k && k.started && k.state && k.state !== 'PLAYER_STATE_PLAY' && Date.now() - t0 > 5000) { log('clock: the media player is ' + k.state + ', started again'); k.again(); }
+    }, 5000);
+    return k.start().then(function () {
+        // the player needs a moment to really play
+        return new Promise(function (resolve) { const until = Date.now() + 2500; const look = function () { if (k.playing || Date.now() > until) resolve(); else setTimeout(look, 50); }; look(); });
+    }).then(function () { log('clock: the media player plays silence (' + (Date.now() - t0) + ' ms)'); }, function (e) { log('clock: not started (' + (e && e.message || e) + '): the sound may be cut'); });
+}
+function keeperStop() {
+    const k = keeper;
+    if (!k) return Promise.resolve();
+    keeper = null;
+    clearInterval(k.watch);
+    return k.stop().then(function () {}, function () {});
+}
 function claim() {
     if (st.claimed) return;
     st.claimed = true;
     const t0 = Date.now();
-    sp.claim().then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); },
+    keeperStart().then(function () { return sp.claim(); }).then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); },
         function (e) { st.claimed = false; log('speakers not claimed: ' + (e && e.message || e)); });
 }
 function release(why) {
     if (!st.claimed) return Promise.resolve();
     st.claimed = false;
-    return sp.release().then(function () { log('speakers released (' + why + ')'); });
+    return sp.release().then(function () { log('speakers released (' + why + ')'); }).then(keeperStop, keeperStop);
 }
 /*
  * A player must never wait for the speakers. Its sound comes through a pipe; while no writer reads it (the device
