@@ -1825,9 +1825,7 @@ Daemon.prototype.filmStart = async function (e, o) {
         : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*', true)];
     const vf = f.fill ? 'scale=' + W + ':' + H + ',format=yuv420p'
         : 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
-    // (the browser's stream is now written without ever being held, as AirPlay's: nothing would slow a decoder
-    // that is not slowed here, so it always reads at the film's own speed)
-    const bySound = false;
+    const bySound = !!this.audio && !!feeds[1];
     const input = (name) => ['-thread_queue_size', '512'].concat(bySound ? [] : ['-re'], ['-i', name]);
     const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-nostats'].concat(feeds[1] ? ['-copyts'] : [], input('pipe:0'), feeds[1] ? input('pipe:3') : [],
         ['-map', '0:v:0', '-vsync', '0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],

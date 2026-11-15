@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.195
+
+- Cofniete: odbieranie dzwieku Przegladarki bez wstrzymywania (g21-audio 0.1.6) bylo bledem. Auto, 2026-11-15: silnik pisal dzwiek 49 razy szybciej niz plynie czas (1 005 856 probek odtworzonych, 48 570 080 wyrzuconych) i film na stronie pedzil. Silnik nie ma wlasnego zegara dla dzwieku - zegarem jest wlasnie wstrzymywanie przez nasz modul wyjscia. g21-audio 0.1.7: tryb live tylko dla AirPlay, Przegladarka jak przed 0.1.6. Wczesniejszy wniosek o 25 000 probek na sekunde byl bledny.
+
 ## 0.1.194
 
 - Przeglądarka bez zewnętrznego odtwarzacza (decyzja właściciela, 2026-11-15): wideo na stronie nie jest już zakrywane kafelkiem „Odtwórz” ani przekazywane do THEiPlay Player / odtwarzacza YouTube; strona odtwarza film sama. Kod odtwarzacza zostaje wyłączony (reguła `player`: `on` w `state/policy.json` go przywraca).
