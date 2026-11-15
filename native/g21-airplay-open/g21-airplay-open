@@ -1325,7 +1325,11 @@ start_ux() {
     audio_fifo=$(head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null)
     if [ -n "$audio_fifo" ] && [ -p "$audio_fifo" ]; then
         audio_dev=g21-audio
-        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=false async=false buffer-mode=unbuffered"
+        # UxPlay writes " sync=true" after whatever is given here, onto the last element. With the file sink last
+        # that put the waiting for time stamps back (car, 2026-11-15, 0.1.61: 7 s of sound in 71 s, in bursts). So
+        # the last element is a sink that goes nowhere, behind a queue that leaks: the words land there, and the
+        # branch that writes the sound is not held by anything.
+        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! tee name=g21at g21at. ! queue ! filesink location=$audio_fifo sync=false async=false buffer-mode=unbuffered g21at. ! queue leaky=downstream max-size-buffers=2 ! fakesink async=false"
         printf '%s g21-airplay-open: sound through G21 Audio (%s)\n' "$(date '+%F %T')" "$audio_fifo" >>"$AUDIOLOG"
     else
         g21_audio_close

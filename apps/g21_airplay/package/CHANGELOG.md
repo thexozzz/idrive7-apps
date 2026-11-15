@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.192
+
+- Dzwiek AirPlay, wynik z auta (2026-11-15, g21-audio 0.1.5 / g21-airplay-open 0.1.61): obraz plynny, dzwiek partiami i jakby przyspieszony. Tryb live dzialal, ale w 71 s dotarlo 7 s dzwieku (19 przerw): UxPlay dopisuje na koncu podanego toru sync=true, wiec wyjscie znow czekalo na znaczniki czasu, a jego cieknaca kolejka wyrzucala reszte. g21-airplay-open 0.1.62: tor konczy sie slepa galezia (tee, cieknaca kolejka, fakesink), na ktora trafia dopisek; galaz zapisujaca dzwiek nie jest niczym wstrzymywana. Sprawdzone na komputerze (gst-launch: caly dzwiek przechodzi mimo dopisku), w aucie nie.
+
 ## 0.1.191
 
 - Pełny Chrome działa w aucie (2026-11-15, `g21-browser` 0.1.41: „engine up: Chrome/153.0.8010.12”, z piaskownicą). Crunchyroll odpowiada 403 na weryfikację także jemu.
