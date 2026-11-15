@@ -3947,6 +3947,27 @@ function createMenuSurface(opts) {
         }
     }
 
+    /*
+     * mgu-render 0.6.20: an app whose picture stays as it was through 4 touches or controller turns in a row
+     * (within 10 s) is taken for one that does not act on them; touch and the controller go to the HMI for 10 s
+     * and the app's layer is taken off. THEiPlay does act on them, but not every input changes its picture: the
+     * knob at the end of a list, a tap beside the items, a tap on a page of Przeglądarka that is still loading.
+     * The renderer counts an input as answered by any message other than the same frame again, so each input
+     * the app gets is answered: the claims are sent again (the same ones; the renderer only stores them).
+     */
+    var answerTimer = null;
+    function answerInput() {
+        if (answerTimer) {
+            return;
+        }
+        answerTimer = setTimeout(function () {
+            answerTimer = null;
+            if (sock && ready && shown) {
+                sendClaim();
+            }
+        }, 120);
+    }
+
     function sendClaim() {
         // mgu-render: CLAIM = u32 n + n*(f32 x,y,w,h). Without a claim, TOUCH
         // never reaches the app. Do not gate on X_STATE "front" — on this G21
@@ -4921,6 +4942,9 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                if (phase === 1) {
+                    answerInput();
+                }
                 // the emergency button comes before everything else on the screen
                 if (KILL.on && pointIn(KILL_BOX, tx, ty)) {
                     if (phase === 1) {
@@ -5137,8 +5161,10 @@ function createMenuSurface(opts) {
                     }
                 }
             } else if (type === CCU && body.length >= 5 && body.length < 12 && shown) {
+                answerInput();
                 onControl(body.readUInt16BE(1), body[3], body[4]);
             } else if (type === X_CCU && body.length >= 5 && shown) {
+                answerInput();
                 onControl(body.readUInt16BE(1), body[3], body[4]);
             }
         }

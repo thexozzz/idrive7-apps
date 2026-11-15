@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.164
+
+- Dostosowanie do `mgu-render` 0.6.20 (MGU Store). Renderer oddaje teraz HMI dotyk i pokrętło, gdy nad aplikacją pojawi się komunikat, menu nagłówka albo asystent, i zdejmuje wtedy warstwę aplikacji — to dzieje się po stronie renderera i THEiPlay korzysta z tego bez zmian (aplikacja dostaje „nie na ekranie”, więc mysz z gładzika oddaje kontroler). Nowa jest też reguła: aplikacja, której obraz nie zmienia się przez 4 kolejne dotknięcia lub ruchy pokrętła w 10 s, traci oba na 10 s i znika z ekranu. Menu THEiPlay nie zawsze zmienia obraz (pokrętło na końcu listy, dotknięcie obok pozycji, strona Przeglądarki w trakcie ładowania), więc każde wejście dostaje teraz odpowiedź: ponownie wysłane te same obszary dotyku, co renderer liczy jako reakcję. Sprawdzone ze źródłem renderera (`native/mgu-render/src/main.c`), nie w aucie.
+
 ## 0.1.163
 
 - Panel WWW na porcie 1235 jest teraz menu THEiPlay w przeglądarce: ta sama strona, te same pozycje z tymi samymi podpowiedziami i przełącznikami, a kliknięcie to ten sam wybór co dotknięcie na ekranie auta. Panel niczego nie wylicza sam — pyta aplikację, co menu pokazuje (`/api/menu`), i mówi jej, co wybrano (`/api/choose`), więc zawsze za menu nadąża. Wcześniej był to formularz adresu RDP (jest pod `/rdp`) i przy starcie w ogóle nie był uruchamiany. Wybrać można tylko to, co menu pokazuje w danej chwili; żądania z innych stron są odrzucane. Pola tekstowe (nazwa, adres, szukanie) otwierają klawiaturę na ekranie auta. Panel nie ma hasła: działa dla każdego w tej samej sieci co MGU. Sprawdzony na komputerze, nie w aucie.
