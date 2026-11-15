@@ -76,7 +76,10 @@ function defaults() {
         noSetuid: env.G21_BROWSER_NOSETUID === '1',   // tests not run as root
         testUid: env.G21_BROWSER_UID ? Number(env.G21_BROWSER_UID) : null, // tests run as root
         allowLocal: env.G21_BROWSER_ALLOW_LOCAL === '1', // tests: pages on 127.0.0.1
-        picture: [1, 0.75, 0.5].indexOf(Number(env.G21_BROWSER_PICTURE)) >= 0 ? Number(env.G21_BROWSER_PICTURE) : 0.75, // share of the screen's pixels the page is rendered at
+        picture: [1, 0.75, 0.5].indexOf(Number(env.G21_BROWSER_PICTURE)) >= 0 ? Number(env.G21_BROWSER_PICTURE) : null, // tests: instead of the policy's "picture"
+        sandboxHelper: path.join(here, 'g21-chrome-sandbox'), // Chromium's setuid sandbox helper, built from sandbox-src/
+        policyFile: path.join(root, 'state', 'policy.json'),   // the owner's rules; see POLICY_DEFAULT
+        policyOut: path.join(run, 'policy.json'),              // the rules in force, for reading (0644)
         idleMs: 90000,        // the engine stays this long after the app went away
         frameGapMs: 50,       // at most 20 page frames a second
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
@@ -482,6 +485,9 @@ function uplinkResolve(leaseFile) {
 function runProxy(opts) {
     const resolve = uplinkResolve(opts.leaseFile);
     const allowLocal = !!opts.allowLocal;
+    const allow = {};
+    (opts.allow || []).forEach((a) => { allow[a] = true; });
+    const excepted = (ip, port) => allow[ip + ':' + port] === true || allow[ip + ':*'] === true;
     let refused = 0;
     const server = net.createServer((c) => {
         let buf = Buffer.alloc(0), stage = 0, up = null;
@@ -516,7 +522,7 @@ function runProxy(opts) {
                 if (!/^[A-Za-z0-9._-]{1,253}$/.test(host) || port < 1) return reply(4);
                 const go = (ip) => {
                     const p = ipv4(ip);
-                    if (!p || (blockedV4(p) && !allowLocal)) {
+                    if (!p || (blockedV4(p) && !allowLocal && !excepted(p.join('.'), port))) {
                         if (++refused <= 20) process.stderr.write('refused ' + (p ? 'local address' : 'address') + ' for port ' + port + '\n');
                         return reply(2);
                     }
@@ -635,6 +641,58 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
     + 'return JSON.stringify({kind:k,value:v,inside:inside,submit:sub,multi:t==="TEXTAREA"||!!e.isContentEditable});})';
 
 // ---------------------------------------------------------------- the daemon
+/*
+ * The rules of the browser, in one file the owner can read and change: state/policy.json (root, 0600).
+ * Only the keys below; a key that is missing or has a value that is not allowed keeps its default, and the
+ * log says so. The file is read again before every start of the engine; the rules in force are written to
+ * /run/g21-browser/policy.json (anyone may read it) with the problems found.
+ *
+ *   sandbox   "ask"       the engine runs in Chromium's sandbox; when it cannot, the screen asks the owner,
+ *                         for that opening only (default)
+ *             "required"  never without the sandbox: when it cannot, the browser shows an error
+ *             "off"       always without the sandbox, no question
+ *   gpu       "off"       the page is drawn on the CPU. The only value for now: the engine binary needs
+ *                         gbm_bo_get_fd_for_plane, which the car's libgbm (Mesa 19.0.6) does not have, so it cannot
+ *                         load the car's graphics libraries as they are (docs/ai/BROWSER_PLAN.md).
+ *   picture   1 | 0.75 | 0.5   share of the screen's pixels the page is rendered at (default 0.75)
+ *   memoryLimitMb  300..3000   the engine's processes together; above it the engine is stopped (default 900)
+ *   network.blockPrivate  true: pages cannot reach loopback, private, link-local and Tailscale addresses (default)
+ *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
+ *                  (or * for any port). This is how a page is let to a tool inside the car.
+ */
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+function readPolicy(file) {
+    const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
+    let raw = null, text = null;
+    try { text = fs.readFileSync(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') problems.push('cannot read the file: ' + e.code); }
+    if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
+    if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
+    if (raw) {
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, memoryLimitMb: 1, network: 1 };
+        Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
+        const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
+        pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
+        pick('gpu', (v) => v === 'off');
+        pick('picture', (v) => [1, 0.75, 0.5].indexOf(v) >= 0);
+        pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
+        const n = raw.network;
+        if (n !== undefined) {
+            if (!n || typeof n !== 'object' || Array.isArray(n)) problems.push('"network": not an object, default kept');
+            else {
+                if (n.blockPrivate !== undefined) { if (typeof n.blockPrivate === 'boolean') p.network.blockPrivate = n.blockPrivate; else problems.push('"network.blockPrivate": true or false, default kept'); }
+                if (n.allow !== undefined) {
+                    if (!Array.isArray(n.allow) || n.allow.length > 64) problems.push('"network.allow": a list of at most 64 entries, default kept');
+                    else n.allow.forEach((a) => {
+                        const m = typeof a === 'string' ? /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\*|\d{1,5})$/.exec(a) : null;
+                        if (m && ipv4(m[1]) && (m[2] === '*' || (Number(m[2]) >= 1 && Number(m[2]) <= 65535))) p.network.allow.push(m[1].split('.').map(Number).join('.') + ':' + (m[2] === '*' ? '*' : Number(m[2])));
+                        else problems.push('"network.allow": entry ' + JSON.stringify(a).slice(0, 40) + ' is not "a.b.c.d:port", ignored');
+                    });
+                }
+            }
+        }
+    }
+    return { policy: p, problems: problems, file: text !== null };
+}
 function Daemon(opts) {
     this.opts = Object.assign(defaults(), opts || {});
     this.opts.log = (m) => this.log(m);
@@ -783,7 +841,7 @@ Daemon.prototype.onCommand = async function (m) {
     }
     if (m.op === 'sandbox-off') {
         // the owner's answer on the screen; only to the question this daemon asked
-        if (this.s.ask !== 'sandbox' || !this.want || this.starting) return;
+        if (this.s.ask !== 'sandbox' || !this.want || this.starting || this.policy().sandbox !== 'ask') return;
         this.sandboxOff = true;
         this.log('sandbox off: allowed by the owner on the screen, for this opening');
         await this.startEngine(null);
@@ -863,10 +921,30 @@ Daemon.prototype.probeEdit = async function (e, x, y) {
 
 // ---- children
 Daemon.prototype.ids = function () { return this.opts.noSetuid ? {} : { uid: this.uid, gid: this.uid }; };
+// the rules in force: read before every engine start, written out for reading, changes logged
+Daemon.prototype.loadPolicy = function () {
+    const r = readPolicy(this.opts.policyFile);
+    const text = JSON.stringify({ policy: r.policy, fromFile: r.file ? this.opts.policyFile : null, problems: r.problems }, null, 2) + '\n';
+    if (text !== this.policyText) {
+        this.policyText = text;
+        this.log('policy' + (r.file ? '' : ' (no state/policy.json: defaults)') + ': ' + JSON.stringify(r.policy) + (r.problems.length ? '; problems: ' + r.problems.join('; ') : ''));
+        try { mkdirp(path.dirname(this.opts.policyOut)); writeIfChanged(this.opts.policyOut, text, 0o644); } catch (e) { this.log('policy: cannot write ' + this.opts.policyOut + ': ' + e.message); }
+    }
+    this.pol = r.policy;
+    return r.policy;
+};
+Daemon.prototype.policy = function () { return this.pol || this.loadPolicy(); };
+Daemon.prototype.picture = function () { return this.opts.picture || this.policy().picture; };
 Daemon.prototype.startProxy = function () {
+    // (the network rules changed: the proxy that runs has the old ones)
+    const net1 = this.policy().network;
+    const want = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net1.blockPrivate ? ['--allow-local'] : []).concat(net1.allow.length ? ['--allow=' + net1.allow.join(',')] : []).join(' ');
+    if (this.proxy && this.proxyKey !== want) { const old = this.proxy; this.proxy = null; this.proxyPort = 0; this.log('proxy: network rules changed, starting it again'); try { old.kill('SIGKILL'); } catch (e) { /* gone */ } }
     if (this.proxy) return Promise.resolve(this.proxyPort);
     return new Promise((resolve, reject) => {
-        const args = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal ? ['--allow-local'] : []);
+        const net0 = this.policy().network;
+        const args = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net0.blockPrivate ? ['--allow-local'] : []).concat(net0.allow.length ? ['--allow=' + net0.allow.join(',')] : []);
+        this.proxyKey = args.join(' ');
         const child = cp.spawn(process.execPath, args, Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'pipe'] }));
         let out = '', settled = false;
         const timer = setTimeout(() => { if (!settled) { settled = true; child.kill('SIGKILL'); reject(new UserError('proxy nie wystartowało')); } }, 5000);
@@ -917,7 +995,7 @@ Daemon.prototype.startFrame = function () {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
-            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.opts.picture) : null; this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
+            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null; this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
             else if (l[0] === 'f') { if (!this.s.live) this.set({ live: true }); this.frameDone(); }
             else if (l[0] === 'e') {
                 const what = l.slice(1).join(' ');
@@ -973,10 +1051,36 @@ Daemon.prototype.sandboxAllowedOff = function () { return this.sandboxOff === tr
 Daemon.prototype.sandboxPossible = function () {
     if (this.opts.forceSandbox) return true; // tests: try it and see
     if (this.opts.noSetuid && process.getuid && process.getuid() === 0) return false; // the engine refuses root with its sandbox
+    if (this.helper) return true; // the setuid helper is in place: no user namespaces needed
     const n = Number((lines('/proc/sys/user/max_user_namespaces')[0] || '').trim());
     const clone = (lines('/proc/sys/kernel/unprivileged_userns_clone')[0] || '1').trim();
     return n > 0 && clone !== '0';
 };
+/*
+ * Chromium's setuid sandbox helper beside the engine, as Chromium wants it: owned by root, mode 4755, in a directory only
+ * root can write. The head unit's kernel has no user namespaces (/proc/self/ns has no "user"), so without the helper
+ * the engine has "No usable sandbox". Returns its path, or '' when it cannot be there (not root, a nosuid file system).
+ */
+function installHelper(o, dir, log) {
+    if (o.noSetuid || !process.getuid || process.getuid() !== 0) return '';
+    const dest = path.join(dir, 'chrome-sandbox');
+    try {
+        const src = fs.readFileSync(o.sandboxHelper);
+        const ds = fs.statSync(dir);
+        if (ds.uid !== 0 || (ds.mode & 0o022)) throw new Error('the engine directory is not root\'s alone');
+        let same = false;
+        try { const st = fs.lstatSync(dest); same = st.isFile() && st.uid === 0 && st.gid === 0 && (st.mode & 0o7777) === 0o4755 && st.size === src.length && fs.readFileSync(dest).equals(src); } catch (e) { /* none */ }
+        if (!same) {
+            const tmp = dest + '.new';
+            try { fs.unlinkSync(tmp); } catch (e) { /* none */ }
+            const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o700);
+            try { fs.writeSync(fd, src); fs.fchownSync(fd, 0, 0); fs.fchmodSync(fd, 0o4755); } finally { fs.closeSync(fd); }
+            fs.renameSync(tmp, dest);
+            log('sandbox helper installed: ' + dest + ' (root, 4755)');
+        }
+        return dest;
+    } catch (e) { log('sandbox helper not in place: ' + e.message); return ''; }
+}
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
 /*
  * The page's window in CSS pixels for a page area of w x h screen pixels at zoom z, rendered at q of the screen's
@@ -992,7 +1096,7 @@ function pageCss(w, h, z, q) {
 Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
     // height even (what the renderer's video layer takes): never larger than the page area the app has.
-    const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z, this.opts.picture), w = cssSize.w, h = cssSize.h;
+    const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z, this.picture()), w = cssSize.w, h = cssSize.h;
     const args = [
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
         '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + cssSize.scale,
@@ -1030,6 +1134,7 @@ Daemon.prototype.prepare = async function () {
         await installEngine(o, m, this.ids(), (phase, pct) => { const k = phase + (pct - pct % 2); if (k !== last) { last = k; this.set({ engine: phase, pct: pct, err: '' }); } });
         this.log('engine installed in ' + (Date.now() - t0) + ' ms');
     }
+    this.helper = this.policy().sandbox === 'off' ? '' : installHelper(o, engineDir(o, m), (t) => this.log(t));
     const own = (p) => { if (!o.noSetuid) fs.chownSync(p, this.uid, this.uid); };
     const profile = path.join(o.cacheDir, 'profile'), tmp = path.join(o.cacheDir, 'tmp'), fc = path.join(o.cacheDir, 'fontconfig');
     fs.chmodSync(o.cacheDir, 0o711);
@@ -1064,13 +1169,20 @@ Daemon.prototype.startEngine = function (url) {
 Daemon.prototype.startEngine2 = async function (url) {
     const o = this.opts;
     if (!this.want) return;
+    this.loadPolicy();
     const dirs = await this.prepare();
     if (!this.want) return;
     this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
     await this.startProxy();
     this.startFrame();
-    const sandbox = !this.sandboxAllowedOff();
-    if (sandbox && !this.sandboxPossible()) { this.log('no sandbox on this system (user namespaces): the owner is asked'); throw askSandbox(); }
+    const mode = this.policy().sandbox;
+    const refuse = (why) => {
+        if (mode === 'required') { this.log(why + ': policy "sandbox": "required", the engine is not started'); return new UserError('reguły wymagają piaskownicy, a silnik nie może jej użyć'); }
+        this.log(why + ': the owner is asked'); return askSandbox();
+    };
+    const sandbox = mode !== 'off' && !this.sandboxAllowedOff();
+    if (mode === 'off') this.log('policy "sandbox": "off": the engine starts without its sandbox');
+    if (sandbox && !this.sandboxPossible()) throw refuse('no sandbox on this system (no user namespaces, no setuid helper)');
     let e = null;
     {
         try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x) {
@@ -1080,11 +1192,10 @@ Daemon.prototype.startEngine2 = async function (url) {
             this.killEngine();
             if (!sandbox) throw x;
             // it may be the sandbox, it may be something else: only a start without it tells, and that is the owner's to allow
-            this.log('engine did not start with its sandbox (' + x.message + '): the owner is asked');
-            throw askSandbox();
+            throw refuse('engine did not start with its sandbox (' + x.message + ')');
         }
     }
-    this.log('engine up: ' + e.product + (sandbox ? ', sandbox' : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
+    this.log('engine up: ' + e.product + (sandbox ? (this.helper ? ', sandbox (setuid helper beside the engine)' : ', sandbox') : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
     this.set({ engine: 'ready' });
     clearInterval(this.memTimer);
     this.memTimer = setInterval(() => this.guard(() => this.checkMemory()), 5000);
@@ -1097,6 +1208,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const env = { LD_LIBRARY_PATH: o.libDir + ':' + dirs.engine, HOME: dirs.profile, TMPDIR: dirs.tmp, XDG_CONFIG_HOME: path.join(dirs.profile, 'xdg'), XDG_CACHE_HOME: path.join(dirs.profile, 'xdg-cache'),
         FONTCONFIG_FILE: dirs.conf, DBUS_SESSION_BUS_ADDRESS: 'disabled:', DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=' + path.join(o.runDir, 'no-dbus') };
     if (process.env.TZ) env.TZ = process.env.TZ;
+    if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
     const child = cp.spawn(path.join(dirs.engine, 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
     const e = { child: child, cdp: null, session: '', target: '', mainFrame: '', down: null, err: '', product: '' };
     this.engine = e;
@@ -1122,7 +1234,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     // The screen the page sees is its own window. Without this the headless engine's screen is 800x600: a player that
     // goes full screen changed the picture's size (the car, 0.1.3). Now full screen fills the page area.
     try {
-        const css = pageCss(this.want.w, this.want.h, this.zoom, this.opts.picture);
+        const css = pageCss(this.want.w, this.want.h, this.zoom, this.picture());
         await send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: false, screenWidth: css.w, screenHeight: css.h });
     } catch (x) { this.log('screen size: ' + x.message); }
     const major = dirs.major;
@@ -1243,7 +1355,7 @@ Daemon.prototype.checkMemory = function () {
         if (roll) kb += Number((/(\d+)/.exec(roll) || [0, 0])[1]);
         else kb += Number(((/VmRSS:\s+(\d+)/.exec(lines(path.join(this.opts.procDir, String(pid), 'status')).join('\n')) || [0, 0])[1])) / 2;
     });
-    const limit = Number((lines(path.join(this.opts.stateDir, 'mem-limit-mb'))[0] || '').trim()) || this.opts.memLimitMb;
+    const limit = Number((lines(path.join(this.opts.stateDir, 'mem-limit-mb'))[0] || '').trim()) || (this.opts.memLimitMb !== 900 ? this.opts.memLimitMb : this.policy().memoryLimitMb);
     if (kb / 1024 > limit) {
         this.log('engine uses ' + Math.round(kb / 1024) + ' MB (limit ' + limit + '): stopped');
         this.killEngine();
@@ -1284,6 +1396,7 @@ Daemon.prototype.start = async function () {
     if (!o.noSetuid) { try { this.uid = pickEngineUid(o); } catch (e) { this.log('engine uid: ' + e.message); } }
     let m = null;
     try { m = loadManifest(o); } catch (e) { this.log(e.message); }
+    this.loadPolicy();
     this.log('g21-browserd started' + (m ? ', engine ' + m.product + (engineReady(o, m) ? ' (installed)' : ' (not installed yet)') : ''));
 };
 Daemon.prototype.close = async function () {
@@ -1295,12 +1408,13 @@ Daemon.prototype.close = async function () {
 };
 
 module.exports = {
-    pageCss: pageCss, Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
+    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
     runFetch(String(process.argv[3]), String(process.argv[4]), process.argv[5] || '/run/mgu-uplink/lease.json', process.argv[6] === '--any-host');
 } else if (require.main === module && process.argv[2] === '--proxy') {
-    runProxy({ leaseFile: process.argv[3] || '/run/mgu-uplink/lease.json', allowLocal: process.argv[4] === '--allow-local' });
+    runProxy({ leaseFile: process.argv[3] || '/run/mgu-uplink/lease.json', allowLocal: process.argv.indexOf('--allow-local') >= 4,
+        allow: process.argv.slice(4).filter((a) => a.indexOf('--allow=') === 0).map((a) => a.slice(8).split(',')).reduce((x, y) => x.concat(y), []) });
 } else if (require.main === module && process.argv[2] === '--check') {
     // mgu-deploy "check" (offline): the manifest reads and names Google's address, this Node can unpack and inflate
     const o = defaults();

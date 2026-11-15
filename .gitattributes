@@ -7,5 +7,9 @@ native/g21-browser/build-engine.js text eol=lf
 native/g21-browser/g21-browser.service text eol=lf
 native/g21-browser/engine/manifest.json text eol=lf
 native/g21-browser/g21-webframe binary
+native/g21-browser/g21-chrome-sandbox binary
+native/g21-browser/build-sandbox.sh text eol=lf
+native/g21-browser/sandbox-src/** text eol=lf
+native/g21-browser/policy.example.json text eol=lf
 native/g21-browser/lib/* binary
 native/g21-browser/fonts/*.ttf binary

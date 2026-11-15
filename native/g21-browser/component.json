@@ -1,7 +1,7 @@
 {
   "id": "g21-browser",
   "kind": "tool",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "GPL-3.0-or-later",
   "title": "Przeglądarka",
   "description": "Silnik przeglądarki dla THEiPlay: Google chrome-headless-shell z własnymi bibliotekami, obraz strony prosto do warstwy wideo. Sterowanie przez /run/g21-browser/ctl.sock.",
@@ -36,6 +36,7 @@
     { "path": "fonts/LiberationSerif-Italic.ttf", "mode": "0644" },
     { "path": "fonts/LiberationSerif-Regular.ttf", "mode": "0644" },
     { "path": "g21-browserd.js", "mode": "0644" },
+    { "path": "g21-chrome-sandbox", "mode": "0755" },
     { "path": "g21-webframe", "mode": "0755" },
     { "path": "lib/ld-linux-x86-64.so.2", "mode": "0755" },
     { "path": "lib/libX11.so.6", "mode": "0755" },
@@ -95,7 +96,9 @@
     { "path": "lib/libxcb.so.1", "mode": "0755" },
     { "path": "lib/libxkbcommon.so.0", "mode": "0755" },
     { "path": "lib/libz.so.1", "mode": "0755" },
-    { "path": "lib/libzstd.so.1", "mode": "0755" }
+    { "path": "lib/libzstd.so.1", "mode": "0755" },
+    { "path": "policy.example.json", "mode": "0644" },
+    { "path": "sandbox-src/LICENSE.chromium", "mode": "0644" }
   ],
   "check": [
     "check.sh"

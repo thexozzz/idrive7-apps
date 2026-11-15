@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.141
+
+- Przeglądarka działa w piaskownicy Chromium także na aucie. Jądro MGU nie ma przestrzeni nazw użytkownika, więc narzędzie `g21-browser` 0.1.5 niesie pomocnika piaskownicy Chromium (`g21-chrome-sandbox`: niezmienione źródła Chromium 153.0.8010.12 z `sandbox/linux/suid`, zbudowane statycznie na Ubuntu 18.04; źródła w `native/g21-browser/sandbox-src`). Demon kładzie go obok silnika jako plik roota z bitem setuid (4755), tak jak wymaga tego Chromium. Procesy stron dostają osobną przestrzeń PID i sieci oraz filtr seccomp. Pytanie „Uruchom bez piaskownicy” pojawia się już tylko wtedy, gdy piaskownica mimo to nie wstanie.
+- Reguły przeglądarki w jednym pliku: `/var/opt/g21-browser/state/policy.json` (wzór: `policy.example.json` w narzędziu). Klucze: `sandbox` (`ask` — domyślnie, `required` — nigdy bez piaskownicy, `off` — zawsze bez, bez pytania), `picture` (1, 0.75, 0.5), `memoryLimitMb` (300–3000), `network.blockPrivate` i `network.allow` (wyjątki „adres:port” dla adresów lokalnych, np. narzędzia w aucie), `gpu` (na razie tylko `off`). Plik jest czytany przed każdym startem silnika; wartość spoza listy zostaje przy domyślnej, a log i `/run/g21-browser/policy.json` (reguły obowiązujące, do odczytu) mówią, co odrzucono.
+- GPU: silnik nadal rysuje na procesorze. Sprawdzone, dlaczego nie da się tego przełączyć: binarka silnika wymaga funkcji `gbm_bo_get_fd_for_plane`, której `libgbm` auta (Mesa 19.0.6) nie ma, a nasze `libgbm` (Mesa 25) nie pasuje do `libEGL` auta.
+- Sprawdzone: pełny test na Ubuntu 18.04 z jądrem 4.14.195, w tym start silnika w piaskownicy przy wyłączonych przestrzeniach nazw użytkownika (jak na aucie). Na aucie jeszcze niesprawdzone.
+
 ## 0.1.140
 
 - Przeglądarka: obraz nie zamiera po włączeniu pełnego ekranu w odtwarzaczu. Na aucie (0.1.139) silnik zaczynał wtedy wysyłać klatki w innym rozmiarze, a dekoder nie mógł podmienić pliku obrazu należącego do roota (253 razy „Operation not permitted”), więc ekran stał. Narzędzie `g21-browser` 0.1.4: ekran, który widzi strona, ma rozmiar jej okna, więc pełny ekran wypełnia obszar strony; gdy rozmiar klatki jednak się zmieni, demon usuwa stary plik i dekoder tworzy nowy.

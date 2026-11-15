@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "sandbox": "ask",
+  "gpu": "off",
+  "picture": 0.75,
+  "memoryLimitMb": 900,
+  "network": {
+    "blockPrivate": true,
+    "allow": []
+  }
+}

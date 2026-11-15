@@ -91,6 +91,24 @@ VERIFIED na aucie (0.1.138 / 0.1.2, jądro 4.14.198-apl):
 - Dźwięk: brak (`--mute-audio`). pllanaio/mgu-browser ma własny most do AudioManager/SmartX (`native/audio_bridge.c`, `docs/AUDIO.md`) — wzór na przyszłość; u nas `g21-audio-route.js` (AirPlay) łączy źródło 287/273 z wyjściem 1024, słyszalność UNVERIFIED.
 - UNVERIFIED na aucie: wszystko powyżej; płynność po zmniejszeniu obrazu.
 
+### 0.1.140 / 0.1.4 na aucie i GPU (odczyt 2026-11-15, 11:02 UTC)
+
+- VERIFIED: 0.1.4 działa; plik obrazu 1320×390 (zoom 1.25, 75%), root, ok. 20 klatek/s przy ruchu na stronie; renderer bez ostrzeżeń.
+- VERIFIED, podział procesora przy otwartej stronie (`top`, udział w całości 4 rdzeni): renderer strony 17%, proces przeglądarki 11%, proces „gpu” silnika (składanie obrazu programowo) 11%, demon 4%, dekoder `g21-webframe` 4%. Dekodowanie JPEG to mała część; większość to rysowanie i składanie strony.
+- VERIFIED, grafika MGU: Intel Atom A3960, GPU 8086:5a84 (HD Graphics 500); `/dev/dri/card0` i `renderD128` to `root:video 0660`; Mesa **19.0.6**, sterownik `i965_dri.so`, `libEGL` tylko z platformą `gbm`; `libva.so.1` (silnik potrzebuje `libva.so.2`), `libstdc++` 6.0.24. Użytkownik silnika (12710) nie jest w grupie `video`.
+- Dlaczego silnik rysuje na CPU: startuje z `--disable-gpu` (tak samo pllanaio/mgu-browser: `--use-angle=swiftshader`). Żeby użyć GPU, silnik musiałby wczytać stos graficzny auta (Mesa 19 zbudowana pod glibc 2.27) obok własnych bibliotek (w `lib/` jest `libgbm`/`libdrm` z Mesa 25 — niezgodne z `libEGL` auta), dostać dostęp do `/dev/dri/card0` (grupa `video`) i przejść czarną listę sterowników Chrome 153. Sprzętowe dekodowanie filmów odpada (libva 1.x). Nawet z GPU każda klatka wraca do pamięci i jest kodowana do JPEG na CPU. UNVERIFIED: czy to w ogóle ruszy i ile da.
+- Ryzyko próby z GPU: silnik bez piaskownicy z dostępem do urządzenia GPU, z którego korzysta też HMI auta.
+
+## Piaskownica setuid i reguły (2026-11-15) — g21-browser 0.1.5, aplikacja 0.1.141
+
+Decyzja właściciela: piaskownica z regułami, które można sprawdzać i zmieniać w pliku; kierunek: „THEiPlay store”, w którym aplikacje sięgają do narzędzi MGU Store, GPU i zegarów — reguły mają to kiedyś opisywać.
+
+**Piaskownica.** Auto: `/proc/self/ns` bez `user`, ale z `pid` i `net`; `/var/opt` (ext4) bez `nosuid`; katalog silnika `cache/engine-*` jest `root 0755`. `g21-chrome-sandbox` = `sandbox/linux/suid/{sandbox.c,process_util_linux.c}` z tagu 153.0.8010.12 (BSD, `sandbox-src/LICENSE.chromium`), `build-sandbox.sh`, gcc 7.5 z Ubuntu 18.04, statyczny. `installHelper()` kopiuje go do katalogu silnika jako `chrome-sandbox` `0:0 4755` (O_EXCL, bez podążania za dowiązaniem); silnik dostaje też `CHROME_DEVEL_SANDBOX`. VERIFIED w maszynie 18.04 / 4.14.195 z `user.max_user_namespaces=0`: `engine up … sandbox (setuid helper beside the engine)`, proces w przestrzeni PID (`NSpid` z dwiema liczbami), `Seccomp: 2`, brak `--no-sandbox`, nikt nie pytany. UNVERIFIED na aucie.
+
+**Reguły.** `state/policy.json` (root, katalog `state` 0700), opis kluczy przy `POLICY_DEFAULT` w `g21-browserd.js`, wzór `policy.example.json`. `loadPolicy()` przed każdym startem silnika; obowiązujące reguły i odrzucone wartości: `/run/g21-browser/policy.json` (0644) i wiersz `policy …` w logu. `network.allow` trafia do proxy jako `--allow=a.b.c.d:port,…` (zmiana reguł sieci = nowe proxy przy następnym starcie silnika). Odczyt z auta: `cat /run/g21-browser/policy.json`. Zmiana wymaga zapisu na aucie (zgoda właściciela) albo przyszłego panelu 1235.
+
+**GPU — nie da się przełącznikiem (VERIFIED odczytami).** `chrome-headless-shell` importuje `gbm_bo_get_fd_for_plane` (i jest linkowany z rozwiązywaniem symboli przy starcie); `libgbm.so.1` auta (Mesa 19.0.6) tej funkcji nie eksportuje → z bibliotekami auta binarka nie wstanie. Z naszym `libgbm` (Mesa 25, bez sterowników DRI) `libEGL` auta nie zadziała (prywatne ABI między `libEGL` i `libgbm` tej samej Mesy). Dalsze przeszkody: `libEGL` auta ma tylko platformy `gbm` i `wayland` (bez `EGL_EXT_platform_device`), a na jądrze 4.14 klient bez roota na `/dev/dri/card0` nie jest uwierzytelniony do renderowania; `libva.so.1` zamiast `.so.2`. Możliwa droga (duża, tylko z próbami na aucie): własna cienka `libgbm.so.1`, która przekazuje wywołania do biblioteki auta i dodaje brakującą funkcję, plus dostęp do `renderD128`.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

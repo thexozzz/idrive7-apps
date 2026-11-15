@@ -224,6 +224,26 @@ function socks(port, host, dport) {
         setTimeout(() => { resolve(-2); c.destroy(); }, 4000);
     });
 }
+// state/policy.json: the owner's rules; anything not allowed keeps its default and is named
+function testPolicy(base) {
+    const file = path.join(base, 'policy-test.json');
+    let r = d.readPolicy(file);
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
+    assert.deepStrictEqual([r.problems, r.file], [[], false]);
+    fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
+    r = d.readPolicy(file);
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
+    assert.deepStrictEqual(r.problems, []);
+    fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
+    r = d.readPolicy(file);
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
+    assert.strictEqual(r.problems.length, 10, r.problems.join(' | '));
+    fs.writeFileSync(file, '{ sandbox: off }');
+    r = d.readPolicy(file);
+    assert.deepStrictEqual([r.policy.sandbox, r.problems.length], ['ask', 1], 'a file that is not JSON changes nothing');
+    fs.unlinkSync(file);
+    console.log('ok policy: defaults without a file, the owner\'s values taken, values not allowed keep their default and are named');
+}
 async function testProxy(port) {
     const child = cp.spawn(process.execPath, [path.join(tool, 'g21-browserd.js'), '--proxy', '/nonexistent/lease.json'], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
@@ -238,7 +258,17 @@ async function testProxy(port) {
     child.stdin.end();
     for (let i = 0; i < 50 && child.exitCode === null; i++) await sleep(30);
     assert.strictEqual(child.exitCode, 0, 'the proxy ends when the daemon goes away');
-    console.log('ok proxy: loopback, private and Tailscale addresses are refused; it ends with the daemon');
+    // the policy's exceptions: this address and port only
+    const c2 = cp.spawn(process.execPath, [path.join(tool, 'g21-browserd.js'), '--proxy', '/nonexistent/lease.json', '--allow=127.0.0.1:' + port + ',10.9.8.7:*'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out2 = '';
+    c2.stdout.on('data', (x) => { out2 += x; });
+    for (let i = 0; i < 100 && !/port \d+/.test(out2); i++) await sleep(30);
+    const p2 = Number((/port (\d+)/.exec(out2) || [0, 0])[1]);
+    assert.strictEqual(await socks(p2, '127.0.0.1', port), 0, 'the excepted address and port connect');
+    assert.strictEqual(await socks(p2, '127.0.0.1', port + 1 > 65535 ? port - 1 : port + 1), 2, 'another port of it is refused');
+    assert.strictEqual(await socks(p2, '192.168.1.1', 80), 2, 'other private addresses stay refused');
+    c2.stdin.end();
+    console.log('ok proxy: loopback, private and Tailscale addresses are refused; a policy exception lets one address and port through; it ends with the daemon');
 }
 
 const PAGE = '<!doctype html><html><head><meta charset="utf-8"><title>Strona testowa</title><style>body{margin:0;font:20px sans-serif;background:#fff}#b{position:absolute;left:40px;top:40px;width:200px;height:80px}#i{position:absolute;left:300px;top:40px;width:300px;height:60px;font-size:24px}#a{position:absolute;left:40px;top:160px;font-size:30px}#n{position:absolute;left:300px;top:160px;font-size:30px}.sp{height:3000px}</style></head>'
@@ -473,6 +503,44 @@ async function testChain(base, eng) {
             if (c2) c2.close();
             await d2.close();
         }
+        // The head unit's kernel has no user namespaces. Without them the engine has its sandbox through Chromium's setuid
+        // helper, which the daemon puts beside the engine (root, 4755); nobody is asked.
+        const nsFile = '/proc/sys/user/max_user_namespaces';
+        let nsWas = null;
+        try { nsWas = fs.readFileSync(nsFile, 'utf8').trim(); fs.writeFileSync(nsFile, '0'); } catch (e) { nsWas = null; }
+        if (nsWas === null) skip('setuid sandbox', 'user namespaces cannot be switched off here');
+        else {
+            const d3 = new d.Daemon({ idleMs: 400, pollMs: 120 });
+            let c3 = null;
+            try {
+                const mark = fs.readFileSync(logFile, 'utf8').length;
+                await d3.start();
+                for (let i = 0; i < 100 && !fs.existsSync(d3.opts.sock); i++) await sleep(20);
+                c3 = client(d3.opts.sock);
+                c3.send({ op: 'open', w: 1796, h: 548, zoom: 1.5 });
+                const s3 = await c3.until('engine up in the setuid sandbox', (x) => (x.engine === 'ready' && x.live) || x.engine === 'failed', 60000);
+                const log3 = fs.readFileSync(logFile, 'utf8').slice(mark);
+                assert.strictEqual(s3.engine, 'ready', 'without user namespaces the engine still starts: ' + s3.err + '\n' + log3.split('\n').slice(-6).join('\n'));
+                assert.strictEqual(s3.ask, '', 'nobody is asked');
+                assert.ok(/engine up: .*sandbox \(setuid helper/.test(log3) && !/no sandbox|sandbox off/.test(log3), log3.split('\n').slice(-4).join('\n'));
+                const helper = path.join(d.engineDir(d3.opts, d.loadManifest(d3.opts)), 'chrome-sandbox');
+                const hs = fs.statSync(helper);
+                assert.deepStrictEqual([hs.uid, hs.gid, hs.mode & 0o7777], [0, 0, 0o4755], 'the helper is root\'s, setuid');
+                const pids3 = d3.engineProcs();
+                assert.ok(pids3.length >= 3);
+                pids3.forEach((pid) => assert.ok(fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8').indexOf('--no-sandbox') < 0, 'no --no-sandbox'));
+                // a page process is in its own PID namespace (two numbers in NSpid) and under a seccomp filter
+                const st3 = pids3.map((pid) => fs.readFileSync('/proc/' + pid + '/status', 'utf8'));
+                assert.ok(st3.some((t) => /NSpid:\s+\d+\s+\d+/.test(t)), 'a process in a PID namespace');
+                assert.ok(st3.some((t) => /Seccomp:\s+2/.test(t)), 'a process under seccomp');
+                console.log('ok setuid sandbox: without user namespaces the engine runs in Chromium\'s sandbox through the helper (root, 4755): PID namespace, seccomp, nobody asked');
+            } finally {
+                if (c3) c3.close();
+                await d3.close();
+                try { fs.writeFileSync(nsFile, nsWas); } catch (e) { /* the VM goes away */ }
+            }
+        }
+        srv.close();
     }
     return undefined;
 }
@@ -483,6 +551,7 @@ async function testChain(base, eng) {
     try {
         testUrls();
         testUid();
+        testPolicy(base);
         testWebframe();
         const eng = await testEngineFiles(base);
         if (eng) await testZip(base, eng);

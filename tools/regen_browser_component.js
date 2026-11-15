@@ -7,8 +7,8 @@ var path = require('path');
 
 var root = path.join(__dirname, '..', 'native', 'g21-browser');
 var file = path.join(root, 'component.json');
-var skip = { 'component.json': true, 'g21-browser.service': true, 'g21-webframe.c': true, 'build-webframe.sh': true, 'build-engine.js': true };
-var exec = { 'g21-webframe': true, 'check.sh': true };
+var skip = { 'component.json': true, 'g21-browser.service': true, 'g21-webframe.c': true, 'build-webframe.sh': true, 'build-engine.js': true, 'build-sandbox.sh': true };
+var exec = { 'g21-webframe': true, 'check.sh': true, 'g21-chrome-sandbox': true };
 var old = {};
 try { old = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) { old = {}; }
 
@@ -18,7 +18,7 @@ function walk(dir, out) {
         var rel = path.relative(root, full).split(path.sep).join('/');
         if (fs.statSync(full).isDirectory()) { walk(full, out); return; }
         // the packed engine and its notices stay on the development machine: the head unit downloads the engine from Google
-        if (skip[rel] || /^\./.test(name) || /^engine\/(engine\.pack\.br\.\d+|LICENSE\.headless_shell)$/.test(rel)) { return; }
+        if (skip[rel] || /^\./.test(name) || /^sandbox-src\/sandbox\//.test(rel) || /^engine\/(engine\.pack\.br\.\d+|LICENSE\.headless_shell)$/.test(rel)) { return; }
         out.push({ path: rel, mode: exec[rel] || /^lib\//.test(rel) ? '0755' : '0644' });
     });
 }
