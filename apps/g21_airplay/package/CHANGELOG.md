@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.152
+
+- Naprawa: gładzik nie przekazywał ruchu, choć kursor był widoczny. Narzędzie `g21-input` 0.1.0 odmówiło przejęcia kontrolera („the car moves”), bo auto jechało (blokada postoju). Właściciel potwierdził, że auto wtedy jechało, i polecił zdjąć blokadę postoju: w 0.1.1 mysz działa także w czasie jazdy. Blokadę przywraca plik `/var/opt/g21-input/config.json` z `{ "parkedOnly": true }`. Prędkość jest teraz czytana przy każdym włączeniu, liczona tylko gdy świeża (6 s) i zapisywana w logu. Niesprawdzone jeszcze w aucie.
+- `g21-browser` 0.1.12: przejście w pełny ekran nie jest już wykonywane dwa razy naraz.
+
 ## 0.1.151
 
 - Naprawa: brak dźwięku z iPhone’a w AirPlay po drugim Starcie. `g21-airplay-open` zamykał tylko powłokę, a klient G21 Audio (node) zostawał i trzymał jedyny strumień; kolejny Start dostawał „busy (held by airplay)” i przechodził na starą trasę bez dźwięku (log z auta 2026-11-15). 0.1.56 zamyka każdego swojego klienta strumienia AirPlay, także pozostałego po starszej wersji. Czy sam zapis UxPlay do G21 Audio daje dźwięk, nie jest jeszcze potwierdzone w aucie.

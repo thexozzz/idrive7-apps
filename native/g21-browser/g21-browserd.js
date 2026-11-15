@@ -1301,7 +1301,9 @@ Daemon.prototype.closeAudio = function () {
 Daemon.prototype.applyFs = async function (e, on) {
     const w = this.want;
     const whole = on && w && w.fw > 0 && this.policy().fullscreen === 'screen';
-    if (whole === !!this.fs) return;
+    if (whole === !!this.fs || this.fsBusy) return;
+    this.fsBusy = true;
+    try {
     const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
     if (whole) {
         const cw = Math.round(w.fw * 2 / 3) & ~3, ch = Math.round(w.fh * 2 / 3) & ~1;
@@ -1316,6 +1318,7 @@ Daemon.prototype.applyFs = async function (e, on) {
         this.log('full screen left: the page area again');
         this.set({ w: css.dw, h: css.dh });
     }
+    } finally { this.fsBusy = false; }
     this.push(true);
 };
 Daemon.prototype.startFrame = function () {

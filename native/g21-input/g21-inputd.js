@@ -46,6 +46,9 @@ const PAD_MODE = 3;
 const TAP_MS = 220, TAP_MOVE = 14;   // a tap: this short, the finger this still (pad units)
 const JUMP = 160;                    // a step larger than this between two samples is no movement (a new contact, a glitch)
 const MAX_KMH = 3;
+// The standstill lock. Owner, 2026-11-15: off. The mouse works while the car moves unless
+// /var/opt/g21-input/config.json says { "parkedOnly": true } (read when the daemon starts).
+const PARKED_ONLY = (function () { try { return JSON.parse(fs.readFileSync(path.join(env.G21_INPUT_ROOT || '/var/opt/g21-input', 'config.json'), 'utf8')).parkedOnly === true; } catch (e) { return false; } }());
 const VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'component.json'), 'utf8')).version; } catch (e) { return ''; } }());
 
 function log(text) {
@@ -98,10 +101,19 @@ Pad.prototype.feed = function (v, now) {
     this.last = { x: x, y: y };
 };
 
-const st = { client: null, on: false, pad: -1, padAt: 0, asks: 0, askAt: 0, alive: 0, speed: null, speedAt: 0, ce: null, ccu: null, veh: null, ready: null };
+const st = { client: null, on: false, pad: -1, padAt: 0, asks: 0, askAt: 0, alive: 0, speed: null, speedAt: 0, take: null, ce: null, ccu: null, veh: null, ready: null };
 function send(o) { if (st.client) { try { st.client.write(JSON.stringify(o) + '\n'); } catch (e) { /* gone */ } } }
-function moving() { return st.speed !== null && st.speed > MAX_KMH; }
-function state() { send({ ev: 'state', on: st.on, pad: st.pad, speed: st.speed, moving: moving() }); }
+// A speed counts only while it is fresh. Car, 2026-11-15: the daemon kept a speed from a drive, got no newer one,
+// and refused the mouse in a standing car ("the car moves") although Vehicle2 said 0.
+const SPEED_FRESH_MS = 6000;
+function speedNow() { return st.speed !== null && Date.now() - st.speedAt < SPEED_FRESH_MS ? st.speed : null; }
+function moving() { const s = speedNow(); return PARKED_ONLY && s !== null && s > MAX_KMH; }
+// ask Vehicle2 for the speed now (resolves either way)
+function readSpeed() {
+    if (!st.veh || !st.take) return Promise.resolve();
+    return tick(function () { return st.veh.getValue('statusCarSpeed2', 3000); }).then(st.take, function (e) { log('speed not read: ' + e); });
+}
+function state() { send({ ev: 'state', on: st.on, pad: st.pad, speed: speedNow(), moving: moving() }); }
 const pad = new Pad(function (o) { if (st.on) send(o); });
 
 function touchMode(on) {
@@ -140,7 +152,7 @@ function proxies() {
             st.ccu = ccu;
             return open('de.bmw.infotainment.vehicle.Vehicle2').then(function (veh) {
                 st.veh = veh;
-                const take = function (v) {
+                const take = st.take = function (v) {
                     const k = v && v.speedVehicleCentreOfGravity;
                     if (typeof k === 'number' && k !== 65535) {
                         const was = moving();
@@ -151,7 +163,7 @@ function proxies() {
                 };
                 return tick(function () { return veh.subscribe({ name: 'statusCarSpeed2', onReceive: take }); }).then(function () {
                     // a standing car may not notify a speed that does not change: read it now and then
-                    setInterval(function () { tick(function () { return veh.getValue('statusCarSpeed2', 3000); }).then(take, function () {}); }, 2000);
+                    setInterval(function () { if (st.on) readSpeed(); }, 2000);
                 });
             }).catch(function (e) { log('speed not readable: ' + e); });
         }).then(function () { log('controller interfaces ready'); });
@@ -160,9 +172,11 @@ function proxies() {
     return st.ready;
 }
 function on() {
-    return proxies().then(function () {
-        if (moving()) { log('not switched on: the car moves'); state(); return; }
-        if (st.speed === null) log('speed unknown (Vehicle2 gives none to this daemon): switched on without the standstill check');
+    return proxies().then(readSpeed).then(function () {
+        if (moving()) { log('not switched on: the car moves (' + st.speed.toFixed(1) + ' km/h)'); state(); return; }
+        if (!PARKED_ONLY) log('standstill lock off (config.json parkedOnly), speed ' + (speedNow() === null ? 'unknown' : st.speed.toFixed(1) + ' km/h'));
+        else if (speedNow() === null) log('speed unknown (Vehicle2 gives none to this daemon now): switched on without the standstill check');
+        else log('standing (' + st.speed.toFixed(1) + ' km/h)');
         st.on = true;
         st.asks = 0;
         return touchMode(true).then(function (ok) { if (!ok) st.on = false; state(); });
