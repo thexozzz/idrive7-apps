@@ -1635,6 +1635,8 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const tree = await send('Page.getFrameTree', {});
     e.mainFrame = tree.frameTree.frame.id;
     this.s.url = tree.frameTree.frame.url || '';
+    // the logins of the last engine; the first page began to load without them: once more, with them
+    try { if (await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
     await this.cast(true);
     // the first page began to load before Page.enable: its "stopped loading" may be past already
     try {
@@ -1651,7 +1653,56 @@ Daemon.prototype.cast = async function (on) {
     if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 82, everyNthFrame: 1 }, e.session);
 };
 // title, address, back / forward
+/*
+ * Logins stay. The engine keeps cookies with an expiry date in its profile, but writes them with a delay and
+ * forgets cookies without a date ("session" cookies: what many sites log a person in with) whenever it stops,
+ * and it stops often here: the app is closed, the zoom changes, a memory limit. So the daemon keeps a copy of all
+ * cookies in state/cookies.json (root, 0600), written while the engine runs and when it stops, and gives them
+ * back to the next engine before its first page counts.
+ */
+function cookieParam(c, now) {
+    if (!c || typeof c.name !== 'string' || typeof c.value !== 'string' || typeof c.domain !== 'string' || !c.domain) return null;
+    const session = c.session === true || !(c.expires > 0);
+    if (!session && c.expires <= now) return null;
+    const p = { name: c.name, value: c.value, domain: c.domain, path: typeof c.path === 'string' ? c.path : '/', secure: !!c.secure, httpOnly: !!c.httpOnly };
+    if (!session) p.expires = c.expires;
+    if (c.sameSite === 'Strict' || c.sameSite === 'Lax' || c.sameSite === 'None') p.sameSite = c.sameSite;
+    if (c.priority === 'Low' || c.priority === 'Medium' || c.priority === 'High') p.priority = c.priority;
+    if (c.sourceScheme === 'Secure' || c.sourceScheme === 'NonSecure') p.sourceScheme = c.sourceScheme;
+    if (c.sourcePort > 0 && c.sourcePort < 65536) p.sourcePort = c.sourcePort;
+    if (c.partitionKey && typeof c.partitionKey === 'object' && typeof c.partitionKey.topLevelSite === 'string') p.partitionKey = { topLevelSite: c.partitionKey.topLevelSite, hasCrossSiteAncestor: !!c.partitionKey.hasCrossSiteAncestor };
+    return p;
+}
+Daemon.prototype.saveCookies = async function (e, force) {
+    const now = Date.now();
+    if (!e || !e.cookiesReady || (!force && now - (e.cookiesAt || 0) < 20000)) return;
+    e.cookiesAt = now;
+    const r = await e.cdp.send('Storage.getCookies', {});
+    const list = (r && Array.isArray(r.cookies) ? r.cookies : []).map((c) => cookieParam(c, now / 1000)).filter(Boolean).slice(0, 4000);
+    mkdirp(this.opts.stateDir, 0o700);
+    writeIfChanged(path.join(this.opts.stateDir, 'cookies.json'), JSON.stringify({ cookies: list }) + '\n', 0o600);
+};
+// true: cookies of the page that is loading were given back (it is then loaded again, with them)
+Daemon.prototype.restoreCookies = async function (e, url) {
+    const j = readJson(path.join(this.opts.stateDir, 'cookies.json'));
+    const list = (j && Array.isArray(j.cookies) ? j.cookies : []).map((c) => cookieParam(c, Date.now() / 1000)).filter(Boolean);
+    let ok = 0, host = '';
+    try { host = new URL(url).hostname; } catch (x) { host = ''; }
+    let mine = false;
+    if (list.length) {
+        try { await e.cdp.send('Storage.setCookies', { cookies: list }); ok = list.length; }
+        catch (x) {
+            // one cookie the engine does not take must not cost the others
+            for (const c of list) { try { await e.cdp.send('Storage.setCookies', { cookies: [c] }); ok += 1; } catch (y) { /* this one is dropped */ } }
+        }
+        mine = !!host && list.some((c) => { const d = c.domain.replace(/^\./, ''); return !('expires' in c) && (host === d || host.slice(-d.length - 1) === '.' + d); });
+    }
+    e.cookiesReady = true;
+    this.log('cookies: ' + ok + ' of ' + list.length + ' given back to the engine');
+    return mine;
+};
 Daemon.prototype.refresh = async function (e) {
+    this.saveCookies(e, false).catch((x) => { if (!e.cookieErr) { e.cookieErr = true; this.log('cookies: ' + x.message); } });
     if (this.engine !== e || !e.session) return;
     let hst;
     try { hst = await e.cdp.send('Page.getNavigationHistory', {}, e.session); } catch (x) { return; }
@@ -1778,8 +1829,11 @@ Daemon.prototype.stopEngine = async function (why) {
         this.engine = null;
         clearInterval(this.memTimer);
         clearInterval(this.pollTimer);
+        try { await Promise.race([this.saveCookies(e, true), sleep(1500)]); } catch (x) { this.log('cookies: ' + x.message); }
+        // the engine writes its profile (cookies, the sites' storage) while it closes: it gets up to 4 s for that
+        const gone = new Promise((resolve) => { if (e.child.exitCode !== null || e.child.signalCode !== null) resolve(); else e.child.once('exit', resolve); });
         try { await Promise.race([e.cdp.send('Browser.close', {}), sleep(1500)]); } catch (x) { /* killed below */ }
-        await sleep(100);
+        await Promise.race([gone, sleep(4000)]);
         try { e.child.kill('SIGKILL'); } catch (x) { /* gone */ }
         this.killStrays();
     }
