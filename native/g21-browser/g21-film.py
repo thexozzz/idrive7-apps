@@ -150,7 +150,10 @@ def main():
         host = ''
     params = {'format': a.format, 'cachedir': False, 'logger': Quiet(), 'quiet': True, 'noprogress': True, 'no_warnings': True,
               'noplaylist': True, 'fixup': 'never', 'retries': 10, 'socket_timeout': 30, 'logtostderr': True,
-              'outtmpl': {'default': '-'}, 'remote_components': []}
+              'outtmpl': {'default': '-'}, 'remote_components': [],
+              # One long request is slowed down by the film's server after its first seconds (car, 2026-11-15: the sound
+              # of a YouTube film arrived at a fraction of its speed and broke up); short ranges each come at full speed.
+              'http_chunk_size': 1048576}
     if a.node:
         params['js_runtimes'] = {'node': {'path': a.node}}
     if any(host == t or host.endswith('.' + t) for t in TUBE):

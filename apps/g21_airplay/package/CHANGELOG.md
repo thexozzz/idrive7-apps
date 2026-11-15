@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.183
+
+- THEiPlay Player, wynik z auta (2026-11-15, `g21-browser` 0.1.36): obraz lepszy (767 klatek w 34 s), ale dźwięk mocno przerywał – do głośników docierał ułamek dźwięku, bo serwer filmu spowalnia jedno długie pobieranie. `g21-browser` 0.1.37: strumienie są pobierane krótkimi zakresami po 1 MB (każdy z pełną prędkością); log zapisuje parametry strumieni i liczbę klatek na sekundę. Niesprawdzone w aucie.
+
 ## 0.1.182
 
 - THEiPlay Player, wynik z auta (2026-11-15, `g21-browser` 0.1.35): film z YouTube odtworzył się własną drogą, pauza i wyjście działają; 1234 klatki w 56 s, czyli ok. 22 klatki/s – za mało (strumień 720p skalowany do 1280×480 przy obciążeniu jednostki 11). Start trwał ok. 14 s.

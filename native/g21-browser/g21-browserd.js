@@ -1726,7 +1726,7 @@ Daemon.prototype.filmStart = async function (e, page, src) {
     this.film = f;
     this.log('film: ' + (tube ? 'YouTube' : (originOf(url) || 'address')) + ', picture ' + W + 'x' + H + (this.audio ? '' : ', no sound stream'));
     const env = { PATH: '/usr/bin:/bin', HOME: '/', LANG: 'C.UTF-8' };
-    const note = (who, child) => { let rest = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { rest += d; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim(); rest = rest.slice(i + 1); if (l && f.notes < 40) { f.notes += 1; this.log('film ' + who + ': ' + l.slice(0, 220)); } } }); };
+    const note = (who, child) => { let rest = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { rest += d; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim(); rest = rest.slice(i + 1); if (l && f.notes < 40 && (who !== 'decoder' || /Stream #|Duration|rror|arning|blocking|nvalid|ailed/.test(l))) { f.notes += 1; this.log('film ' + who + ': ' + l.slice(0, 220)); } } }); };
     const fetch = (fmt) => {
         const args = [helper, '--pyz', o.ytdlp, '--lease', o.leaseFile, '--node', process.execPath, '--format', fmt].concat(url === src && page ? ['--referer', page] : [], ['--', url]);
         const c = cp.spawn(o.python, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'pipe', 'pipe'] }));
@@ -1741,7 +1741,7 @@ Daemon.prototype.filmStart = async function (e, page, src) {
     const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=' + top + '][fps<=30]/bv*[vcodec^=avc1][height<=' + top + ']/b[height<=' + top + ']/b'), fetch('ba[ext=m4a]/ba')]
         : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*')];
     const vf = 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
-    const args = ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-thread_queue_size', '512', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-thread_queue_size', '512', '-re', '-i', 'pipe:3'] : [],
+    const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-nostats', '-thread_queue_size', '512', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-thread_queue_size', '512', '-re', '-i', 'pipe:3'] : [],
         ['-map', '0:v:0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
         this.audio ? ['-map', feeds[1] ? '1:a:0' : '0:a:0?', '-ar', '48000', '-ac', '2', '-f', 's16le', '-y', this.audio.fifo] : []);
     let dec;
@@ -1759,6 +1759,7 @@ Daemon.prototype.filmStart = async function (e, page, src) {
         if (!f.shown) {
             // the first of the film: the page's picture stops coming, the app is told "full screen"
             f.shown = true;
+            f.shownAt = Date.now();
             clearTimeout(f.timer);
             this.cast(false).catch(() => {});
             this.fs = { w: f.fw, h: f.fh, scale: f.fw / W, film: true };
@@ -1792,7 +1793,8 @@ Daemon.prototype.filmStop = function (why, err) {
     this.film = null;
     clearTimeout(f.timer);
     f.procs.forEach((p) => { try { p.kill('SIGCONT'); } catch (x) { /* gone */ } try { p.kill('SIGKILL'); } catch (x) { /* gone */ } });
-    this.log('film: stopped (' + why + '), ' + f.frames + ' frames shown' + (f.dropped ? ', ' + f.dropped + ' left out' : ''));
+    const secs = f.shownAt ? (Date.now() - f.shownAt) / 1000 : 0;
+    this.log('film: stopped (' + why + '), ' + f.frames + ' frames shown' + (secs > 1 ? ' in ' + secs.toFixed(0) + ' s (' + (f.frames / secs).toFixed(1) + ' a second)' : '') + (f.dropped ? ', ' + f.dropped + ' left out' : ''));
     const e = this.engine;
     if (f.shown && e) {
         // the page again: its own size, its picture coming
