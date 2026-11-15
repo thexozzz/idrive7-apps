@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.165
+
+- Naprawa przerywania dźwięku AirPlay, tym mocniejszego, im większy obraz przysyłał iPhone. Log z auta 2026-11-15: w jednej sesji pisarz `g21-audio-out` odrzucił 1 461 888 z 5 772 480 próbek (25%), 3045 razy „urządzenie pełne”, ani jednego opróżnienia. Urządzenie SmartX trzyma 3072 próbki (64 ms) niezależnie od tego, o co się prosi; zapas 80 ms z 0.1.2 go przepełniał, a dźwięk przychodzący porcjami (procesor zajęty dekodowaniem obrazu, obciążenie 8,6 na 4 rdzeniach) był wyrzucany, gdy brakowało miejsca. `g21-audio` 0.1.3: pisarz nigdy nie odrzuca, tylko czeka na miejsce (odtwarzacz czeka wtedy w potoku), nie odmierza już czasu własnym zegarem, a zapas dobiera do faktycznej pojemności urządzenia (SmartX: 40 ms). Binarka przebudowana na Ubuntu 18.04; w aucie niesprawdzone.
+- Mniej pracy procesora w AirPlay: `g21-airplay-open` 0.1.58 uruchamia UxPlay z `-srgb no`. UxPlay domyślnie przeliczał każdą klatkę na RGB w gałęzi, która kończy się w `fakesink` (obraz dla ekranu bierze druga gałąź, I420) — przy 1080×498 i 24 kl./s to była praca na nic.
+- Ustalone przy okazji: iPhone nie trzyma się rozmiaru 600×400, o który prosi THEiPlay (`-s 600x400`); w poziomie przysłał 1080×498, w pionie 332×720. Do 600×400 obraz zmniejsza dopiero `g21-yuvring` (na ekranie było 600×276).
+
 ## 0.1.164
 
 - Dostosowanie do `mgu-render` 0.6.20 (MGU Store). Renderer oddaje teraz HMI dotyk i pokrętło, gdy nad aplikacją pojawi się komunikat, menu nagłówka albo asystent, i zdejmuje wtedy warstwę aplikacji — to dzieje się po stronie renderera i THEiPlay korzysta z tego bez zmian (aplikacja dostaje „nie na ekranie”, więc mysz z gładzika oddaje kontroler). Nowa jest też reguła: aplikacja, której obraz nie zmienia się przez 4 kolejne dotknięcia lub ruchy pokrętła w 10 s, traci oba na 10 s i znika z ekranu. Menu THEiPlay nie zawsze zmienia obraz (pokrętło na końcu listy, dotknięcie obok pozycji, strona Przeglądarki w trakcie ładowania), więc każde wejście dostaje teraz odpowiedź: ponownie wysłane te same obszary dotyku, co renderer liczy jako reakcję. Sprawdzone ze źródłem renderera (`native/mgu-render/src/main.c`), nie w aucie.

@@ -48,13 +48,14 @@ static struct {
     long (*writei)(snd_pcm_t *, const void *, unsigned long);
     int (*recover)(snd_pcm_t *, int, int);
     int (*delay)(snd_pcm_t *, long *);
+    long (*avail)(snd_pcm_t *);   /* optional */
     const char *(*strerror)(int);
 } A;
 enum { PLAYBACK = 0, NONBLOCK = 1, S16_LE = 2, RW_INTERLEAVED = 3 };
 #define RATE 48000
 #define CH 2
 #define CHUNK 480      /* frames: 10 ms */
-#define PREFILL 8      /* chunks gathered before the first one is played, and again after an underrun (80 ms) */
+#define PREFILL 8      /* the most chunks gathered before the first one is played, and again after an underrun */
 #define IDLE_MS 3000   /* this long without sound: the speakers go back */
 
 static volatile sig_atomic_t stopping;
@@ -69,7 +70,7 @@ static int alsa_load(void)
     if (!h) { fprintf(stderr, "[G21-AUDIO] out: libasound.so.2: %s\n", dlerror()); return 0; }
 #define SYM(f, n) ((A.f = dlsym(h, n)) != NULL)
     if (SYM(open, "snd_pcm_open") && SYM(set_params, "snd_pcm_set_params") && SYM(writei, "snd_pcm_writei") &&
-        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) return 1;
+        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) { A.avail = dlsym(h, "snd_pcm_avail_update"); return 1; }
 #undef SYM
     fprintf(stderr, "[G21-AUDIO] out: libasound.so.2 lacks a function\n");
     return 0;
@@ -107,16 +108,41 @@ static int read_chunk(int16_t *buf, int wait_ms)
     return 1;
 }
 
+/*
+ * One chunk to the device, all of it. A device that is full is waited for, never skipped: SmartX holds 64 ms
+ * (3072 frames) whatever is asked, and sound that came in a burst (the head unit busy with a large picture) was
+ * thrown away while it was full: a quarter of an AirPlay session, which is the stutter heard (car, 2026-11-15:
+ * frames 4310592 dropped 1461888, full 3045, xruns 0). Waiting holds the player back through the pipe instead.
+ * 1: the device ran empty (the caller gathers a cushion again); 0 otherwise.
+ */
+static int write_chunk(snd_pcm_t *pcm, const int16_t *b, unsigned long *frames, unsigned long *dropped, unsigned long *full, unsigned long *xruns)
+{
+    int off = 0, waited = 0;
+    while (off < CHUNK) {
+        long w = A.writei(pcm, b + off * CH, (unsigned long)(CHUNK - off));
+        if (w == -EAGAIN || w == 0) {
+            if (stopping) return 0;
+            if (waited >= 400) { *dropped += (unsigned long)(CHUNK - off); (*full)++; return 0; }   /* a device that takes nothing */
+            usleep(2000);
+            waited += 2;
+            continue;
+        }
+        if (w < 0) { (*xruns)++; A.recover(pcm, (int)w, 1); *dropped += (unsigned long)(CHUNK - off); return 1; }
+        off += (int)w;
+        *frames += (unsigned long)w;
+    }
+    return 0;
+}
+
 static int play(const char *dev)
 {
     static int16_t buf[CHUNK * CH];
     static int16_t pre[PREFILL][CHUNK * CH];
-    int need = PREFILL;
+    int need = 1, cushion = 4;
     snd_pcm_t *pcm;
-    unsigned long frames = 0, dropped = 0, xruns = 0, late = 0, full = 0;
-    const long drop_above_ms = (long)(buffer_us() / 1000) + 25;
-    double report, next;
-    long last_delay = 0;
+    unsigned long frames = 0, dropped = 0, xruns = 0, full = 0;
+    double report;
+    long d = 0;
     int r;
     /* a short pipe: what waits in it is delay between the picture and the sound (16 KiB = 85 ms) */
     fcntl(0, F_SETPIPE_SZ, 16384);
@@ -126,54 +152,42 @@ static int play(const char *dev)
     fprintf(stderr, "[G21-AUDIO] out: active\n");
     pcm = dev_open(dev);
     if (!pcm) leave(1);
+    /* the cushion: what the device really holds, less two chunks of room (SmartX: 3072 frames -> 4 chunks, 40 ms) */
+    if (A.avail) {
+        long room = A.avail(pcm);
+        if (room >= 3 * CHUNK) { cushion = (int)(room / CHUNK) - 2; if (cushion > PREFILL) cushion = PREFILL; if (cushion < 1) cushion = 1; }
+        fprintf(stderr, "[G21-AUDIO] out: device holds %ld frames, cushion %d ms\n", room, cushion * 10);
+    }
     report = mono_ms() + 5000;
-    next = mono_ms();
     for (;;) {
-        long d = 0, w;
         double now;
-        if (need > 0) {
+        if (need) {
             /*
              * A cushion. A player that sends its sound in step with the clock (AirPlay) has nothing ahead: played
-             * chunk by chunk as it comes, every late chunk empties the device and the speakers buzz (car,
-             * 2026-11-15). So some chunks are gathered first and played together; the device then holds that
-             * much ahead. The same again after an underrun.
+             * chunk by chunk as it comes, every late chunk empties the device and the speakers buzz. So some
+             * chunks are gathered first and played together; the device then holds that much ahead. The same
+             * again after it ran empty. Nothing paces the writing but the device itself: it takes a chunk when
+             * it has room, and a player that is ahead waits in the pipe.
              */
             int n = 1, i, got = 1;
             memcpy(pre[0], buf, sizeof buf);
-            while (n < need && (got = read_chunk(pre[n], 200)) > 0) n++;
+            while (n < cushion && (got = read_chunk(pre[n], 200)) > 0) n++;
             if (got < 0) { r = -1; break; }
-            for (i = 0; i < n; i++) {
-                w = A.writei(pcm, pre[i], CHUNK);
-                if (w == -EAGAIN) { dropped += CHUNK; full++; }
-                else if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); }
-                else { frames += (unsigned long)w; if (w < CHUNK) dropped += (unsigned long)(CHUNK - w); }
-            }
+            for (i = 0; i < n; i++) write_chunk(pcm, pre[i], &frames, &dropped, &full, &xruns);
             need = 0;
-            next = mono_ms();
         } else {
-            if (A.delay(pcm, &d) < 0) d = 0;
-            last_delay = d;
-            if (d * 1000 / RATE > drop_above_ms) { dropped += CHUNK; late++; }
-            else {
-                w = A.writei(pcm, buf, CHUNK);
-                if (w == -EAGAIN) { dropped += CHUNK; full++; }
-                else if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); need = PREFILL; }
-                else { frames += (unsigned long)w; if (w < CHUNK) dropped += (unsigned long)(CHUNK - w); }
-            }
+            need = write_chunk(pcm, buf, &frames, &dropped, &full, &xruns);
         }
-        /* real time: one chunk every 10 ms of the clock; after a stall the schedule starts again from now */
-        next += 10.0;
         now = mono_ms();
-        if (now - next > 200.0) next = now;
-        else if (next > now) usleep((useconds_t)((next - now) * 1000.0));
         if (now >= report) {
             report = now + 5000;
-            fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (late %lu, full %lu) xruns %lu delay_ms %ld\n", frames, dropped, late, full, xruns, last_delay * 1000 / RATE);
+            if (A.delay(pcm, &d) < 0) d = 0;
+            fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full %lu) xruns %lu delay_ms %ld\n", frames, dropped, full, xruns, d * 1000 / RATE);
         }
         r = read_chunk(buf, IDLE_MS);
         if (r <= 0) break;
     }
-    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (late %lu, full %lu) xruns %lu\n", r < 0 ? "stopped" : "idle", frames, dropped, late, full, xruns);
+    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full %lu) xruns %lu\n", r < 0 ? "stopped" : "idle", frames, dropped, full, xruns);
     leave(0);
     return 0;
 }

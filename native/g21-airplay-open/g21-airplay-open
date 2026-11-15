@@ -1363,9 +1363,9 @@ start_ux() {
         # AirPlay Sound: -vs 0 = streamed audio only (the phone picks G21 as a speaker).
         set -- -n "$shown" -nh -p 7400 $mac_args -vs 0 -as "$audio_sink" $pin_args -d 1
     elif [ -n "$mac_args" ]; then
-        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 $mac_args -vsync no -srgb no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
     else
-        set -- -n "$shown" -nh -p 7400 -vsync no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
+        set -- -n "$shown" -nh -p 7400 -vsync no -srgb no -vs "fakesink async=false" -as "$audio_sink" -s "$vsize" -fps 24 $pin_args -d 1
     fi
     printf '%s\n' "$*" > /run/g21-airplay/ux.cmd
     # Run under a tiny shell wrapper so stdout is line-buffered into UXLOG
