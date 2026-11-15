@@ -1930,7 +1930,7 @@ Daemon.prototype.cast = async function (on) {
     const e = this.engine;
     if (!e || !e.session) return;
     try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* was off */ }
-    if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 82, everyNthFrame: 1 }, e.session);
+    if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 72, everyNthFrame: 1 }, e.session);
 };
 // title, address, back / forward
 /*
@@ -1997,6 +1997,10 @@ Daemon.prototype.refresh = async function (e) {
     if (!this.s.loading) this.remember(cur.url || '', cur.title || '');
 };
 Daemon.prototype.pageNote = function (e, text) {
+    // (an app's reads of car signals that the car does not answer are not the page's fault and filled the log's
+    // 60 lines before a player's error could be written: car, 2026-11-15; the same line twice in a row says nothing)
+    if (/\/_car\//.test(String(text)) || text === e.lastNote) return;
+    e.lastNote = text;
     e.notes = (e.notes || 0) + 1;
     if (e.notes <= 60) this.log(String(text).replace(/\s+/g, ' ').slice(0, 600));
     else if (e.notes === 61) this.log('(more page errors are not logged in this engine run)');
@@ -2008,7 +2012,7 @@ Daemon.prototype.onEvent = function (e, m) {
     case 'Page.screencastFrame': this.onFrame(e, p); return;
     case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) this.set({ loading: true, err: '', editable: false }); return;
     case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
-    case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.mainFrame = p.frame.id; this.set({ url: p.frame.url + (p.frame.urlFragment || '') }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = ''; e.mainFrame = p.frame.id; this.set({ url: p.frame.url + (p.frame.urlFragment || '') }); this.guard(() => this.refresh(e)); } return;
     case 'Page.navigatedWithinDocument':
         if (p.frameId === e.mainFrame) {
             const link = /^data:/.test(p.url) ? /#(chrome:\/\/[a-z0-9-]{1,40})$/.exec(p.url) : null;

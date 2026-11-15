@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.170
+
+- Płynność wideo w Przeglądarce (`g21-browser` 0.1.25). Pomiar na aucie 2026-11-15: jednostka jest stale obciążona (średnie obciążenie 9–10 na 4 rdzeniach), a silnik przeglądarki działał z obniżonym priorytetem (`Nice=5`), więc film dekodowany programowo przegrywał o procesor ze wszystkim innym — przycinał obraz, a po chwili dźwięk. Usługa ma teraz zwykły priorytet (`Nice=0`). Klatki strony idą jako JPEG o jakości 72 zamiast 82 (mniej pracy przy kodowaniu i dekodowaniu każdej klatki).
+- Log błędów strony nie jest już zapychany: odczyty sygnałów auta, na które auto nie odpowiada, oraz powtórzenia tej samej linii nie są zapisywane, a limit 60 linii liczy się od nowa po każdym przejściu na inną stronę. Przez to zapchanie błąd odtwarzacza YouTube („Coś poszło nie tak”) nie zapisał się i jego przyczyna dalej nie jest znana.
+- Hello THEiPlay, karta „Auto”: liczniki na żywo z sygnałów, które odpowiedziały na G21 (prędkość, tryb jazdy, zasięg, paliwo, przebieg, temperatura zewnętrzna, ciśnienie i temperatura opon, dane podróży, średnia prędkość i zużycie, doładowanie, przeciążenia, skala mocy i momentu). Przeliczenia surowych wartości są przyjęte (dały wiarygodne liczby na aucie), nie ze specyfikacji. Osobna karta „Sygnały” to przeglądarka wszystkich 1648 pól do odczytu; pole, które nie odpowiada, nie jest już odpytywane w kółko.
+- Most danych auta potwierdzony na aucie: `g21-car.js` na Node 8 jednostki wylistował 338 interfejsów i odczytał 93 z 245 sprawdzonych pól pojazdu (reszta: usługa niedostępna w tym aucie).
+
 ## 0.1.169
 
 - Ustawienia > „O systemie”: wolne miejsce (pamięć aplikacji `/var/opt`, dysk `/var/opt/hdshare`), pamięć RAM, procesor, grafika, system i USB. Czyta to demon `g21-browser` 0.1.24 (Node 8 aplikacji nie umie zapytać o wolne miejsce); dotknięcie kafelka odświeża.

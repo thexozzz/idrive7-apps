@@ -22,8 +22,10 @@ RestartSec=3
 TimeoutStopSec=5
 # A page that eats memory: the kernel takes this tool's processes first, not a BMW process.
 OOMScoreAdjust=900
-# Below the HMI in the scheduler.
-Nice=5
+# The scheduler's ordinary priority. It was Nice=5 ("below the HMI"), and the head unit is busy all the time
+# (load 9-10 on 4 cores, car 2026-11-15): a film decoded in software at a lower priority than everything else
+# stuttered, and its sound after it. OOMScoreAdjust above still makes this tool the first to go when memory is short.
+Nice=0
 # As jap-ridetube-d: 1, not 0, so the crash handler never sees the engine's cores.
 LimitCORE=1
 
