@@ -20,6 +20,7 @@
   #t-test { grid-template-columns: 1.2fr 1fr 1fr; }
   #t-car { grid-template-columns: 0.9fr 2.6fr; }
   #t-sig { grid-template-columns: 1.1fr 1.1fr 1.5fr; }
+  #t-ecu { grid-template-columns: 0.9fr 1.3fr 1.6fr; }
   #t-info { grid-template-columns: 1fr 1fr; }
   section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: hidden; }
   h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--dim); }
@@ -62,6 +63,7 @@
     <button data-tab="test" class="on">Test</button>
     <button data-tab="car">Auto</button>
     <button data-tab="sig">Sygnały</button>
+    <button data-tab="ecu">Sterowniki</button>
     <button data-tab="info">Co aplikacja może</button>
   </nav>
   <span id="clock">--:--:--</span>
@@ -130,6 +132,25 @@
     </section>
   </div>
 
+  <div class="tab" id="t-ecu">
+    <section>
+      <h2>Katalog (odczyt diagnostyczny)</h2>
+      <div class="list" id="dcats" style="flex:none"></div>
+      <h2>Adres sterownika (hex)</h2>
+      <input id="ecuAddr" value="12" maxlength="2" autocomplete="off">
+      <div class="row"><button id="scan">Czytaj cały katalog</button></div>
+      <p id="ecuState">12 = silnik, 18 = skrzynia biegów. Tylko usługi odczytu (22 i 01).</p>
+    </section>
+    <section>
+      <h2 id="ditemsTitle">Pozycje</h2>
+      <div class="list" id="ditems"></div>
+    </section>
+    <section>
+      <h2 id="dvalTitle">Odpowiedź</h2>
+      <pre id="dval">wybierz katalog, potem pozycję — albo „Czytaj cały katalog”</pre>
+    </section>
+  </div>
+
   <div class="tab" id="t-info">
     <section>
       <h2>Co ma aplikacja w THEiPlay</h2>
@@ -141,11 +162,12 @@
         <li>Pełny ekran (<code>requestFullscreen</code>): cały ekran środkowy 1920×720.</li>
         <li>Zegary i HUD: THEiPlay &gt; Aplikacje &gt; Ustawienia &gt; Zegary / HUD pokazuje tam obraz aplikacji.</li>
         <li>Dane auta, tylko odczyt: sygnały SOME/IP, które aplikacja zgłosi w <code>theiplay.json</code> (karta Sygnały pokazuje wszystkie).</li>
+        <li>Odczyty diagnostyczne sterowników (<code>"uds"</code>): pytanie do sterownika, tylko usługi odczytu 22 i 01 (karta Sterowniki).</li>
       </ul>
       <h2>Czego nie ma</h2>
       <ul>
         <li>Zapisu do auta: żadnego ustawiania pól ani wywołań.</li>
-        <li>Danych diagnostycznych sterowników (to, co czytają Engine Config czy 8HP przez UDS).</li>
+        <li>Zapisu, kodowania, kasowania błędów ani testów elementów w sterownikach.</li>
         <li>Sygnałów o osobie i miejscu: VIN, pozycja, cele, telefon, kontakty, profile.</li>
         <li>Mikrofonu, Bluetooth, USB, pobierania plików, rozszerzeń Chrome, DRM.</li>
       </ul>
@@ -160,13 +182,16 @@
     "de.bmw.infotainment.vehicle.Vehicle2.statusCarSpeed2",
     "de.bmw.infotainment.KombiIF.*",
     "*"
-  ]
+  ],
+  "uds": ["12", "18"]
 }</pre>
       <h2>Odczyt sygnału</h2>
       <pre>var app = location.pathname.split('/')[1];
 fetch('/_car/' + app + '/list')            // { ok, ifaces: { interfejs: [pola] } }
 fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
-  .then(r =&gt; r.json())                   // { ok, value } albo { ok:false, err }</pre>
+  .then(r =&gt; r.json())                   // { ok, value } albo { ok:false, err }
+// pytanie do sterownika: e = adres, s = 22 albo 01, d = identyfikator (hex)
+fetch('/_car/' + app + '/uds?e=12&amp;s=01&amp;d=05')   // { ok, data: "hex" } albo { ok:false, err }</pre>
     </section>
   </div>
 </main>
@@ -183,6 +208,7 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
             Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.classList.toggle('on', t.id === 't-' + b.dataset.tab); });
             if (b.dataset.tab === 'car') { dashStart(); }
             if (b.dataset.tab === 'sig') { sigStart(); }
+            if (b.dataset.tab === 'ecu') { ecuStart(); }
         });
     });
     // clock
@@ -399,6 +425,88 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
             drawIfaces();
         });
     }
+    // ---- the control units: diagnostic READS (service 22 and 01), by the catalogs in diag.json
+    var diag = null, dcat = 0, ditem = -1, ecuOn = false, scanning = false;
+    function addr() { var a = $('ecuAddr').value.trim().toUpperCase(); return /^[0-9A-F]{2}$/.test(a) ? a : ''; }
+    function bytesOf(h) { var out = [], i; for (i = 0; i + 1 < h.length; i += 2) { out.push(parseInt(h.substr(i, 2), 16)); } return out; }
+    function fieldText(fd, b) {
+        var size = { u8: 1, s8: 1, u16: 2, s16: 2, u32: 4, s32: 4 }[fd.t], at = fd.at || 0, raw = 0, i, t, n;
+        if (fd.t === 'hex') { return b.slice(at, at + (fd.len || b.length)).map(function (x) { return (x < 16 ? '0' : '') + x.toString(16).toUpperCase(); }).join(''); }
+        if (fd.t === 'str') { return b.slice(at, at + (fd.len || b.length)).filter(function (x) { return x >= 32 && x < 127; }).map(function (x) { return String.fromCharCode(x); }).join('').trim(); }
+        if (!size || at + size > b.length) { return null; }
+        for (i = 0; i < size; i += 1) { raw = raw * 256 + b[fd.le ? at + size - 1 - i : at + i]; }
+        if (fd.t.charAt(0) === 's' && raw >= Math.pow(2, size * 8 - 1)) { raw -= Math.pow(2, size * 8); }
+        if (typeof fd.m === 'number') { raw = raw & fd.m; }
+        if (fd.e) { t = fd.e[raw]; return t !== undefined ? t : String(raw); }
+        n = raw * (fd.k === undefined ? 1 : fd.k) + (fd.o || 0);
+        return (Math.abs(n) >= 100 || n === Math.round(n) ? String(Math.round(n * 10) / 10) : n.toFixed(2)).replace('.', ',') + (fd.u ? ' ' + fd.u : '');
+    }
+    function itemText(it, data) {
+        var b = bytesOf(data);
+        return it.f.map(function (fd) { var v = fieldText(fd, b); return (fd.n ? fd.n + ': ' : '') + (v === null ? 'za krótka odpowiedź' : v); }).join('\n');
+    }
+    function drawCats() {
+        var box = $('dcats');
+        box.textContent = '';
+        diag.catalogs.forEach(function (c, idx) {
+            box.appendChild(button(c.name + '  (' + c.items.length + ')', idx === dcat, function () { if (scanning) { return; } dcat = idx; ditem = -1; $('ecuAddr').value = c.ecu; drawCats(); drawItems(); }));
+        });
+    }
+    function drawItems() {
+        var box = $('ditems'), c = diag.catalogs[dcat];
+        box.textContent = '';
+        $('ditemsTitle').textContent = c.name + ' — ' + c.hint;
+        c.items.forEach(function (it, idx) {
+            box.appendChild(button(it.id + '  ' + it.name, idx === ditem, function () { if (scanning) { return; } ditem = idx; drawItems(); readItem(); }));
+        });
+    }
+    function ask(it) { var c = diag.catalogs[dcat]; return car('uds?e=' + addr() + '&s=' + c.sid + '&d=' + it.id); }
+    function readItem() {
+        var it = diag.catalogs[dcat].items[ditem];
+        if (!it || !addr()) { $('dval').className = 'err'; $('dval').textContent = 'podaj adres sterownika: dwie cyfry szesnastkowe'; return; }
+        $('dvalTitle').textContent = 'Odpowiedź: ' + it.id + ' ' + it.name;
+        $('dval').className = '';
+        $('dval').textContent = 'pytam sterownik ' + addr() + '…';
+        ask(it).then(function (r) {
+            $('dval').className = r.ok ? '' : 'err';
+            $('dval').textContent = r.ok ? itemText(it, r.data) + '\n\nsurowe: ' + r.data : (r.err || 'brak odpowiedzi');
+        });
+    }
+    function scanAll() {
+        var c = diag.catalogs[dcat], lines = [], okN = 0, at = 0;
+        if (scanning) { scanning = false; return; }
+        if (!addr()) { readItem(); return; }
+        scanning = true;
+        $('scan').textContent = 'Przerwij';
+        $('dvalTitle').textContent = c.name + ', sterownik ' + addr();
+        $('dval').className = '';
+        (function step() {
+            if (!scanning || at >= c.items.length || !shown('ecu')) {
+                scanning = false;
+                $('scan').textContent = 'Czytaj cały katalog';
+                $('ecuState').textContent = okN + ' z ' + at + ' pozycji odpowiedziało';
+                return;
+            }
+            var it = c.items[at];
+            $('ecuState').textContent = 'czytam ' + (at + 1) + ' z ' + c.items.length + '…';
+            ask(it).then(function (r) {
+                at += 1;
+                if (r.ok) { okN += 1; lines.push(it.name + ': ' + itemText(it, r.data).replace(/\n/g, ' | ')); $('dval').textContent = lines.join('\n'); }
+                else if (/switched|declare|transport|busy|połączenia/i.test(r.err || '')) { scanning = false; $('dval').className = 'err'; $('dval').textContent = r.err; }
+                setTimeout(step, 150);
+            });
+        }());
+    }
+    function ecuStart() {
+        if (ecuOn) { return; }
+        ecuOn = true;
+        fetch('diag.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+            diag = j;
+            drawCats();
+            drawItems();
+        }, function () { ecuOn = false; $('dval').className = 'err'; $('dval').textContent = 'nie udało się wczytać katalogów'; });
+    }
+    $('scan').addEventListener('click', function () { if (diag) { scanAll(); } });
     $('filter').addEventListener('input', drawIfaces);
     $('again').addEventListener('click', read);
 }());

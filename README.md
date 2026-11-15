@@ -10,6 +10,12 @@ dane auta (prędkość, przeglądarka wszystkich sygnałów do odczytu) i opisuj
 Live Data z `cauliflowermossgrape/idrive7-apps` (licencja MIT, Copyright (c) 2026 cauliflowermossgrape) skryptem
 `tools/gen_hello_signals.js`. Na G21 odpowiada 47 z 60 wartości (2026-11-15).
 
+## Sterowniki
+
+`diag.json` to katalogi odczytów diagnostycznych (OBD-II, identyfikacja, silnik benzynowy DME8, skrzynia ZF 8HP) z tego
+samego repozytorium (`tools/gen_hello_diag.js`). Aplikacja zgłasza sterowniki w `theiplay.json` (`"uds": ["12", "18"]`)
+i pyta: `fetch('/_car/<id>/uds?e=12&s=01&d=05')`. THEiPlay przepuszcza tylko usługi odczytu 22 i 01.
+
 ## Import
 
 THEiPlay > Aplikacje > Sklep > „Importuj z git” i adres repozytorium: `wlasciciel/nazwa` albo `wlasciciel/nazwa@galaz`
