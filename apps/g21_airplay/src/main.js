@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.149',
+        version: (this._packageJson && this._packageJson.version) || '0.1.150',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.149') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.150') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5780,8 +5780,8 @@ AirPlayApp.prototype._syncMouse = function (why) {
         return;
     }
     if (want) {
-        if (!this._input) {
-            this._input = inputClient.createInputClient({
+        if (!this._padInput) {
+            this._padInput = inputClient.createInputClient({
                 note: noteStart,
                 onMove: function (dx, dy) {
                     self._mouseMove(dx, dy);
@@ -5803,7 +5803,7 @@ AirPlayApp.prototype._syncMouse = function (why) {
         this._mouseDown = false;
         this._mouseActive = true;
         noteStart('[G21-INPUT] active: ' + app + ' mouse=' + conf.mouse + ' (' + why + '), adapter chromium');
-        this._input.on(app);
+        this._padInput.on(app);
     } else {
         this._mouseActive = false;
         noteStart('[G21-INPUT] inactive (' + why + '): switch ' + (this._mouseOn ? 'on' : 'off') + ', app ' + (app || 'none') + ', front ' + (this._appFront !== false) + ', adapter ' + (ready ? 'ready' : 'not ready'));
@@ -5811,8 +5811,8 @@ AirPlayApp.prototype._syncMouse = function (why) {
             this._web.send({ op: 'mouse', t: 'up', x: this._mouseX, y: this._mouseY });
         }
         this._mouseDown = false;
-        if (this._input) {
-            this._input.off();
+        if (this._padInput) {
+            this._padInput.off();
         }
     }
     this._paintWeb();

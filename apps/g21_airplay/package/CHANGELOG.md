@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.150
+
+- Naprawa: mysz z gładzika kontrolera iDrive (G21 Input) nie działała, a aplikacja wywracała się z błędem `this._input.on is not a function` (log z auta 2026-11-15). Klient G21 Input był zapisywany w polu `_input`, które od dawna zajmuje menedżer pokrętła, więc nigdy nie powstawał. Ma teraz własne pole `_padInput`. Poprawka nie była jeszcze sprawdzana w aucie.
+
 ## 0.1.149
 
 - Naprawa: AirPlay przestał być wykrywany przez iPhone’a. Narzędzie `g21-airplay-open` 0.1.54 otwierało G21 Audio wewnątrz `$(...)`; klient dźwięku działający w tle trzymał potok podstawienia otwarty i start zatrzymywał się na zawsze przed uruchomieniem UxPlay (stan z auta 2026-11-15: avahi i strumień dźwięku działają, UxPlay nie ma). 0.1.55 otwiera dźwięk bez podstawienia i czyta nazwę FIFO z pliku. Poprawka nie była jeszcze sprawdzana w aucie.
