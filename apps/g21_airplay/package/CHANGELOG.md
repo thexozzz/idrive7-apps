@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.153
+
+- `g21-browser` 0.1.13 zapisuje w swoim logu błędy strony i odtwarzacza (CDP `Log` i `Media`, najwyżej 60 wierszy na uruchomienie silnika). Powód: odtwarzacz znów pokazał „coś poszło nie tak”, a auto było w tym czasie nieosiągalne i log nie mówił, dlaczego. Sama przyczyna nie jest ustalona ani naprawiona.
+
 ## 0.1.152
 
 - Naprawa: gładzik nie przekazywał ruchu, choć kursor był widoczny. Narzędzie `g21-input` 0.1.0 odmówiło przejęcia kontrolera („the car moves”), bo auto jechało (blokada postoju). Właściciel potwierdził, że auto wtedy jechało, i polecił zdjąć blokadę postoju: w 0.1.1 mysz działa także w czasie jazdy. Blokadę przywraca plik `/var/opt/g21-input/config.json` z `{ "parkedOnly": true }`. Prędkość jest teraz czytana przy każdym włączeniu, liczona tylko gdy świeża (6 s) i zapisywana w logu. Niesprawdzone jeszcze w aucie.

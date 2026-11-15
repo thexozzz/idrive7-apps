@@ -1581,6 +1581,11 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     await e.cdp.send('Target.setDiscoverTargets', { discover: true });
     const send = (method, params) => e.cdp.send(method, params, e.session);
     await send('Page.enable', {});
+    // what the page and its players complain about goes to the log ("coś poszło nie tak" of a player says no more
+    // on the screen): errors only, 60 lines an engine run at most
+    e.notes = 0;
+    try { await send('Log.enable', {}); } catch (x) { /* not in this engine */ }
+    try { await send('Media.enable', {}); } catch (x) { /* not in this engine */ }
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
     // The screen the page sees is its own window. Without this the headless engine's screen is 800x600: a player that
@@ -1627,6 +1632,11 @@ Daemon.prototype.refresh = async function (e) {
     } catch (x) { /* the page is on its way somewhere else */ }
     if (!this.s.loading) this.remember(cur.url || '', cur.title || '');
 };
+Daemon.prototype.pageNote = function (e, text) {
+    e.notes = (e.notes || 0) + 1;
+    if (e.notes <= 60) this.log(String(text).replace(/\s+/g, ' ').slice(0, 600));
+    else if (e.notes === 61) this.log('(more page errors are not logged in this engine run)');
+};
 Daemon.prototype.onEvent = function (e, m) {
     if (this.engine !== e) return;
     const p = m.params || {};
@@ -1640,6 +1650,9 @@ Daemon.prototype.onEvent = function (e, m) {
         // nobody can answer a dialog on this screen: alerts are closed, questions answered "no"
         e.cdp.send('Page.handleJavaScriptDialog', { accept: p.type === 'alert' || p.type === 'beforeunload' }, e.session).catch(() => {});
         return;
+    case 'Log.entryAdded': { const en = p.entry || {}; if (en.level === 'error') this.pageNote(e, 'page ' + (en.source || '') + ': ' + en.text + (en.url ? ' (' + String(en.url).slice(0, 120) + ')' : '')); return; }
+    case 'Media.playerErrorsRaised': (p.errors || []).forEach((er) => this.pageNote(e, 'player error: ' + JSON.stringify(er).slice(0, 500))); return;
+    case 'Media.playerMessagesLogged': (p.messages || []).forEach((ms) => { if (ms.level === 'error' || ms.level === 'warning') this.pageNote(e, 'player ' + ms.level + ': ' + ms.message); }); return;
     case 'Inspector.targetCrashed': if (m.sessionId === e.session) { this.log('page crashed'); this.set({ err: 'strona przestała działać: odśwież', loading: false }); } return;
     case 'Target.targetInfoChanged': {
         const t = p.targetInfo || {};
