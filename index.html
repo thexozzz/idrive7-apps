@@ -8,44 +8,50 @@
   :root { --bg: #0b0f14; --card: #151c25; --line: #263243; --text: #e8eef6; --dim: #8b9bb0; --acc: #3ea6ff; --ok: #4cd08a; --bad: #ff7a7a; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 19px/1.35 system-ui, "Noto Sans", sans-serif; }
-  body { display: flex; flex-direction: column; padding: 12px 18px; gap: 10px; }
-  header { display: flex; align-items: center; gap: 14px; }
-  h1 { margin: 0; font-size: 28px; font-weight: 600; }
-  #clock { margin-left: auto; font-size: 28px; font-variant-numeric: tabular-nums; color: var(--acc); }
+  body { display: flex; flex-direction: column; padding: 10px 16px; gap: 8px; }
+  header { display: flex; align-items: center; gap: 12px; }
+  h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  #clock { margin-left: auto; font-size: 26px; font-variant-numeric: tabular-nums; color: var(--acc); }
   nav { display: flex; gap: 8px; }
-  nav button { min-height: 46px; padding: 6px 18px; }
-  nav button.on { background: var(--acc); color: #04121f; border-color: var(--acc); }
+  nav button { min-height: 44px; padding: 4px 16px; }
   main { flex: 1; min-height: 0; }
-  .tab { display: none; height: 100%; gap: 12px; }
+  .tab { display: none; height: 100%; gap: 10px; }
   .tab.on { display: grid; }
   #t-test { grid-template-columns: 1.2fr 1fr 1fr; }
-  #t-car { grid-template-columns: 0.8fr 1.2fr 1.4fr; }
+  #t-car { grid-template-columns: 0.9fr 2.6fr; }
+  #t-sig { grid-template-columns: 1.1fr 1.1fr 1.5fr; }
   #t-info { grid-template-columns: 1fr 1fr; }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
-  h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--dim); }
-  #pad { flex: 1; min-height: 70px; border: 1px dashed var(--line); border-radius: 10px; position: relative; overflow: hidden; touch-action: none; cursor: crosshair; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: hidden; }
+  h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--dim); }
+  #pad { flex: 1; min-height: 60px; border: 1px dashed var(--line); border-radius: 10px; position: relative; overflow: hidden; touch-action: none; cursor: crosshair; }
   #dot { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--acc); left: 50%; top: 50%; }
   #dot.hit { background: var(--ok); }
-  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 17px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 16px; }
   dt { color: var(--dim); }
   dd { margin: 0; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  button { font: inherit; color: var(--text); background: #1f2a38; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 52px; cursor: pointer; }
+  button { font: inherit; color: var(--text); background: #1f2a38; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 48px; cursor: pointer; }
   button:active, button.on { background: var(--acc); color: #04121f; border-color: var(--acc); }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
   .row button { flex: 1; }
-  input { font: inherit; color: var(--text); background: #0e141b; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; min-height: 50px; }
-  #bars { display: flex; height: 18px; border-radius: 6px; overflow: hidden; }
+  input { font: inherit; color: var(--text); background: #0e141b; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; width: 100%; min-height: 46px; }
+  #bars { display: flex; height: 16px; border-radius: 6px; overflow: hidden; }
   #bars i { flex: 1; }
   #say { color: var(--ok); min-height: 1.35em; }
-  .big { font-size: 64px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+  .big { font-size: 84px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
   .unit { color: var(--dim); font-size: 22px; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 8px; }
+  .cell { background: #0e141b; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: center; min-height: 0; overflow: hidden; }
+  .cell .k { color: var(--dim); font-size: 14px; white-space: nowrap; }
+  .cell .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+  .cell .v small { font-size: 15px; font-weight: 400; color: var(--dim); }
+  .cell.off .v { color: var(--dim); }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-  .list button { min-height: 44px; text-align: left; padding: 6px 12px; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
-  pre { margin: 0; flex: 1; min-height: 0; overflow: auto; font: 15px/1.3 ui-monospace, "Noto Sans Mono", monospace; color: #cfe3ff; white-space: pre-wrap; word-break: break-word; }
+  .list button { min-height: 42px; text-align: left; padding: 5px 10px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+  pre { margin: 0; flex: 1; min-height: 0; overflow: auto; font: 14px/1.3 ui-monospace, "Noto Sans Mono", monospace; color: #cfe3ff; white-space: pre-wrap; word-break: break-word; }
   .err { color: var(--bad); }
-  p { margin: 0; color: var(--dim); font-size: 16px; }
-  code { color: #cfe3ff; font-size: 15px; }
-  ul { margin: 0; padding-left: 20px; font-size: 16px; color: var(--dim); }
+  p { margin: 0; color: var(--dim); font-size: 15px; }
+  code { color: #cfe3ff; font-size: 14px; }
+  ul { margin: 0; padding-left: 20px; font-size: 15px; color: var(--dim); }
   li { margin: 2px 0; }
 </style>
 </head>
@@ -55,6 +61,7 @@
   <nav>
     <button data-tab="test" class="on">Test</button>
     <button data-tab="car">Auto</button>
+    <button data-tab="sig">Sygnały</button>
     <button data-tab="info">Co aplikacja może</button>
   </nav>
   <span id="clock">--:--:--</span>
@@ -96,20 +103,30 @@
     <section>
       <h2>Prędkość</h2>
       <div><span class="big" id="speed">—</span> <span class="unit">km/h</span></div>
-      <p id="speedNote">Vehicle2.statusCarSpeed2, co sekundę</p>
-      <h2>Stan</h2>
+      <h2>Tryb jazdy</h2>
+      <div class="cell" style="flex:none"><span class="v" id="c-mode">—</span></div>
       <p id="carState">sprawdzam…</p>
     </section>
     <section>
-      <h2>Interfejsy auta (tylko odczyt)</h2>
+      <h2>Na żywo z auta (tylko odczyt, co 3 s)</h2>
+      <div class="grid" id="grid"></div>
+    </section>
+  </div>
+
+  <div class="tab" id="t-sig">
+    <section>
+      <h2>Interfejsy auta</h2>
       <input id="filter" placeholder="filtr, np. vehicle" autocomplete="off">
       <div class="list" id="ifaces"></div>
     </section>
     <section>
       <h2 id="fieldsTitle">Pola</h2>
-      <div class="list" id="fields" style="flex:0 1 46%"></div>
+      <div class="list" id="fields"></div>
+    </section>
+    <section>
       <h2 id="valueTitle">Wartość</h2>
       <pre id="value">wybierz interfejs, potem pole</pre>
+      <div class="row"><button id="again">Odczytaj jeszcze raz</button></div>
     </section>
   </div>
 
@@ -117,20 +134,20 @@
     <section>
       <h2>Co ma aplikacja w THEiPlay</h2>
       <ul>
-        <li>Zwykła strona WWW w silniku Chrome (piaskownica, internet, HTML/CSS/JS, WebAudio, WebGL programowo).</li>
-        <li>Dotyk ekranu i kursor z gładzika kontrolera (<code>"mouse": "yes"</code>), przewijanie dwoma palcami, pokrętło = kliknięcie.</li>
+        <li>Zwykła strona WWW w silniku Chrome (piaskownica, internet, HTML/CSS/JS, WebAudio).</li>
+        <li>Dotyk ekranu i kursor z gładzika kontrolera (<code>"mouse": "yes"</code>), przewijanie dwoma palcami, gesty wstecz / dalej, pokrętło = kliknięcie.</li>
         <li>Dźwięk przez głośniki auta (G21 Audio).</li>
         <li>Klawiatura THEiPlay dla pól tekstowych.</li>
         <li>Pełny ekran (<code>requestFullscreen</code>): cały ekran środkowy 1920×720.</li>
         <li>Zegary i HUD: THEiPlay &gt; Aplikacje &gt; Ustawienia &gt; Zegary / HUD pokazuje tam obraz aplikacji.</li>
-        <li>Dane auta, tylko odczyt: sygnały SOME/IP, które aplikacja zgłosi w <code>theiplay.json</code>.</li>
+        <li>Dane auta, tylko odczyt: sygnały SOME/IP, które aplikacja zgłosi w <code>theiplay.json</code> (karta Sygnały pokazuje wszystkie).</li>
       </ul>
       <h2>Czego nie ma</h2>
       <ul>
         <li>Zapisu do auta: żadnego ustawiania pól ani wywołań.</li>
         <li>Danych diagnostycznych sterowników (to, co czytają Engine Config czy 8HP przez UDS).</li>
         <li>Sygnałów o osobie i miejscu: VIN, pozycja, cele, telefon, kontakty, profile.</li>
-        <li>Pobierania plików, rozszerzeń Chrome, DRM.</li>
+        <li>Mikrofonu, Bluetooth, USB, pobierania plików, rozszerzeń Chrome, DRM.</li>
       </ul>
     </section>
     <section>
@@ -141,7 +158,7 @@
   "mouse": "yes",
   "car": [
     "de.bmw.infotainment.vehicle.Vehicle2.statusCarSpeed2",
-    "de.bmw.infotainment.vehicle.Vehicle2.*",
+    "de.bmw.infotainment.KombiIF.*",
     "*"
   ]
 }</pre>
@@ -158,12 +175,14 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
 (function () {
     var $ = function (id) { return document.getElementById(id); };
     var APP = location.pathname.split('/')[1] || '';
+    function shown(tab) { return $('t-' + tab).classList.contains('on'); }
     // tabs
     Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
         b.addEventListener('click', function () {
             Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (x) { x.classList.toggle('on', x === b); });
             Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.classList.toggle('on', t.id === 't-' + b.dataset.tab); });
-            if (b.dataset.tab === 'car') { carStart(); }
+            if (b.dataset.tab === 'car') { dashStart(); }
+            if (b.dataset.tab === 'sig') { sigStart(); }
         });
     });
     // clock
@@ -229,11 +248,107 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
     document.addEventListener('fullscreenchange', function () { $('full').classList.toggle('on', !!document.fullscreenElement); sizes(); });
 
     // ---- the car's signals: read only, through THEiPlay (/_car/<app>/...)
-    var V2 = 'de.bmw.infotainment.vehicle.Vehicle2';
-    var carOn = false, ifaces = {}, picked = '', pickedField = '';
     function car(path) {
         return fetch('/_car/' + APP + '/' + path, { cache: 'no-store' }).then(function (r) { return r.json(); }, function () { return { ok: false, err: 'brak połączenia z THEiPlay' }; });
     }
+    function get(iface, name) { return car('get?i=' + encodeURIComponent(iface) + '&n=' + encodeURIComponent(name)); }
+
+    /*
+     * The dashboard. Each cell names a field that answered on a G21 (2026-11-15) and how its raw number is shown.
+     * A raw value that means "no signal" (the field's largest number) is shown as a dash. The scalings are the ones
+     * BMW's signals commonly use and gave plausible numbers on the car; they are not from a specification.
+     */
+    var KOMBI = 'de.bmw.infotainment.KombiIF', TPMS = 'de.bmw.infotainment.vehicle.TPMS', FES = 'de.bmw.infotainment.drivingexcitement.FES', V2 = 'de.bmw.infotainment.vehicle.Vehicle2';
+    function num(v, bad) { return typeof v === 'number' && bad.indexOf(v) < 0 ? v : null; }
+    function r1(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
+    function four(v, keys, f, unit) {
+        var out = keys.map(function (k) { var n = num(v[k], [255, 254]); return n === null ? '—' : f(n); });
+        return out.join(' · ') + ' <small>' + unit + '</small>';
+    }
+    var READS = [
+        { i: V2, n: 'statusCarSpeed2', every: 1 },
+        { i: KOMBI, n: 'statusRangeTankStatus' }, { i: KOMBI, n: 'statusKombiExternalDisplay' }, { i: KOMBI, n: 'statusBordcomputerAverage' },
+        { i: KOMBI, n: 'statusBordcomputerTravelData' }, { i: TPMS, n: 'statusTyrePressure' }, { i: TPMS, n: 'statusTyreTemperature' },
+        { i: FES, n: 'statusFESVehicleDynamicSwitchHMI' }, { i: FES, n: 'statusSwitchDriveDynamicSport2' }, { i: FES, n: 'statusVehicleDynamicEngineMaxValue' }
+    ];
+    var CELLS = [
+        { k: 'Zasięg', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.range, [65535, 4095]); return n === null ? null : n + ' <small>km</small>'; } },
+        { k: 'Paliwo', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.fluidLevelFuelTank, [255]); return n === null ? null : n + ' <small>l</small>'; } },
+        { k: 'Przebieg', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.mileageKilometre, [16777215, 4294967295]); return n === null ? null : String(n).replace(/\B(?=(\d{3})+$)/g, ' ') + ' <small>km</small>'; } },
+        { k: 'Temperatura na zewnątrz', from: 'statusKombiExternalDisplay', f: function (v) { var n = num(v.displayTemperatureExterior, [255]); return n === null ? null : r1(n * 0.5 - 40) + ' <small>°C</small>'; } },
+        { k: 'Ciśnienie opon  PL · PP · TL · TP', from: 'statusTyrePressure', f: function (v) { return four(v, ['actualValuePressureTyreFLH', 'actualValuePressureTyreFRH', 'actualValuePressureTyreRLH', 'actualValuePressureTyreRRH'], function (n) { return r1(n / 10); }, 'bar'); } },
+        { k: 'Temperatura opon  PL · PP · TL · TP', from: 'statusTyreTemperature', f: function (v) { return four(v, ['actualValueTemperatureTyreFLH', 'actualValueTemperatureTyreFRH', 'actualValueTemperatureTyreRLH', 'actualValueTemperatureTyreRRH'], function (n) { return String(n - 40); }, '°C'); } },
+        { k: 'Podróż', from: 'statusBordcomputerTravelData', f: function (v) { var d = num(v.wayPassed, [65535]); return d === null ? null : d + ' <small>km, ' + (v.rideDurationHours || 0) + ' h ' + two(v.rideDurationMinutes || 0) + ' min</small>'; } },
+        { k: 'Średnia prędkość', from: 'statusBordcomputerAverage', f: function (v) { var n = num(v.speedAverage1BC1, [4095, 65535]); return n === null ? null : n + ' <small>km/h</small>'; } },
+        { k: 'Średnie zużycie', from: 'statusBordcomputerAverage', f: function (v) { var n = num(v.consumptionAverage1BC1, [4095, 65535]); return n === null ? null : r1(n / 10) + ' <small>l/100 km</small>'; } },
+        { k: 'Doładowanie (wskaźnik)', from: 'statusSwitchDriveDynamicSport2', f: function (v) { var n = num(v.displayBoostPressure, [255]), mx = num(v.displayMaximumValueBoostPressure, [255]); return n === null ? null : n + (mx === null ? '' : ' <small>z ' + mx + '</small>'); } },
+        { k: 'Przeciążenie wzdłuż · w poprzek', from: 'statusSwitchDriveDynamicSport2', f: function (v) { var a = num(v.displayLongitudinalAcceleration, [255, 65535]), b = num(v.displayLateralAcceleration, [255, 65535]); return a === null || b === null ? null : r1((a - 200) / 100) + ' · ' + r1((b - 200) / 100) + ' <small>g</small>'; } },
+        { k: 'Silnik: moc · moment (skala)', from: 'statusVehicleDynamicEngineMaxValue', f: function (v) { var p = num(v.displayMaximumValuePower, [65535]), t = num(v.displayMaximumValueTorque, [65535]); return p === null ? null : p + ' <small>kW</small> · ' + (t === null ? '—' : t) + ' <small>Nm</small>'; } }
+    ];
+    var MODES = { COMFORT: 'Comfort', SPORT: 'Sport', SPORT_PLUS: 'Sport+', ECO_PRO: 'Eco Pro', ADAPTIVE: 'Adaptive', SPORT_INDIVIDUAL: 'Sport Individual' };
+    var last = {}, dashOn = false, turn = 0, fails = {};
+    function cellEls() {
+        var g = $('grid');
+        CELLS.forEach(function (c, idx) {
+            var d = document.createElement('div'), k = document.createElement('span'), v = document.createElement('span');
+            d.className = 'cell off';
+            d.id = 'cell' + idx;
+            k.className = 'k';
+            k.textContent = c.k;
+            v.className = 'v';
+            v.textContent = '—';
+            d.appendChild(k);
+            d.appendChild(v);
+            g.appendChild(d);
+        });
+    }
+    function draw() {
+        var sp = last.statusCarSpeed2, raw = sp ? sp.speedVehicleCentreOfGravity : null;
+        $('speed').textContent = typeof raw === 'number' && raw !== 65535 ? String(Math.round(raw * 0.015625)) : '—';
+        var md = last.statusFESVehicleDynamicSwitchHMI ? String(last.statusFESVehicleDynamicSwitchHMI.actualValueModeDrivingExperience || '') : '';
+        $('c-mode').textContent = md ? (MODES[md] || md.replace(/_/g, ' ').toLowerCase()) : '—';
+        CELLS.forEach(function (c, idx) {
+            var el = $('cell' + idx), v = last[c.from], text = null;
+            if (v) { try { text = c.f(v); } catch (e) { text = null; } }
+            el.classList.toggle('off', text === null);
+            el.lastChild.innerHTML = text === null ? '—' : text;
+        });
+    }
+    function poll() {
+        if (!dashOn || !shown('car')) { return; }
+        turn += 1;
+        var todo = READS.filter(function (r) {
+            // a field that does not answer is asked again only now and then
+            if (fails[r.n] >= 3 && turn % 15 !== 0) { return false; }
+            return r.every === 1 || turn % 3 === 1;
+        });
+        var p = Promise.resolve();
+        todo.forEach(function (r) {
+            p = p.then(function () { return get(r.i, r.n); }).then(function (a) {
+                if (a.ok && a.value && typeof a.value === 'object') { last[r.n] = a.value; fails[r.n] = 0; }
+                else { fails[r.n] = (fails[r.n] || 0) + 1; if (fails[r.n] >= 3) { delete last[r.n]; } }
+            });
+        });
+        p.then(function () {
+            var okN = READS.filter(function (r) { return last[r.n]; }).length;
+            $('carState').textContent = okN + ' z ' + READS.length + ' sygnałów odpowiada';
+            $('carState').className = okN ? '' : 'err';
+            draw();
+        });
+    }
+    function dashStart() {
+        if (dashOn) { return; }
+        dashOn = true;
+        if (!$('grid').firstChild) { cellEls(); }
+        car('list').then(function (r) {
+            if (!r.ok) { dashOn = false; $('carState').textContent = r.err || 'dane auta niedostępne'; $('carState').className = 'err'; return; }
+            setInterval(poll, 1000);
+            poll();
+        });
+    }
+
+    // ---- every readable signal: pick an interface, a field, read it (once; again on the button)
+    var ifaces = {}, picked = '', pickedField = '', sigOn = false;
     function button(text, on, fn) {
         var b = document.createElement('button');
         b.textContent = text;
@@ -245,7 +360,7 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
         var f = $('filter').value.trim().toLowerCase(), box = $('ifaces');
         box.textContent = '';
         Object.keys(ifaces).filter(function (n) { return !f || n.toLowerCase().indexOf(f) >= 0; }).forEach(function (n) {
-            box.appendChild(button(n.replace(/^de\.bmw\.infotainment\./, '') + '  (' + ifaces[n].length + ')', n === picked, function () { picked = n; pickedField = ''; drawIfaces(); drawFields(); }));
+            box.appendChild(button(n.replace(/^de\.bmw\.(infotainment\.)?/, '') + '  (' + ifaces[n].length + ')', n === picked, function () { picked = n; pickedField = ''; drawIfaces(); drawFields(); }));
         });
     }
     function drawFields() {
@@ -259,35 +374,24 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
     function read() {
         if (!picked || !pickedField) { return; }
         $('valueTitle').textContent = 'Wartość: ' + pickedField;
-        car('get?i=' + encodeURIComponent(picked) + '&n=' + encodeURIComponent(pickedField)).then(function (r) {
+        $('value').className = '';
+        $('value').textContent = 'czytam…';
+        get(picked, pickedField).then(function (r) {
             $('value').className = r.ok ? '' : 'err';
-            $('value').textContent = r.ok ? JSON.stringify(r.value, null, 2) : (r.err || 'błąd');
+            $('value').textContent = r.ok ? JSON.stringify(r.value, null, 2) : (/unavailable/i.test(r.err || '') ? 'usługa auta nie odpowiada (niedostępna w tym aucie albo teraz)' : (r.err || 'błąd'));
         });
     }
-    function speed() {
-        if (!carOn || !$('t-car').classList.contains('on')) { return; }
-        car('get?i=' + V2 + '&n=statusCarSpeed2').then(function (r) {
-            var raw = r.ok && r.value ? r.value.speedVehicleCentreOfGravity : null;
-            $('speed').textContent = typeof raw === 'number' && raw !== 65535 ? String(Math.round(raw * 0.015625)) : '—';
-            $('speedNote').textContent = r.ok ? 'Vehicle2.statusCarSpeed2, co sekundę' : (r.err || 'brak odczytu');
-            $('speedNote').className = r.ok ? '' : 'err';
-        });
-    }
-    function carStart() {
-        if (carOn) { return; }
-        carOn = true;
+    function sigStart() {
+        if (sigOn) { return; }
+        sigOn = true;
         car('list').then(function (r) {
-            if (!r.ok) { carOn = false; $('carState').textContent = r.err || 'dane auta niedostępne'; $('carState').className = 'err'; return; }
+            if (!r.ok) { sigOn = false; $('value').className = 'err'; $('value').textContent = r.err || 'dane auta niedostępne'; return; }
             ifaces = r.ifaces || {};
-            $('carState').className = '';
-            $('carState').textContent = Object.keys(ifaces).length + ' interfejsów do odczytu';
             drawIfaces();
-            setInterval(speed, 1000);
-            setInterval(function () { if ($('t-car').classList.contains('on')) { read(); } }, 2000);
-            speed();
         });
     }
     $('filter').addEventListener('input', drawIfaces);
+    $('again').addEventListener('click', read);
 }());
 </script>
 </body>
