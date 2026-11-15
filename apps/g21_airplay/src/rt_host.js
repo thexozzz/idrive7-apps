@@ -318,6 +318,10 @@ function createRideTube(opts) {
         model,
         ui, settings, display,
         open: () => host.show(),
+        /** G21 Input's cursor on RideTube's screen: where it is, the field it moves in, a click */
+        setPointer: (p) => display.setPointer(p),
+        pointerSize: () => display.pointerSize(),
+        tapAt: (x, y) => display.tapAt(x, y),
         /** the player, on this film (a YouTube film of a page in Przeglądarka) */
         playId: (id) => { if (typeof ctx.playId === 'function') ctx.playId(id); },
         /** back to THEiPlay's menu (onExit) */

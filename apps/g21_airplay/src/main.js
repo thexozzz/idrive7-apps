@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.185',
+        version: (this._packageJson && this._packageJson.version) || '0.1.186',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.185') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.186') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1961,6 +1961,7 @@ AirPlayApp.prototype._openRideTube = function () {
         this._menu.close();
     }
     this._rt.open();
+    this._syncMouse('youtube opened');
 };
 
 // RideTube closed (its THEiPlay entry, Back): THEiPlay's menu again. The film
@@ -1973,6 +1974,7 @@ AirPlayApp.prototype._rtClosed = function () {
     if (typeof this._menu.setScreen === 'function') {
         this._menu.setScreen('multimedia');   // YouTube lives in Multimedia
     }
+    this._syncMouse('youtube closed');
 };
 
 // RideTube's search: THEiPlay's knob keyboard (the HMI's speller screens are
@@ -6129,24 +6131,44 @@ AirPlayApp.prototype._syncMenuMouse = function (why) {
     var scr;
     var want = !!(this._mouseOn && !this._mouseActive && this._desk && this._desk.menuMouse && this._desk.menuMouse() && this._appFront !== false && !this._exiting
         && m && typeof m.setPointer === 'function' && typeof m.tapAt === 'function');
-    if (want === !!this._menuMouseActive) {
+    // RideTube (YouTube) has the screen: the cursor and its clicks are for it. Without this the pad and the knob
+    // stayed taken for the menu's cursor, which was not on the screen, and RideTube's Back did nothing (car,
+    // 2026-11-15, after a film of a page was given to the YouTube player).
+    var rt = this._rt && typeof this._rt.isOpen === 'function' && this._rt.isOpen() && typeof this._rt.setPointer === 'function' ? this._rt : null;
+    var tgt = rt ? 'rt' : 'menu';
+    if (want === !!this._menuMouseActive && (!want || tgt === this._menuMouseTgt)) {
         return;
     }
+    if (this._menuMouseTgt && tgt !== this._menuMouseTgt) {
+        // the screen that had the cursor loses it
+        if (this._menuMouseTgt === 'rt') {
+            if (this._rt && typeof this._rt.setPointer === 'function') {
+                this._rt.setPointer(null);
+            }
+        } else if (m && typeof m.setPointer === 'function') {
+            m.setPointer(null);
+        }
+        this._menuX = -1;
+    }
+    this._menuMouseTgt = want ? tgt : '';
     this._menuMouseActive = want;
     if (want) {
-        scr = m.webScreen ? m.webScreen() : { w: 1920, h: 720 };
+        scr = rt ? rt.pointerSize() : (m.webScreen ? m.webScreen() : { w: 1920, h: 720 });
         this._menuScr = scr;
         if (!(this._menuX >= 0 && this._menuX < scr.w && this._menuY >= 0 && this._menuY < scr.h)) {
             this._menuX = Math.floor(scr.w / 2);
             this._menuY = Math.floor(scr.h / 2);
         }
-        noteStart('[G21-INPUT] active: theiplay menu (' + why + ')');
-        m.setPointer({ x: this._menuX, y: this._menuY });
+        noteStart('[G21-INPUT] active: theiplay ' + (rt ? 'youtube' : 'menu') + ' (' + why + ')');
+        (rt || m).setPointer({ x: this._menuX, y: this._menuY });
         this._padClient().on('theiplay');
     } else {
         noteStart('[G21-INPUT] menu cursor off (' + why + ')');
         if (m && typeof m.setPointer === 'function') {
             m.setPointer(null);
+        }
+        if (this._rt && typeof this._rt.setPointer === 'function') {
+            this._rt.setPointer(null);
         }
         if (!this._mouseActive && this._padInput) {
             this._padInput.off();
@@ -6163,7 +6185,7 @@ AirPlayApp.prototype._menuMouseMove = function (dx, dy) {
     }
     this._menuX = Math.max(0, Math.min(scr.w - 1, this._menuX + dx * gain));
     this._menuY = Math.max(0, Math.min(scr.h - 1, this._menuY + dy * gain));
-    this._menu.setPointer({ x: this._menuX, y: this._menuY });
+    (this._menuMouseTgt === 'rt' && this._rt ? this._rt : this._menu).setPointer({ x: this._menuX, y: this._menuY });
 };
 
 AirPlayApp.prototype._menuMouseTap = function () {
@@ -6171,7 +6193,7 @@ AirPlayApp.prototype._menuMouseTap = function () {
         return;
     }
     this._menuTapAt = Date.now();
-    this._menu.tapAt(Math.round(this._menuX), Math.round(this._menuY));
+    (this._menuMouseTgt === 'rt' && this._rt ? this._rt : this._menu).tapAt(Math.round(this._menuX), Math.round(this._menuY));
 };
 
 /*
@@ -6389,6 +6411,13 @@ AirPlayApp.prototype._mouseTapMenu = function () {
 };
 
 AirPlayApp.prototype._mouseButton = function (down) {
+    if (this._mouseActive && this._web && this._web.state().film) {
+        // THEiPlay Player has the screen: a click is a touch where the cursor is (its buttons; anywhere else shows them)
+        if (down) {
+            this._mouseTapMenu();
+        }
+        return;
+    }
     if (this._mouseActive && this._menu && typeof this._menu.editing === 'function' && this._menu.editing()) {
         this._mouseIn = false;
     }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.186
+
+- Mysz (gładzik) w odtwarzaczu YouTube (RideTube): kursor jest rysowany na jego ekranie, a kliknięcie działa jak dotknięcie – lista filmów, przyciski odtwarzacza, Wstecz. Auto, 2026-11-15: po przekazaniu filmu ze strony do odtwarzacza YouTube przycisk Wstecz nie działał, bo gładzik i gałka zostawały przechwycone dla kursora menu, którego na tym ekranie nie było; teraz kursor przechodzi razem z ekranem (menu ↔ YouTube).
+- Mysz w THEiPlay Player: kliknięcie to dotknięcie w miejscu kursora (przyciski odtwarzacza; poza nimi – pokazanie przycisków). Niesprawdzone w aucie.
+
 ## 0.1.185
 
 - Dźwięk AirPlay, pomiar w aucie (2026-11-15): do głośników docierało ok. 11 s dźwięku na 29 s sesji, choć moduł wyjścia nic nie gubił (0 opróżnień, bufor urządzenia prawie pusty). Przyczyna: auto odrzucało pakiety UDP z dźwiękiem, zanim UxPlay je odczytał – licznik systemu „RcvbufErrors” 52 178 wobec 53 046 wpisów „resent audio packet” w logu UxPlay.

@@ -780,8 +780,25 @@ class Display {
         o.chrome = { tabs: a.tabs };
         this._reach(a.reaches);             // (before _drawChrome: its focus marks follow the page)
         this._drawChrome(o);
+        // THEiPlay: the mouse cursor (G21 Input) over everything, in the frame's own (logical) pixels
+        if (this.pointer) {
+            const px = this.pointer.x, py = this.pointer.y;
+            o.xf();
+            o.quad([[px - 2, py - 4], [px - 2, py + 27], [px + 21, py + 19], [px - 2, py - 4]], '#101010');
+            o.quad([[px, py], [px, py + 22], [px + 16, py + 16], [px, py]], '#ffffff');
+        }
         return o;
     }
+
+    /** THEiPlay: the cursor of G21 Input on this screen ({x, y} in logical px, null: none), shown at once. */
+    setPointer(p) {
+        this.pointer = p && isFinite(p.x) && isFinite(p.y) ? { x: Math.round(p.x), y: Math.round(p.y) } : null;
+        this._repaint();
+    }
+    /** the field the cursor moves in: the app's frame */
+    pointerSize() { return this.app && this.app.w > 0 ? { w: this.app.w, h: this.app.h } : { w: 1280, h: 480 }; }
+    /** a click of the mouse: a tap there */
+    tapAt(x, y) { this._touch(1, x, y); this._touch(3, x, y); }
 
     /** Header / bar changed (focus, press): show it now, without waiting for the app's next frame. */
     _repaint() {
