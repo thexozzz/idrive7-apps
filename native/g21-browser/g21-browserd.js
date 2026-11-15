@@ -59,6 +59,11 @@ function defaults() {
         libDir: env.G21_BROWSER_LIB || path.join(here, 'lib'),
         fontsDir: path.join(here, 'fonts'),
         webframe: path.join(here, 'g21-webframe'),
+        // THEiPlay Player: the decoder, the stream fetcher, and what it borrows from two other tools
+        filmDecoder: env.G21_BROWSER_FILM_DECODER || path.join(here, 'gputest', 'ffmpeg-va'),
+        filmHelper: path.join(here, 'g21-film.py'),
+        python: env.G21_BROWSER_PYTHON || '/var/opt/mgu-python/current/bin/python3',
+        ytdlp: env.G21_BROWSER_YTDLP || '/var/opt/jap-ridetube-d/current/ytdlp.pyz',
         cacheDir: path.join(root, 'cache'),
         stateDir: path.join(root, 'state'),
         logDir: path.join(root, 'log'),
@@ -1256,6 +1261,8 @@ Daemon.prototype.onCommand = async function (m) {
         await this.startEngine(null);
         return;
     }
+    if (this.film && this.film.shown && m.op === 'mouse') { if (m.t === 'up') this.filmPause(); return; }
+    if (this.film && (m.op === 'nav' || m.op === 'home' || m.op === 'back' || m.op === 'fwd' || m.op === 'reload')) this.filmStop('the page changes', '');
     if (!e) {
         if ((m.op === 'reload' || m.op === 'home' || m.op === 'nav') && this.want && !this.starting) await this.startEngine(m.op === 'nav' ? this.resolve(m.url) : null);
         return;
@@ -1368,6 +1375,8 @@ Daemon.prototype.gpuTest = function () {
 Daemon.prototype.key = async function (e, k) {
     const K = { Enter: [13, '\r'], Backspace: [8, ''], Tab: [9, ''], Escape: [27, ''] }[k];
     if (!K) return;
+    // THEiPlay Player: the cross (Escape) ends the film, the knob's press pauses it
+    if (this.film) { if (k === 'Escape') this.filmStop('closed by the owner', ''); else if (k === 'Enter') this.filmPause(); return; }
     // Out of a player's full screen: the engine without a window of its own does not leave full screen on the
     // Escape key (that is the browser's doing, not the page's), so the page is told directly.
     if (k === 'Escape' && this.fs) {
@@ -1641,6 +1650,141 @@ Daemon.prototype.appUrl = async function (id) {
     const port = await this.startApps();
     return port ? 'http://127.0.0.1:' + port + '/' + a.id + '/' + (a.start || '') : null;
 };
+/*
+ * THEiPlay Player. A film inside a page is drawn by the engine, photographed (screencast, JPEG) and decoded again:
+ * on the head unit that is what stutters, not the film's own decoding (car, 2026-11-15: H.264 1280 x 720 costs the
+ * processor about a fifth of one core). So every <video> of a page gets a button, "Odtwórz w THEiPlay Player":
+ * the page's film stops, g21-film.py (yt-dlp) brings the stream, gputest/ffmpeg-va decodes it and scales it to the
+ * centre screen, and the frames go as they are into the video file through g21-webframe; the sound goes to the
+ * G21 Audio stream the engine has. The app sees it as a page in full screen: the cross leaves, the knob's press
+ * (Enter) or a click pauses.
+ *
+ * The button tells the daemon through a dialog (window.prompt, answered here and never shown) or, from a frame of
+ * another site where dialogs are not allowed, through a window that is closed at once (about:blank#theiplay-player:).
+ * Neither needs the Runtime domain, which pages can notice.
+ * Not played: films with DRM (yt-dlp cannot fetch them). No seeking yet; the film starts from its beginning.
+ */
+const PLAYER_HOOK = '(function(){try{if(window.__g21Film)return;window.__g21Film=1;'
+    + 'var T="\\u25B6 Odtw\\u00F3rz w THEiPlay Player",W="\\u0141adowanie filmu\\u2026",map=new WeakMap(),last=0;'
+    + 'function ask(v,b){var now=Date.now();if(now-last<1500)return;last=now;try{v.pause();}catch(e){}b.textContent=W;'
+    + 'var q=JSON.stringify({src:String(v.currentSrc||v.src||""),page:String(location.href)});'
+    + 'setTimeout(function(){try{if(window.top===window.self)window.prompt("theiplay-player:"+q);else window.open("about:blank#theiplay-player:"+encodeURIComponent(q));}catch(e){}'
+    + 'setTimeout(function(){b.textContent=T;},6000);},350);}'
+    + 'function make(v){var b=document.createElement("button");b.type="button";b.textContent=T;'
+    + 'b.style.cssText="position:fixed;z-index:2147483647;display:none;margin:0;padding:10px 18px;border:0;border-radius:22px;background:rgba(0,0,0,.84);color:#fff;font:600 15px/1.2 sans-serif;cursor:pointer;box-shadow:0 0 0 1.5px rgba(255,255,255,.6)";'
+    + 'var go=function(ev){ev.preventDefault();ev.stopPropagation();ask(v,b);};b.addEventListener("click",go,true);b.addEventListener("touchend",go,true);'
+    + '(document.body||document.documentElement).appendChild(b);return b;}'
+    + 'function scan(){var vs=document.querySelectorAll("video"),i,v,b,r;for(i=0;i<vs.length;i++){v=vs[i];b=map.get(v);if(!b){b=make(v);map.set(v,b);}'
+    + 'if(!b.isConnected)(document.body||document.documentElement).appendChild(b);r=v.getBoundingClientRect();'
+    + 'if(r.width<160||r.height<90||r.bottom<40||r.right<40||r.top>window.innerHeight-40||r.left>window.innerWidth-40||document.fullscreenElement){b.style.display="none";continue;}'
+    + 'b.style.left=Math.max(8,r.left+12)+"px";b.style.top=Math.max(8,r.top+12)+"px";b.style.display="block";}}'
+    + 'setInterval(scan,800);'
+    + '}catch(e){}})();';
+const TUBE_RE = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
+Daemon.prototype.filmAsk = function (e, text) {
+    let q = null;
+    try { q = JSON.parse(String(text).slice(0, 9000)); } catch (x) { q = null; }
+    const ok = (u) => (typeof u === 'string' && /^https?:\/\/[^\s]+$/i.test(u) ? u.slice(0, 4000) : '');
+    const page = ok(q && q.page), src = ok(q && q.src);
+    if (!page && !src) { this.log('film: asked without an address'); return; }
+    this.guard(() => this.filmStart(e, page, src));
+};
+Daemon.prototype.filmStart = async function (e, page, src) {
+    if (this.engine !== e || !this.want) return;
+    this.filmStop('another film', '');
+    const o = this.opts;
+    const bin = o.filmDecoder, helper = o.filmHelper;
+    const missing = [o.python, o.ytdlp, bin, helper].filter((f) => !fs.existsSync(f));
+    if (missing.length || !this.frame) {
+        this.log('film: cannot start, missing ' + (missing.join(', ') || 'g21-webframe'));
+        this.set({ err: 'Odtwarzacz THEiPlay: brak ' + (missing.length ? path.basename(missing[0]) : 'g21-webframe') });
+        return;
+    }
+    let host = '';
+    try { host = new URL(page || src).hostname; } catch (x) { host = ''; }
+    const tube = TUBE_RE.test(host);
+    const url = tube || !src ? page : src;
+    // the picture: the centre screen's shape, at two thirds when it is the whole 1920 x 720 (1280 x 480)
+    const fw = this.want.fw || this.want.w, fh = this.want.fh || this.want.h;
+    const k = fw > 1280 ? 2 / 3 : 1;
+    const W = Math.round(fw * k) & ~3, H = Math.round(fh * k) & ~1, size = W * H * 3 / 2;
+    const f = { W: W, H: H, fw: fw, fh: fh, procs: [], frames: 0, dropped: 0, paused: false, shown: false, notes: 0 };
+    this.film = f;
+    this.log('film: ' + (tube ? 'YouTube' : (originOf(url) || 'address')) + ', picture ' + W + 'x' + H + (this.audio ? '' : ', no sound stream'));
+    const env = { PATH: '/usr/bin:/bin', HOME: '/', LANG: 'C.UTF-8' };
+    const note = (who, child) => { let rest = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { rest += d; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim(); rest = rest.slice(i + 1); if (l && f.notes < 40) { f.notes += 1; this.log('film ' + who + ': ' + l.slice(0, 220)); } } }); };
+    const fetch = (fmt) => {
+        const args = [helper, '--pyz', o.ytdlp, '--lease', o.leaseFile, '--node', process.execPath, '--format', fmt].concat(url === src && page ? ['--referer', page] : [], ['--', url]);
+        const c = cp.spawn(o.python, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'pipe', 'pipe'] }));
+        c.on('error', (x) => this.log('film fetch: ' + x.message));
+        note('fetch', c);
+        f.procs.push(c);
+        return c;
+    };
+    // YouTube gives the picture and the sound apart; other sites one stream with both
+    const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=720][fps<=30]/bv*[vcodec^=avc1][height<=720]/b[height<=720]'), fetch('ba[ext=m4a]/ba')]
+        : [fetch('b[height<=720]/b/bv*[height<=720]/bv*')];
+    const vf = 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
+    const args = ['-hide_banner', '-nostdin', '-loglevel', 'warning', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-re', '-i', 'pipe:3'] : [],
+        ['-map', '0:v:0', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
+        this.audio ? ['-map', feeds[1] ? '1:a:0' : '0:a:0?', '-ar', '48000', '-ac', '2', '-f', 's16le', '-y', this.audio.fifo] : []);
+    let dec;
+    try {
+        dec = cp.spawn(bin, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: [feeds[0].stdout, 'pipe', 'pipe'].concat(feeds[1] ? [feeds[1].stdout] : []) }));
+    } catch (x) { this.filmStop('decoder: ' + x.message, 'Odtwarzacz THEiPlay: dekoder nie ruszył'); return; }
+    f.procs.push(dec);
+    note('decoder', dec);
+    dec.on('error', (x) => { this.log('film decoder: ' + x.message); if (this.film === f) this.filmStop('decoder: ' + x.message, 'Odtwarzacz THEiPlay: dekoder nie ruszył'); });
+    const head = Buffer.alloc(16);
+    head.writeUInt32LE(12 + size, 0); head.write('G21R', 4, 'latin1'); head.writeUInt32LE(W, 8); head.writeUInt32LE(H, 12);
+    let pend = [], have = 0;
+    dec.stdout.on('data', (d) => {
+        if (this.film !== f) return;
+        if (!f.shown) {
+            // the first of the film: the page's picture stops coming, the app is told "full screen"
+            f.shown = true;
+            clearTimeout(f.timer);
+            this.cast(false).catch(() => {});
+            this.fs = { w: f.fw, h: f.fh, scale: f.fw / W, film: true };
+            this.set({ w: f.fw, h: f.fh, err: '' });
+            this.push(true);
+        }
+        pend.push(d); have += d.length;
+        while (have >= size) {
+            const all = pend.length === 1 ? pend[0] : Buffer.concat(pend, have);
+            const rest = all.subarray(size);
+            pend = rest.length ? [rest] : []; have = rest.length;
+            const fr = this.frame;
+            // (the video file's writer is behind: this frame is left out rather than kept in memory)
+            if (!fr || fr.stdin.writableLength > 2 * size) { f.dropped += 1; continue; }
+            try { fr.stdin.write(head); fr.stdin.write(all.subarray(0, size)); f.frames += 1; } catch (x) { f.dropped += 1; }
+        }
+    });
+    dec.on('exit', (code, sig) => { if (this.film === f) this.filmStop(code === 0 ? 'the end' : 'decoder exit ' + (sig || code), f.frames ? '' : 'Odtwarzacz THEiPlay: tego filmu nie udało się odtworzyć'); });
+    f.timer = setTimeout(() => { if (this.film === f && !f.shown) this.filmStop('no picture in 90 s', 'Odtwarzacz THEiPlay: film nie nadszedł'); }, 90000);
+};
+Daemon.prototype.filmPause = function () {
+    const f = this.film;
+    if (!f || !f.shown) return;
+    f.paused = !f.paused;
+    f.procs.forEach((p) => { try { p.kill(f.paused ? 'SIGSTOP' : 'SIGCONT'); } catch (x) { /* gone */ } });
+    this.log('film: ' + (f.paused ? 'paused' : 'plays on'));
+};
+Daemon.prototype.filmStop = function (why, err) {
+    const f = this.film;
+    if (!f) return;
+    this.film = null;
+    clearTimeout(f.timer);
+    f.procs.forEach((p) => { try { p.kill('SIGCONT'); } catch (x) { /* gone */ } try { p.kill('SIGKILL'); } catch (x) { /* gone */ } });
+    this.log('film: stopped (' + why + '), ' + f.frames + ' frames shown' + (f.dropped ? ', ' + f.dropped + ' left out' : ''));
+    const e = this.engine;
+    if (f.shown && e) {
+        // the page again: its own size, its picture coming
+        this.fsStale = true;
+        this.guard(async () => { await this.applyFs(e, false); await this.cast(true); });
+    }
+    if (err) this.set({ err: err });
+};
 Daemon.prototype.openAudio = function () {
     this.closeAudio();
     if (this.policy().audio !== 'on') return Promise.resolve();
@@ -1689,6 +1833,7 @@ Daemon.prototype.closeAudio = function () {
  */
 Daemon.prototype.applyFs = async function (e, on) {
     const w = this.want;
+    if (this.film && this.film.shown) return; // THEiPlay Player has the screen
     const whole = on && w && w.fw > 0 && this.policy().fullscreen === 'screen';
     if ((whole === !!this.fs && !this.fsStale) || this.fsBusy) return;
     this.fsStale = false;
@@ -1758,7 +1903,7 @@ Daemon.prototype.startFrame = function () {
 };
 Daemon.prototype.onFrame = function (e, p) {
     const ack = () => { if (this.engine === e) e.cdp.send('Page.screencastFrameAck', { sessionId: p.sessionId }, e.session).catch(() => {}); };
-    if (!this.client || !this.frame || this.frameBusy) { ack(); return; } // (one frame in flight; nobody watching: dropped)
+    if (!this.client || !this.frame || this.frameBusy || (this.film && this.film.shown)) { ack(); return; } // (one frame in flight; nobody watching: dropped)
     const jpg = Buffer.from(p.data, 'base64');
     const len = Buffer.alloc(4);
     len.writeUInt32LE(jpg.length, 0);
@@ -1987,6 +2132,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     if (this.policy().video !== 'any') {
         try { await send('Page.addScriptToEvaluateOnNewDocument', { source: LIGHT_VIDEO }); } catch (x) { this.log('light video: ' + x.message); }
     }
+    try { await send('Page.addScriptToEvaluateOnNewDocument', { source: PLAYER_HOOK }); } catch (x) { this.log('player button: ' + x.message); }
     try { await send('Media.enable', {}); } catch (x) { /* not in this engine */ }
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -2114,6 +2260,12 @@ Daemon.prototype.onEvent = function (e, m) {
         }
         return;
     case 'Page.javascriptDialogOpening':
+        // (the button "Odtwórz w THEiPlay Player" of a page speaks through a question nobody sees)
+        if (p.type === 'prompt' && /^theiplay-player:/.test(String(p.message || ''))) {
+            e.cdp.send('Page.handleJavaScriptDialog', { accept: false }, e.session).catch(() => {});
+            this.filmAsk(e, String(p.message).slice(16));
+            return;
+        }
         // nobody can answer a dialog on this screen: alerts are closed, questions answered "no"
         e.cdp.send('Page.handleJavaScriptDialog', { accept: p.type === 'alert' || p.type === 'beforeunload' }, e.session).catch(() => {});
         return;
@@ -2136,7 +2288,7 @@ Daemon.prototype.onEvent = function (e, m) {
     case 'Target.targetInfoChanged': {
         const t = p.targetInfo || {};
         if (t.targetId === e.target) { if (t.title && t.title !== this.s.title) this.set({ title: String(t.title).slice(0, 120) }); return; }
-        if (this.popups[t.targetId]) this.adopt(e, t);
+        if (this.popups[t.targetId]) { const fm = /^about:blank#theiplay-player:(.+)$/.exec(String(t.url || '')); if (fm) { this.closePopup(e, t.targetId); let txt = ''; try { txt = decodeURIComponent(fm[1]); } catch (x) { txt = ''; } if (txt) this.filmAsk(e, txt); return; } this.adopt(e, t); }
         return;
     }
     case 'Target.targetCreated': {
@@ -2144,6 +2296,8 @@ Daemon.prototype.onEvent = function (e, m) {
         const t = p.targetInfo || {};
         if (t.type !== 'page' || t.targetId === e.target) return;
         this.popups[t.targetId] = setTimeout(() => this.closePopup(e, t.targetId), 4000);
+        // the player's button inside a frame of another site
+        { const fm = /^about:blank#theiplay-player:(.+)$/.exec(String(t.url || '')); if (fm) { this.closePopup(e, t.targetId); let txt = ''; try { txt = decodeURIComponent(fm[1]); } catch (x) { txt = ''; } if (txt) this.filmAsk(e, txt); return; } }
         this.adopt(e, t);
         return;
     }
@@ -2214,6 +2368,7 @@ Daemon.prototype.checkMemory = function () {
     }
 };
 Daemon.prototype.stopEngine = async function (why) {
+    this.filmStop('engine stops', '');
     clearTimeout(this.idleTimer);
     if (this.starting) { try { await this.starting; } catch (e) { /* logged */ } }
     const had = !!this.engine;

@@ -614,6 +614,27 @@ int main(int argc, char **argv)
         }
         if (read_all(0, in, n)) break;
         t0 = now_us();
+        if (n >= 12 && memcmp(in, "G21R", 4) == 0) {
+            /* a film's frame from THEiPlay Player: "G21R", u32 LE width, u32 LE height, then I420 as it is
+             * (limited range already): no JPEG on the way */
+            uint32_t rw = (uint32_t)in[4] | ((uint32_t)in[5] << 8) | ((uint32_t)in[6] << 16) | ((uint32_t)in[7] << 24);
+            uint32_t rh = (uint32_t)in[8] | ((uint32_t)in[9] << 8) | ((uint32_t)in[10] << 16) | ((uint32_t)in[11] << 24);
+            size_t need = (size_t)rw * (size_t)rh * 3 / 2;
+            if (rw < 16 || rh < 16 || rw > MAX_W || rh > MAX_H || (rw & 1) || (rh & 1) || (size_t)n != need + 12) { printf("e raw frame %ux%u of %u bytes\n", rw, rh, n); continue; }
+            if (need > frame_cap) {
+                uint8_t *nb = realloc(frame_buf, need);
+                if (!nb) { printf("e no memory\n"); continue; }
+                frame_buf = nb; frame_cap = need;
+            }
+            memcpy(frame_buf, in + 12, need);
+            if ((int)rw != ring_w || (int)rh != ring_h || ring_fd < 0) {
+                if (open_ring((int)rw, (int)rh) != 0) { printf("e video file: %s\n", strerror(errno)); continue; }
+            }
+            if (publish() != 0) { printf("e video file: %s\n", strerror(errno)); continue; }
+            have_frame = 1;
+            printf("f %u %lld\n", seq, now_us() - t0);
+            continue;
+        }
         if (jpeg_decode(&j, in, n) != 0) { printf("e %s\n", jerr); continue; }
         r = to_frame(&j);
         if (r < 0) { printf("e no memory\n"); continue; }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.181
+
+- THEiPlay Player, pierwsza wersja (`g21-browser` 0.1.35). Na każdym wideo strony w Przeglądarce pojawia się przycisk „▶ Odtwórz w THEiPlay Player”. Po kliknięciu film strony zatrzymuje się, a odtwarza go własny odtwarzacz na całym ekranie środkowym: strumień pobiera `g21-film.py` (yt-dlp z `jap-ridetube-d`, Python z `mgu-python`), dekoduje i skaluje `gputest/ffmpeg-va`, klatki idą wprost do warstwy wideo przez `g21-webframe` (bez zrzutów ekranu i JPEG), dźwięk do strumienia G21 Audio przeglądarki. Krzyżyk kończy film i wraca do strony, wciśnięcie gałki albo klik pauzuje.
+- Ograniczenia tej wersji: dekodowanie na procesorze (GPU dekoduje, ale kopiowanie klatek z GPU jeszcze nie działa – niżej); film zaczyna się od początku, nie ma przewijania; obraz z zachowaniem proporcji (czarne pasy po bokach), bez opcji rozciągnięcia; tylko ekran środkowy (zegary i HUD jeszcze nie); filmy z DRM nie zadziałają. Całość NIESPRAWDZONA w aucie ani poza nim (części linuksowe nie uruchamiają się na Windows).
+- Test GPU, wynik z auta (2026-11-15): binarka na nagłówkach libva z 2017-09 (0.1.34) wysypuje się już przy dekodowaniu; na nagłówkach 2.0.0 dekodowanie działa, a nie działa tylko kopiowanie klatki. Odczyt układu struktur na aucie: `VAImageFormat` ma 32 bajty, `VAImage` 96. Nowa binarka: nagłówki 2.0.0 z tymi dwiema strukturami w układzie auta. Kopiowanie klatek z GPU nadal niesprawdzone.
+
 ## 0.1.180
 
 - Test GPU, wynik z auta (2026-11-15, g21-browser 0.1.33): test startuje z kafelka. Procesor: 600 klatek H.264 1280x720 w 2,9 s, 5,0 s czasu procesora. GPU, samo dekodowanie (klatki zostaja w pamieci GPU): 600 klatek w 0,8 s, 0,6 s czasu procesora. Kopiowanie klatki z GPU do pamieci nie dzialalo: biblioteka auta (libva 1.99, VA-API 0.99, stan z 2017 r.) ma struktury obrazu w starym ukladzie (VAImageFormat 32 bajty, VAImage 96 bajtow), a binarka byla zbudowana z naglowkami 2.0.0.
