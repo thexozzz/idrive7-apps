@@ -156,6 +156,12 @@ Decyzja właściciela (2026-11-15): wspólny moduł dźwięku na sprawdzonych ro
 
 **Odczyt z auta:** `tail -n 30 /var/opt/g21-input/log/inputd.log`; w `/tmp/g21-airplay-start.log` wiersze `[G21-INPUT]`.
 
+## Menu z kafelkami (2026-11-15) — aplikacja 0.1.146
+
+Decyzja właściciela: pierwsze menu jako kafelki, podział Multimedia / Aplikacje; w Aplikacjach Przeglądarka, inne aplikacje i Sklep (import własnych aplikacji „chrome” przez git — do zaprojektowania, pytanie otwarte: co dokładnie jest aplikacją). Moja decyzja: trzeci kafelek „Ustawienia” na Napis, Język, Renderowanie i Pozycję, żeby nie zniknęły.
+
+`menu_draw.js`: listy z `.tiles = true` (`ROOT_ITEMS`, `MEDIA_ITEMS`, `APPS_ITEMS`) układa `menuLayout` jako kafelki 300 px wysokie w jednym rzędzie, z oknem przesuwanym wokół wybranego; `SYSTEM_ITEMS`, `STORE_ITEMS` to zwykłe listy. Dotyk: przeciągnięcie w poziomie przesuwa wybór. `main.js`: `multimedia`, `system`, `apps-store` i ich „wstecz” w `_onAppsChoice`; powroty `label-back`, `pos-out-back`, `set-back` → `system`; `yt-back`, `yt-where-cancel`, `_rtClosed`, `_goRoot` → `multimedia`. UNVERIFIED na aucie.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

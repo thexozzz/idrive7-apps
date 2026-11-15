@@ -180,6 +180,10 @@ var EN = {
     'strzalki, potem wybierz': 'arrows, then select',
     'Gdzie pokazać': 'Where to show',
     'Aplikacje': 'Apps',
+    'Ustawienia': 'Settings',
+    'Sklep': 'Store',
+    'wkrótce': 'soon',
+    'Renderowanie': 'Rendering',
     'Przeglądarka': 'Browser',
     'Zegary': 'Gauges',
     'Jakość obrazu': 'Picture quality',
@@ -652,22 +656,44 @@ var FONT = {
     'Ż': ['00100', '00000', '11111', '00010', '00100', '01000', '11111']
 };
 
+// The main menu: large tiles in a row that slides (the knob, the arrows, a finger). Three of them; what was a
+// row of the old list is inside one of the three.
 var ROOT_ITEMS = [
-    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
+    { name: 'multimedia', title: 'Multimedia', hint: 'YouTube, AirPlay', icon: 'play' },
+    { name: 'apps', title: 'Aplikacje', hint: 'przeglądarka, sklep', icon: 'globe' },
+    { name: 'system', title: 'Ustawienia', hint: 'napis, język, pozycja', icon: 'gear' }
+];
+ROOT_ITEMS.tiles = true;
+
+var MEDIA_ITEMS = [
     { name: 'youtube', title: 'YouTube', hint: '', icon: 'play' },
+    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay' },
+    { name: 'media-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+MEDIA_ITEMS.tiles = true;
+
+// what the old main list held besides the players
+var SYSTEM_ITEMS = [
     { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
-    { name: 'settings', title: 'Ustawienia', hint: 'GPU', icon: 'gear' },
+    { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
-    { name: 'apps', title: 'Aplikacje', hint: 'przeglądarka, YouTube', icon: 'globe' }
+    { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
 // Aplikacje: what runs inside THEiPlay. (A shop with more of them is to come.)
 var APPS_ITEMS = [
     { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' },
-    { name: 'apps-youtube', title: 'YouTube', hint: '', icon: 'play' },
+    { name: 'apps-store', title: 'Sklep', hint: 'wkrótce', icon: 'grid' },
     { name: 'apps-settings', title: 'Ustawienia', hint: 'ekrany, obraz, piaskownica', icon: 'gear' },
     { name: 'apps-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+APPS_ITEMS.tiles = true;
+
+// Sklep: not built yet. The page says so instead of pretending.
+var STORE_ITEMS = [
+    { name: 'store-soon', title: 'Import aplikacji z git', hint: 'w przygotowaniu', icon: 'grid' },
+    { name: 'store-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 
 // Aplikacje > Ustawienia: where Przeglądarka shows besides the centre, and the engine's rules
@@ -836,6 +862,9 @@ var SCREENS = {
     'air-box': AIR_BOX_ITEMS,
     label: LABEL_ITEMS,
     settings: SETTINGS_ITEMS,
+    multimedia: MEDIA_ITEMS,
+    system: SYSTEM_ITEMS,
+    'apps-store': STORE_ITEMS,
     apps: APPS_ITEMS,
     'apps-settings': APPS_SET_ITEMS,
     youtube: YOUTUBE_ITEMS,
@@ -1218,7 +1247,9 @@ function menuLayout(items, selected, width, height, detail, heading, previewSpac
     var count = items.length || 1;
     var headerH = 68;
     var footerH = 96;
-    var home = count <= 2 && page.boxW > 900;
+    // tiles: pages of one or two items, and the lists marked .tiles (the main menu and its two halves)
+    var tiles = !!items.tiles && page.boxW > 900;
+    var home = (count <= 2 || tiles) && page.boxW > 900;
     var gap = home ? 28 : 12;
     var bubbles = [];
     var i;
@@ -1228,11 +1259,23 @@ function menuLayout(items, selected, width, height, detail, heading, previewSpac
     var rowH;
     var first = 0;
     if (home) {
-        rowW = Math.min(560, Math.floor((page.boxW - 180 - gap) / count));
+        // as many tiles as fit; more than that and the row slides so that the chosen one stays in sight
+        var fit = tiles ? Math.max(1, Math.floor((page.boxW - 120 + gap) / (380 + gap))) : count;
+        var seen = Math.min(count, fit);
+        rowW = tiles ? Math.min(420, Math.floor((page.boxW - 120 - (seen - 1) * gap) / seen)) : Math.min(560, Math.floor((page.boxW - 180 - gap) / count));
         rowH = 300;
-        x = page.ox + Math.floor((page.boxW - (count * rowW + (count - 1) * gap)) / 2);
+        if (count > seen) {
+            first = selected - Math.floor((seen - 1) / 2);
+            if (first < 0) {
+                first = 0;
+            }
+            if (first > count - seen) {
+                first = count - seen;
+            }
+        }
+        x = page.ox + Math.floor((page.boxW - (seen * rowW + (seen - 1) * gap)) / 2);
         y = page.oy + Math.floor((page.boxH - rowH) / 2) + 10;
-        for (i = 0; i < items.length; i += 1) {
+        for (i = first; i < items.length && i < first + seen; i += 1) {
             bubbles.push({
                 x: x,
                 y: y,
@@ -4935,12 +4978,14 @@ function createMenuSurface(opts) {
                         paint();
                     }
                 } else if (phase === 2 && touchDown) {
-                    var dragY = ty - touchDown.y;
+                    // a list follows a finger that goes up or down; a row of tiles one that goes sideways
+                    var sideways = !!items.tiles;
+                    var dragY = sideways ? (tx - touchDown.x) : (ty - touchDown.y);
                     var steps;
                     var origin;
                     var next;
-                    if (Math.abs(dragY) >= 96) {
-                        steps = Math.round(dragY / 72);
+                    if (Math.abs(dragY) >= (sideways ? 140 : 96)) {
+                        steps = Math.round(dragY / (sideways ? 220 : 72));
                         origin = touchDown.origin;
                         if (origin < 0) {
                             origin = selected;
@@ -5363,6 +5408,9 @@ function createMenuSurface(opts) {
 module.exports = {
     ITEMS: ITEMS,
     ROOT_ITEMS: ROOT_ITEMS,
+    MEDIA_ITEMS: MEDIA_ITEMS,
+    SYSTEM_ITEMS: SYSTEM_ITEMS,
+    STORE_ITEMS: STORE_ITEMS,
     APPS_ITEMS: APPS_ITEMS,
     APPS_SET_ITEMS: APPS_SET_ITEMS,
     WEB_FILE: WEB_FILE,

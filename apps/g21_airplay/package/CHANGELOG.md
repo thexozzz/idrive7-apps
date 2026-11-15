@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.146
+
+- Menu główne to teraz duże kafelki w rzędzie, który się przesuwa (pokrętło, strzałki, palec w poziomie): Multimedia, Aplikacje, Ustawienia. Multimedia: YouTube i AirPlay. Aplikacje: Przeglądarka, Sklep, Ustawienia aplikacji. Ustawienia: Napis, Język, Renderowanie, Pozycja (to, co było wierszami starego menu). „Wstecz” z YouTube i AirPlay wraca do Multimediów, z Napisu, Renderowania i Pozycji do Ustawień. Gdy kafelków jest więcej, niż się mieści, rząd przesuwa się tak, żeby wybrany był widoczny.
+- Sklep jest na razie zapowiedzią: kafelek otwiera stronę z pozycją „Import aplikacji z git — w przygotowaniu”. Importu jeszcze nie ma.
+- Na aucie jeszcze niesprawdzone.
+
 ## 0.1.145
 
 - G21 Input: nowe narzędzie `g21-input` 0.1.0 — fizyczny touchpad na pokrętle iDrive jako mysz. Demon włącza w kontrolerze tryb dotyku tylko wtedy, gdy aplikacja o to prosi, czyta położenie palca i wysyła aplikacji ruch oraz stuknięcia; po zamknięciu aplikacji, jej awarii, ruszeniu auta albo zatrzymaniu demona tryb dotyku jest wyłączany. Sprawdzone na aucie: tryb dotyku przyjęty, 60 próbek na sekundę ze współrzędnymi palca, po próbie kontroler wrócił do zwykłego trybu.

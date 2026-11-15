@@ -32,12 +32,12 @@ function ops(frame) {
     return seen;
 }
 
-// ---- the menu: one new item at the end, nothing else moved
-assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['airplay', 'youtube', 'label-toggle', 'lang-toggle', 'settings', 'position', 'apps']);
-assert.strictEqual(menu.ROOT_ITEMS[6].title, 'Aplikacje');
+// ---- the menu: three tiles; Przeglądarka is the first tile of Aplikacje
+assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['multimedia', 'apps', 'system']);
+assert.strictEqual(menu.ROOT_ITEMS[1].title, 'Aplikacje');
 assert.strictEqual(menu.APPS_ITEMS[0].title, 'Przeglądarka');
-var rootFrame = menu.buildFrame(menu.ROOT_ITEMS, 6, 1920, 720, '', 'THEiPlay', '0.1.136', null, null, null, 'THEiPlay', null, null);
-assert.ok(rootFrame.layout.count === 7 && rootFrame.rects > 20);
+var rootFrame = menu.buildFrame(menu.ROOT_ITEMS, 1, 1920, 720, '', 'THEiPlay', '0.1.136', null, null, null, 'THEiPlay', null, null);
+assert.ok(rootFrame.layout.count === 3 && rootFrame.rects > 20);
 
 // ---- the browser screen's frame
 var page = menu.webLayout(1920, 720).page;
@@ -154,8 +154,9 @@ function glueApp() {
     var g = glueApp();
     assert.strictEqual(g._onAppsChoice('settings'), false, 'another screen\'s choice is not taken');
     assert.ok(g._onAppsChoice('apps') && g.screen === 'apps');
-    assert.ok(g._onAppsChoice('apps-youtube'));
-    assert.deepStrictEqual(g.chosen, ['youtube'], 'YouTube inside Aplikacje is the YouTube of the main menu');
+    assert.ok(g._onAppsChoice('multimedia') && g.screen === 'multimedia' && g._onAppsChoice('media-back') && g.screen === 'root', 'Multimedia opens and goes back');
+    assert.ok(g._onAppsChoice('system') && g.screen === 'system' && g._onAppsChoice('system-back') && g.screen === 'root', 'Ustawienia opens and goes back');
+    assert.ok(g._onAppsChoice('apps') && g._onAppsChoice('apps-store') && g.screen === 'apps-store' && g._onAppsChoice('store-soon') && g._onAppsChoice('store-back') && g.screen === 'apps', 'Sklep says it is to come and goes back');
     assert.ok(g._onAppsChoice('apps-settings') && g.screen === 'apps-settings');
     assert.deepStrictEqual(g.calls, ['look'], 'the settings only look at the daemon: no page is opened');
     assert.strictEqual(g.hints['aset-picture'], '—', 'no daemon yet: a dash, not a made-up value');

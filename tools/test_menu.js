@@ -11,32 +11,47 @@ assert.ok(built.rects > 40);
 assert.ok(built.layout);
 assert.ok(built.layout.bubbles.length <= menu.ROOT_ITEMS.length);
 assert.strictEqual(built.layout.count, menu.ROOT_ITEMS.length);
-assert.strictEqual(menu.ROOT_ITEMS.length, 7);
-// the last item is "Aplikacje" (Przeglądarka, YouTube, Ustawienia inside); the others and their order stay
-assert.strictEqual(menu.ROOT_ITEMS[6].name, 'apps');
-assert.strictEqual(menu.ROOT_ITEMS[6].title, 'Aplikacje');
-assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-youtube', 'apps-settings', 'apps-back']);
+// The main menu: three tiles in a row that slides. Multimedia (YouTube, AirPlay), Aplikacje (Przeglądarka, Sklep,
+// Ustawienia), Ustawienia (what the old list held besides the players).
+assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['multimedia', 'apps', 'system']);
+assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['Multimedia', 'Aplikacje', 'Ustawienia']);
+assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
+assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-store', 'apps-settings', 'apps-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'system-back']);
+assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-soon', 'store-back']);
 assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-picture', 'aset-sandbox', 'aset-memory', 'aset-back']);
-assert.strictEqual(menu.SCREENS.apps, menu.APPS_ITEMS);
-assert.strictEqual(menu.SCREENS['apps-settings'], menu.APPS_SET_ITEMS);
-assert.ok(menu.buildFrame(menu.APPS_ITEMS, 0, 1920, 720).layout.count === 4 && menu.buildFrame(menu.APPS_SET_ITEMS, 0, 1920, 720).layout.count === 6);
-assert.strictEqual(menu.ROOT_ITEMS[5].name, 'position');
-assert.strictEqual(menu.ROOT_ITEMS[1].name, 'youtube');
-assert.strictEqual(menu.ROOT_ITEMS[1].hint, '');
-assert.strictEqual(menu.ROOT_ITEMS[2].name, 'label-toggle');
-assert.strictEqual(menu.ROOT_ITEMS[3].name, 'lang-toggle');
-assert.strictEqual(menu.ROOT_ITEMS[4].name, 'settings');
+assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
+// tiles: large, side by side, in one row; a list page stays rows one under another
+[menu.ROOT_ITEMS, menu.MEDIA_ITEMS, menu.APPS_ITEMS].forEach(function (list) {
+    var lay = menu.buildFrame(list, 0, 1920, 720).layout;
+    assert.ok(lay.bubbles.length >= 3 && lay.bubbles.every(function (b) { return b.home && b.h === 300 && b.w >= 300 && b.y === lay.bubbles[0].y; }), 'tiles in one row');
+    assert.ok(lay.bubbles[1].x >= lay.bubbles[0].x + lay.bubbles[0].w && lay.bubbles[lay.bubbles.length - 1].x + lay.bubbles[lay.bubbles.length - 1].w <= 1900, 'side by side, inside the page');
+});
+assert.ok(menu.buildFrame(menu.SYSTEM_ITEMS, 0, 1920, 720).layout.bubbles.every(function (b) { return !b.home; }), 'Ustawienia is a list');
+// more tiles than fit: the row slides so that the chosen one is in sight
+(function () {
+    var many = [];
+    var k;
+    for (k = 0; k < 9; k += 1) {
+        many.push({ name: 'tile-' + k, title: 'Kafel ' + k, hint: '', icon: 'play' });
+    }
+    many.tiles = true;
+    var at0 = menu.buildFrame(many, 0, 1920, 720).layout;
+    var at8 = menu.buildFrame(many, 8, 1920, 720).layout;
+    assert.ok(at0.bubbles.length >= 3 && at0.bubbles.length < 9, 'only what fits is drawn: ' + at0.bubbles.length);
+    assert.strictEqual(at0.bubbles[0].index, 0);
+    assert.strictEqual(at8.bubbles[at8.bubbles.length - 1].index, 8, 'the row slid to the last tile');
+    assert.ok(at8.bubbles.some(function (b) { return b.index === 8 && b.selected; }));
+    assert.strictEqual(at0.count, 9);
+}());
 assert.strictEqual(menu.SCREENS.youtube[0].name, 'yt-where');
 assert.strictEqual(menu.SCREENS.youtube[1].name, 'yt-login');
 assert.strictEqual(menu.SCREENS.youtube[2].name, 'yt-browse');
 assert.strictEqual(menu.SCREENS.settings[0].name, 'set-render');
 assert.strictEqual(menu.SCREENS.settings[0].hint, 'GPU');
-assert.strictEqual(menu.ROOT_ITEMS[0].name, 'airplay');
-assert.strictEqual(menu.ROOT_ITEMS[0].hint, 'lustro iPhone');
-assert.strictEqual(menu.ROOT_ITEMS[2].name, 'label-toggle');
-assert.strictEqual(menu.ROOT_ITEMS[0].icon, 'airplay');
-assert.strictEqual(menu.ROOT_ITEMS[2].icon, 'tag');
-assert.notStrictEqual(menu.ROOT_ITEMS[0].title, menu.ROOT_ITEMS[1].title);
+assert.strictEqual(menu.MEDIA_ITEMS[1].hint, 'lustro iPhone');
+assert.strictEqual(menu.MEDIA_ITEMS[1].icon, 'airplay');
+assert.strictEqual(menu.SYSTEM_ITEMS[0].icon, 'tag');
 assert.ok(menu.ICONS.airplay);
 assert.ok(menu.ICONS.play);
 assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));

@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.145',
+        version: (this._packageJson && this._packageJson.version) || '0.1.146',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.145') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.146') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -905,7 +905,7 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
 AirPlayApp.prototype._goRoot = function () {
     this._chosen = 'airplay';
     if (this._menu && typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('root');
+        this._menu.setScreen('multimedia');   // AirPlay lives in Multimedia
     }
     this._sync();
 };
@@ -1948,7 +1948,7 @@ AirPlayApp.prototype._rtClosed = function () {
     }
     this._menu.open();
     if (typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('root');
+        this._menu.setScreen('multimedia');   // YouTube lives in Multimedia
     }
 };
 
@@ -2963,7 +2963,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     if (name === 'label-back') {
         this._labelMove = false;
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('system');
         }
         this._sync();
         return;
@@ -2985,7 +2985,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
             this._menu.setBoxPreview(null);
         }
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('system');
         }
         return;
     }
@@ -3188,7 +3188,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('multimedia');
         }
         return;
     }
@@ -3201,7 +3201,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-where-cancel') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('multimedia');
         }
         return;
     }
@@ -3250,7 +3250,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'set-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('root');
+            this._menu.setScreen('system');
         }
         return;
     }
@@ -5443,6 +5443,25 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     };
     if (name === 'apps') {
         go('apps');
+        return true;
+    }
+    if (name === 'multimedia' || name === 'system') {
+        go(name);
+        return true;
+    }
+    if (name === 'media-back' || name === 'system-back') {
+        go('root');
+        return true;
+    }
+    if (name === 'apps-store') {
+        go('apps-store');
+        return true;
+    }
+    if (name === 'store-back') {
+        go('apps');
+        return true;
+    }
+    if (name === 'store-soon') {
         return true;
     }
     if (name === 'apps-back') {
