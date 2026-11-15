@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.178
+
+- „Test GPU”, wynik z auta (2026-11-15, 0.1.177 / 0.1.31): z kafelka test nie ruszył (binarka miała ścieżkę programu ładującego z Ubuntu, której w aucie nie ma). Uruchomiony ręcznie: procesor dekoduje 600 klatek H.264 1280×720 w 3,1 s i zużywa 4,4 s czasu procesora na 20 s filmu (ok. 22% jednego rdzenia); na GPU test kończył się awarią („stack smashing detected”), bo nagłówki libva 1.8.3 nie pasują do biblioteki auta (Intel 0.99).
+- `g21-browser` 0.1.32: `gputest/ffmpeg-va` zbudowany z nagłówkami libva 2.0.0, z programem ładującym auta i nazwami bibliotek auta; test nie zostawia zrzutu pamięci, gdy się wysypie; kafelek od razu pokazuje „trwa…”, a wynik jest krótki (klatki na sekundę i czas procesora dla GPU i dla procesora), szczegóły w logu. Dekodowanie na GPU nadal niesprawdzone w aucie.
+
 ## 0.1.177
 
 - „Test GPU” w Ustawienia > Ogólne > O systemie: ten sam 20‑sekundowy film H.264 1280×720 jest dekodowany raz przez układ graficzny (VA-API, `/dev/dri/renderD128`) i raz przez procesor; wynik (klatki, czas, czas procesora) pojawia się na kafelku i w logu `g21-browser`. Odczyt z auta 2026-11-15: sterownik Intel (VA-API 0.99) zgłasza dekodowanie H.264, HEVC, VP8, VP9 i JPEG. `g21-browser` 0.1.31 niesie do tego `gputest/ffmpeg-va` (FFmpeg 4.4.4 zbudowany pod `libva.so.1` auta) i próbkę filmu. To pomiar przed budową odtwarzacza na GPU; samo dekodowanie w aucie niesprawdzone.

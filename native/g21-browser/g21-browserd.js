@@ -1331,7 +1331,11 @@ Daemon.prototype.onCommand = async function (m) {
  * "Test GPU" (Ustawienia > Ogólne > O systemie), asked for by the owner: the same 20 s H.264 1280 x 720 film is
  * decoded as fast as it goes, once by the graphics chip (VA-API, /dev/dri/renderD128, frames copied back to
  * memory) and once by the processor. Only decoding: nothing is shown and nothing is written but the log.
- * gputest/ffmpeg-va is FFmpeg 4.4.4 (LGPL parts only) built for the car's old libva (libva.so.1).
+ * gputest/ffmpeg-va is FFmpeg 4.4.4 (LGPL parts only) built with the headers of libva 2.0.0 and asking for the
+ * car's libva.so.1 (Intel's 0.99). Car, 2026-11-15: the first build (headers of libva 1.8.3, Ubuntu's program
+ * loader path) did not start from here, and started by hand it decoded on the processor (600 frames in 3.1 s,
+ * 4.4 s of processor time) and died on the graphics chip with "stack smashing detected". Hence: the car's loader,
+ * no core file of a test that dies, and a short answer that fits a tile (the lines are in the log).
  */
 Daemon.prototype.gpuTest = function () {
     if (this.gpuBusy) return;
@@ -1341,22 +1345,23 @@ Daemon.prototype.gpuTest = function () {
     this.gpuBusy = true;
     const run = (name, pre) => new Promise((done) => {
         const t0 = Date.now();
-        cp.execFile(bin, ['-hide_banner', '-nostdin', '-benchmark'].concat(pre, ['-i', film, '-an', '-f', 'null', '-']),
+        cp.execFile('/bin/sh', ['-c', 'ulimit -c 0; exec "$@"', 'sh', bin, '-hide_banner', '-nostdin', '-benchmark'].concat(pre, ['-i', film, '-an', '-f', 'null', '-']),
             { timeout: 90000, maxBuffer: 4 * 1024 * 1024, env: { PATH: '/usr/bin:/bin', LD_LIBRARY_PATH: '/usr/lib', LIBVA_DRIVERS_PATH: '/usr/lib/dri' } }, (err, so, se) => {
                 const text = String(se || '');
                 const frames = (text.match(/frame=\s*(\d+)/g) || []).pop();
                 const b = /bench: utime=([\d.]+)s stime=([\d.]+)s rtime=([\d.]+)s/.exec(text);
                 const bad = /hwaccel initiali[sz]ation returned error|Failed setup for format|Device creation failed|No VA display|Failed to initialise VAAPI|Impossible to convert/.exec(text);
                 text.split('\n').filter((l) => l.trim() && !/^frame=/.test(l.trim())).slice(-8).forEach((l) => this.log('gpu test ' + name + ': ' + l.trim().slice(0, 200)));
-                if (err && !b) { done(name + ': błąd (' + String(err.message).split('\n')[0].slice(0, 60) + ')'); return; }
-                if (bad) { done(name + ': nie ruszyło (' + bad[0] + ')'); return; }
+                if (err && !b) { this.log('gpu test ' + name + ': ' + (err.signal || err.code || '') + ' ' + String(err.message).split('\n')[0].slice(0, 160)); done(name + ': błąd'); return; }
+                if (bad) { done(name + ': nie ruszyło'); return; }
                 const n = frames ? Number(/\d+/.exec(frames)[0]) : 0, wall = b ? Number(b[3]) : (Date.now() - t0) / 1000, cpu = b ? Number(b[1]) + Number(b[2]) : 0;
-                done(name + ': ' + n + ' klatek w ' + wall.toFixed(1) + ' s (' + (wall > 0 ? Math.round(n / wall) : 0) + ' kl./s), procesor ' + cpu.toFixed(1) + ' s');
+                this.log('gpu test ' + name + ': ' + n + ' frames in ' + wall.toFixed(1) + ' s, processor time ' + cpu.toFixed(1) + ' s');
+                done(name + ' ' + (wall > 0 ? Math.round(n / wall) : 0) + ' kl./s (' + cpu.toFixed(1) + ' s)');
             });
     });
     say('trwa…');
     run('GPU', ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128']).then((a) => {
-        say(a + ' · procesor: trwa…');
+        say(a + ' · trwa…');
         return run('procesor', ['-threads', '4']).then((b) => { say(a + ' · ' + b); });
     }).catch((x) => say('błąd: ' + x.message)).then(() => { this.gpuBusy = false; });
 };
