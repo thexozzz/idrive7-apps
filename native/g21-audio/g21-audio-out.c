@@ -278,6 +278,48 @@ static int live(const char *dev)
     return 0;
 }
 
+/*
+ * probe DEVICE MODE: how many frames a second the device really takes, written in one of several ways. Silence only
+ * (zeros): nothing is heard. Car, 2026-11-15: the live writer above was given 48 000 frames a second and the device
+ * took exactly 36 000 of them, three reports in a row; the question is whether another way of writing gets all.
+ *   plug480    through "plug:", 480 frames a write, not blocking (what the writers above do)
+ *   plug1024   through "plug:", one period (1024 frames) a write, not blocking
+ *   raw1024    the device itself (without "plug:"), 1024 frames a write, not blocking
+ *   block1024  through "plug:", 1024 frames a write, blocking
+ * One mode a run (a second open of the same stream in one process is not safe here). The first second is left out
+ * of the rate: it is the buffer being filled.
+ */
+static int probe(const char *dev, const char *mode)
+{
+    static int16_t zero[1024 * CH];
+    const int blocking = !strcmp(mode, "block1024");
+    const int chunk = !strcmp(mode, "plug480") ? 480 : 1024;
+    const char *name = !strcmp(mode, "raw1024") && !strncmp(dev, "plug:", 5) ? dev + 5 : dev;
+    snd_pcm_t *pcm = NULL;
+    unsigned long frames = 0, at1 = 0, refused = 0, errors = 0;
+    double t0, t, mark = 0;
+    int rc;
+    umask(0007);
+    rc = A.open(&pcm, name, PLAYBACK, blocking ? 0 : NONBLOCK);
+    if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: open %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
+    rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
+    if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: set_params %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
+    t0 = mono_ms();
+    while ((t = mono_ms()) - t0 < 6000 && !stopping) {
+        long w;
+        if (!mark && t - t0 >= 1000) { mark = t; at1 = frames; }
+        w = A.writei(pcm, zero, (unsigned long)chunk);
+        if (w == -EAGAIN || w == 0) { refused++; usleep(1000); continue; }
+        if (w < 0) { errors++; A.recover(pcm, (int)w, 1); continue; }
+        frames += (unsigned long)w;
+    }
+    t = mono_ms();
+    fprintf(stderr, "[G21-AUDIO] out: probe %s: %lu frames in %.0f ms, %.0f a second after the first second (%lu writes refused, %lu errors)\n",
+        mode, frames, t - t0, mark && t > mark ? (double)(frames - at1) * 1000.0 / (t - mark) : 0.0, refused, errors);
+    leave(0);
+    return 0;
+}
+
 /* a quiet tone, 150 ms fades */
 static int tone(const char *dev, int seconds, int amp)
 {
@@ -320,6 +362,7 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
+    if (argc >= 4 && !strcmp(argv[1], "probe")) return alsa_load() ? probe(argv[2], argv[3]) : 1;
     if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "live")) return alsa_load() ? live(argv[2]) : 1;
     if (argc >= 3 && !strcmp(argv[1], "play")) return alsa_load() ? play(argv[2]) : 1;
     if (argc >= 4 && !strcmp(argv[1], "tone")) {

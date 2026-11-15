@@ -51,13 +51,13 @@ if (op === 'hold') {
     process.on('SIGTERM', end);
     process.on('SIGINT', end);
     setTimeout(function () { if (!held) { say('no answer'); process.exit(1); } }, 4000);
-} else if (op === 'status' || op === 'tone') {
-    connect(op === 'tone' ? { op: 'tone', seconds: Number(process.argv[3]) || 2 } : { op: 'status' }, function (m) {
+} else if (op === 'status' || op === 'tone' || op === 'probe') {
+    connect(op === 'tone' ? { op: 'tone', seconds: Number(process.argv[3]) || 2 } : { op: op }, function (m) {
         process.stdout.write(JSON.stringify(m) + '\n');
         process.exit(m.ok === false ? 1 : 0);
     });
-    setTimeout(function () { say('no answer'); process.exit(1); }, 20000);
+    setTimeout(function () { say('no answer'); process.exit(1); }, op === 'probe' ? 80000 : 20000);
 } else {
-    process.stderr.write('usage: g21-audio-client.js hold NAME UID | status | tone [SECONDS]\n');
+    process.stderr.write('usage: g21-audio-client.js hold NAME UID | status | tone [SECONDS] | probe\n');
     process.exit(2);
 }

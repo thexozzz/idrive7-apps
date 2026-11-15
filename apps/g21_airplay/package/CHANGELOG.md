@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.196
+
+- Dźwięk AirPlay, wynik z auta (2026-11-15, `g21-audio` 0.1.6 / `g21-airplay-open` 0.1.62): dźwięk dociera w całości (0 przerw), ale jest lekko przycinany. Trzy kolejne raporty co 5 s: telefon dostarcza ok. 48 300 próbek na sekundę, urządzenie głośników (`plug:smartx:CarLifeMedia_CF_48_STEREO`) zabiera dokładnie 36 000 – równo 75% – więc zapas rośnie do 600 ms i jest przycinany (ok. 12 200 próbek na sekundę wyrzuconych). To samo 75% widać w pomiarze z 0.1.2 („dropped” 25%). Konfiguracja SmartX auta dla tego urządzenia: okres 1024, 3 okresy.
+- `g21-audio` 0.1.8: pomiar `probe` (`g21-audio-client.js probe`): pisze ciszę czterema sposobami (przez `plug:` po 480 i po 1024 próbki, wprost do urządzenia, z blokowaniem) i zapisuje, ile próbek na sekundę urządzenie zabiera przy każdym. Nic nie słychać; głośniki są na ok. 30 s zajęte. Sam pomiar – sposób pisania zmienię po jego wyniku.
+
 ## 0.1.195
 
 - Cofniete: odbieranie dzwieku Przegladarki bez wstrzymywania (g21-audio 0.1.6) bylo bledem. Auto, 2026-11-15: silnik pisal dzwiek 49 razy szybciej niz plynie czas (1 005 856 probek odtworzonych, 48 570 080 wyrzuconych) i film na stronie pedzil. Silnik nie ma wlasnego zegara dla dzwieku - zegarem jest wlasnie wstrzymywanie przez nasz modul wyjscia. g21-audio 0.1.7: tryb live tylko dla AirPlay, Przegladarka jak przed 0.1.6. Wczesniejszy wniosek o 25 000 probek na sekunde byl bledny.

@@ -243,6 +243,33 @@ function tone(m) {
     }, function (e) { return { ev: 'tone', ok: false, err: String(e && e.message || e) }; })
         .then(function (reply) { return (held && !st.claimed ? sp.release() : Promise.resolve()).then(function () { return reply; }); });
 }
+/*
+ * probe: how many frames a second the speakers' device takes, for each way of writing (g21-audio-out probe). Silence
+ * is written, nothing is heard; the speakers are claimed for it meanwhile (about 30 s), so not while a stream plays.
+ */
+function probe() {
+    if (st.active) return Promise.resolve({ ev: 'probe', ok: false, err: 'a stream is playing' });
+    const modes = ['plug480', 'plug1024', 'raw1024', 'block1024'];
+    const lines = [];
+    let held = false;
+    const one = function (mode) {
+        return new Promise(function (resolve) {
+            const opts = { stdio: ['ignore', 'ignore', 'pipe'] };
+            if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
+            const child = cp.spawn(OUT, ['probe', device(), mode], opts);
+            let err = '';
+            child.stderr.on('data', function (d) { err += d; });
+            const kill = setTimeout(function () { err += '\n[G21-AUDIO] out: probe ' + mode + ': did not come back in 12 s, stopped'; try { child.kill('SIGKILL'); } catch (e) { /* gone */ } }, 12000);
+            child.on('error', function (e) { err += e.message; });
+            child.on('exit', function () { clearTimeout(kill); const l = (err.trim().split('\n').pop() || mode + ': nothing said').replace(/^\[G21-AUDIO\] out: /, ''); log(l); lines.push(l); setTimeout(resolve, 600); });
+        });
+    };
+    return sp.claim().then(function () {
+        held = true;
+        return modes.reduce(function (p, m) { return p.then(function () { return one(m); }); }, Promise.resolve());
+    }).then(function () { return { ev: 'probe', ok: true, lines: lines }; }, function (e) { return { ev: 'probe', ok: false, err: String(e && e.message || e), lines: lines }; })
+        .then(function (reply) { return (held && !st.claimed ? sp.release() : Promise.resolve()).then(function () { return reply; }, function () { return reply; }); });
+}
 function caps() {
     return {
         ev: 'caps', version: VERSION,
@@ -279,6 +306,7 @@ function serve() {
                 else if (m.op === 'open') openAsk(c, m, send);
                 else if (m.op === 'close') { if (st.holder === c) closeStream('closed by its player').then(function () { send({ ev: 'closed' }); }); else send({ ev: 'closed' }); }
                 else if (m.op === 'tone') tone(m).then(send);
+                else if (m.op === 'probe') probe().then(send);
             }
         });
         c.on('error', function () { /* close follows */ });
