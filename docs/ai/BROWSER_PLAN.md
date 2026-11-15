@@ -61,6 +61,22 @@ Ich przeglądarka (Debian Chromium 156, własny loader i biblioteki, piaskownica
 - `lib/librt.so.1`, `lib/libresolv.so.2` (libc6 2.39-0ubuntu8.9; pliki pakietu porównane bajt w bajt z `libc.so.6`, `libm`, `libdl`, `libpthread` i loaderem z `lib/`).
 - NIE zrobione (większa przeróbka, najpierw pomiar na aucie): mniejszy obraz albo wysyłanie tylko zmienionych wierszy (oni: z ok. 14 do 30 kl/s), RPATH w plikach zamiast `LD_LIBRARY_PATH`, zamrażanie strony w tle.
 
+## Ubuntu 18.04 z jądrem 4.14 i pierwszy wynik z auta (2026-11-15)
+
+- VERIFIED (maszyna QEMU/KVM w WSL właściciela, `/opt/g21-vm`: Ubuntu 18.04.6, glibc systemu 2.27, jądro mainline **4.14.195** — wersji 4.14.198 nie ma już na kernel.ubuntu.com; Node 22.12.0 w wydaniu `glibc-217`): `test_browser_tool.js` w całości, bez SKIP. Silnik Google startuje z własnym loaderem i glibc 2.39 na jądrze 4.14, **z piaskownicą** (ta maszyna ma przestrzenie nazw użytkownika), i nie wczytuje żadnej biblioteki systemu.
+- VERIFIED na aucie (zgłoszenie właściciela, 0.1.138): silnik pobrał się i uruchomił, **bez piaskownicy** (auto jej nie daje; właściciel zobaczył pytanie i stuknął). Pasek pokazuje tytuł strony i ładowanie, aplikacja działa płynnie.
+- **BROKEN na aucie: nie widać treści strony.** Pod paskiem jest jednolite tło bez napisu, czyli aplikacja wysłała VIDEO + op 19 (`live` i warstwa wideo są), a renderer nic nie rysuje z `/dev/shm/mgu-video-g21browser`. Hipotezy (UNVERIFIED): (1) renderer nie przyjmuje pliku 1920×636 (dotąd najwyżej 1280×720), (2) renderer nie może odczytać pliku uid silnika, (3) klatki przestają dochodzić po pierwszej. Do odczytu z auta przy otwartej stronie: `ls -l /dev/shm/`; `hexdump -C -n 64 /dev/shm/mgu-video-g21browser` dwa razy (czy rośnie `seq`); `tail -n 60 /var/opt/g21-browser/log/browserd.log`; log renderera (`journalctl -u mgu-render* -n 60`).
+
+## Auto 2026-11-15 (odczyt przez ssh, tylko odczyt) — g21-browser 0.1.3, aplikacja 0.1.139
+
+VERIFIED na aucie (0.1.138 / 0.1.2, jądro 4.14.198-apl):
+
+- Silnik pobiera się (77 s) i startuje; klatki dochodzą do `/dev/shm/mgu-video-g21browser` (`seq` rośnie), 1920×636.
+- **Brak obrazu strony:** `mgu-renderd`: `video 1: /dev/shm/mgu-video-g21browser is not the app's (owner uid 12710)`. Renderer rysuje plik tylko aplikacji albo roota (YouTube i AirPlay piszą jako root). Naprawa: `adoptRing` w demonie (fchown na roota po wierszu `ring` dekodera, bez podążania za dowiązaniem).
+- **Dotyk:** `touch: 70,75 is outside the apps' claims: to the HMI` → `g21_airplay: the HMI was touched - closed`. Aplikacja może zająć dotyk tylko w `CONTENT` (104,88 1796×632). Naprawa: `webLayout` w tym obszarze (strona 1796×548).
+- **Po powrocie nic nie działa:** log aplikacji `menu-closed` … `menu-show open`, `menu-frame 46`, bez ponownego SHOW/CLAIM. Naprawa: `CLOSED` i `showSurface` zerują `surfaced` (i nazwę pliku wideo).
+- **Piaskownica:** `/proc/self/ns` nie ma `user` (jądro bez CONFIG_USER_NS; `max_user_namespaces` 22563 nic tu nie znaczy), są `pid` i `net`. LSM: `capability,yama`. Demon: bez seccomp, pełne capability. `/dev/shm` i `/run` są `nosuid`; `/var/opt` (ext4) — opcje do odczytania w całości. Piaskownica wymaga więc pomocnika setuid `chrome-sandbox` (tak robi pllanaio/mgu-browser); zip `chrome-headless-shell` go nie ma. Decyzja właściciela: do czasu działającej piaskownicy pytać przy każdym otwarciu; cel: piaskownica.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

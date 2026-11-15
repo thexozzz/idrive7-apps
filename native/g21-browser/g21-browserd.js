@@ -752,7 +752,7 @@ Daemon.prototype.away = async function () {
     const e = this.engine;
     if (e) { try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* gone */ } }
     clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.guard(() => this.stopEngine('idle')), this.opts.idleMs);
+    this.idleTimer = setTimeout(() => this.guard(() => { this.sandboxOff = false; return this.stopEngine('idle'); }), this.opts.idleMs);
 };
 
 Daemon.prototype.onCommand = async function (m) {
@@ -769,7 +769,7 @@ Daemon.prototype.onCommand = async function (m) {
         await this.startEngine(null);
         return;
     }
-    case 'close': this.want = null; await this.stopEngine('closed by the app'); return;
+    case 'close': this.want = null; this.sandboxOff = false; await this.stopEngine('closed by the app'); return;
     case 'zoom': {
         const z = Number(m.z);
         if (ZOOMS.indexOf(z) < 0 || z === this.zoom) return;
@@ -783,9 +783,8 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'sandbox-off') {
         // the owner's answer on the screen; only to the question this daemon asked
         if (this.s.ask !== 'sandbox' || !this.want || this.starting) return;
-        mkdirp(this.opts.stateDir, 0o700);
-        fs.writeFileSync(path.join(this.opts.stateDir, 'sandbox'), 'off\n');
-        this.log('sandbox off: allowed by the owner on the screen');
+        this.sandboxOff = true;
+        this.log('sandbox off: allowed by the owner on the screen, for this opening');
         await this.startEngine(null);
         return;
     }
@@ -883,6 +882,24 @@ Daemon.prototype.startProxy = function () {
         });
     });
 };
+/*
+ * mgu-renderd shows /dev/shm/mgu-video-* only when the file is the app's or root's ("is not the app's (owner uid 12710)"
+ * on the car, 0.1.2: the page area stayed empty). The decoder runs as the engine uid, so root takes the file over once
+ * the decoder has made it; the decoder keeps writing through the descriptor it holds. In /dev/shm (sticky) the engine uid
+ * can then neither replace nor remove it. Opened without following a link, and only the file the decoder named.
+ */
+Daemon.prototype.adoptRing = function (ino) {
+    if (this.opts.noSetuid || !process.getuid || process.getuid() !== 0) return;
+    let fd = -1;
+    try {
+        fd = fs.openSync(this.opts.ring, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        const st = fs.fstatSync(fd);
+        if (!st.isFile() || st.nlink !== 1 || Number(st.ino) !== ino || (st.uid !== this.uid && st.uid !== 0)) throw new Error('not the decoder\'s file');
+        if (st.uid !== 0) fs.fchownSync(fd, 0, st.gid);
+        fs.fchmodSync(fd, 0o644);
+    } catch (e) { this.log('video file not taken over (the renderer will not draw it): ' + e.message); }
+    if (fd >= 0) { try { fs.closeSync(fd); } catch (e) { /* closed */ } }
+};
 Daemon.prototype.startFrame = function () {
     if (this.frame) return;
     let colour = (lines(path.join(this.opts.stateDir, 'color'))[0] || '').trim();
@@ -899,7 +916,7 @@ Daemon.prototype.startFrame = function () {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
-            if (l[0] === 'ring') this.set({ w: Number(l[1]), h: Number(l[2]), ino: Number(l[3]), live: false });
+            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); this.set({ w: Number(l[1]), h: Number(l[2]), ino: Number(l[3]), live: false }); }
             else if (l[0] === 'f') { if (!this.s.live) this.set({ live: true }); this.frameDone(); }
             else if (l[0] === 'e') { this.log('webframe: ' + l.slice(1).join(' ')); this.frameDone(); }
         }
@@ -936,12 +953,13 @@ Daemon.prototype.frameDone = function () {
 };
 
 /*
- * The engine's sandbox is never switched off on the tool's own decision. state/sandbox = "off" is the
- * owner's answer to the app's question (op "sandbox-off"); without it an engine that cannot have its
- * sandbox does not start, and the state says ask: "sandbox".
+ * The engine's sandbox is never switched off on the tool's own decision. An engine that cannot have its
+ * sandbox does not start and the state says ask: "sandbox"; the owner's answer (op "sandbox-off") holds
+ * until the browser is closed or left, so every opening asks again (owner, 2026-11-15: ask every time until
+ * the sandbox works on the car). Nothing is kept on disk; state/sandbox of 0.1.2 is removed.
  */
 function askSandbox() { const e = new UserError('system auta nie pozwala na piaskownicę silnika'); e.ask = 'sandbox'; return e; }
-Daemon.prototype.sandboxAllowedOff = function () { return (lines(path.join(this.opts.stateDir, 'sandbox'))[0] || '').trim() === 'off'; };
+Daemon.prototype.sandboxAllowedOff = function () { return this.sandboxOff === true; };
 Daemon.prototype.sandboxPossible = function () {
     if (this.opts.forceSandbox) return true; // tests: try it and see
     if (this.opts.noSetuid && process.getuid && process.getuid() === 0) return false; // the engine refuses root with its sandbox
@@ -949,8 +967,15 @@ Daemon.prototype.sandboxPossible = function () {
     const clone = (lines('/proc/sys/kernel/unprivileged_userns_clone')[0] || '1').trim();
     return n > 0 && clone !== '0';
 };
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+function pageCss(w, h, z) {
+    const k = Math.round(z * 4), sw = 16 / gcd(k, 16), sh = 8 / gcd(k, 8);
+    return { w: Math.max(sw, Math.floor(w / z / sw) * sw), h: Math.max(sh, Math.floor(h / z / sh) * sh) };
+}
 Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
-    const z = this.zoom, w = Math.round(this.want.w / z), h = Math.round(this.want.h / z);
+    // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
+    // height even (what the renderer's video layer takes): never larger than the page area the app has.
+    const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z), w = cssSize.w, h = cssSize.h;
     const args = [
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
         '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + z,
@@ -1232,6 +1257,7 @@ Daemon.prototype.start = async function () {
     try { fs.unlinkSync(o.ring); } catch (e) { /* none */ }
     this.listen();
     // the uplink learns our uid at start (its 5 s rescan), before the first page
+    try { fs.unlinkSync(path.join(o.stateDir, 'sandbox')); this.log('removed state/sandbox (0.1.2 kept the answer; now every opening asks)'); } catch (e) { /* none */ }
     if (!o.noSetuid) { try { this.uid = pickEngineUid(o); } catch (e) { this.log('engine uid: ' + e.message); } }
     let m = null;
     try { m = loadManifest(o); } catch (e) { this.log(e.message); }
@@ -1245,7 +1271,8 @@ Daemon.prototype.close = async function () {
     try { fs.unlinkSync(this.opts.sock); } catch (e) { /* none */ }
 };
 
-module.exports = { Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
+module.exports = {
+    pageCss: pageCss, Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
     runFetch(String(process.argv[3]), String(process.argv[4]), process.argv[5] || '/run/mgu-uplink/lease.json', process.argv[6] === '--any-host');

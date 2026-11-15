@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.139
+
+- Przeglądarka: widać stronę. Na aucie (0.1.138) renderer odrzucał plik obrazu strony („is not the app's (owner uid 12710)”), bo zapisywał go użytkownik silnika, i pod paskiem było puste tło. Narzędzie `g21-browser` 0.1.3 przejmuje plik na roota zaraz po utworzeniu; dekoder pisze dalej przez otwarty uchwyt.
+- Przeglądarka: cały ekran mieści się w obszarze dotyku aplikacji (od 104,88; strona 1796×548). Wcześniej pasek był rysowany od rogu ekranu, gdzie dotyk należy do iDrive: stuknięcie w „Menu” trafiało do HMI i renderer zamykał aplikację.
+- Po zamknięciu powierzchni przez renderer (dotknięcie HMI) i powrocie aplikacja znów się pokazuje i reaguje na dotyk. Wcześniej rysowała klatki, ale nie zgłaszała się rendererowi ponownie.
+- Piaskownica: zgoda na pracę bez niej obowiązuje tylko do zamknięcia przeglądarki; każde otwarcie pyta ponownie i nic nie jest zapisywane na dysku (plik `state/sandbox` z 0.1.2 jest usuwany). Ustalone na aucie: jądro 4.14.198-apl nie ma przestrzeni nazw użytkownika, więc piaskownica Chromium wymaga pomocnika setuid — to następny krok.
+- Rozmiar okna silnika jest dobierany do powiększenia tak, żeby obraz miał całe piksele, szerokość podzielną przez 4 i parzystą wysokość (np. 1788×546 przy 150%); aplikacja rysuje go w rzeczywistym rozmiarze.
+- Sprawdzone: pełny test na Ubuntu 18.04 z jądrem 4.14.195 (prawdziwy silnik Google). Na aucie potwierdzone wcześniej: pobranie i start silnika. Nowe poprawki na aucie jeszcze niesprawdzone.
+
 ## 0.1.138
 
 - Przeglądarka nie wyłącza już sama piaskownicy silnika. Gdy system auta na nią nie pozwala (albo silnik z nią nie wstaje), ekran pokazuje „System auta nie pozwala na piaskownicę silnika” i przycisk „Uruchom bez piaskownicy”. Dopiero stuknięcie uruchamia silnik bez niej; wybór jest zapamiętany (`state/sandbox`). „Odśwież” próbuje ponownie z piaskownicą. Wcześniej narzędzie przechodziło na pracę bez piaskownicy bez pytania.

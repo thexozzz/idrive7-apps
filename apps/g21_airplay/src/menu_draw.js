@@ -3089,24 +3089,34 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
 var WEB_BAR_H = 84;
 var WEB_ZOOMS = [1, 1.25, 1.5, 1.75, 2];
 
+/*
+ * Everything sits inside CONTENT: mgu-renderd lets an app claim touch only there (the HMI keeps its side
+ * bar and its top line). On the car (0.1.138) the toolbar was drawn from 0,0: a tap on "Menu" at 70,75 was
+ * "outside the apps' claims", went to the HMI, and the renderer closed the app's surface.
+ */
 function webLayout(width, height) {
-    var y = 14;
-    var h = 56;
-    var right = width - 16;
+    var ox = Math.min(CONTENT.x, Math.max(0, width - 640));
+    var oy = Math.min(CONTENT.y, Math.max(0, height - 360));
+    var w = Math.min(CONTENT.w, width - ox) & ~3;
+    var h = height - oy;
+    var y = oy + 14;
+    var bh = 56;
+    var right = ox + w - 16;
     var lay = {
-        exit: { name: 'web-exit', x: 16, y: y, w: 136, h: h },
-        back: { name: 'web-back', x: 164, y: y, w: 64, h: h },
-        fwd: { name: 'web-fwd', x: 236, y: y, w: 64, h: h },
-        reload: { name: 'web-reload', x: 308, y: y, w: 64, h: h },
-        home: { name: 'web-home', x: 380, y: y, w: 64, h: h },
-        power: { name: 'app-exit', x: right - 64, y: y, w: 64, h: h },
-        zoomIn: { name: 'web-zoom-in', x: right - 136, y: y, w: 64, h: h },
-        zoomOut: { name: 'web-zoom-out', x: right - 208, y: y, w: 64, h: h },
-        enter: { name: 'web-enter', x: right - 280, y: y, w: 64, h: h },
-        keys: { name: 'web-keys', x: right - 352, y: y, w: 64, h: h }
+        ox: ox, oy: oy, w: w, h: h,
+        exit: { name: 'web-exit', x: ox + 16, y: y, w: 136, h: bh },
+        back: { name: 'web-back', x: ox + 164, y: y, w: 64, h: bh },
+        fwd: { name: 'web-fwd', x: ox + 236, y: y, w: 64, h: bh },
+        reload: { name: 'web-reload', x: ox + 308, y: y, w: 64, h: bh },
+        home: { name: 'web-home', x: ox + 380, y: y, w: 64, h: bh },
+        power: { name: 'app-exit', x: right - 64, y: y, w: 64, h: bh },
+        zoomIn: { name: 'web-zoom-in', x: right - 136, y: y, w: 64, h: bh },
+        zoomOut: { name: 'web-zoom-out', x: right - 208, y: y, w: 64, h: bh },
+        enter: { name: 'web-enter', x: right - 280, y: y, w: 64, h: bh },
+        keys: { name: 'web-keys', x: right - 352, y: y, w: 64, h: bh }
     };
-    lay.url = { name: 'web-url', x: 456, y: y, w: lay.keys.x - 12 - 456, h: h };
-    lay.page = { x: 0, y: WEB_BAR_H, w: width & ~3, h: (height - WEB_BAR_H) & ~1 };
+    lay.url = { name: 'web-url', x: ox + 456, y: y, w: lay.keys.x - 12 - (ox + 456), h: bh };
+    lay.page = { x: ox, y: oy + WEB_BAR_H, w: w, h: (h - WEB_BAR_H) & ~1 };
     return lay;
 }
 
@@ -3159,6 +3169,9 @@ function webReloadGlyph(draw, cx, cy, ink) {
 function buildWebFrame(width, height, web) {
     var draw = new FrameBuilder();
     var lay = webLayout(width, height);
+    var midX = lay.ox + Math.floor(lay.w / 2);
+    var vw;
+    var vh;
     var hits = [];
     var info = web || {};
     var showVideo = !!(info.live && info.video);
@@ -3178,23 +3191,32 @@ function buildWebFrame(width, height, web) {
     var i;
     draw.clear(0);
     if (showVideo) {
-        draw.video(lay.page.x, lay.page.y, lay.page.w, lay.page.h, 1);
+        // 1:1, at the size the engine made the picture (a few pixels under the page area at some zooms)
+        vw = info.w > 0 && info.w <= lay.page.w ? info.w : lay.page.w;
+        vh = info.h > 0 && info.h <= lay.page.h ? info.h : lay.page.h;
+        if (vw < lay.page.w) {
+            draw.rect(lay.page.x + vw, lay.page.y, lay.page.w - vw, lay.page.h, PAGE_B);
+        }
+        if (vh < lay.page.h) {
+            draw.rect(lay.page.x, lay.page.y + vh, vw, lay.page.h - vh, PAGE_B);
+        }
+        draw.video(lay.page.x, lay.page.y, vw, vh, 1);
     } else {
-        draw.grad(0, WEB_BAR_H, width, height - WEB_BAR_H, PAGE_A, PAGE_B);
+        draw.grad(lay.ox, lay.oy + WEB_BAR_H, lay.w, lay.h - WEB_BAR_H, PAGE_A, PAGE_B);
         st = webStatus(info);
-        midY = WEB_BAR_H + Math.floor((height - WEB_BAR_H) / 2);
+        midY = lay.oy + WEB_BAR_H + Math.floor((lay.h - WEB_BAR_H) / 2);
         if (st.busy) {
-            drawSpinner(draw, Math.floor(width / 2), midY - 70);
+            drawSpinner(draw, midX, midY - 70);
         }
         tw = draw.textWidth(tr(st.title), 5);
-        draw.text(tr(st.title), Math.floor((width - tw) / 2), midY + (st.busy ? 16 : -40), 5, st.busy ? INK : SOFT);
+        draw.text(tr(st.title), (midX - Math.floor(tw / 2)), midY + (st.busy ? 16 : -40), 5, st.busy ? INK : SOFT);
         if (st.hint) {
             hw = draw.textWidth(tr(st.hint), 3);
-            draw.text(tr(st.hint), Math.floor((width - hw) / 2), midY + (st.busy ? 76 : 20), 3, MUTED);
+            draw.text(tr(st.hint), (midX - Math.floor(hw / 2)), midY + (st.busy ? 76 : 20), 3, MUTED);
         }
         if (st.ask === 'sandbox') {
             tw = draw.textWidth(tr('Uruchom bez piaskownicy'), 3);
-            c = { name: 'web-sandbox-off', x: Math.floor((width - tw) / 2) - 36, y: midY + 76, w: tw + 72, h: 64 };
+            c = { name: 'web-sandbox-off', x: (midX - Math.floor(tw / 2)) - 36, y: midY + 76, w: tw + 72, h: 64 };
             draw.round(c.x, c.y, c.w, c.h, 18, RED_CARD);
             draw.text(tr('Uruchom bez piaskownicy'), c.x + 36, c.y + 22, 3, INK);
             hits.push(c);
@@ -3202,8 +3224,8 @@ function buildWebFrame(width, height, web) {
     }
 
     // the toolbar
-    draw.grad(0, 0, width, WEB_BAR_H, HEAD_A, HEAD_B);
-    draw.rect(0, WEB_BAR_H - 3, width, 3, info.loading && ready ? ACCENT : LINE);
+    draw.grad(lay.ox, lay.oy, lay.w, WEB_BAR_H, HEAD_A, HEAD_B);
+    draw.rect(lay.ox, lay.oy + WEB_BAR_H - 3, lay.w, 3, info.loading && ready ? ACCENT : LINE);
 
     c = webButton(draw, hits, lay.exit, true);
     chevron(draw, 'w', lay.exit.x + 26, c.cy, 8, 3, ACCENT);
@@ -3284,8 +3306,8 @@ function buildWebFrame(width, height, web) {
     // what the daemon has to say over a page that shows (a bad address, a page that stopped)
     if (showVideo && info.err) {
         tw = draw.textWidth(tr(info.err), 3);
-        draw.round(Math.floor((width - tw) / 2) - 28, height - 78, tw + 56, 52, 26, RED_CARD);
-        draw.text(tr(info.err), Math.floor((width - tw) / 2), height - 78 + 16, 3, INK);
+        draw.round((midX - Math.floor(tw / 2)) - 28, height - 78, tw + 56, 52, 26, RED_CARD);
+        draw.text(tr(info.err), (midX - Math.floor(tw / 2)), height - 78 + 16, 3, INK);
     }
     return {
         frame: packFrame(draw),
@@ -3592,7 +3614,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -3716,6 +3738,7 @@ function createMenuSurface(opts) {
         shown = true;
         front = true;
         note('menu-show ' + (reason || 'open'));
+        surfaced = false; // every entry puts the surface up again; the renderer may have closed it meanwhile
         armPulse();
         if (sock && ready) {
             paint();
@@ -4674,7 +4697,12 @@ function createMenuSurface(opts) {
                     note(front ? 'menu-front' : 'menu-away');
                 }
             } else if (type === CLOSED) {
+                // the renderer took the surface down (the HMI was touched): show, grab, claim and the video are
+                // sent again with the next frame. On the car (0.1.138) the app came back and nothing was drawn.
                 note('menu-closed');
+                surfaced = false;
+                mirrorSent = false;
+                mirrorPath = '';
             } else if (type === TOUCH && body.length >= 12 && shown) {
                 var phase = body.readUInt32LE(0);
                 var tx = body.readFloatLE(4);
@@ -5031,7 +5059,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }

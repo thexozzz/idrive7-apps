@@ -40,17 +40,18 @@ assert.ok(rootFrame.layout.count === 7 && rootFrame.rects > 20);
 
 // ---- the browser screen's frame
 var page = menu.webLayout(1920, 720).page;
-assert.deepStrictEqual(page, { x: 0, y: 84, w: 1920, h: 636 }, 'the page area: the whole width under the toolbar, even sizes');
+// inside the area mgu-renderd lets an app claim for touch (104,88 1796x632 on the car): outside it a tap goes to the HMI
+assert.deepStrictEqual(page, { x: 104, y: 172, w: 1796, h: 548 }, 'the page area: under the toolbar, inside the claim, width % 4, even height');
 var live = { connected: true, engine: 'ready', url: 'https://pl.wikipedia.org/wiki/BMW_serii_3', title: 'BMW serii 3 – Wikipedia', live: true, video: true, back: true, fwd: false, zoom: 1.5 };
 var f = menu.buildWebFrame(1920, 720, live);
 var seen = ops(f.frame);
 assert.strictEqual(seen[19], 1, 'the page is the VIDEO op');
-assert.deepStrictEqual(Array.prototype.slice.call(seen.video), [0, 84, 1920, 636], 'drawn 1:1 in the page area');
+assert.deepStrictEqual(Array.prototype.slice.call(seen.video), [104, 172, 1796, 548], 'drawn 1:1 in the page area');
 assert.ok(!seen[6] && !seen[7] && !seen[10], 'only ops proven on the car (no CARD, RAMPRECT, TRIS)');
 assert.ok(f.frame.length < 8000, 'a small frame: ' + f.frame.length);
 var names = f.layout.webHits.map(function (h) { return h.name; });
 assert.deepStrictEqual(names, ['web-exit', 'web-back', 'web-reload', 'web-home', 'web-url', 'web-keys', 'web-enter', 'web-zoom-out', 'web-zoom-in', 'app-exit'], 'forward is off without a page ahead');
-f.layout.webHits.forEach(function (h) { assert.ok(h.h >= 56 && h.w >= 64 && h.y + h.h <= 84, h.name + ' is a finger wide and inside the toolbar'); });
+f.layout.webHits.forEach(function (h) { assert.ok(h.h >= 56 && h.w >= 64 && h.x >= 104 && h.x + h.w <= 1900 && h.y >= 88 && h.y + h.h <= 172, h.name + ' is a finger wide, inside the toolbar and inside the touch claim'); });
 assert.ok(names.indexOf('app-exit') !== -1, '"Wyłącz aplikację" is on this screen too');
 // zoom at its ends
 assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 2 })).layout.webHits.every(function (h) { return h.name !== 'web-zoom-in'; }));
@@ -72,7 +73,7 @@ assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).la
     var b = menu.buildWebFrame(1920, 720, { connected: true, engine: 'failed', err: 'system auta nie pozwala na piaskownicę silnika', ask: 'sandbox', video: true });
     var hit = b.layout.webHits.filter(function (h) { return h.name === 'web-sandbox-off'; });
     assert.strictEqual(hit.length, 1, 'the owner can answer');
-    assert.ok(hit[0].y >= 84 && hit[0].h >= 56 && hit[0].w >= 200 && hit[0].y + hit[0].h <= 720 && hit[0].x >= 0 && hit[0].x + hit[0].w <= 1920, 'inside the page area');
+    assert.ok(hit[0].y >= 172 && hit[0].h >= 56 && hit[0].w >= 200 && hit[0].y + hit[0].h <= 720 && hit[0].x >= 104 && hit[0].x + hit[0].w <= 1900, 'inside the page area');
     assert.ok(/web\.send\(\{ op: 'sandbox-off' \}\)/.test(fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8')), 'main.js sends the answer');
 }());
 
@@ -130,7 +131,7 @@ assert.strictEqual(a._onWebChoice('settings'), false, 'another screen\'s choice 
 assert.strictEqual(a._onWebChoice('web-back'), true);
 assert.strictEqual(a.sent.length, 0, 'closed: nothing is sent');
 assert.strictEqual(a._onWebChoice('browser'), true);
-assert.deepStrictEqual(a.calls, ['open 1920x636']);
+assert.deepStrictEqual(a.calls, ['open 1796x548']);
 assert.ok(a.web[0].on && a.web[0].connected && a.web[0].engine === 'starting', 'the first moments say "Uruchamiam", not "brak narzędzia"');
 a.setState({ connected: true, engine: 'ready', url: 'https://wp.pl/', title: 'WP', live: true, ino: 77, zoom: 1.5, ring: '/dev/shm/mgu-video-g21browser' });
 a.tell();
@@ -219,7 +220,7 @@ renderer.listen(RSOCK, async function () {
         surf.open();
         await sleep(300);
         assert.ok(frames.length >= 1, 'the menu shows');
-        assert.deepStrictEqual(surf.webPage(), { x: 0, y: 84, w: 1920, h: 636 });
+        assert.deepStrictEqual(surf.webPage(), { x: 104, y: 172, w: 1796, h: 548 });
         var n = frames.length;
         var st = { on: true, connected: true, engine: 'ready', err: '', url: 'https://wp.pl/', title: 'WP', loading: false, back: true, fwd: false, live: true, zoom: 1.5, editable: false, pct: 100, ring: '/dev/shm/mgu-video-g21browser' };
         surf.setWeb(st);
@@ -230,6 +231,19 @@ renderer.listen(RSOCK, async function () {
         surf.setWeb(Object.assign({}, st)); surf.repaint();
         await sleep(150);
         assert.strictEqual(frames.length, n + 1, 'the same state: no new frame');
+        // the renderer closes the surface (the HMI was touched): the next frame shows, claims and names the video again
+        var before = got.length, vids = videos.length;
+        conn.write(msg(106, Buffer.alloc(0)));
+        await sleep(60);
+        surf.setWeb(Object.assign({}, st, { title: 'WP 2' }));
+        await sleep(200);
+        var again = got.slice(before);
+        assert.ok(again.indexOf(3) !== -1 && again.indexOf(9) !== -1, 'after CLOSED the surface is shown and claimed again: ' + again.join(','));
+        assert.strictEqual(videos.length, vids + 1, 'and the video file is named again');
+        assert.strictEqual(videos[videos.length - 1], '/dev/shm/mgu-video-g21browser');
+        surf.setWeb(st);
+        await sleep(200);
+        n = frames.length - 1;
         // toolbar: a tap that ends on the button
         var lay = menu.webLayout(1920, 720);
         touch(1, lay.back.x + 20, lay.back.y + 20); await sleep(30); touch(3, lay.back.x + 22, lay.back.y + 22); await sleep(60);
@@ -238,8 +252,8 @@ renderer.listen(RSOCK, async function () {
         assert.deepStrictEqual(chosen, ['web-back'], 'a tap that slides off does nothing; a button that is off does nothing');
         assert.strictEqual(touches.length, 0, 'toolbar taps do not reach the page');
         // the page: down, moves and up in the page's own pixels
-        touch(1, 300, 284); await sleep(20); touch(2, 300, 250); await sleep(20); touch(2, 300, 60); await sleep(20); touch(3, 310, 700); await sleep(60);
-        assert.deepStrictEqual(touches, [[1, 300, 200], [2, 300, 166], [2, 300, 0], [3, 310, 616]], 'a drag that leaves the page is held at its edge');
+        touch(1, 404, 372); await sleep(20); touch(2, 404, 338); await sleep(20); touch(2, 404, 100); await sleep(20); touch(3, 414, 719); await sleep(60);
+        assert.deepStrictEqual(touches, [[1, 300, 200], [2, 300, 166], [2, 300, 0], [3, 310, 547]], 'a drag that leaves the page is held at its edge');
         // the knob: turn scrolls, left / right is back / forward, press opens the address
         chosen.length = 0;
         knob(100, 0, 0); await sleep(30); knob(101, 0, 0); await sleep(30); knob(99, 0, 0); await sleep(30);

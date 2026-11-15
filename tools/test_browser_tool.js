@@ -301,6 +301,11 @@ async function testChain(base, eng) {
             const pids = daemon.engineProcs();
             assert.ok(pids.length >= 3, 'engine processes');
             pids.forEach((pid) => assert.ok(/Uid:\s+65534\s/.test(fs.readFileSync('/proc/' + pid + '/status', 'utf8')), 'engine pid ' + pid + ' uid'));
+            // mgu-renderd draws a video file only when it is the app's or root's: the decoder (engine uid) made it, root took it over
+            const ringSt = fs.statSync(daemon.opts.ring);
+            assert.strictEqual(ringSt.uid, 0, 'the video file belongs to root');
+            assert.strictEqual(ringSt.mode & 0o777, 0o644);
+            // (that the decoder still writes it through its descriptor: the scroll part below waits for new frames in this file)
             [daemon.proxy.pid, daemon.frame.pid].forEach((pid) => assert.ok(/Uid:\s+65534\s/.test(fs.readFileSync('/proc/' + pid + '/status', 'utf8')), 'helper uid'));
             // no library of this machine: only the tool's own
             const foreign = {};
@@ -402,25 +407,38 @@ async function testChain(base, eng) {
         const sandboxFile = path.join(base, 'state', 'sandbox');
         let c2 = null;
         try {
-            assert.strictEqual(fs.existsSync(sandboxFile), false);
+            fs.mkdirSync(path.dirname(sandboxFile), { recursive: true }); fs.writeFileSync(sandboxFile, 'off\n'); // what 0.1.2 left on the car
             await d2.start();
+            assert.strictEqual(fs.existsSync(sandboxFile), false, 'an answer kept by 0.1.2 is dropped');
             for (let i = 0; i < 100 && !fs.existsSync(d2.opts.sock); i++) await sleep(20);
             c2 = client(d2.opts.sock);
-            c2.send({ op: 'open', w: 1280, h: 424, zoom: 1 });
+            c2.send({ op: 'open', w: 1796, h: 548, zoom: 1.5 });
             await c2.until('the daemon asks about the sandbox', (x) => x.engine === 'failed' && x.ask === 'sandbox', 60000);
             assert.strictEqual(fs.existsSync(sandboxFile), false, 'nothing is switched off before the answer');
             assert.deepStrictEqual(d2.engineProcs(), []);
+            // "odśwież" tries with the sandbox again and asks again (counted in the log: the states can pass faster than a wait is set up)
+            const asked = () => (fs.readFileSync(logFile, 'utf8').match(/did not start with its sandbox/g) || []).length;
+            const before = asked();
+            assert.ok(before >= 1);
             c2.send({ op: 'reload' });
-            await c2.until('"odśwież" tries with the sandbox again', (x) => x.engine === 'starting', 20000);
+            for (let i = 0; i < 600 && asked() === before; i++) await sleep(100);
+            assert.strictEqual(asked(), before + 1, 'one more start with the sandbox');
             await c2.until('and asks again', (x) => x.engine === 'failed' && x.ask === 'sandbox', 60000);
             assert.strictEqual(fs.existsSync(sandboxFile), false);
             c2.send({ op: 'sandbox-off' });
             const s2 = await c2.until('engine up without its sandbox', (x) => x.engine === 'ready' && x.live, 60000);
-            assert.deepStrictEqual([s2.w, s2.h], [1280, 424]);
+            assert.deepStrictEqual([s2.w, s2.h], [1788, 546], 'the car\'s page area 1796x548 at zoom 1.5: whole pixels, width % 4, even height');
+            assert.deepStrictEqual([1, 1.25, 1.5, 1.75, 2].map((z) => { const p = d.pageCss(1796, 548, z); return (p.w * z) % 4 === 0 && (p.h * z) % 2 === 0 && p.w * z <= 1796 && p.h * z <= 548 && p.w * z > 1760 && p.h * z > 530; }), [true, true, true, true, true]);
             assert.strictEqual(s2.ask, '');
-            assert.strictEqual(fs.readFileSync(sandboxFile, 'utf8').trim(), 'off');
+            assert.strictEqual(fs.existsSync(sandboxFile), false, 'the answer is not kept on disk');
             assert.ok(/sandbox off: allowed by the owner/.test(fs.readFileSync(logFile, 'utf8')));
-            console.log('ok sandbox: an engine that cannot start with it asks the owner; only "sandbox-off" starts it without, remembered in state/sandbox');
+            // the answer holds for this opening only: closed and opened again, the daemon asks again
+            c2.send({ op: 'close' });
+            await c2.until('engine off', (x) => x.engine === 'off', 20000);
+            c2.send({ op: 'open', w: 1796, h: 548, zoom: 1.5 });
+            await c2.until('the next opening asks again', (x) => x.engine === 'failed' && x.ask === 'sandbox', 60000);
+            assert.deepStrictEqual(d2.engineProcs(), []);
+            console.log('ok sandbox: an engine that cannot start with it asks the owner; "sandbox-off" starts it without for this opening only, nothing kept on disk');
         } finally {
             if (c2) c2.close();
             await d2.close();
