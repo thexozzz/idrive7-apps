@@ -148,6 +148,11 @@ var EN = {
     'Szybkość myszy': 'Mouse speed',
     'Kursor w menu': 'Cursor in the menu',
     'Rozciągnij': 'Stretch',
+    'Zamknij': 'Close',
+    'Wyłącznik': 'Kill switch',
+    'Obszar zegarów': 'Gauge area',
+    'Strony chrome': 'Chrome pages',
+    'Wyjdź': 'Exit',
     'Przycisk wyłączenia': 'Kill button',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
     'Poziomo': 'Across',
@@ -343,6 +348,8 @@ var ICON_ACCENT = 0xF0C48AFF;
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
 var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
+// the bar under an app from Sklep (back, home)
+var APP_NAV_H = 52;
 
 // 16x16 1-bit icons for option tiles (RECT-only renderer).
 var ICONS = {
@@ -695,14 +702,14 @@ var SYSTEM_ITEMS = [
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
     // a button over everything that ends the app, whatever it shows
-    { name: 'set-kill', title: 'Przycisk wyłączenia', hint: 'wyłączony', icon: 'stop' },
+    { name: 'set-kill', title: 'Wyłącznik', hint: 'wyłączony', icon: 'stop' },
     // where the picture sits and how many pixels it has on each screen: for everything THEiPlay shows (AirPlay,
     // YouTube, Przeglądarka), and only here. Which screens an app uses stays that app's own choice.
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
-    { name: 'air-quality', title: 'Rozdzielczość treści', hint: '600x400, 400x240', icon: 'desktop' },
+    { name: 'air-quality', title: 'Rozdzielczość', hint: '600x400, 400x240', icon: 'desktop' },
     // the part of the gauges everything is drawn in (was in AirPlay > Ekrany > Zegary, but it is for YouTube and
     // Przeglądarka as well)
-    { name: 'cluster-place', title: 'Obszar na zegarach', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
+    { name: 'cluster-place', title: 'Obszar zegarów', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
     // the controller's touchpad as a mouse (the same switch as the icon in an app's bar) and how fast it moves
     { name: 'set-mouse', title: 'Mysz z gładzika', hint: 'włączona', icon: 'gear' },
     { name: 'set-mouse-speed', title: 'Szybkość myszy', hint: '3 z 5', icon: 'gear' },
@@ -728,7 +735,7 @@ APPS_ITEMS.tiles = true;
 var DEMO_APP = 'thexozzz/idrive7-apps@theiplay-hello';
 var STORE_ITEMS = [
     { name: 'store-import', title: 'Importuj z git', hint: 'adres repozytorium GitHub', icon: 'grid' },
-    { name: 'store-demo', title: 'Aplikacja testowa', hint: 'Hello THEiPlay', icon: 'play' },
+    { name: 'store-demo', title: 'Hello THEiPlay', hint: 'aplikacja testowa', icon: 'play' },
     { name: 'store-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 
@@ -745,7 +752,7 @@ var APPS_SET_ITEMS = [
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
-    { name: 'aset-pages', title: 'Strony przeglądarki', hint: 'chrome://about', icon: 'globe' },
+    { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
     { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 
@@ -1295,13 +1302,28 @@ function pageBox(width, height) {
     return { ox: ox, oy: oy, boxW: boxW, boxH: boxH };
 }
 
+// Every page of the menu is a row of large tiles that slides (the knob, a finger, the touchpad's cursor): easier
+// to read and to hit than rows. Only a page with a slider (Pozycja: x, y, size) stays a list.
+function tiledList(items) {
+    var i;
+    if (items && items.tiles) {
+        return true;
+    }
+    for (i = 0; items && i < items.length; i += 1) {
+        if (items[i] && items[i].adjust) {
+            return false;
+        }
+    }
+    return !!(items && items.length);
+}
+
 function menuLayout(items, selected, width, height, detail, heading, previewSpace) {
     var page = pageBox(width, height);
     var count = items.length || 1;
     var headerH = 68;
     var footerH = 96;
     // tiles: pages of one or two items, and the lists marked .tiles (the main menu and its two halves)
-    var tiles = !!items.tiles && page.boxW > 900;
+    var tiles = tiledList(items) && page.boxW > 900;
     var home = (count <= 2 || tiles) && page.boxW > 900;
     var gap = home ? 28 : 12;
     var bubbles = [];
@@ -3340,6 +3362,37 @@ function buildWebFrame(width, height, web) {
     var secure;
     var i;
     draw.clear(0);
+    if (showVideo && info.app && !info.fs) {
+        // An app from Sklep is an app, not a page in a browser: no address bar, no browser buttons; its page has
+        // the whole part of the screen the app gets touches from. "Zamknij" floats at its top right; the knob
+        // pushed left goes back inside the app and, from its first page, closes it.
+        // Under it a quiet bar as on a phone: back (a step back in the app; from its first page: out of it) and
+        // home (THEiPlay's Aplikacje, where the apps are chosen).
+        var appBox = { x: CONTENT.x, y: CONTENT.y, w: CONTENT.w & ~3, h: (CONTENT.h - APP_NAV_H) & ~1 };
+        var navY = CONTENT.y + CONTENT.h - APP_NAV_H;
+        var navMid = CONTENT.x + Math.floor(CONTENT.w / 2);
+        var appBack = { name: 'web-app-back', x: navMid - 190, y: navY, w: 170, h: APP_NAV_H };
+        var appHome = { name: 'web-exit', x: navMid + 20, y: navY, w: 170, h: APP_NAV_H };
+        var appClose = appHome;
+        var bkx = appBack.x + Math.floor(appBack.w / 2);
+        var hmx = appHome.x + Math.floor(appHome.w / 2);
+        var nvy = navY + Math.floor(APP_NAV_H / 2);
+        draw.video(appBox.x, appBox.y, appBox.w, appBox.h, 1);
+        draw.rect(CONTENT.x, navY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
+        draw.quad([[bkx - 9, nvy], [bkx + 7, nvy - 11], [bkx + 7, nvy + 11]], HINT);
+        draw.stroke(hmx - 11, nvy - 11, 22, 22, 11, 2.5, HINT);
+        if (info.mouse) {
+            var ax = appBox.x + Math.max(0, Math.min(appBox.w - 1, Math.round(info.cx || 0)));
+            var ay = appBox.y + Math.max(0, Math.min(appBox.h - 1, Math.round(info.cy || 0)));
+            draw.quad([[ax - 2, ay - 4], [ax - 2, ay + 27], [ax + 21, ay + 19]], 0x101010FF);
+            draw.quad([[ax, ay], [ax, ay + 22], [ax + 16, ay + 16]], 0xFFFFFFFF);
+        }
+        return {
+            frame: packFrame(draw),
+            rects: draw.rects,
+            layout: { webHits: [appBack, appHome], webPage: appBox, web: lay, video: true, app: true }
+        };
+    }
     if (showVideo && info.fs) {
         // a player in full screen: its picture over the whole centre screen, the toolbar hidden. The way out: the
         // player's own button, or the knob pushed left (main.js sends Escape).
@@ -3353,6 +3406,13 @@ function buildWebFrame(width, height, web) {
             fsChip.x = CONTENT.x + 12;
         }
         drawChip(draw, fsChip, !!info.fsFull, tr('Pełny ekran'));
+        // and the way out, beside it (a small picture with no way out looked like a hang: car, 2026-11-15)
+        var fsOut = { name: 'web-fs-exit', x: fsChip.x - 12 - 150, y: fsChip.y, w: 150, h: CHIP_H };
+        if (fsOut.x < CONTENT.x + 12) {
+            fsOut.x = fsChip.x;
+            fsOut.y = fsChip.y + CHIP_H + 10;
+        }
+        drawChip(draw, fsOut, false, tr('Wyjdź'));
         if (info.mouse) {
             var fx = fsBox.x + Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
             var fy = fsBox.y + Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
@@ -3362,7 +3422,7 @@ function buildWebFrame(width, height, web) {
         return {
             frame: packFrame(draw),
             rects: draw.rects,
-            layout: { webHits: [fsChip], webPage: fsBox, web: lay, video: true, fs: true }
+            layout: { webHits: [fsChip, fsOut], webPage: fsBox, web: lay, video: true, fs: true }
         };
     }
     if (showVideo) {
@@ -3785,8 +3845,8 @@ function createMenuSurface(opts) {
     }
 
     function paint() {
-        // (Przeglądarka draws its own cursor, inside the page)
-        POINTER = pointer && !(webView && webView.on && !edit) ? pointer : null;
+        // one cursor over everything the app draws: menus, Przeglądarka's bar and its page
+        POINTER = pointer;
         try {
             paintFrame();
         } finally {
@@ -3811,7 +3871,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, fsFull: !!webView.fsFull, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -4431,7 +4491,7 @@ function createMenuSurface(opts) {
             } else if (tilted && (tilt === 'n' || tilt === 's') && typeof opts.onWebScroll === 'function') {
                 opts.onWebScroll(0, tilt === 's' ? 300 : -300);
             } else if (tilted && tilt === 'w') {
-                choose(webView.fs ? 'web-fs-exit' : 'web-back');
+                choose(webView.fs ? 'web-fs-exit' : (webView.app && !webView.back ? 'web-exit' : 'web-back'));
             } else if (tilted && tilt === 'e') {
                 choose('web-fwd');
             }
@@ -4441,7 +4501,10 @@ function createMenuSurface(opts) {
                     opts.onWebMouseButton(push === 1);
                 }
             } else if (push === 1 && lastPush !== 1) {
-                choose(webView.fs ? 'web-fs-exit' : 'web-url');
+                // (an app has no address to type)
+                if (webView.fs || !webView.app) {
+                    choose(webView.fs ? 'web-fs-exit' : 'web-url');
+                }
             }
             lastPush = push;
             return;
@@ -5117,7 +5180,7 @@ function createMenuSurface(opts) {
                     }
                 } else if (phase === 2 && touchDown) {
                     // a list follows a finger that goes up or down; a row of tiles one that goes sideways
-                    var sideways = !!items.tiles;
+                    var sideways = tiledList(items);
                     var dragY = sideways ? (tx - touchDown.x) : (ty - touchDown.y);
                     var steps;
                     var origin;
@@ -5371,7 +5434,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.app || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -5387,6 +5450,10 @@ function createMenuSurface(opts) {
         /** the page area of Przeglądarka on this screen: { x, y, w, h } */
         webPage: function () {
             return webLayout(screen.w || 1920, screen.h || 720).page;
+        },
+        /** an app from Sklep: the whole part of the screen the app gets touches from */
+        webAppPage: function () {
+            return { x: CONTENT.x, y: CONTENT.y, w: CONTENT.w & ~3, h: (CONTENT.h - APP_NAV_H) & ~1 };
         },
         /** the whole centre screen (Przeglądarka's full screen) */
         webScreen: function () {

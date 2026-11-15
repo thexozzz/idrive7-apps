@@ -102,7 +102,10 @@ class UserError extends Error { constructor(msg) { super(msg); this.user = true;
 
 function writeIfChanged(file, text, mode) {
     try { if (fs.readFileSync(file, 'utf8') === text) return; } catch (e) { /* not there yet */ }
-    fs.writeFileSync(file + '.tmp', text, { mode: mode });
+    // forced to the disk before it takes the file's place: a head unit switched off right after a change keeps it
+    const fd = fs.openSync(file + '.tmp', 'w', mode);
+    try { fs.writeSync(fd, text); try { fs.fsyncSync(fd); } catch (e) { /* a file system that cannot */ } } finally { fs.closeSync(fd); }
+    try { fs.chmodSync(file + '.tmp', mode); } catch (e) { /* the mode of the open stands */ }
     fs.renameSync(file + '.tmp', file);
 }
 

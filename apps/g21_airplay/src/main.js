@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.166',
+        version: (this._packageJson && this._packageJson.version) || '0.1.167',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -495,6 +495,10 @@ function AirPlayApp() {
         this._menu.setMouse(this._mouseOn);
     }
     noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' (saved setting)');
+    this._webFsFull = !!(this._desk.webFsFull && this._desk.webFsFull());
+    this._airStretchOn = !!(this._desk.airStretch && this._desk.airStretch());
+    // where the settings live: a folder under /tmp does not survive a restart of the head unit
+    noteStart('settings-dir ' + (this._store && this._store.dir) + (this._store && this._store.volatile ? ' (VOLATILE: lost at a restart)' : ''));
     if (this._menu && typeof this._menu.setKill === 'function') {
         this._menu.setKill(!!(this._desk.killButton && this._desk.killButton()));
     }
@@ -579,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.166') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.167') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -3316,6 +3320,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'air-stretch') {
         this._airStretchOn = !this._airStretchOn;
+        if (this._desk.setAirStretch) {
+            this._desk.setAirStretch(this._airStretchOn);
+            this._saveDesk();
+        }
         noteStart('air-stretch ' + (this._airStretchOn ? 'on' : 'off'));
         this._syncAirStretch();
         this._refreshAirBadge();
@@ -5287,7 +5295,7 @@ AirPlayApp.prototype._openBrowser = function () {
     if (!this._menu || typeof this._menu.setWeb !== 'function') {
         return;
     }
-    page = this._menu.webPage();
+    page = this._webPageBox();
     this._webOn = true;
     this._webIno = 0;
     this._webOpenAt = Date.now();
@@ -5354,8 +5362,17 @@ AirPlayApp.prototype._paintWeb = function () {
         cy: this._mouseY,
         fs: !!s.fs,
         fsBox: this._webFsBox(),
-        fsFull: !!this._webFsFull
+        fsFull: !!this._webFsFull,
+        app: this._webApp || ''
     });
+};
+
+// The page's place: under the browser's bar, or, for an app from Sklep (no bar), the whole touchable part.
+AirPlayApp.prototype._webPageBox = function () {
+    if (this._webApp && this._menu && typeof this._menu.webAppPage === 'function') {
+        return this._menu.webAppPage();
+    }
+    return this._menu.webPage();
 };
 
 // Where a page's full screen is drawn on the centre screen: the window of Ustawienia > Pozycja, as everything
@@ -5380,6 +5397,7 @@ AirPlayApp.prototype._onWebState = function (state) {
         this._mousePage = { w: state.w, h: state.h };
         this._mouseX = Math.floor(state.w / 2);
         this._mouseY = Math.floor(state.h / 2);
+        this._mouseHome();
     }
     if (this._menuScreen() === 'apps-settings') {
         this._paintApps();
@@ -5507,7 +5525,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
     m.setItemHint('aset-home', pol ? (pol.homepage ? pol.homepage.replace(/^https?:\/\//, '').slice(0, 40) : 'wbudowana') : '—');
     m.setItemHint('aset-zoom', s && s.connected && s.zoom ? Math.round(s.zoom * 100) + '%' : '—');
-    m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : 'okno z Pozycji') : '—');
+    m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : (this._webFsFull ? 'cały ekran' : 'okno z Pozycji')) : '—');
     m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
@@ -5545,7 +5563,7 @@ AirPlayApp.prototype._syncStoreMenu = function () {
             i.hint = self._storeNote || 'adres repozytorium GitHub';
         }
         if (i.name === 'store-demo') {
-            i.hint = apps.some(function (a) { return a.name === 'Hello THEiPlay'; }) ? 'zainstalowana: jest w Aplikacjach' : 'Hello THEiPlay';
+            i.hint = apps.some(function (a) { return a.name === 'Hello THEiPlay'; }) ? 'zainstalowana: jest w Aplikacjach' : 'aplikacja testowa';
         }
         if (i.name === 'store-back') {
             apps.forEach(function (a) {
@@ -5881,6 +5899,16 @@ AirPlayApp.prototype._onWebChoice = function (name) {
     if (!this._webOn) {
         return true;
     }
+    if (name === 'web-app-back') {
+        // a step back in the app; from its first page: out of it, to Aplikacje
+        var appState = this._web ? this._web.state() : null;
+        if (appState && appState.back && web) {
+            web.send({ op: 'back' });
+        } else {
+            this._closeBrowser();
+        }
+        return true;
+    }
     if (name === 'web-exit') {
         this._closeBrowser();
         return true;
@@ -5906,8 +5934,12 @@ AirPlayApp.prototype._onWebChoice = function (name) {
     } else if (name === 'web-fs-full') {
         // the floating "Pełny ekran": the whole centre screen (1920 x 720) or the Pozycja window again
         this._webFsFull = !this._webFsFull;
+        if (this._desk.setWebFsFull) {
+            this._desk.setWebFsFull(this._webFsFull);
+            this._saveDesk();
+        }
         noteStart('web-fs-full ' + (this._webFsFull ? 'on' : 'off'));
-        var fsPage = this._menu.webPage();
+        var fsPage = this._webPageBox();
         var fsWin = this._webFsBox();
         this._webClient().open(fsPage.w, fsPage.h, this._webApp || '', fsWin.w, fsWin.h);
         this._paintWeb();
@@ -6089,6 +6121,7 @@ AirPlayApp.prototype._syncWebMouse = function (why) {
         this._mouseY = Math.floor(this._mousePage.h / 2);
         this._mouseDown = false;
         this._mouseActive = true;
+        this._mouseHome();
         noteStart('[G21-INPUT] active: ' + app + ' mouse=' + conf.mouse + ' (' + why + '), adapter chromium');
         this._padInput.on(app);
     } else {
@@ -6098,6 +6131,9 @@ AirPlayApp.prototype._syncWebMouse = function (why) {
             this._web.send({ op: 'mouse', t: 'up', x: this._mouseX, y: this._mouseY });
         }
         this._mouseDown = false;
+        if (this._menu && typeof this._menu.setPointer === 'function') {
+            this._menu.setPointer(null);
+        }
         if (this._padInput) {
             this._padInput.off();
         }
@@ -6112,11 +6148,22 @@ AirPlayApp.prototype._mouseMove = function (dx, dy) {
     var mag = Math.abs(dx) + Math.abs(dy);
     var gain = speed * (1 + Math.min(2, mag / 30));
     var p = this._mousePage;
+    var scr;
+    var box;
     if (!this._mouseActive || !p) {
         return;
     }
-    this._mouseX = Math.max(0, Math.min(p.w - 1, this._mouseX + dx * gain));
-    this._mouseY = Math.max(0, Math.min(p.h - 1, this._mouseY + dy * gain));
+    // The cursor goes over the whole screen: inside the page it is the page's mouse, outside it (the browser's
+    // bar, the buttons that float) a tap is a touch there. It used to be shut inside the page.
+    scr = this._menu && this._menu.webScreen ? this._menu.webScreen() : { w: 1920, h: 720 };
+    box = this._mouseBox();
+    this._scrX = Math.max(0, Math.min(scr.w - 1, (this._scrX || 0) + dx * gain));
+    this._scrY = Math.max(0, Math.min(scr.h - 1, (this._scrY || 0) + dy * gain));
+    this._mouseIn = this._scrX >= box.x && this._scrX < box.x + box.w && this._scrY >= box.y && this._scrY < box.y + box.h;
+    if (this._mouseIn) {
+        this._mouseX = Math.max(0, Math.min(p.w - 1, (this._scrX - box.x) * p.w / box.w));
+        this._mouseY = Math.max(0, Math.min(p.h - 1, (this._scrY - box.y) * p.h / box.h));
+    }
     // to the engine and to the screen at most every 25 ms: the pad sends 60 samples a second
     if (this._mouseTimer) {
         return;
@@ -6126,13 +6173,51 @@ AirPlayApp.prototype._mouseMove = function (dx, dy) {
         if (!self._mouseActive || !self._web) {
             return;
         }
-        self._web.send({ op: 'mouse', t: 'move', x: Math.round(self._mouseX), y: Math.round(self._mouseY), down: !!self._mouseDown });
-        self._paintWeb();
+        if (self._mouseIn) {
+            self._web.send({ op: 'mouse', t: 'move', x: Math.round(self._mouseX), y: Math.round(self._mouseY), down: !!self._mouseDown });
+        }
+        if (self._menu && typeof self._menu.setPointer === 'function') {
+            self._menu.setPointer({ x: self._scrX, y: self._scrY });
+        } else {
+            self._paintWeb();
+        }
     }, 25);
 };
 
 // the knob pressed / let go: the left button where the cursor is, and only that
+// where the page is on the screen now (under the bar, an app's area, a full screen's window)
+AirPlayApp.prototype._mouseBox = function () {
+    var s = this._web ? this._web.state() : null;
+    var b = s && s.fs ? this._webFsBox() : this._webPageBox();
+    return { x: b.x || 0, y: b.y || 0, w: b.w || 1, h: b.h || 1 };
+};
+
+// the cursor to the middle of the page
+AirPlayApp.prototype._mouseHome = function () {
+    var box = this._mouseBox();
+    this._scrX = box.x + Math.floor(box.w / 2);
+    this._scrY = box.y + Math.floor(box.h / 2);
+    this._mouseIn = true;
+    if (this._menu && typeof this._menu.setPointer === 'function') {
+        this._menu.setPointer({ x: this._scrX, y: this._scrY });
+    }
+};
+
+// outside the page: a touch of the menu where the cursor is
+AirPlayApp.prototype._mouseTapMenu = function () {
+    if (this._menu && typeof this._menu.tapAt === 'function' && !(this._menuTapAt && Date.now() - this._menuTapAt < 350)) {
+        this._menuTapAt = Date.now();
+        this._menu.tapAt(Math.round(this._scrX), Math.round(this._scrY));
+    }
+};
+
 AirPlayApp.prototype._mouseButton = function (down) {
+    if (this._mouseActive && this._mouseIn === false) {
+        if (down) {
+            this._mouseTapMenu();
+        }
+        return;
+    }
     if (!this._mouseActive || !this._web || !!down === !!this._mouseDown) {
         return;
     }
@@ -6143,6 +6228,10 @@ AirPlayApp.prototype._mouseButton = function (down) {
 
 // a light tap on the pad: one click. Not while the knob holds the button, nor right after it (one click, not two).
 AirPlayApp.prototype._mouseTap = function () {
+    if (this._mouseActive && this._mouseIn === false) {
+        this._mouseTapMenu();
+        return;
+    }
     if (!this._mouseActive || !this._web || this._mouseDown || (this._mouseTapAt && Date.now() - this._mouseTapAt < 350)) {
         return;
     }

@@ -244,6 +244,10 @@ function createDesktopSettings(stored) {
     var menuMouse = data.menuMouse === true;
     // the button over everything that ends the app
     var killButton = data.killButton === true;
+    // the two "stretch over the whole screen" switches (Przeglądarka's full screen, AirPlay's full screen)
+    // (on unless switched off: a player's full screen is the whole screen; off: the Pozycja window)
+    var webFsFull = data.webFsFull !== false;
+    var airStretch = data.airStretch === true;
     var mouseSpeed = [1, 2, 3, 4, 5].indexOf(data.mouseSpeed) >= 0 ? data.mouseSpeed : 3;
     var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
@@ -401,6 +405,10 @@ function createDesktopSettings(stored) {
         mouseSpeed: function () { return mouseSpeed; },
         menuMouse: function () { return menuMouse; },
         killButton: function () { return killButton; },
+        webFsFull: function () { return webFsFull; },
+        setWebFsFull: function (on) { webFsFull = !!on; return { ok: true }; },
+        airStretch: function () { return airStretch; },
+        setAirStretch: function (on) { airStretch = !!on; return { ok: true }; },
         setKillButton: function (on) { killButton = !!on; return { ok: true }; },
         setMenuMouse: function (on) { menuMouse = !!on; return { ok: true }; },
         setMouseSpeed: function (n) { if ([1, 2, 3, 4, 5].indexOf(n) < 0) { return { ok: false }; } mouseSpeed = n; return { ok: true }; },
@@ -672,6 +680,8 @@ function createDesktopSettings(stored) {
                 mouseSpeed: mouseSpeed,
                 menuMouse: menuMouse,
                 killButton: killButton,
+                webFsFull: webFsFull,
+                airStretch: airStretch,
                 uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,

@@ -27,7 +27,8 @@ assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system ==
     assert.ok(lay.bubbles.length >= 3 && lay.bubbles.every(function (b) { return b.home && b.h === 300 && b.w >= 300 && b.y === lay.bubbles[0].y; }), 'tiles in one row');
     assert.ok(lay.bubbles[1].x >= lay.bubbles[0].x + lay.bubbles[0].w && lay.bubbles[lay.bubbles.length - 1].x + lay.bubbles[lay.bubbles.length - 1].w <= 1900, 'side by side, inside the page');
 });
-assert.ok(menu.buildFrame(menu.SYSTEM_ITEMS, 0, 1920, 720).layout.bubbles.every(function (b) { return !b.home; }), 'Ustawienia is a list');
+assert.ok(menu.buildFrame(menu.SYSTEM_ITEMS, 0, 1920, 720).layout.bubbles.every(function (b) { return b.home; }), 'Ustawienia is tiles too');
+assert.ok(menu.buildFrame(menu.SCREENS['pos-box'], 0, 1920, 720).layout.bubbles.every(function (b) { return !b.home; }), 'a page with sliders stays a list');
 // more tiles than fit: the row slides so that the chosen one is in sight
 (function () {
     var many = [];

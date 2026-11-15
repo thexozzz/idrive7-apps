@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.1.167
+
+- Naprawa: w Przeglądarce kursor z gładzika był zamknięty w obszarze strony i nie dało się nim sięgnąć paska ani przycisków. Teraz chodzi po całym ekranie: w stronie jest myszą strony, poza nią stuknięcie to dotknięcie w tym miejscu (pasek adresu, wstecz, pływające przyciski).
+- Aplikacja ze Sklepu ma na dole dyskretny pasek jak w telefonie: „wstecz” (krok wstecz w aplikacji, z pierwszej strony — wyjście) i „home” (Aplikacje w THEiPlay). Zastępuje „Zamknij”.
+- Naprawa: film w Przeglądarce przełączony na pełny ekran robił się małym oknem, z którego nie było widać wyjścia (pełny ekran szedł w okno z Pozycji, domyślnie 640×360). Pełny ekran jest teraz domyślnie całym ekranem 1920×720 (przycisk „Pełny ekran” przełącza na okno z Pozycji), a obok jest zawsze przycisk „Wyjdź”.
+- Menu: każda strona to rząd dużych kafelków, który się przesuwa (pokrętło, palec, kursor z gładzika), zamiast wierszy. Wierszami zostaje tylko strona z suwakami (Pozycja).
+
+- Aplikacja ze Sklepu otwiera się jako aplikacja, nie jako strona w przeglądarce: bez paska adresu i przycisków przeglądarki, na całym dotykowym obszarze ekranu (1796×632 zamiast 1796×548). W prawym górnym rogu pływa „Zamknij”; pokrętło w lewo cofa wewnątrz aplikacji, a z jej pierwszej strony ją zamyka. W trakcie ładowania i przy błędzie widać jeszcze pasek ze stanem. Niesprawdzone w aucie.
+
+- Ustawienia nie giną. Plik ustawień był nadpisywany w miejscu i zostawiany systemowi do zapisania: wyłączenie auta albo zakończenie aplikacji tuż po zmianie gubiło zmianę albo zostawiało pół pliku, a następny start czytał wartości domyślne. Teraz zapis idzie do pliku obok, jest wymuszany na dysk i dopiero zajmuje miejsce właściwego; poprzedni plik zostaje jako `.bak` i jest czytany, gdy właściwego nie da się odczytać. Tak samo zapisuje reguły i ustawienia `g21-browser` 0.1.22.
+- Zapis nie jest już odrzucany w całości, gdy jakaś wartość (napis, nazwa) zawiera słowo „password” albo „secret”; odrzucane jest tylko pole o takiej nazwie.
+- Zapisywane są też oba przełączniki rozciągnięcia na cały ekran (Przeglądarka, AirPlay), które dotąd żyły tylko do zamknięcia aplikacji.
+- Log startu podaje folder ustawień i ostrzega, gdy jest to `/tmp` (znika przy restarcie jednostki).
+
 - Pełny ekran AirPlay ma pływający przycisk „Rozciągnij” w prawym górnym rogu: obraz wypełnia cały ekran środkowy 1920×720, kosztem proporcji; drugi raz — z powrotem z proporcjami. Renderer zawsze zachowuje kształt klatki, więc rozciąganie robi `g21-yuvring` (`g21-airplay-open` 0.1.59): gdy aplikacja poda kształt ekranu w pliku `airplay-size.stretch`, klatka jest robiona w tym kształcie. Działa na ścieżce pierścienia (ta, której używa auto). Poza pełnym ekranem obraz zawsze ma swoje proporcje. Niesprawdzone w aucie.
 
 ## 0.1.166

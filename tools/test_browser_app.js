@@ -146,7 +146,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -214,13 +214,19 @@ function glueApp() {
     var withCursor = menu.buildWebFrame(1920, 720, Object.assign({}, last, { video: true }));
     var without = menu.buildWebFrame(1920, 720, Object.assign({}, last, { video: true, mouse: false }));
     assert.ok(withCursor.rects > without.rects, 'the cursor is drawn over the page');
-    // the finger moves: relative, faster for a fast finger, held inside the page
+    // the finger moves: relative, faster for a fast finger; over the whole screen, not shut inside the page
     g._mouseMove(10, 0);
     assert.ok(g._mouseX > 888 + 10 && g._mouseY === 264, 'the cursor moved right by more than the pad units');
     g._mouseMove(-5000, -5000);
-    assert.deepStrictEqual([g._mouseX, g._mouseY], [0, 0], 'held at the page edge');
+    assert.deepStrictEqual([g._scrX, g._scrY], [0, 0], 'held at the screen edge');
     g._mouseMove(100000, 100000);
-    assert.deepStrictEqual([g._mouseX, g._mouseY], [1775, 527]);
+    assert.ok(g._scrX >= 1900 && g._scrY >= 700 && g._mouseIn === false, 'past the page: on the screen, outside the page');
+    // outside the page a tap is a touch of the menu there, not a click in the page
+    g.sent.length = 0;
+    g._mouseTap();
+    assert.deepStrictEqual(g.sent, [], 'no click goes to the page from outside it');
+    g._mouseHome();
+    assert.ok(g._mouseIn === true, 'back in the middle of the page');
     // the knob: down and up, one of each; a tap right after the knob is not a second click
     g.sent.length = 0;
     g._mouseButton(true); g._mouseButton(true); g._mouseTap(); g._mouseButton(false); g._mouseTap();

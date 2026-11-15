@@ -71,29 +71,75 @@ function createConfigStore(opts) {
         return '';
     }
 
+    // the settings as last written; when that file cannot be read (cut off in the middle of an older, in-place
+    // write), the copy of the write before it
     function readSettings() {
-        try {
-            var data = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-            if (!data || typeof data !== 'object') {
-                return {};
+        var files = [settingsFile, settingsFile + '.bak'];
+        var i;
+        var data;
+        for (i = 0; i < files.length; i += 1) {
+            try {
+                data = JSON.parse(fs.readFileSync(files[i], 'utf8'));
+                if (data && typeof data === 'object') {
+                    return data;
+                }
+            } catch (err) {
+                // the next one
             }
-            return data;
-        } catch (err) {
-            return {};
         }
+        return {};
     }
 
     function writeSettings(snapshot) {
         ensureDir(base);
-        var body = JSON.stringify(snapshot, null, 2);
-        if (body.indexOf('password') !== -1 || body.indexOf('secret') !== -1) {
+        var secretKey = false;
+        // No secret goes into this file: a field NAMED password or secret is refused. (The check used to look for
+        // the two words anywhere in the text, so a label or a name that contained one of them stopped every
+        // save from then on.)
+        var body = JSON.stringify(snapshot, function (key, value) {
+            if (/^(password|secret)$/i.test(key)) {
+                secretKey = true;
+            }
+            return value;
+        }, 2);
+        if (secretKey) {
             throw new Error('settings must not contain secrets');
         }
-        var fd = fs.openSync(settingsFile, 'w', 384);
+        /*
+         * Written beside the file, forced to the disk, then put in its place: the file is always a whole one, the
+         * old or the new. It used to be written in place and left to the system to flush: a car switched off, or
+         * the app ended, right after a change lost the change or left half a file, and the next start read
+         * the defaults. The file before stays as .bak.
+         */
+        var tmp = settingsFile + '.new';
+        var fd = fs.openSync(tmp, 'w', 384);
         try {
             fs.writeSync(fd, body, null, 'utf8');
+            try {
+                fs.fsyncSync(fd);
+            } catch (syncErr) {
+                // a file system that cannot: the rename still keeps the file whole
+            }
         } finally {
             fs.closeSync(fd);
+        }
+        try {
+            if (JSON.parse(fs.readFileSync(settingsFile, 'utf8'))) {
+                fs.writeFileSync(settingsFile + '.bak', fs.readFileSync(settingsFile));
+            }
+        } catch (bakErr) {
+            // no good file before this one
+        }
+        fs.renameSync(tmp, settingsFile);
+        try {
+            var dirFd = fs.openSync(base, 'r');
+            try {
+                fs.fsyncSync(dirFd);
+            } finally {
+                fs.closeSync(dirFd);
+            }
+        } catch (dirErr) {
+            // Windows, or a folder that cannot be opened: the file itself is on the disk
         }
         return { ok: true, file: settingsFile };
     }
@@ -127,6 +173,9 @@ function createConfigStore(opts) {
         settingsFile: settingsFile,
         readSettings: readSettings,
         writeSettings: writeSettings,
+        /** where the settings are kept; volatile: a folder that is gone after a restart of the head unit */
+        dir: base,
+        volatile: base === DEFAULT_DIR || base.indexOf('/tmp/') === 0,
         hasSecret: hasSecret,
         readSecret: readSecret,
         writeSecret: writeSecret,
