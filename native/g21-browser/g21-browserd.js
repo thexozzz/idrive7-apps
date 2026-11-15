@@ -676,7 +676,7 @@ Daemon.prototype.push = function (force) {
     const s = this.s;
     const start = /^data:/.test(s.url);
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? '' : s.url, title: start ? 'Strona startowa' : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
-        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring };
+        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '' };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -779,6 +779,15 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     default: break;
+    }
+    if (m.op === 'sandbox-off') {
+        // the owner's answer on the screen; only to the question this daemon asked
+        if (this.s.ask !== 'sandbox' || !this.want || this.starting) return;
+        mkdirp(this.opts.stateDir, 0o700);
+        fs.writeFileSync(path.join(this.opts.stateDir, 'sandbox'), 'off\n');
+        this.log('sandbox off: allowed by the owner on the screen');
+        await this.startEngine(null);
+        return;
     }
     if (!e) {
         if ((m.op === 'reload' || m.op === 'home' || m.op === 'nav') && this.want && !this.starting) await this.startEngine(m.op === 'nav' ? toUrl(m.url) : null);
@@ -926,10 +935,16 @@ Daemon.prototype.frameDone = function () {
     if (wait) setTimeout(ack, wait); else ack();
 };
 
-Daemon.prototype.sandboxOn = function () {
-    if (this.opts.forceSandbox) return (lines(path.join(this.opts.stateDir, 'sandbox'))[0] || '').trim() !== 'off'; // tests: the fallback below
-    if (this.opts.noSetuid && process.getuid && process.getuid() === 0) return false; // the engine refuses root without --no-sandbox
-    if ((lines(path.join(this.opts.stateDir, 'sandbox'))[0] || '').trim() === 'off') return false;
+/*
+ * The engine's sandbox is never switched off on the tool's own decision. state/sandbox = "off" is the
+ * owner's answer to the app's question (op "sandbox-off"); without it an engine that cannot have its
+ * sandbox does not start, and the state says ask: "sandbox".
+ */
+function askSandbox() { const e = new UserError('system auta nie pozwala na piaskownicę silnika'); e.ask = 'sandbox'; return e; }
+Daemon.prototype.sandboxAllowedOff = function () { return (lines(path.join(this.opts.stateDir, 'sandbox'))[0] || '').trim() === 'off'; };
+Daemon.prototype.sandboxPossible = function () {
+    if (this.opts.forceSandbox) return true; // tests: try it and see
+    if (this.opts.noSetuid && process.getuid && process.getuid() === 0) return false; // the engine refuses root with its sandbox
     const n = Number((lines('/proc/sys/user/max_user_namespaces')[0] || '').trim());
     const clone = (lines('/proc/sys/kernel/unprivileged_userns_clone')[0] || '1').trim();
     return n > 0 && clone !== '0';
@@ -940,7 +955,7 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
         '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + z,
         '--disable-gpu', '--disable-software-rasterizer', '--disable-accelerated-video-decode', '--disable-accelerated-video-encode',
-        '--mute-audio', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+        '--mute-audio', '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
         '--autoplay-policy=user-gesture-required', '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',
@@ -1000,7 +1015,7 @@ Daemon.prototype.startEngine = function (url) {
         this.starting = null;
         this.log('engine start failed: ' + e.message);
         this.killEngine();
-        this.set({ engine: 'failed', err: e.user ? e.message : 'silnik nie wystartował', loading: false, live: false });
+        this.set({ engine: 'failed', err: e.user ? e.message : 'silnik nie wystartował', ask: e.ask || '', loading: false, live: false });
     });
     return this.starting;
 };
@@ -1009,21 +1024,22 @@ Daemon.prototype.startEngine2 = async function (url) {
     if (!this.want) return;
     const dirs = await this.prepare();
     if (!this.want) return;
-    this.set({ engine: 'starting', err: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
+    this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
     await this.startProxy();
     this.startFrame();
-    let sandbox = this.sandboxOn();
+    const sandbox = !this.sandboxAllowedOff();
+    if (sandbox && !this.sandboxPossible()) { this.log('no sandbox on this system (user namespaces): the owner is asked'); throw askSandbox(); }
     let e = null;
-    for (let attempt = 0; attempt < 2 && !e; attempt++) {
+    {
         try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x) {
             // what the engine itself said (a missing library, a kernel it cannot run on): the only trace of a start that failed
             const said = this.engine ? String(this.engine.err).split('\n').filter((l) => l.trim() && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 600) : '';
             if (said) this.log('engine said: ' + said);
             this.killEngine();
-            if (!sandbox || attempt) throw x;
-            this.log('engine did not start with its sandbox (' + x.message + '): once more without');
-            try { mkdirp(o.stateDir, 0o700); fs.writeFileSync(path.join(o.stateDir, 'sandbox'), 'off\n'); } catch (x2) { /* next start tries again */ }
-            sandbox = false;
+            if (!sandbox) throw x;
+            // it may be the sandbox, it may be something else: only a start without it tells, and that is the owner's to allow
+            this.log('engine did not start with its sandbox (' + x.message + '): the owner is asked');
+            throw askSandbox();
         }
     }
     this.log('engine up: ' + e.product + (sandbox ? ', sandbox' : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
@@ -1206,7 +1222,7 @@ Daemon.prototype.stopEngine = async function (why) {
     this.pendingAck = null;
     try { fs.unlinkSync(this.opts.ring); } catch (x) { /* none */ }
     if (had) this.log('engine stopped (' + why + ')');
-    this.set({ engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false, live: false, w: 0, h: 0, ino: 0, editable: false, pct: 0 });
+    this.set({ engine: 'off', err: '', ask: '', url: '', title: '', loading: false, back: false, fwd: false, live: false, w: 0, h: 0, ino: 0, editable: false, pct: 0 });
 };
 Daemon.prototype.start = async function () {
     const o = this.opts;

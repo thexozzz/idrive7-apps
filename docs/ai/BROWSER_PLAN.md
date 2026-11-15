@@ -52,6 +52,15 @@ Dekoder: luma bit w bit jak libjpeg (porównanie z Pillow) dla 4:2:0, 4:2:2, 4:4
 - Testy na Windows: `test_airplay_audio.js` i `test_browser_tool.js` padały (brak `sh`, brak prawa do dowiązań) — teraz mówią SKIP; `node tools/test_all.js` → 0.
 - **Ustalenie (UNVERIFIED na aucie): silnik otwiera po nazwie biblioteki, których narzędzie nie niesie**, i loader szuka ich wtedy w systemie: `libresolv.so.2`, `libpci.so.3`, `libva.so.2`, `libva-drm.so.2`, `libX11-xcb.so.1`, a proces GPU (tylko z piaskownicą) także `libvulkan_intel.so` z jego `libstdc++`, `libwayland-client`, `libffi`, `libxcb-*`. W WSL (glibc 2.31 systemu obok 2.39 narzędzia) silnik mimo to działa. Na aucie do odczytu: `ls /usr/lib /lib | grep -E 'vulkan|libva|libpci|X11-xcb|wayland-client|libresolv'` oraz po otwarciu strony `grep -l -E 'vulkan_intel|libva' /proc/[0-9]*/maps`. Jeśli silnik pada przy starcie na aucie, to pierwszy trop (wiersze `engine said:` w logu).
 
+## Porównanie z pllanaio/mgu-browser (2026-11-15) — g21-browser 0.1.2, aplikacja 0.1.138
+
+Ich przeglądarka (Debian Chromium 156, własny loader i biblioteki, piaskownica setuid, obraz 1280×384) wyświetlała strony na prawdziwym ID7. Wzięte stamtąd:
+
+- **Piaskownica: decyzja właściciela (2026-11-15): pytać na ekranie.** Demon nigdy sam nie dodaje `--no-sandbox`. Stan `ask: "sandbox"` → aplikacja rysuje przycisk „Uruchom bez piaskownicy” (`web-sandbox-off`) → polecenie `sandbox-off` zapisuje `state/sandbox` = `off` i startuje silnik. Zip Google `chrome-headless-shell` nie ma `chrome-sandbox` (setuid), więc na jądrze bez przestrzeni nazw użytkownika jedyna droga to praca bez piaskownicy.
+- Flagi: `--password-store=basic`, `--use-mock-keychain`, `--disable-smooth-scrolling`.
+- `lib/librt.so.1`, `lib/libresolv.so.2` (libc6 2.39-0ubuntu8.9; pliki pakietu porównane bajt w bajt z `libc.so.6`, `libm`, `libdl`, `libpthread` i loaderem z `lib/`).
+- NIE zrobione (większa przeróbka, najpierw pomiar na aucie): mniejszy obraz albo wysyłanie tylko zmienionych wierszy (oni: z ok. 14 do 30 kl/s), RPATH w plikach zamiast `LD_LIBRARY_PATH`, zamrażanie strony w tle.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

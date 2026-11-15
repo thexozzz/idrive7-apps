@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.138
+
+- Przeglądarka nie wyłącza już sama piaskownicy silnika. Gdy system auta na nią nie pozwala (albo silnik z nią nie wstaje), ekran pokazuje „System auta nie pozwala na piaskownicę silnika” i przycisk „Uruchom bez piaskownicy”. Dopiero stuknięcie uruchamia silnik bez niej; wybór jest zapamiętany (`state/sandbox`). „Odśwież” próbuje ponownie z piaskownicą. Wcześniej narzędzie przechodziło na pracę bez piaskownicy bez pytania.
+- Narzędzie `g21-browser` 0.1.2, poprawki wzięte z porównania z projektem `pllanaio/mgu-browser` (działa na prawdziwym ID7): `--password-store=basic` i `--use-mock-keychain` (stały magazyn szyfrowania ciasteczek, żeby logowania nie znikały po ponownym uruchomieniu), `--disable-smooth-scrolling` (przewijanie pokrętłem bez dziesiątek klatek pośrednich).
+- Do bibliotek narzędzia doszły `librt.so.1` i `libresolv.so.2` z tego samego pakietu libc6 2.39-0ubuntu8.9 co reszta, żeby silnik nie sięgał po nie do bibliotek auta.
+- Na aucie nadal niesprawdzone. Sprawdzone lokalnie na prawdziwym silniku Google (WSL, jako root): cały łańcuch i nowe pytanie o piaskownicę.
+
 ## 0.1.137
 
 - Przeglądarka: naprawione pobieranie silnika. Narzędzie `g21-browser` 0.1.0 miało w `engine/manifest.json` sumę SHA-256 kopii silnika, która różniła się od pliku Google (607 bajtów w czterech miejscach), więc auto odrzuciłoby pobrany silnik z błędem „zła suma SHA-256” i przeglądarka by się nie otworzyła. `g21-browser` 0.1.1 ma manifest zrobiony z prawdziwego pliku Google (Chrome for Testing 153.0.8010.12). Sprawdzone lokalnie na tym pliku: pobranie, sumy, start z piaskownicą, dotyk, klawiatura, przewijanie, nawigacja, zoom. Na aucie nadal niesprawdzone.

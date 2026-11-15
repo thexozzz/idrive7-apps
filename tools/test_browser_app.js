@@ -65,7 +65,16 @@ assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).la
     assert.ok(n.indexOf('web-exit') !== -1 && n.indexOf('app-exit') !== -1, st.engine + ': Menu and "Wyłącz aplikację" answer');
     assert.ok(n.indexOf('web-url') === -1 && n.indexOf('web-back') === -1, st.engine + ': no address, no history yet');
     assert.strictEqual(n.indexOf('web-reload') !== -1, !!st.connected, st.engine + ': reload when there is a daemon to ask');
+    assert.strictEqual(n.indexOf('web-sandbox-off'), -1, st.engine + ': no sandbox button unless the daemon asks');
 });
+// the daemon asks about the sandbox: one button in the page area, a finger wide, below the toolbar
+(function () {
+    var b = menu.buildWebFrame(1920, 720, { connected: true, engine: 'failed', err: 'system auta nie pozwala na piaskownicę silnika', ask: 'sandbox', video: true });
+    var hit = b.layout.webHits.filter(function (h) { return h.name === 'web-sandbox-off'; });
+    assert.strictEqual(hit.length, 1, 'the owner can answer');
+    assert.ok(hit[0].y >= 84 && hit[0].h >= 56 && hit[0].w >= 200 && hit[0].y + hit[0].h <= 720 && hit[0].x >= 0 && hit[0].x + hit[0].w <= 1920, 'inside the page area');
+    assert.ok(/web\.send\(\{ op: 'sandbox-off' \}\)/.test(fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8')), 'main.js sends the answer');
+}());
 
 // ---- the keyboard's web layouts
 ['url', 'text', 'webpass'].forEach(function (mode) {

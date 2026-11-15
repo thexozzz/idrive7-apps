@@ -407,7 +407,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.137',
+        version: (this._packageJson && this._packageJson.version) || '0.1.138',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -546,7 +546,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.137') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.138') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5242,7 +5242,8 @@ AirPlayApp.prototype._paintWeb = function () {
         zoom: s.zoom,
         editable: s.editable,
         pct: s.pct,
-        ring: s.ring
+        ring: s.ring,
+        ask: s.ask
     });
 };
 
@@ -5315,6 +5316,11 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         web.send({ op: 'fwd' });
     } else if (name === 'web-reload') {
         web.send({ op: s.loading && s.engine === 'ready' ? 'stop' : 'reload' });
+    } else if (name === 'web-sandbox-off') {
+        // the owner's answer to "start without the sandbox?": the daemon takes it only while it asks
+        if (s.ask === 'sandbox') {
+            web.send({ op: 'sandbox-off' });
+        }
     } else if (name === 'web-home') {
         web.send({ op: 'home' });
     } else if (name === 'web-enter') {

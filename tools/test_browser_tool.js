@@ -396,19 +396,31 @@ async function testChain(base, eng) {
     }
     assert.deepStrictEqual(daemon.engineProcs(), []);
     if (root) {
-        // an engine that will not start with its sandbox (here: as root) gets one more start without, and the tool remembers
+        // an engine that will not start with its sandbox (here: as root) does not start without it on the tool's
+        // own decision: the state asks, and only the owner's answer ("sandbox-off") starts it and is remembered
         const d2 = new d.Daemon({ testUid: null, noSetuid: true, forceSandbox: true });
+        const sandboxFile = path.join(base, 'state', 'sandbox');
         let c2 = null;
         try {
+            assert.strictEqual(fs.existsSync(sandboxFile), false);
             await d2.start();
             for (let i = 0; i < 100 && !fs.existsSync(d2.opts.sock); i++) await sleep(20);
             c2 = client(d2.opts.sock);
             c2.send({ op: 'open', w: 1280, h: 424, zoom: 1 });
+            await c2.until('the daemon asks about the sandbox', (x) => x.engine === 'failed' && x.ask === 'sandbox', 60000);
+            assert.strictEqual(fs.existsSync(sandboxFile), false, 'nothing is switched off before the answer');
+            assert.deepStrictEqual(d2.engineProcs(), []);
+            c2.send({ op: 'reload' });
+            await c2.until('"odśwież" tries with the sandbox again', (x) => x.engine === 'starting', 20000);
+            await c2.until('and asks again', (x) => x.engine === 'failed' && x.ask === 'sandbox', 60000);
+            assert.strictEqual(fs.existsSync(sandboxFile), false);
+            c2.send({ op: 'sandbox-off' });
             const s2 = await c2.until('engine up without its sandbox', (x) => x.engine === 'ready' && x.live, 60000);
             assert.deepStrictEqual([s2.w, s2.h], [1280, 424]);
-            assert.strictEqual(fs.readFileSync(path.join(base, 'state', 'sandbox'), 'utf8').trim(), 'off');
-            assert.ok(/did not start with its sandbox/.test(fs.readFileSync(logFile, 'utf8')));
-            console.log('ok sandbox: when the engine cannot start with it, one more start without, remembered in state/sandbox');
+            assert.strictEqual(s2.ask, '');
+            assert.strictEqual(fs.readFileSync(sandboxFile, 'utf8').trim(), 'off');
+            assert.ok(/sandbox off: allowed by the owner/.test(fs.readFileSync(logFile, 'utf8')));
+            console.log('ok sandbox: an engine that cannot start with it asks the owner; only "sandbox-off" starts it without, remembered in state/sandbox');
         } finally {
             if (c2) c2.close();
             await d2.close();

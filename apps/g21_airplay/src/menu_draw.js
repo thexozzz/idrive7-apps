@@ -3115,6 +3115,10 @@ function webStatus(web) {
     if (!web.connected) {
         return { title: 'Brak narzędzia Przeglądarka', hint: 'zainstaluj je w MGU Store', busy: false };
     }
+    if (web.engine === 'failed' && web.ask === 'sandbox') {
+        // the daemon never drops the engine's sandbox by itself: the owner decides, once
+        return { title: 'System auta nie pozwala na piaskownicę silnika', hint: 'bez niej stronę chroni tylko osobny użytkownik i proxy', busy: false, ask: 'sandbox' };
+    }
     if (web.engine === 'failed') {
         return { title: web.err || 'silnik nie wystartował', hint: 'dotknij odśwież, aby spróbować ponownie', busy: false };
     }
@@ -3187,6 +3191,13 @@ function buildWebFrame(width, height, web) {
         if (st.hint) {
             hw = draw.textWidth(tr(st.hint), 3);
             draw.text(tr(st.hint), Math.floor((width - hw) / 2), midY + (st.busy ? 76 : 20), 3, MUTED);
+        }
+        if (st.ask === 'sandbox') {
+            tw = draw.textWidth(tr('Uruchom bez piaskownicy'), 3);
+            c = { name: 'web-sandbox-off', x: Math.floor((width - tw) / 2) - 36, y: midY + 76, w: tw + 72, h: 64 };
+            draw.round(c.x, c.y, c.w, c.h, 18, RED_CARD);
+            draw.text(tr('Uruchom bez piaskownicy'), c.x + 36, c.y + 22, 3, INK);
+            hits.push(c);
         }
     }
 
@@ -3581,7 +3592,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -5020,7 +5031,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }

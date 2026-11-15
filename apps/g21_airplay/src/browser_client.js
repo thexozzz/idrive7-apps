@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: ''
+        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: ''
     };
 }
 
@@ -87,7 +87,9 @@ function createBrowserClient(opts) {
                 zoom: Number(m.zoom) || 1.5,
                 editable: !!m.editable,
                 pct: m.pct | 0,
-                ring: String(m.ring || '')
+                ring: String(m.ring || ''),
+                // what the daemon needs the owner to decide ("sandbox"), or ''
+                ask: String(m.ask || '')
             };
             tell();
         } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {

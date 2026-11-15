@@ -1,7 +1,7 @@
 {
   "id": "g21-browser",
   "kind": "tool",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "GPL-3.0-or-later",
   "title": "Przeglądarka",
   "description": "Silnik przeglądarki dla THEiPlay: Google chrome-headless-shell z własnymi bibliotekami, obraz strony prosto do warstwy wideo. Sterowanie przez /run/g21-browser/ctl.sock.",
@@ -85,6 +85,8 @@
     { "path": "lib/libplc4.so", "mode": "0755" },
     { "path": "lib/libplds4.so", "mode": "0755" },
     { "path": "lib/libpthread.so.0", "mode": "0755" },
+    { "path": "lib/libresolv.so.2", "mode": "0755" },
+    { "path": "lib/librt.so.1", "mode": "0755" },
     { "path": "lib/libselinux.so.1", "mode": "0755" },
     { "path": "lib/libsoftokn3.so", "mode": "0755" },
     { "path": "lib/libsqlite3.so.0", "mode": "0755" },

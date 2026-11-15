@@ -62,6 +62,8 @@ lib/libpcre2-8.so.0  libpcre2-8-0  10.42-4ubuntu2.2
 lib/libplc4.so  libnspr4  2:4.35-1.1build1
 lib/libplds4.so  libnspr4  2:4.35-1.1build1
 lib/libpthread.so.0  libc6  2.39-0ubuntu8.9
+lib/libresolv.so.2  libc6  2.39-0ubuntu8.9
+lib/librt.so.1  libc6  2.39-0ubuntu8.9
 lib/libselinux.so.1  libselinux1  3.5-2ubuntu2.1
 lib/libsoftokn3.so  libnss3  2:3.98-1ubuntu0.3
 lib/libsqlite3.so.0  libsqlite3-0  3.45.1-1ubuntu2.9
