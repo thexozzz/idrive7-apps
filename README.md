@@ -4,6 +4,12 @@ Testowa aplikacja do Sklepu THEiPlay (BMW iDrive 7 / MGU). To zwykła strona WWW
 sprawdza dotyk i mysz z gładzika, przewijanie, dźwięk (Web Audio), klawiaturę, rozmiar okna i pełny ekran, czyta
 dane auta (prędkość, przeglądarka wszystkich sygnałów do odczytu) i opisuje, co aplikacja w THEiPlay może.
 
+## Skąd liczniki
+
+`signals.json` to katalog sygnałów, które auto samo wysyła do jednostki (SOME/IP), z przeliczeniami — wzięty z aplikacji
+Live Data z `cauliflowermossgrape/idrive7-apps` (licencja MIT, Copyright (c) 2026 cauliflowermossgrape) skryptem
+`tools/gen_hello_signals.js`. Na G21 odpowiada 47 z 60 wartości (2026-11-15).
+
 ## Import
 
 THEiPlay > Aplikacje > Sklep > „Importuj z git” i adres repozytorium: `wlasciciel/nazwa` albo `wlasciciel/nazwa@galaz`

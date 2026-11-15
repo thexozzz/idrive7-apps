@@ -1,0 +1,785 @@
+{
+ "source": "cauliflowermossgrape/idrive7-apps, apps/live_data/signals.js (MIT License, Copyright (c) 2026 cauliflowermossgrape)",
+ "note": "value = raw * k + o, shown in u with d decimals; bad / max / lim: raw values that mean \"no data\"; e: enum texts; raw: scaling not known; q: scaling is a best guess",
+ "groups": [
+  {
+   "group": "Silnik",
+   "items": [
+    {
+     "id": "rpm",
+     "name": "Engine speed",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusEngineSpeed2",
+     "m": "actualValueRPMEngineCrankshaft",
+     "k": 0.25,
+     "d": 0,
+     "u": "rpm",
+     "bad": [
+      65535
+     ]
+    },
+    {
+     "id": "torque",
+     "name": "Engine torque",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusActualValueTorque2",
+     "m": "actualValueTorqueCrankshaft",
+     "k": 0.5,
+     "o": -1023.5,
+     "d": 0,
+     "u": "Nm",
+     "max": 4095
+    },
+    {
+     "id": "powerPct",
+     "name": "Power, % of maximum (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusVehicleDynamicEngine",
+     "m": "displaySportEnginePower",
+     "d": 0,
+     "u": "%",
+     "bad": [
+      255
+     ]
+    },
+    {
+     "id": "torquePct",
+     "name": "Torque, % of maximum (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusVehicleDynamicEngine",
+     "m": "displaySportEngineTorque",
+     "d": 0,
+     "u": "%",
+     "bad": [
+      255
+     ]
+    },
+    {
+     "id": "powerMax",
+     "name": "Maximum power (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusVehicleDynamicEngineMaxValue",
+     "m": "displayMaximumValuePower",
+     "bad": [
+      65535
+     ],
+     "raw": true
+    },
+    {
+     "id": "torqueMax",
+     "name": "Maximum torque (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusVehicleDynamicEngineMaxValue",
+     "m": "displayMaximumValueTorque",
+     "bad": [
+      65535
+     ],
+     "raw": true
+    },
+    {
+     "id": "boost",
+     "name": "Boost (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusSwitchDriveDynamicSport2",
+     "m": "displayBoostPressure",
+     "k": 0.01,
+     "d": 2,
+     "u": "bar",
+     "bad": [
+      255
+     ],
+     "q": true
+    },
+    {
+     "id": "boostMax",
+     "name": "Boost peak (sport display)",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusSwitchDriveDynamicSport2",
+     "m": "displayMaximumValueBoostPressure",
+     "k": 0.01,
+     "d": 2,
+     "u": "bar",
+     "bad": [
+      255
+     ],
+     "q": true
+    },
+    {
+     "id": "pedal",
+     "name": "Accelerator pedal",
+     "i": "de.bmw.powertrain.AcceleratorPedal",
+     "f": "AngleAcceleratorPedal",
+     "m": "actualValueAngleAcceleratorPedal",
+     "k": 0.025,
+     "d": 0,
+     "u": "%",
+     "lim": [
+      -2,
+      102
+     ],
+     "q": true
+    },
+    {
+     "id": "coolant",
+     "name": "Coolant",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusEngineTemperature",
+     "m": "temperatureEngineDrive",
+     "o": -48,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      255
+     ]
+    },
+    {
+     "id": "oil",
+     "name": "Engine oil",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusEngineTemperature",
+     "m": "temperatureEngineOilDrive",
+     "o": -48,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      255
+     ]
+    },
+    {
+     "id": "oil2",
+     "name": "Engine oil (fuel signal)",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusInjectionVolume",
+     "m": "oilTemperature",
+     "o": -48,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      255
+     ],
+     "q": true
+    },
+    {
+     "id": "running",
+     "name": "Engine",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusEngineStatus",
+     "m": "statusEngineRunDrive",
+     "e": {
+      "0": "off",
+      "1": "starting",
+      "2": "running",
+      "3": null,
+      "MOTOR_AUS": "off",
+      "MOTOR_STARTET": "starting",
+      "MOTOR_LAEUFT": "running"
+     }
+    },
+    {
+     "id": "msa",
+     "name": "Auto start-stop",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusPushButtonMSA2",
+     "m": "statusFunctionMSA",
+     "e": {
+      "0": "off",
+      "1": "on",
+      "3": null,
+      "MSA_AKTIVIERT": "on",
+      "MSA_DEAKTIVIERT": "off"
+     }
+    }
+   ]
+  },
+  {
+   "group": "Paliwo i podróż",
+   "items": [
+    {
+     "id": "tank",
+     "name": "Fuel in the tank",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusRangeTankStatus",
+     "m": "fluidLevelFuelTank",
+     "d": 0,
+     "u": "l",
+     "max": 255
+    },
+    {
+     "id": "tankL",
+     "name": "Fuel tank, left half",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusRangeTankStatus",
+     "m": "fluidLevelFuelTankLeftHand",
+     "d": 0,
+     "u": "l",
+     "max": 255,
+     "q": true
+    },
+    {
+     "id": "tankR",
+     "name": "Fuel tank, right half",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusRangeTankStatus",
+     "m": "fluidLevelFuelTankRightHand",
+     "d": 0,
+     "u": "l",
+     "max": 255,
+     "q": true
+    },
+    {
+     "id": "range",
+     "name": "Range",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusRangeTankStatus",
+     "m": "range",
+     "d": 0,
+     "u": "km",
+     "max": 4095
+    },
+    {
+     "id": "odo",
+     "name": "Odometer",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusRangeTankStatus",
+     "m": "mileageKilometre",
+     "d": 0,
+     "u": "km",
+     "max": 16777215
+    },
+    {
+     "id": "fuelRaw",
+     "name": "Fuel injection signal (raw)",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusInjectionVolume",
+     "m": "injectionVolumeFuelEngine",
+     "raw": true
+    },
+    {
+     "id": "avgCons1",
+     "name": "Average consumption, trip 1",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusBordcomputerAverage",
+     "m": "consumptionAverage1BC1",
+     "k": 0.1,
+     "d": 1,
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "avgSpeed1",
+     "name": "Average speed, trip 1",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusBordcomputerAverage",
+     "m": "speedAverage1BC1",
+     "k": 0.1,
+     "d": 1,
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "avgCons2",
+     "name": "Average consumption, trip 2",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusBordcomputerAverage",
+     "m": "consumptionAverage2BC2",
+     "k": 0.1,
+     "d": 1,
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "avgSpeed2",
+     "name": "Average speed, trip 2",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusBordcomputerAverage",
+     "m": "speedAverage2BC2",
+     "k": 0.1,
+     "d": 1,
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "tripDist",
+     "name": "Distance driven",
+     "i": "de.bmw.infotainment.KombiIF",
+     "f": "statusBordcomputerTravelData",
+     "m": "wayPassed",
+     "d": 0,
+     "u": "km",
+     "bad": [
+      65535
+     ],
+     "q": true
+    }
+   ]
+  },
+  {
+   "group": "Jazda",
+   "items": [
+    {
+     "id": "speed",
+     "name": "Speed",
+     "i": "de.bmw.infotainment.vehicle.Vehicle2",
+     "f": "statusCarSpeed2",
+     "m": "speedVehicleCentreOfGravity",
+     "k": 0.015625,
+     "d": 0,
+     "u": "km/h",
+     "bad": [
+      65535
+     ]
+    },
+    {
+     "id": "mode",
+     "name": "Driving mode",
+     "i": "de.bmw.infotainment.drivingexcitement.FES",
+     "f": "statusFESVehicleDynamicSwitchHMI",
+     "m": "actualValueModeDrivingExperience",
+     "e": {
+      "0": null,
+      "1": "Sport",
+      "2": "Sport plus",
+      "3": "Sport individual",
+      "4": "Comfort",
+      "5": "Comfort plus",
+      "6": "Comfort individual",
+      "7": "Eco pro",
+      "8": "Eco pro plus",
+      "9": "Eco pro individual",
+      "10": "Adaptive",
+      "61": null,
+      "62": null,
+      "63": null,
+      "SPORT_DYNAMIC": "Sport",
+      "SPORT_EXPERT": "Sport plus",
+      "ECO_PRO_EFFICIENT": "Eco pro"
+     }
+    },
+    {
+     "id": "gLong",
+     "name": "Acceleration, forward",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusLongitudinalAccelerationMassCenter",
+     "m": "longitudinalAccelerationCentreOfGravity",
+     "k": 0.00020394324259558568,
+     "o": -6.628155384356534,
+     "d": 2,
+     "u": "g",
+     "bad": [
+      65535
+     ]
+    },
+    {
+     "id": "gLat",
+     "name": "Acceleration, sideways",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusLateralAccelerationMassCenter",
+     "m": "lateralAccelerationCentreOfGravity",
+     "k": 0.00020394324259558568,
+     "o": -6.628155384356534,
+     "d": 2,
+     "u": "g",
+     "bad": [
+      65535
+     ]
+    },
+    {
+     "id": "yaw",
+     "name": "Yaw rate",
+     "i": "de.bmw.infotainment.vehicle.CDS2",
+     "f": "statusYawVelocityVehicle",
+     "m": "yawVelocityVehicle",
+     "k": 0.005,
+     "o": -163.84,
+     "d": 1,
+     "u": "°/s",
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "roll",
+     "name": "Roll rate",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "datenFahrdynamiksensorErweitert",
+     "m": "wankgeschwindigkeitSchwerpunkt",
+     "k": 0.005,
+     "o": -163.84,
+     "d": 1,
+     "u": "°/s",
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "pitch",
+     "name": "Pitch rate",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "datenFahrdynamiksensorErweitert",
+     "m": "nickgeschwindigkeitSchwerpunkt",
+     "k": 0.005,
+     "o": -163.84,
+     "d": 1,
+     "u": "°/s",
+     "bad": [
+      65535
+     ],
+     "q": true
+    },
+    {
+     "id": "steer",
+     "name": "Steering wheel angle",
+     "i": "de.bmw.chassis.SteeringAngle",
+     "f": "ActualSteeringAngleDriver",
+     "m": "actualValueSteeringAngleDriver",
+     "k": 0.04395,
+     "d": 0,
+     "u": "°",
+     "lim": [
+      -900,
+      900
+     ],
+     "s16": true,
+     "q": true
+    },
+    {
+     "id": "handbrake",
+     "name": "Parking brake",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusHandBrake",
+     "m": "statusContactHandBrake",
+     "e": {
+      "0": null,
+      "1": "released",
+      "2": "applied",
+      "3": null,
+      "HANDBREMSE_ANGEZOGEN": "applied",
+      "HANDBREMSE_GELOEST": "released",
+      "NICHT_CODIERT": null
+     }
+    },
+    {
+     "id": "outside",
+     "name": "Outside temperature",
+     "i": "de.bmw.infrastructure.EnvironmentalInformation",
+     "f": "ExteriorTemperature",
+     "m": "temperatureExterior",
+     "k": 0.5,
+     "o": -40,
+     "d": 1,
+     "u": "°C",
+     "bad": [
+      255
+     ]
+    },
+    {
+     "id": "battery",
+     "name": "12 V battery charge",
+     "i": "de.bmw.infotainment.vehicle.CDS",
+     "f": "statusBattery2",
+     "m": "conditionBatteryChargingCondition",
+     "d": 0,
+     "u": "%",
+     "max": 151
+    },
+    {
+     "id": "oilLevel",
+     "name": "Engine oil level",
+     "i": "de.bmw.infotainment.vehicle.Vehicle2",
+     "f": "statusOilDipstick2",
+     "m": "fluidLevelEngineOilRelative",
+     "e": {
+      "0": "below minimum",
+      "1": "at minimum",
+      "2": "1/4",
+      "3": "2/4",
+      "4": "3/4",
+      "5": "full",
+      "6": "above full",
+      "7": "overfilled",
+      "13": "OK",
+      "14": "measuring",
+      "15": null,
+      "MOTOROELSTAND_UNTER_MINIMUM": "below minimum",
+      "MOTOROELSTAND_AM_MINIMUM": "at minimum",
+      "MOTOROELSTAND_1_4": "1/4",
+      "MOTOROELSTAND_2_4": "2/4",
+      "MOTOROELSTAND_3_4": "3/4",
+      "MOTOROELSTAND_4_4": "full",
+      "MOTOROELSTAND_5_4": "above full",
+      "MOTOROELSTAND_UEBERFUELLT": "overfilled",
+      "MOTOROELSTAND_OK": "OK",
+      "SERVICEFUNKTION_AKTIV": "measuring"
+     }
+    }
+   ]
+  },
+  {
+   "group": "Opony",
+   "items": [
+    {
+     "id": "pFL",
+     "name": "Tyre pressure, front left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyrePressure",
+     "m": "actualValuePressureTyreFLH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "pFR",
+     "name": "Tyre pressure, front right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyrePressure",
+     "m": "actualValuePressureTyreFRH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "pRL",
+     "name": "Tyre pressure, rear left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyrePressure",
+     "m": "actualValuePressureTyreRLH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "pRR",
+     "name": "Tyre pressure, rear right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyrePressure",
+     "m": "actualValuePressureTyreRRH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "tFL",
+     "name": "Tyre temperature, front left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyreTemperature",
+     "m": "actualValueTemperatureTyreFLH",
+     "o": -40,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      65535
+     ],
+     "lim": [
+      -40,
+      150
+     ]
+    },
+    {
+     "id": "tFR",
+     "name": "Tyre temperature, front right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyreTemperature",
+     "m": "actualValueTemperatureTyreFRH",
+     "o": -40,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      65535
+     ],
+     "lim": [
+      -40,
+      150
+     ]
+    },
+    {
+     "id": "tRL",
+     "name": "Tyre temperature, rear left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyreTemperature",
+     "m": "actualValueTemperatureTyreRLH",
+     "o": -40,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      65535
+     ],
+     "lim": [
+      -40,
+      150
+     ]
+    },
+    {
+     "id": "tRR",
+     "name": "Tyre temperature, rear right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTyreTemperature",
+     "m": "actualValueTemperatureTyreRRH",
+     "o": -40,
+     "d": 0,
+     "u": "°C",
+     "bad": [
+      65535
+     ],
+     "lim": [
+      -40,
+      150
+     ]
+    },
+    {
+     "id": "ptFL",
+     "name": "Tyre pressure target, front left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTargetTyrePressure",
+     "m": "targetPressureTyreFLH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "ptFR",
+     "name": "Tyre pressure target, front right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTargetTyrePressure",
+     "m": "targetPressureTyreFRH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "ptRL",
+     "name": "Tyre pressure target, rear left",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTargetTyrePressure",
+     "m": "targetPressureTyreRLH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    },
+    {
+     "id": "ptRR",
+     "name": "Tyre pressure target, rear right",
+     "i": "de.bmw.infotainment.vehicle.TPMS",
+     "f": "statusTargetTyrePressure",
+     "m": "targetPressureTyreRRH",
+     "k": 0.1,
+     "d": 1,
+     "u": "bar",
+     "max": 65532
+    }
+   ]
+  },
+  {
+   "group": "Podwozie (surowe liczby)",
+   "items": [
+    {
+     "id": "wFL",
+     "name": "Wheel speed, front left",
+     "i": "de.bmw.powertrain.Powertrain",
+     "f": "ActualValueRPMWheel",
+     "m": "actualValueRPMWheelFLH",
+     "raw": true
+    },
+    {
+     "id": "wFR",
+     "name": "Wheel speed, front right",
+     "i": "de.bmw.powertrain.Powertrain",
+     "f": "ActualValueRPMWheel",
+     "m": "actualValueRPMwheelFRH",
+     "raw": true
+    },
+    {
+     "id": "wRL",
+     "name": "Wheel speed, rear left",
+     "i": "de.bmw.powertrain.Powertrain",
+     "f": "ActualValueRPMWheel",
+     "m": "actualValueRPMWheelRLH",
+     "raw": true
+    },
+    {
+     "id": "wRR",
+     "name": "Wheel speed, rear right",
+     "i": "de.bmw.powertrain.Powertrain",
+     "f": "ActualValueRPMWheel",
+     "m": "actualValueRPMWheelRRH",
+     "raw": true
+    },
+    {
+     "id": "slope",
+     "name": "Road gradient, along",
+     "i": "de.bmw.chassis.VehicleModel",
+     "f": "LaneSlope",
+     "m": "actualValueLongitudinalGradientRoadway",
+     "raw": true
+    },
+    {
+     "id": "slopeSide",
+     "name": "Road gradient, across",
+     "i": "de.bmw.chassis.VehicleModel",
+     "f": "LaneSlope",
+     "m": "actualValueTransverseGradientRoadway",
+     "raw": true
+    },
+    {
+     "id": "mass",
+     "name": "Vehicle mass",
+     "i": "de.bmw.infotainment.vehicle.Vehicle2",
+     "f": "statusVehicleMass",
+     "m": "massVehicle",
+     "raw": true
+    },
+    {
+     "id": "abs",
+     "name": "ABS status",
+     "i": "de.bmw.chassis.VehicleStabilizationManagement",
+     "f": "StabilizationManagement",
+     "m": "qualifierFunctionABS",
+     "raw": true,
+     "x": true
+    },
+    {
+     "id": "asc",
+     "name": "Traction control (ASC) status",
+     "i": "de.bmw.chassis.VehicleStabilizationManagement",
+     "f": "StabilizationManagement",
+     "m": "qualifierFunctionASC",
+     "raw": true,
+     "x": true
+    },
+    {
+     "id": "dsc",
+     "name": "Stability control (DSC) status",
+     "i": "de.bmw.chassis.VehicleStabilizationManagement",
+     "f": "StabilizationManagement",
+     "m": "qualifierFunctionFDR",
+     "raw": true,
+     "x": true
+    },
+    {
+     "id": "braking",
+     "name": "Driver braking",
+     "i": "de.bmw.chassis.VehicleStabilizationManagement",
+     "f": "StabilizationManagement",
+     "m": "statusBrakingDriver",
+     "raw": true
+    }
+   ]
+  }
+ ]
+}
