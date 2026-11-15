@@ -17,9 +17,9 @@ assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['m
 assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['Multimedia', 'Aplikacje', 'Ustawienia']);
 assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
 assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-store', 'apps-settings', 'apps-back']);
-assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'system-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'air-quality', 'system-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-soon', 'store-back']);
-assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-picture', 'aset-sandbox', 'aset-memory', 'aset-back']);
+assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-back']);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
 // tiles: large, side by side, in one row; a list page stays rows one under another
 [menu.ROOT_ITEMS, menu.MEDIA_ITEMS, menu.APPS_ITEMS].forEach(function (list) {
@@ -92,15 +92,15 @@ assert.ok(scrolled.layout.bubbles[0].y >= scrolled.layout.oy);
 
 var air = menu.buildFrame(menu.AIRPLAY_ITEMS, 0, 1920, 720, 'AirPlay start', 'AirPlay');
 assert.ok(air.rects > 40);
-assert.strictEqual(menu.AIRPLAY_ITEMS.length, 7);
+assert.strictEqual(menu.AIRPLAY_ITEMS.length, 6);
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].name, 'air-toggle');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].title, 'Start');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].icon, 'play');
 assert.strictEqual(menu.AIRPLAY_ITEMS[0].hint, 'włącz lustro');
 assert.strictEqual(menu.AIRPLAY_ITEMS[1].name, 'air-screen');
-assert.strictEqual(menu.AIRPLAY_ITEMS[2].name, 'air-quality');
-assert.strictEqual(menu.AIRPLAY_ITEMS[5].name, 'air-sound');
-assert.strictEqual(menu.AIRPLAY_ITEMS[6].name, 'air-back');
+assert.ok(!menu.AIRPLAY_ITEMS.some(function (i) { return i.name === 'air-quality'; }), 'the resolution lives in the main Ustawienia only');
+assert.strictEqual(menu.AIRPLAY_ITEMS[4].name, 'air-sound');
+assert.strictEqual(menu.AIRPLAY_ITEMS[5].name, 'air-back');
 assert.strictEqual(menu.AIR_OUT_ITEMS[0].title, 'Środek');
 assert.ok(!menu.AIR_OUT_ITEMS.some(function (item) { return item.name === 'air-out-start'; }));
 assert.ok(menu.AIRPLAY_ITEMS.every(function (item) {

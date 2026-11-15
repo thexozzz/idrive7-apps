@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null
+        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false
     };
 }
 
@@ -91,7 +91,10 @@ function createBrowserClient(opts) {
                 // what the daemon needs the owner to decide ("sandbox"), or ''
                 ask: String(m.ask || ''),
                 // the daemon's rules that the menu shows and sets (g21-browser's policy)
-                pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0 } : null
+                pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0,
+                    homepage: String(m.pol.homepage || ''), autoplay: String(m.pol.autoplay || ''), fullscreen: String(m.pol.fullscreen || ''), audio: String(m.pol.audio || ''), sound: String(m.pol.sound || '') } : null,
+                // a player of the page is in full screen and the picture is the whole centre screen
+                fs: !!m.fs
             };
             tell();
         } else if (m.ev === 'apps' && typeof options.onApps === 'function') {
@@ -104,6 +107,19 @@ function createBrowserClient(opts) {
         } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {
             options.onEdit({ kind: String(m.kind || 'text'), value: String(m.value || ''), submit: !!m.submit, multi: !!m.multi });
         }
+    }
+
+    // the page area, the whole screen (for full screen) and, for an app from Sklep, which
+    function openMsg() {
+        var o = { op: 'open', w: want.w, h: want.h };
+        if (want.fw && want.fh) {
+            o.fw = want.fw;
+            o.fh = want.fh;
+        }
+        if (want.app) {
+            o.app = want.app;
+        }
+        return o;
     }
 
     function connect() {
@@ -125,7 +141,7 @@ function createBrowserClient(opts) {
             failNoted = false;
             note('web-up');
             if (want.w) {
-                send(want.app ? { op: 'open', w: want.w, h: want.h, app: want.app } : { op: 'open', w: want.w, h: want.h });
+                send(openMsg());
             }
             send({ op: 'apps' });
         });
@@ -192,10 +208,10 @@ function createBrowserClient(opts) {
 
     return {
         /** show the browser in a page area of w x h screen pixels */
-        open: function (w, h, app) {
-            want = { w: w | 0, h: h | 0, app: app ? String(app) : '' };
+        open: function (w, h, app, fw, fh) {
+            want = { w: w | 0, h: h | 0, app: app ? String(app) : '', fw: fw | 0, fh: fh | 0 };
             if (up) {
-                send(want.app ? { op: 'open', w: want.w, h: want.h, app: want.app } : { op: 'open', w: want.w, h: want.h });
+                send(openMsg());
             } else {
                 connect();
             }

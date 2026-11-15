@@ -757,6 +757,11 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *                         gbm_bo_get_fd_for_plane, which the car's libgbm (Mesa 19.0.6) does not have, so it cannot
  *                         load the car's graphics libraries as they are (docs/ai/BROWSER_PLAN.md).
  *   picture   1 | 0.75 | 0.5   share of the screen's pixels the page is rendered at (default 0.75)
+ *   homepage  ""          the built-in start page (default); or an address: what "home" and a new opening show
+ *   autoplay  "allow"     films and sound may start by themselves (default)
+ *             "gesture"   only after a touch or a click on the page
+ *   fullscreen "screen"   a player that goes full screen gets the whole centre screen, the toolbar hidden (default)
+ *             "page"      it fills the page area under the toolbar
  *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
  *                         the car's speakers while a page plays and gives them back after (default)
  *             "off"       pages are silent
@@ -765,7 +770,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -773,13 +778,16 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
         pick('gpu', (v) => v === 'off');
         pick('picture', (v) => [1, 0.75, 0.5].indexOf(v) >= 0);
         pick('audio', (v) => v === 'on' || v === 'off');
+        pick('homepage', (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)));
+        pick('autoplay', (v) => v === 'allow' || v === 'gesture');
+        pick('fullscreen', (v) => v === 'screen' || v === 'page');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -842,7 +850,8 @@ Daemon.prototype.push = function (force) {
     const start = /^data:/.test(s.url);
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? '' : s.url, title: start ? 'Strona startowa' : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
-        pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none' } };
+        pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen }, fs: !!this.fs };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -867,7 +876,7 @@ Daemon.prototype.remember = function (url, title) {
     rec.unshift({ url: clean, title: String(title || '').slice(0, 80) });
     try { mkdirp(this.opts.stateDir, 0o700); writeIfChanged(file, JSON.stringify(rec.slice(0, 12)) + '\n', 0o600); } catch (e) { this.log('recent: ' + e.message); }
 };
-Daemon.prototype.home = function () { return startPage(readJson(path.join(this.opts.stateDir, 'recent.json'))); };
+Daemon.prototype.home = function () { return this.policy().homepage || startPage(readJson(path.join(this.opts.stateDir, 'recent.json'))); };
 
 // ---- control socket
 Daemon.prototype.listen = function () {
@@ -929,7 +938,9 @@ Daemon.prototype.onCommand = async function (m) {
         const z = ZOOMS.indexOf(Number(m.zoom)) >= 0 ? Number(m.zoom) : (ZOOMS.indexOf(Number(this.settings().zoom)) >= 0 ? Number(this.settings().zoom) : 1.5);
         clearTimeout(this.idleTimer);
         if (this.engine && this.want && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
-        this.want = { w: w, h: h };
+        // fw x fh: the whole centre screen, for a player that goes full screen
+        const fw = Math.max(0, Math.min(3840, Number(m.fw) | 0)) & ~3, fh = Math.max(0, Math.min(2160, Number(m.fh) | 0)) & ~1;
+        this.want = { w: w, h: h, fw: fw >= w && fh >= h ? fw : 0, fh: fw >= w && fh >= h ? fh : 0 };
         this.zoom = z;
         // an app from Sklep: its first page instead of the start page
         const appUrl = m.app ? await this.appUrl(String(m.app)) : null;
@@ -959,12 +970,15 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'policy') {
         // A rule set from THEiPlay's menu (Aplikacje > Ustawienia). Only these three, and never "sandbox": "off" or a
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
-        const ok = { audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
+        // (an address for the start page: what the owner typed, made an address as the address bar does)
+        if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page',
+            audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture(), audioWas = this.policy().audio;
+        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay;
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -974,7 +988,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
@@ -1005,7 +1019,8 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     const send = (method, params) => e.cdp.send(method, params, e.session);
-    const z = this.zoom;
+    // (in full screen the picture is the whole screen at its own scale, not the zoom's)
+    const z = this.fs ? this.fs.scale : this.zoom;
     switch (m.op) {
     case 'nav': {
         const url = toUrl(m.url);
@@ -1277,6 +1292,32 @@ Daemon.prototype.closeAudio = function () {
     this.audio = null;
     if (a) { try { a.conn.end(JSON.stringify({ op: 'close' }) + '\n'); } catch (e) { /* gone */ } }
 };
+/*
+ * Full screen. A player that goes full screen fills the engine's window; with policy "fullscreen": "screen" the
+ * window then becomes the whole centre screen in its own shape (fw x fh, rendered at two thirds: 1280 x 480 for
+ * 1920 x 720), so a film keeps its proportions, and the app draws it over the whole screen with the toolbar
+ * hidden. Back out of full screen the window is the page area again.
+ */
+Daemon.prototype.applyFs = async function (e, on) {
+    const w = this.want;
+    const whole = on && w && w.fw > 0 && this.policy().fullscreen === 'screen';
+    if (whole === !!this.fs) return;
+    const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
+    if (whole) {
+        const cw = Math.round(w.fw * 2 / 3) & ~3, ch = Math.round(w.fh * 2 / 3) & ~1;
+        await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: false, screenWidth: cw, screenHeight: ch });
+        this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
+        this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');
+        this.set({ w: w.fw, h: w.fh });
+    } else {
+        const css = pageCss(w.w, w.h, this.zoom, this.picture());
+        this.fs = null;
+        await send({ width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: false, screenWidth: css.w, screenHeight: css.h });
+        this.log('full screen left: the page area again');
+        this.set({ w: css.dw, h: css.dh });
+    }
+    this.push(true);
+};
 Daemon.prototype.startFrame = function () {
     if (this.frame) return;
     let colour = (lines(path.join(this.opts.stateDir, 'color'))[0] || '').trim();
@@ -1293,7 +1334,7 @@ Daemon.prototype.startFrame = function () {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
-            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null; this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
+            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.fs ? { dw: this.fs.w, dh: this.fs.h } : (this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null); this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
             else if (l[0] === 'f') { if (!this.s.live) this.set({ live: true }); this.frameDone(); }
             else if (l[0] === 'e') {
                 const what = l.slice(1).join(' ');
@@ -1404,7 +1445,7 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
         // device; with --disable-audio-output the engine keeps a film's clock on a sink of its own.
         '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
-        '--autoplay-policy=user-gesture-required', '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
+        '--autoplay-policy=' + (this.policy && this.policy().autoplay === 'gesture' ? 'user-gesture-required' : 'no-user-gesture-required'), '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + dirs.major + '.0.0.0 Safari/537.36',
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
         '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--js-flags=--max-old-space-size=512'
@@ -1576,6 +1617,11 @@ Daemon.prototype.refresh = async function (e) {
     if (this.engine !== e) return;
     const cur = hst.entries[hst.currentIndex] || {};
     this.set({ url: cur.url || this.s.url, title: String(cur.title || '').slice(0, 120), back: hst.currentIndex > 0, fwd: hst.currentIndex < hst.entries.length - 1 });
+    // is something of the page in full screen? (a player's own button, or the page's script)
+    try {
+        const r = await e.cdp.send('Runtime.evaluate', { expression: '!!document.fullscreenElement', returnByValue: true }, e.session);
+        if (this.engine === e) await this.applyFs(e, !!(r && r.result && r.result.value === true));
+    } catch (x) { /* the page is on its way somewhere else */ }
     if (!this.s.loading) this.remember(cur.url || '', cur.title || '');
 };
 Daemon.prototype.onEvent = function (e, m) {
@@ -1635,6 +1681,7 @@ Daemon.prototype.onEngineExit = function (e, code, sig) {
 Daemon.prototype.killEngine = function () {
     const e = this.engine;
     this.engine = null;
+    this.fs = null;
     this.closeAudio();
     clearInterval(this.memTimer);
     clearInterval(this.pollTimer);
@@ -1676,6 +1723,7 @@ Daemon.prototype.stopEngine = async function (why) {
     if (this.starting) { try { await this.starting; } catch (e) { /* logged */ } }
     const had = !!this.engine;
     const e = this.engine;
+    this.fs = null;
     this.closeAudio();
     if (e) {
         this.engine = null;

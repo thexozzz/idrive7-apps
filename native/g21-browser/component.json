@@ -1,7 +1,7 @@
 {
   "id": "g21-browser",
   "kind": "tool",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "license": "GPL-3.0-or-later",
   "title": "Przeglądarka",
   "description": "Silnik przeglądarki dla THEiPlay: Google chrome-headless-shell z własnymi bibliotekami, obraz strony prosto do warstwy wideo. Sterowanie przez /run/g21-browser/ctl.sock.",

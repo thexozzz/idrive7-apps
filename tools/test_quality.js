@@ -108,8 +108,9 @@ assert.strictEqual(fit.fitsProfile(400, 600, 600, 400), true);
 assert.strictEqual(fit.fitsProfile(1280, 720, 600, 400), false);
 
 // Menu: quality button, submenu with current sizes, option lists.
-var air = menu.AIRPLAY_ITEMS.filter(function (i) { return i.name === 'air-quality'; })[0];
-assert.strictEqual(air.title, 'Jakość obrazu');
+var air = menu.SYSTEM_ITEMS.filter(function (i) { return i.name === 'air-quality'; })[0];
+assert.strictEqual(air.title, 'Rozdzielczość treści');
+assert.ok(!menu.AIRPLAY_ITEMS.some(function (i) { return i.name === 'air-quality'; }));
 var page = menu.qualityItems('600x400', '320x192');
 assert.deepStrictEqual(page.map(function (i) { return i.name; }), ['q-central', 'q-kombi', 'q-back']);
 assert.strictEqual(page[0].title, 'Ekran centralny');

@@ -189,6 +189,12 @@ var EN = {
     'Przeglądarka': 'Browser',
     'Zegary': 'Gauges',
     'Jakość obrazu': 'Picture quality',
+    'Rozdzielczość treści': 'Content resolution',
+    'Rozdzielczość': 'Resolution',
+    'Strona startowa': 'Start page',
+    'Powiększenie': 'Zoom',
+    'Pełny ekran': 'Full screen',
+    'Autoodtwarzanie': 'Autoplay',
     'Piaskownica': 'Sandbox',
     'Limit pamięci': 'Memory limit',
     'kliknij kafelek': 'tap a tile',
@@ -679,7 +685,10 @@ var SYSTEM_ITEMS = [
     { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
+    // where the picture sits and how many pixels it has on each screen: for everything THEiPlay shows (AirPlay,
+    // YouTube, Przeglądarka), and only here. Which screens an app uses stays that app's own choice.
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
+    { name: 'air-quality', title: 'Rozdzielczość treści', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
@@ -707,7 +716,11 @@ var STORE_ITEMS = [
 var APPS_SET_ITEMS = [
     { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
     { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
-    { name: 'aset-picture', title: 'Jakość obrazu', hint: '75%', icon: 'desktop' },
+    { name: 'aset-home', title: 'Strona startowa', hint: 'wbudowana', icon: 'globe' },
+    { name: 'aset-zoom', title: 'Powiększenie', hint: '150%', icon: 'desktop' },
+    { name: 'aset-picture', title: 'Rozdzielczość', hint: '75%', icon: 'desktop' },
+    { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
+    { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
     { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
@@ -716,7 +729,6 @@ var APPS_SET_ITEMS = [
 var AIRPLAY_ITEMS = [
     { name: 'air-toggle', title: 'Start', hint: 'włącz lustro', icon: 'play' },
     { name: 'air-screen', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
-    { name: 'air-quality', title: 'Jakość obrazu', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'air-name', title: 'Nazwa', hint: 'THEiPlay', icon: 'tag' },
     { name: 'air-pin', title: 'Kod', hint: 'bez kodu', icon: 'unlock' },
     { name: 'air-sound', title: 'AirPlay Sound', hint: 'wyłączone: obraz i dźwięk', icon: 'play' },
@@ -838,7 +850,7 @@ function qualityItems(central, kombi) {
     return [
         { name: 'q-central', title: 'Ekran centralny', hint: central || '600x400', icon: 'desktop' },
         { name: 'q-kombi', title: 'Zegary i HUD', hint: kombi || '400x240', icon: 'grid' },
-        { name: 'q-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
+        { name: 'q-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
     ];
 }
 
@@ -3289,6 +3301,23 @@ function buildWebFrame(width, height, web) {
     var secure;
     var i;
     draw.clear(0);
+    if (showVideo && info.fs) {
+        // a player in full screen: its picture over the whole centre screen, the toolbar hidden. The way out: the
+        // player's own button, or the knob pushed left (main.js sends Escape).
+        var fsBox = { x: 0, y: 0, w: width & ~3, h: height & ~1 };
+        draw.video(fsBox.x, fsBox.y, fsBox.w, fsBox.h, 1);
+        if (info.mouse) {
+            var fx = Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
+            var fy = Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
+            draw.quad([[fx - 2, fy - 4], [fx - 2, fy + 27], [fx + 21, fy + 19]], 0x101010FF);
+            draw.quad([[fx, fy], [fx, fy + 22], [fx + 16, fy + 16]], 0xFFFFFFFF);
+        }
+        return {
+            frame: packFrame(draw),
+            rects: draw.rects,
+            layout: { webHits: [], webPage: fsBox, web: lay, video: true, fs: true }
+        };
+    }
     if (showVideo) {
         // 1:1, at the size the engine made the picture (a few pixels under the page area at some zooms)
         vw = info.w > 0 && info.w <= lay.page.w ? info.w : lay.page.w;
@@ -3723,7 +3752,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -4316,7 +4345,7 @@ function createMenuSurface(opts) {
             } else if (tilted && (tilt === 'n' || tilt === 's') && typeof opts.onWebScroll === 'function') {
                 opts.onWebScroll(0, tilt === 's' ? 300 : -300);
             } else if (tilted && tilt === 'w') {
-                choose('web-back');
+                choose(webView.fs ? 'web-fs-exit' : 'web-back');
             } else if (tilted && tilt === 'e') {
                 choose('web-fwd');
             }
@@ -4326,7 +4355,7 @@ function createMenuSurface(opts) {
                     opts.onWebMouseButton(push === 1);
                 }
             } else if (push === 1 && lastPush !== 1) {
-                choose('web-url');
+                choose(webView.fs ? 'web-fs-exit' : 'web-url');
             }
             lastPush = push;
             return;
@@ -5193,7 +5222,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0)].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -5209,6 +5238,10 @@ function createMenuSurface(opts) {
         /** the page area of Przeglądarka on this screen: { x, y, w, h } */
         webPage: function () {
             return webLayout(screen.w || 1920, screen.h || 720).page;
+        },
+        /** the whole centre screen (Przeglądarka's full screen) */
+        webScreen: function () {
+            return { w: (screen.w || 1920) & ~3, h: (screen.h || 720) & ~1 };
         },
         setRideView: function (info) {
             rideView = info && info.on ? info : null;

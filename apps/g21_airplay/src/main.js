@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.147',
+        version: (this._packageJson && this._packageJson.version) || '0.1.148',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.147') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.148') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1209,7 +1209,7 @@ AirPlayApp.prototype._showQuality = function (screenName) {
         items = menuDraw.qualityItems(this._desk.qualityCentral(), this._desk.qualityKombi());
     }
     if (typeof this._menu.setItems === 'function') {
-        this._menu.setItems(items, 'Jakość obrazu');
+        this._menu.setItems(items, 'Rozdzielczość treści');
     }
 };
 
@@ -1256,7 +1256,7 @@ AirPlayApp.prototype._onQualityChoice = function (name) {
     }
     if (name === 'q-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('airplay');
+            this._menu.setScreen('system');
         }
         this._sync();
         return true;
@@ -4071,10 +4071,6 @@ AirPlayApp.prototype._paintAirMenu = function (air, receiver) {
         this._settings.outputs().map(this._outputLabel.bind(this)).join(' + ') || 'żaden'
     );
     this._menu.setItemHint('air-name', name);
-    if (typeof this._menu.setItemTitle === 'function') {
-        this._menu.setItemTitle('air-quality', 'Jakość obrazu');
-    }
-    this._menu.setItemHint('air-quality', this._qualityHint());
 };
 
 AirPlayApp.prototype._paintRdpMenu = function () {
@@ -5240,7 +5236,8 @@ AirPlayApp.prototype._openBrowser = function () {
     this._webIno = 0;
     this._webOpenAt = Date.now();
     noteStart('web-open ' + page.w + 'x' + page.h);
-    this._webClient().open(page.w, page.h, this._webApp || '');
+    var whole = this._menu.webScreen ? this._menu.webScreen() : { w: 0, h: 0 };
+    this._webClient().open(page.w, page.h, this._webApp || '', whole.w, whole.h);
     this._paintWeb();
     // no daemon after 3 s: the screen says the tool is missing (until then: "Uruchamiam")
     setTimeout(function () {
@@ -5297,12 +5294,19 @@ AirPlayApp.prototype._paintWeb = function () {
         h: s.h,
         mouse: !!this._mouseActive,
         cx: this._mouseX,
-        cy: this._mouseY
+        cy: this._mouseY,
+        fs: !!s.fs
     });
 };
 
 AirPlayApp.prototype._onWebState = function (state) {
     this._syncMouse('browser state');
+    // the picture changed its size (full screen and back): the cursor's field with it
+    if (this._mouseActive && this._mousePage && state.w > 0 && state.h > 0 && (state.w !== this._mousePage.w || state.h !== this._mousePage.h)) {
+        this._mousePage = { w: state.w, h: state.h };
+        this._mouseX = Math.floor(state.w / 2);
+        this._mouseY = Math.floor(state.h / 2);
+    }
     if (this._menuScreen() === 'apps-settings') {
         this._paintApps();
     }
@@ -5427,6 +5431,10 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-hud', this._webHud ? 'włączone' : 'wyłączone');
     // the engine's rules: from the tool's daemon; a dash while it does not answer
     m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
+    m.setItemHint('aset-home', pol ? (pol.homepage ? pol.homepage.replace(/^https?:\/\//, '').slice(0, 40) : 'wbudowana') : '—');
+    m.setItemHint('aset-zoom', s && s.connected && s.zoom ? Math.round(s.zoom * 100) + '%' : '—');
+    m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : 'cały ekran') : '—');
+    m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
     if (typeof m.repaint === 'function') {
@@ -5519,6 +5527,9 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     }
     if (name === 'multimedia' || name === 'system') {
         go(name);
+        if (name === 'system' && m && typeof m.setItemHint === 'function' && typeof this._qualityHint === 'function') {
+            m.setItemHint('air-quality', this._qualityHint());
+        }
         return true;
     }
     if (name === 'media-back' || name === 'system-back') {
@@ -5621,6 +5632,36 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintApps();
         return true;
     }
+    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay') {
+        var selfSet = this;
+        var ZOOMS = [1, 1.25, 1.5, 1.75, 2];
+        s = this._web ? this._web.state() : null;
+        pol = s && s.connected ? s.pol : null;
+        if (!pol) {
+            return true;
+        }
+        if (name === 'aset-zoom') {
+            this._web.send({ op: 'zoom', z: ZOOMS[(ZOOMS.indexOf(s.zoom) + 1) % ZOOMS.length] });
+        } else if (name === 'aset-fs') {
+            this._web.send({ op: 'policy', key: 'fullscreen', value: pol.fullscreen === 'page' ? 'screen' : 'page' });
+        } else if (name === 'aset-autoplay') {
+            this._web.send({ op: 'policy', key: 'autoplay', value: pol.autoplay === 'gesture' ? 'allow' : 'gesture' });
+        } else if (m && typeof m.startEdit === 'function') {
+            // an address, or nothing for the built-in start page
+            m.startEdit({
+                mode: 'url',
+                field: 'aset-home',
+                title: 'Strona startowa',
+                value: pol.homepage || '',
+                onDone: function (value) {
+                    if (selfSet._web) {
+                        selfSet._web.send({ op: 'policy', key: 'homepage', value: String(value == null ? '' : value).trim() });
+                    }
+                }
+            });
+        }
+        return true;
+    }
     if (name === 'aset-picture' || name === 'aset-sandbox' || name === 'aset-memory') {
         s = this._web ? this._web.state() : null;
         pol = s && s.connected ? s.pol : null;
@@ -5678,6 +5719,9 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         if (s.ask === 'sandbox') {
             web.send({ op: 'sandbox-off' });
         }
+    } else if (name === 'web-fs-exit') {
+        // out of a player's full screen
+        web.send({ op: 'key', k: 'Escape' });
     } else if (name === 'web-home') {
         web.send({ op: 'home' });
     } else if (name === 'web-enter') {

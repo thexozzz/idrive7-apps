@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.148
+
+- Aplikacje > Ustawienia ma nowe opcje Przeglądarki: „Strona startowa” (adres albo pusto = wbudowana), „Powiększenie” (100–200%), „Rozdzielczość” (dawniej „Jakość obrazu”), „Pełny ekran” (cały ekran / obszar strony) i „Autoodtwarzanie” (dozwolone / po dotknięciu). Autoodtwarzanie jest teraz domyślnie dozwolone.
+- Pełny ekran odtwarzacza na stronie: narzędzie `g21-browser` 0.1.11 wykrywa pełny ekran strony i przełącza obraz na cały ekran środkowy (1920×720, renderowany jako 1280×480, proporcje filmu zachowane), aplikacja chowa pasek i rysuje obraz na całym ekranie. Wyjście: przycisk odtwarzacza, wciśnięcie pokrętła albo pokrętło w lewo.
+- „Rozdzielczość treści” (dawniej „Jakość obrazu” w AirPlay) jest teraz tylko w głównych Ustawieniach, obok „Pozycji”, i dotyczy wszystkiego, co pokazuje THEiPlay. Wybór ekranów, na których aplikacja ma się wyświetlać, zostaje w każdej aplikacji.
+- Nic z tego nie było sprawdzane w aucie.
+
 ## 0.1.147
 
 - Narzędzie `g21-browser` 0.1.10 i aplikacja mają napisany import aplikacji z git dla Sklepu (publiczne repozytorium GitHub ze stroną `index.html`, rozpakowane do `apps/` i serwowane silnikowi z lokalnego serwera plików tylko do odczytu; kafelek aplikacji w „Aplikacjach”). Na życzenie właściciela nie jest to jeszcze podpięte do menu: Sklep pozostaje kafelkiem z zapowiedzią. Kod nie był uruchamiany.
