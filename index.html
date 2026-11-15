@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hello THEiPlay</title>
+<style>
+  :root { --bg: #0b0f14; --card: #151c25; --line: #263243; --text: #e8eef6; --dim: #8b9bb0; --acc: #3ea6ff; --ok: #4cd08a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 20px/1.35 system-ui, "Noto Sans", sans-serif; }
+  body { display: flex; flex-direction: column; padding: 16px 20px; gap: 14px; }
+  header { display: flex; align-items: baseline; gap: 18px; }
+  h1 { margin: 0; font-size: 34px; font-weight: 600; }
+  #clock { margin-left: auto; font-size: 34px; font-variant-numeric: tabular-nums; color: var(--acc); }
+  .sub { color: var(--dim); font-size: 18px; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--dim); }
+  #pad { flex: 1; min-height: 90px; border: 1px dashed var(--line); border-radius: 10px; position: relative; overflow: hidden; touch-action: none; cursor: crosshair; }
+  #dot { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--acc); left: 50%; top: 50%; transition: background .15s; }
+  #dot.hit { background: var(--ok); }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 18px; }
+  dt { color: var(--dim); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { font: inherit; color: var(--text); background: #1f2a38; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; min-height: 56px; cursor: pointer; }
+  button:active, button.on { background: var(--acc); color: #04121f; border-color: var(--acc); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row button { flex: 1; }
+  input { font: inherit; color: var(--text); background: #0e141b; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; width: 100%; min-height: 56px; }
+  input:focus { outline: 2px solid var(--acc); }
+  #bars { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+  #bars i { flex: 1; }
+  #say { color: var(--ok); min-height: 1.35em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hello THEiPlay</h1>
+  <span class="sub">testowa aplikacja ze Sklepu</span>
+  <span id="clock">--:--:--</span>
+</header>
+<main>
+  <section>
+    <h2>Dotyk i mysz</h2>
+    <div id="pad"><div id="dot"></div></div>
+    <dl>
+      <dt>Pozycja</dt><dd id="pos">—</dd>
+      <dt>Kliknięcia</dt><dd id="clicks">0</dd>
+      <dt>Wejście</dt><dd id="kind">—</dd>
+    </dl>
+  </section>
+  <section>
+    <h2>Dźwięk</h2>
+    <div class="row">
+      <button id="beep">Ton 440 Hz</button>
+      <button id="tune">Melodia</button>
+    </div>
+    <div id="say"></div>
+    <h2>Klawiatura</h2>
+    <input id="text" placeholder="dotknij i wpisz tekst" autocomplete="off">
+  </section>
+  <section>
+    <h2>Ekran</h2>
+    <dl>
+      <dt>Okno</dt><dd id="win">—</dd>
+      <dt>Ekran</dt><dd id="scr">—</dd>
+      <dt>Skala</dt><dd id="dpr">—</dd>
+      <dt>Klatki/s</dt><dd id="fps">—</dd>
+      <dt>Silnik</dt><dd id="ua">—</dd>
+    </dl>
+    <div id="bars"><i style="background:#fff"></i><i style="background:#ff0"></i><i style="background:#0ff"></i><i style="background:#0f0"></i><i style="background:#f0f"></i><i style="background:#f00"></i><i style="background:#00f"></i><i style="background:#000"></i></div>
+    <div class="row"><button id="full">Pełny ekran</button></div>
+  </section>
+</main>
+<script>
+'use strict';
+(function () {
+    var $ = function (id) { return document.getElementById(id); };
+    // clock
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    function tick() { var d = new Date(); $('clock').textContent = two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds()); }
+    tick();
+    setInterval(tick, 500);
+    // screen
+    function sizes() {
+        $('win').textContent = window.innerWidth + ' × ' + window.innerHeight;
+        $('scr').textContent = screen.width + ' × ' + screen.height;
+        $('dpr').textContent = String(Math.round(window.devicePixelRatio * 100) / 100);
+    }
+    sizes();
+    window.addEventListener('resize', sizes);
+    var m = /(HeadlessChrome|Chrome)\/([\d.]+)/.exec(navigator.userAgent);
+    $('ua').textContent = m ? m[1] + ' ' + m[2] : navigator.userAgent;
+    // frames a second
+    var frames = 0, since = performance.now();
+    (function loop(now) {
+        frames += 1;
+        if (now - since >= 1000) { $('fps').textContent = String(Math.round(frames * 1000 / (now - since))); frames = 0; since = now; }
+        requestAnimationFrame(loop);
+    }(performance.now()));
+    // pointer: touch and the touchpad mouse
+    var pad = $('pad'), dot = $('dot'), clicks = 0;
+    function at(e) {
+        var r = pad.getBoundingClientRect();
+        var x = Math.max(0, Math.min(r.width, e.clientX - r.left)), y = Math.max(0, Math.min(r.height, e.clientY - r.top));
+        dot.style.left = x + 'px';
+        dot.style.top = y + 'px';
+        $('pos').textContent = Math.round(e.clientX) + ', ' + Math.round(e.clientY);
+        $('kind').textContent = e.pointerType === 'touch' ? 'dotyk' : (e.pointerType === 'mouse' ? 'mysz' : (e.pointerType || '—'));
+    }
+    pad.addEventListener('pointermove', at);
+    pad.addEventListener('pointerdown', function (e) { at(e); dot.classList.add('hit'); });
+    window.addEventListener('pointerup', function () { dot.classList.remove('hit'); });
+    pad.addEventListener('click', function () { clicks += 1; $('clicks').textContent = String(clicks); });
+    // sound: Web Audio, no files
+    var ctx = null;
+    function audio() { if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); } if (ctx.state === 'suspended') { ctx.resume(); } return ctx; }
+    function tone(freq, start, len) {
+        var c = audio(), o = c.createOscillator(), g = c.createGain(), t = c.currentTime + start;
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+        g.gain.setValueAtTime(0.2, t + len - 0.05);
+        g.gain.linearRampToValueAtTime(0, t + len);
+        o.connect(g);
+        g.connect(c.destination);
+        o.start(t);
+        o.stop(t + len + 0.02);
+    }
+    function said(text) { $('say').textContent = text; setTimeout(function () { if ($('say').textContent === text) { $('say').textContent = ''; } }, 2500); }
+    $('beep').addEventListener('click', function () { tone(440, 0, 1); said('gra ton 440 Hz (1 s)'); });
+    $('tune').addEventListener('click', function () {
+        [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 523.25].forEach(function (f, i) { tone(f, i * 0.22, 0.2); });
+        said('gra melodia');
+    });
+    // full screen
+    $('full').addEventListener('click', function () {
+        if (document.fullscreenElement) { document.exitFullscreen(); } else { document.documentElement.requestFullscreen(); }
+    });
+    document.addEventListener('fullscreenchange', function () { $('full').classList.toggle('on', !!document.fullscreenElement); sizes(); });
+}());
+</script>
+</body>
+</html>
