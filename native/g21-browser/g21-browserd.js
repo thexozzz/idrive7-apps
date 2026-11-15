@@ -351,6 +351,10 @@ function loadManifest(o) {
     m.sha = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
     // the program itself is the first file; "kind": "chrome" is the full Chrome (run with --headless=new)
     m.binary = String(m.files[0].path);
+    // other programs of the engine that it starts itself and that need the same loader path (the same place in
+    // the file, the same words): the full Chrome's crash handler. Without it the handler does not start and
+    // Chrome ends itself 160 ms after its start (car, 2026-11-15; seen again on the development machine).
+    m.interpAlso = (Array.isArray(m.interpAlso) ? m.interpAlso : []).map(String).filter((n) => m.files.some((f) => f.path === n) && n !== m.binary);
     m.kind = m.kind === 'chrome' ? 'chrome' : 'shell';
     return m;
 }
@@ -592,7 +596,8 @@ async function installEngine(o, m, ids, set) {
         if (pack) await fillFromPack(o, m, tmp, (pct) => set('unpacking', pct));
         else await fillFromZip(m, zip, tmp, (pct) => set('unpacking', pct));
         const ip = m.interp;
-        const fd = fs.openSync(path.join(tmp, m.binary), 'r+');
+        for (const name of [m.binary].concat(m.interpAlso)) {
+        const fd = fs.openSync(path.join(tmp, name), 'r+');
         try {
             const was = Buffer.alloc(ip.size);
             fs.readSync(fd, was, 0, ip.size, ip.offset);
@@ -601,6 +606,7 @@ async function installEngine(o, m, ids, set) {
             now.write(ip.to, 'latin1');
             fs.writeSync(fd, now, 0, ip.size, ip.offset);
         } finally { fs.closeSync(fd); }
+        }
         m.files.forEach((f) => fs.chmodSync(path.join(tmp, f.path), f.mode & 0o755));
         fs.writeFileSync(path.join(tmp, '.ok'), m.sha + '\n', { mode: 0o644 });
         fs.renameSync(tmp, dest);
@@ -2290,7 +2296,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
     const e = { child: child, cdp: null, session: '', target: '', mainFrame: '', down: null, err: '', product: '' };
     this.engine = e;
-    child.stderr.on('data', (d) => { e.err = (e.err + d).slice(-2000); });
+    child.stderr.on('data', (d) => { if (e.err.length < 6000) e.err += d; else e.err = e.err.slice(0, 3000) + (e.err.slice(3000) + d).slice(-3000); });
     child.on('error', (x) => { e.err += ' spawn: ' + x.message; });
     child.on('exit', (code, sig) => this.guard(() => this.onEngineExit(e, code, sig)));
     try { fs.writeFileSync('/proc/' + child.pid + '/oom_score_adj', '900'); } catch (x) { /* not Linux or gone */ }

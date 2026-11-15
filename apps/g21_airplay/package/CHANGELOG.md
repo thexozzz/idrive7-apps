@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.190
+
+- Pełny Chrome, przyczyna awarii przy starcie znaleziona (auto 2026-11-15 z `g21-browser` 0.1.40: nadal kończył pracę po 160 ms, przeglądarka przeszła na lekki silnik, a Crunchyroll dalej odpowiadał 403). Odtworzone na komputerze z bibliotekami i przełącznikami z auta: Chrome przy starcie uruchamia własny program pomocniczy `chrome_crashpad_handler`, który miał wpisaną ścieżkę programu ładującego z Ubuntu (poprawiana była tylko w głównym pliku); pomocnik nie startował i Chrome sam się zatrzymywał. Z poprawioną ścieżką w obu plikach Chrome startuje (sprawdzone na komputerze, nie w aucie).
+- `g21-browser` 0.1.41: instalacja silnika poprawia ścieżkę programu ładującego także w `chrome_crashpad_handler` (`interpAlso` w `engine-chrome/manifest.json`; silnik zostanie pobrany jeszcze raz, bo zmienił się jego opis). Log nieudanego startu zachowuje początek komunikatów silnika, nie tylko koniec.
+
 ## 0.1.189
 
 - Dźwięk AirPlay, przyczyna znaleziona w logu UxPlay z auta (2026-11-15): jego tor dźwięku ma kolejkę 8 buforów, która „cieknie” – gdy odbiornik nie odbierze dźwięku od razu, UxPlay go wyrzuca. Nasz moduł wyjścia wstrzymywał potok, kiedy urządzenie było pełne (zmiana z 0.1.3), więc dźwięk ginął właśnie tam: ok. 11 s na 29 s bez żadnej straty policzonej u nas. Do tego wyjście UxPlay czekało na znaczniki czasu, które bywały błędne – wtedy nie było dźwięku wcale (stan po 0.1.60).

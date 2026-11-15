@@ -118,5 +118,8 @@
       "sha256": "cd250e8177183add7029ccc3057217b978779f9c7af800c45083f3cc0139020e"
     }
   ],
-  "parts": []
+  "parts": [],
+  "interpAlso": [
+    "chrome_crashpad_handler"
+  ]
 }
