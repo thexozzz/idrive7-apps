@@ -248,6 +248,29 @@ function createBrowserClient(opts) {
         leave: function () {
             drop(null);
         },
+        /**
+         * The engine stops now, connected or not: something else needs the head unit (AirPlay). The engine otherwise
+         * lives 90 s after the browser was left, and the full Chrome's processes took the processor from AirPlay's
+         * picture meanwhile (car, 2026-11-15: load 14 with five of them in the background).
+         */
+        stopNow: function () {
+            var one;
+            if (sock && up) {
+                drop({ op: 'close' });
+                return;
+            }
+            drop(null);
+            try {
+                one = net.createConnection(file);
+                one.on('connect', function () {
+                    one.end(JSON.stringify({ op: 'close' }) + '\n');
+                });
+                one.on('error', function () { /* no daemon: nothing to stop */ });
+                one.setTimeout(3000, function () {
+                    one.destroy();
+                });
+            } catch (err) { /* no daemon */ }
+        },
         /** the app is switched off: the engine stops now */
         shutdown: function () {
             drop({ op: 'close' });

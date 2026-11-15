@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.193
+
+- AirPlay: przy włączeniu AirPlay (i pulpitu zdalnego) silnik Przeglądarki, jeśli jeszcze żyje w tle, jest zatrzymywany od razu. Auto, 2026-11-15: obraz AirPlay skakał przy obciążeniu jednostki 14, z pięcioma procesami pełnego Chrome w tle (silnik żyje 90 s po wyjściu z Przeglądarki). Niesprawdzone w aucie.
+
 ## 0.1.192
 
 - Dzwiek AirPlay, wynik z auta (2026-11-15, g21-audio 0.1.5 / g21-airplay-open 0.1.61): obraz plynny, dzwiek partiami i jakby przyspieszony. Tryb live dzialal, ale w 71 s dotarlo 7 s dzwieku (19 przerw): UxPlay dopisuje na koncu podanego toru sync=true, wiec wyjscie znow czekalo na znaczniki czasu, a jego cieknaca kolejka wyrzucala reszte. g21-airplay-open 0.1.62: tor konczy sie slepa galezia (tee, cieknaca kolejka, fakesink), na ktora trafia dopisek; galaz zapisujaca dzwiek nie jest niczym wstrzymywana. Sprawdzone na komputerze (gst-launch: caly dzwiek przechodzi mimo dopisku), w aucie nie.

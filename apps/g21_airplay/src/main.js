@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.192',
+        version: (this._packageJson && this._packageJson.version) || '0.1.193',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.192') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.193') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -3384,6 +3384,11 @@ AirPlayApp.prototype._choose = function (name) {
     }
     this._chosen = name;
     noteStart('choose ' + name);
+    // a picture from a phone or a computer is about to come: the browser's engine, if it still lives in the
+    // background, stops now and leaves its processor and its memory
+    if (!this._webOn && this._webClient && typeof this._webClient().stopNow === 'function') {
+        this._webClient().stopNow();
+    }
     this._sessions.connect(name, this._endpoint(name)).then(function (result) {
         self._sessionText = result.ok
             ? (name + ' ' + (result.state || 'ok'))
