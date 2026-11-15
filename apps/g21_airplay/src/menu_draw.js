@@ -185,6 +185,7 @@ var EN = {
     'Aplikacje': 'Apps',
     'Ustawienia': 'Settings',
     'Sklep': 'Store',
+    'Strony przeglądarki': 'Browser pages',
     'Importuj z git': 'Import from git',
     'Aplikacja testowa': 'Test app',
     'Importuj z git': 'Import from git',
@@ -736,6 +737,8 @@ var APPS_SET_ITEMS = [
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
+    // the browser's own pages: version, rules, switches, history (chrome://about)
+    { name: 'aset-pages', title: 'Strony przeglądarki', hint: 'chrome://about', icon: 'globe' },
     { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
 ];
 

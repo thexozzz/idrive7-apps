@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.161
+
+- Aplikacje > Ustawienia ma pozycję „Strony przeglądarki”: otwiera Przeglądarkę na `chrome://about` (wersja, reguły, przełączniki, historia). `g21-browser` 0.1.20 przyjmuje pierwszą stronę od aplikacji.
+- Przegląd kodu. Nowe narzędzie `tools/check_calls.js` (w `test_all.js`) szuka wywołań metod, których nie ma — błąd tego rodzaju wywracał aplikację przy włączeniu myszy; teraz nie znajduje żadnego. `g21-airplay-open` 0.1.57: dźwięk AirPlay nie czeka już w 64 KiB buforze `filesink` (0,34 s opóźnienia i dźwięk porcjami), jest pisany od razu.
+- Auto było nieosiągalne w czasie przeglądu: logów z ostatnich wersji nie czytano, nic z powyższego nie było w nim uruchamiane.
+
 ## 0.1.160
 
 - Adresy `chrome://` w Przeglądarce. Dotąd pole adresu je odrzucało, a silnik (Chrome headless shell) i tak nie ma stron takich jak `chrome://version` czy `chrome://settings`. `g21-browser` 0.1.19: własne strony `chrome://about` (lista), `version`, `settings`, `policy`, `flags`, `history`, `downloads`, `extensions`, `bookmarks`, `password-manager`; pozostałe adresy `chrome://` idą do silnika (np. `chrome://gpu`), a gdy silnik strony nie ma, przeglądarka to pisze zamiast pustego ekranu. `about:nazwa` działa tak samo. Link do listy jest na stronie startowej. Strony własne sprawdzone testem jednostkowym; strony silnika i całość w aucie niesprawdzone.

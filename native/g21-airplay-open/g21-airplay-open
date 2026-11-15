@@ -1323,7 +1323,7 @@ start_ux() {
     audio_fifo=$(head -n 1 /run/g21-airplay/g21-audio.fifo 2>/dev/null)
     if [ -n "$audio_fifo" ] && [ -p "$audio_fifo" ]; then
         audio_dev=g21-audio
-        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=true"
+        audio_sink="audio/x-raw,format=S16LE,rate=48000,channels=2 ! filesink location=$audio_fifo sync=true buffer-mode=unbuffered"
         printf '%s g21-airplay-open: sound through G21 Audio (%s)\n' "$(date '+%F %T')" "$audio_fifo" >>"$AUDIOLOG"
     else
         g21_audio_close

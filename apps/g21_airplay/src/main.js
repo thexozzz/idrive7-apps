@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.160',
+        version: (this._packageJson && this._packageJson.version) || '0.1.161',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.160') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.161') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5229,7 +5229,8 @@ AirPlayApp.prototype._openBrowser = function () {
     this._webOpenAt = Date.now();
     noteStart('web-open ' + page.w + 'x' + page.h);
     var whole = this._webFsBox();
-    this._webClient().open(page.w, page.h, this._webApp || '', whole.w, whole.h);
+    this._webClient().open(page.w, page.h, this._webApp || '', whole.w, whole.h, this._webUrl || '');
+    this._webUrl = '';
     this._paintWeb();
     // no daemon after 3 s: the screen says the tool is missing (until then: "Uruchamiam")
     setTimeout(function () {
@@ -5773,6 +5774,13 @@ AirPlayApp.prototype._onWebChoice = function (name) {
     var s;
     var at;
     if (name === 'browser') {
+        this._openBrowser();
+        return true;
+    }
+    if (name === 'aset-pages') {
+        // Przeglądarka on the list of its own pages
+        this._webApp = '';
+        this._webUrl = 'chrome://about';
         this._openBrowser();
         return true;
     }

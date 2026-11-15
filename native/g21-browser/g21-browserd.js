@@ -1065,15 +1065,17 @@ Daemon.prototype.onCommand = async function (m) {
         // an app from Sklep: its first page instead of the start page
         const appUrl = m.app ? await this.appUrl(String(m.app)) : null;
         if (m.app && !appUrl) { this.set({ engine: 'failed', err: 'nie ma takiej aplikacji', loading: false, live: false }); return; }
+        // the app may name the first page ("Strony przeglądarki" in its settings: chrome://about)
+        const firstUrl = appUrl || (typeof m.url === 'string' && m.url ? this.resolve(m.url) : null);
         // (the proxy that runs was started before the apps' server: it does not let the engine reach it)
         if (this.engine && appUrl && String(this.proxyKey || '').indexOf('127.0.0.1:' + this.appsPort) < 0) await this.stopEngine('an app is opened');
         if (this.engine) {
             await this.cast(true);
-            if (appUrl) { this.set({ err: '', loading: true }); await this.engine.cdp.send('Page.navigate', { url: appUrl }, this.engine.session); }
+            if (firstUrl) { this.set({ err: '', loading: true }); await this.go(this.engine, firstUrl); }
             this.push(true);
             return;
         }
-        await this.startEngine(appUrl);
+        await this.startEngine(firstUrl);
         return;
     }
     case 'close': this.want = null; this.sandboxOff = false; await this.stopEngine('closed by the app'); return;

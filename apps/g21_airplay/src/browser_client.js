@@ -119,6 +119,11 @@ function createBrowserClient(opts) {
         if (want.app) {
             o.app = want.app;
         }
+        // a first page asked for: once, not again when the daemon is connected anew
+        if (want.url) {
+            o.url = want.url;
+            want.url = '';
+        }
         return o;
     }
 
@@ -208,8 +213,8 @@ function createBrowserClient(opts) {
 
     return {
         /** show the browser in a page area of w x h screen pixels */
-        open: function (w, h, app, fw, fh) {
-            want = { w: w | 0, h: h | 0, app: app ? String(app) : '', fw: fw | 0, fh: fh | 0 };
+        open: function (w, h, app, fw, fh, url) {
+            want = { w: w | 0, h: h | 0, app: app ? String(app) : '', fw: fw | 0, fh: fh | 0, url: url ? String(url) : '' };
             if (up) {
                 send(openMsg());
             } else {
