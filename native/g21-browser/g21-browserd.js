@@ -708,10 +708,15 @@ Cdp.prototype.send = function (method, params, sessionId, timeoutMs) {
 
 // ---------------------------------------------------------------- pages
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// an address as a person reads it: no scheme, percent signs decoded
+function shownUrl(url) {
+    const t = String(url).replace(/^https?:\/\//, '').replace(/\/$/, '');
+    try { return decodeURI(t); } catch (e) { return t; }
+}
 function startPage(recent) {
     const tiles = [['Google', 'https://www.google.com/'], ['Wikipedia', 'https://pl.wikipedia.org/'], ['DuckDuckGo', 'https://duckduckgo.com/']]
         .map((t) => '<a class="t" href="' + t[1] + '">' + t[0] + '</a>').join('');
-    const rec = (recent || []).slice(0, 10).map((r) => '<a class="r" href="' + esc(r.url) + '"><b>' + esc(r.title || r.url) + '</b><span>' + esc(r.url.replace(/^https?:\/\//, '')) + '</span></a>').join('');
+    const rec = (Array.isArray(recent) ? recent : []).filter((r) => r && typeof r.url === 'string' && /^https?:\/\//i.test(r.url)).slice(0, 10).map((r) => '<a class="r" href="' + esc(r.url) + '"><b>' + esc(r.title || r.url) + '</b><span>' + esc(shownUrl(r.url)) + '</span></a>').join('');
     const html = '<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Strona startowa</title><style>'
         + 'html{background:#090807;color:#f7f2ea;font-family:"Liberation Sans",Arial,sans-serif}body{margin:0;padding:22px 34px}'
         + 'h1{font-size:26px;font-weight:400;margin:0 0 16px}h1 b{color:#e6a15c;font-weight:700}h2{font-size:15px;font-weight:400;color:#c4b5a4;margin:22px 0 10px;letter-spacing:.08em;text-transform:uppercase}'
@@ -864,17 +869,32 @@ Daemon.prototype.settings = function () { return readJson(path.join(this.opts.st
 Daemon.prototype.saveSettings = function (patch) {
     try { mkdirp(this.opts.stateDir, 0o700); writeIfChanged(path.join(this.opts.stateDir, 'settings.json'), JSON.stringify(Object.assign(this.settings(), patch)) + '\n', 0o600); } catch (e) { this.log('settings: ' + e.message); }
 };
-// last pages for the start page: address without query and fragment (those can carry tokens)
-Daemon.prototype.remember = function (url, title) {
+/*
+ * The address a page is remembered by for "Ostatnio otwierane": the whole address, so the link opens the same film
+ * or the same search again (without "?v=..." a YouTube link opened an empty player page). Left out: parameters that
+ * look like a login's secrets, a fragment that carries a token, and anything too long to be an address worth keeping.
+ */
+const SECRET_PARAM = /^(access_?token|id_?token|refresh_?token|token|auth|authorization|session(id)?|sid|sso|ticket|password|passwd|pwd|secret|signature|sig|jwt|api_?key|key|code|state|nonce|otp)$/i;
+function recentUrl(url) {
     let u;
-    try { u = new URL(url); } catch (e) { return; }
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
-    const clean = u.origin + u.pathname;
+    try { u = new URL(url); } catch (e) { return null; }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    u.username = '';
+    u.password = '';
+    Array.from(new Set(Array.from(u.searchParams.keys()))).forEach((k) => { if (SECRET_PARAM.test(k)) u.searchParams.delete(k); });
+    if (/token|session|password|secret|=ey[A-Za-z0-9_-]{10}/i.test(u.hash) || u.hash.length > 200) u.hash = '';
+    if (u.search.length > 600) u.search = '';
+    return u.href;
+}
+// last pages for the start page
+Daemon.prototype.remember = function (url, title) {
+    const clean = recentUrl(url);
+    if (!clean) return;
     const file = path.join(this.opts.stateDir, 'recent.json');
     let rec = readJson(file);
     if (!Array.isArray(rec)) rec = [];
     rec = rec.filter((r) => r && r.url !== clean);
-    rec.unshift({ url: clean, title: String(title || '').slice(0, 80) });
+    rec.unshift({ url: clean, title: String(title || '').slice(0, 120) });
     try { mkdirp(this.opts.stateDir, 0o700); writeIfChanged(file, JSON.stringify(rec.slice(0, 12)) + '\n', 0o600); } catch (e) { this.log('recent: ' + e.message); }
 };
 Daemon.prototype.home = function () { return this.policy().homepage || startPage(readJson(path.join(this.opts.stateDir, 'recent.json'))); };
@@ -1797,7 +1817,7 @@ Daemon.prototype.close = async function () {
 
 module.exports = {
     parseRepo: parseRepo, untarGz: untarGz, APPS_RE: APPS_RE, APP_LIMITS: APP_LIMITS,
-    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
+    pageCss: pageCss, readPolicy: readPolicy, POLICY_DEFAULT: POLICY_DEFAULT, installHelper: installHelper, Daemon: Daemon, toUrl: toUrl, recentUrl: recentUrl, startPage: startPage, blockedV4: blockedV4, ipv4: ipv4, loadManifest: loadManifest, installEngine: installEngine, fillFromZip: fillFromZip, havePack: havePack, engineReady: engineReady, engineDir: engineDir, pickEngineUid: pickEngineUid, defaults: defaults, ZOOMS: ZOOMS, SOURCE_RE: SOURCE_RE };
 
 if (require.main === module && process.argv[2] === '--fetch') {
     runFetch(String(process.argv[3]), String(process.argv[4]), process.argv[5] || '/run/mgu-uplink/lease.json', process.argv[6] === '--any-host');

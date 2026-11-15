@@ -24,6 +24,12 @@ function skip(what, why) { skipped += 1; console.log('SKIP ' + what + ': ' + why
 
 function testUrls() {
     assert.strictEqual(d.toUrl('wp.pl'), 'https://wp.pl/');
+    // "Ostatnio otwierane": the link opens the same page again, a login's secrets are not kept
+    assert.strictEqual(d.recentUrl('https://www.youtube.com/watch?v=abc123&t=42s'), 'https://www.youtube.com/watch?v=abc123&t=42s');
+    assert.strictEqual(d.recentUrl('https://www.google.com/search?q=bmw+g21#ip=1'), 'https://www.google.com/search?q=bmw+g21#ip=1');
+    assert.strictEqual(d.recentUrl('https://user:pw@example.com/cb?code=1&state=2&page=3&access_token=x#access_token=y'), 'https://example.com/cb?page=3');
+    assert.strictEqual(d.recentUrl('data:text/html,x'), null);
+    assert.ok(Buffer.from(d.startPage([{ url: 'https://www.youtube.com/watch?v=abc123', title: 'Film' }, { url: 'javascript:alert(1)', title: 'x' }]).split(',')[1], 'base64').toString('utf8').indexOf('href="https://www.youtube.com/watch?v=abc123"') > 0);
     assert.strictEqual(d.toUrl(' https://example.com/a?b=1 '), 'https://example.com/a?b=1');
     assert.strictEqual(d.toUrl('example.com:8443/p'), 'https://example.com:8443/p');
     assert.strictEqual(d.toUrl('127.0.0.1:8080/x'), 'http://127.0.0.1:8080/x');
@@ -429,7 +435,7 @@ async function testChain(base, eng) {
         assert.strictEqual(JSON.parse(fs.readFileSync(path.join(base, 'state', 'settings.json'), 'utf8')).zoom, 2);
         console.log('ok zoom: the engine restarts on the same page, the picture stays 1920x636');
         const rec = JSON.parse(fs.readFileSync(path.join(base, 'state', 'recent.json'), 'utf8'));
-        assert.ok(rec.some((x) => x.url === site + '/two') && rec.every((x) => !/[?#]/.test(x.url)));
+        assert.ok(rec.some((x) => x.url === site + '/two'));
         // the app goes away: the engine follows after idleMs, the video file goes
         c.close();
         for (let i = 0; i < 100 && (daemon.engine || fs.existsSync(daemon.opts.ring)); i++) await sleep(50);

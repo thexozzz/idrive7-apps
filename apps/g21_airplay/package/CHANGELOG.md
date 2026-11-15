@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.158
+
+- Naprawa: linki „Ostatnio otwierane” na stronie startowej Przeglądarki nie otwierały tej samej strony, bo adres był zapisywany bez części po `?` i `#` (film YouTube `/watch?v=…` otwierał pusty odtwarzacz, wyszukiwanie pustą stronę). `g21-browser` 0.1.17 zapisuje cały adres; pomija tylko parametry wyglądające na dane logowania (token, code, session…) i fragmenty z tokenem. Wpisy zapisane wcześniej zostają skrócone, dopóki strona nie zostanie otwarta ponownie. Sprawdzone testem jednostkowym, nie w aucie.
+
 ## 0.1.157
 
 - Sklep działa: Aplikacje > Sklep ma „Importuj z git” (adres `wlasciciel/repo` albo `wlasciciel/repo@galaz`) i „Aplikacja testowa”, która importuje bez wpisywania stronę testową `Hello THEiPlay` (gałąź `theiplay-hello` tego repozytorium; źródło w `examples/theiplay-hello/`). Zaimportowana aplikacja jest kafelkiem w Aplikacjach i otwiera się w Przeglądarce; w Sklepie można ją usunąć (dwa wybory). `g21-browser` 0.1.16: gałąź inna niż domyślna jest osobną aplikacją.
