@@ -13,7 +13,7 @@ var QWERTY_ROWS = [
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
     ['z', 'x', 'c', 'v', 'b', 'n', 'm', '_', '-', '.'],
     ['ą', 'ć', 'ę', 'ł', 'ń', 'ó', 'ś', 'ź', 'ż'],
-    ['SH', 'SPC', 'DEL', 'ANU', 'OK']
+    ['SH', 'SPC', 'LT', 'RT', 'DEL', 'CLR', 'ANU', 'OK']
 ];
 
 // Przeglądarka: what an address and a web form need. Polish letters are the long press on a, c, e, l, n, o, s, z.
@@ -23,12 +23,13 @@ var WEB_ROWS = [
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '@'],
     ['z', 'x', 'c', 'v', 'b', 'n', 'm', '.', '-', '/'],
     [':', '?', '=', '&', '%', '#', '_', '+', '!', ','],
-    ['SH', 'SPC', 'DEL', 'ANU', 'OK']
+    ['SH', 'SPC', 'LT', 'RT', 'DEL', 'CLR', 'ANU', 'OK']
 ];
 
 // Key widths in key units (a letter is 1): the renderer draws them and the knob's
 // up / down finds the key under the same spot of the next row.
-var KEY_WEIGHT = { SH: 1.6, SPC: 3.6, DEL: 1.8, ANU: 1.8, OK: 2.2 };
+// (LT, RT: the text's caret a letter left / right; CLR: the whole text away)
+var KEY_WEIGHT = { SH: 1.2, SPC: 2.2, LT: 0.9, RT: 0.9, DEL: 1.3, CLR: 1.5, ANU: 1.4, OK: 1.4 };
 var KEY_GAP = 0.14;
 
 var ALTS = {
@@ -247,6 +248,8 @@ function createEdit(opts) {
         mode: opts.mode || 'user',
         title: opts.title || mode.title,
         value: value,
+        // where the next letter goes: after the text until an arrow key moves it
+        caret: value.length,
         keyIndex: 0,
         shift: false,
         rows: [],
@@ -306,8 +309,24 @@ function applyKey(edit, forced) {
     if (key === 'OK') {
         return { action: 'done', value: edit.value };
     }
+    if (typeof edit.caret !== 'number' || edit.caret > edit.value.length || edit.caret < 0) {
+        edit.caret = edit.value.length;
+    }
     if (key === 'DEL') {
-        edit.value = edit.value.slice(0, -1);
+        // the letter before the caret
+        if (edit.caret > 0) {
+            edit.value = edit.value.slice(0, edit.caret - 1) + edit.value.slice(edit.caret);
+            edit.caret -= 1;
+        }
+        return { action: 'edit', value: edit.value };
+    }
+    if (key === 'CLR') {
+        edit.value = '';
+        edit.caret = 0;
+        return { action: 'edit', value: edit.value };
+    }
+    if (key === 'LT' || key === 'RT') {
+        edit.caret = Math.max(0, Math.min(edit.value.length, edit.caret + (key === 'LT' ? -1 : 1)));
         return { action: 'edit', value: edit.value };
     }
     if (key === 'SH') {
@@ -321,7 +340,8 @@ function applyKey(edit, forced) {
     if (edit.value.length >= edit.max) {
         return { action: 'edit', value: edit.value };
     }
-    edit.value += key;
+    edit.value = edit.value.slice(0, edit.caret) + key + edit.value.slice(edit.caret);
+    edit.caret += key.length;
     return { action: 'edit', value: edit.value };
 }
 

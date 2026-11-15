@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.174
+
+- Lekkie wideo (`g21-browser` 0.1.28, reguła `video`, Ustawienia > Przeglądarka > „Lekkie wideo”, domyślnie włączone): strona dowiaduje się, zanim ruszą jej skrypty, że silnik odtwarza tylko H.264, do 720 linii i 30 klatek na sekundę. YouTube i podobne serwisy podają silnikowi najpierw VP9 albo AV1, których programowe dekodowanie kosztuje kilka razy więcej niż H.264 — na czterech wolnych rdzeniach tej jednostki obraz się zacinał, a po chwili dźwięk. Gdy silnik nie ma H.264, nic nie jest zmieniane. Niesprawdzone w aucie: nie zmierzono, o ile spada obciążenie.
+- Naprawa: kursor nie trafiał dokładnie. Obraz strony jest rysowany w swoim rozmiarze od lewego górnego rogu obszaru i przy niektórych powiększeniach jest o kilka–kilkanaście pikseli mniejszy od obszaru, a położenie kursora było rozciągane na cały obszar (do ok. 20 px obok przy prawej i dolnej krawędzi). Teraz liczone jest od obrazu; strona aplikacji ze Sklepu jest też rysowana 1:1.
+- Klawiatura: klawisze „<” i „>” przesuwają kursor tekstu, „wyczyść” usuwa cały tekst; „usuń” kasuje znak przed kursorem, a nowe znaki wchodzą w miejscu kursora.
+- Naprawa: linki na stronach `chrome://` (i link do `chrome://about` na stronie startowej) nic nie robiły — silnik odrzucał je jako przejście pod adres `data:` (log z auta: „Not allowed to navigate top frame to data URL”).
+- Crunchyroll: w logu z auta strona odpowiada 403 na żądanie z tokenem wyzwania Cloudflare (`__cf_chl_rt_tk`). To odmowa po stronie ich ochrony antybotowej, nie błąd przekierowań ani proxy THEiPlay (proxy niczego dla tej strony nie odrzuciło). Nie jest obchodzone.
+
 ## 0.1.173
 
 - Odczyty diagnostyczne sterowników dla aplikacji ze Sklepu (`g21-browser` 0.1.27), drogą, której używają Live Data i ZF 8HP z `cauliflowermossgrape/idrive7-apps` (MIT): zapytania UDS przez TASU, własny transport diagnostyczny jednostki. Na sztywno w czytniku `g21-car.js`: tylko usługi odczytu 22 (ReadDataByIdentifier) i 01 (OBD, dane bieżące), tylko jeden sterownik naraz (nigdy adres „wszystkie”), nigdy identyfikator VIN, jedno zapytanie naraz co najmniej co 120 ms. Nie ma zmiany sesji, zapisu, kodowania, testów elementów, resetu ani kasowania błędów. Aplikacja zgłasza sterowniki w `theiplay.json` (`"uds"`), pyta przez `/_car/<aplikacja>/uds?e=<adres>&s=<22|01>&d=<identyfikator>`; wyłącznik: Ustawienia > Aplikacje > „Diagnostyka” (reguła `carDiag`).

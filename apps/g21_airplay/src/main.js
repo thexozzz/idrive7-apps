@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.173',
+        version: (this._packageJson && this._packageJson.version) || '0.1.174',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.173') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.174') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5536,6 +5536,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-fs', pol ? (pol.fullscreen === 'page' ? 'obszar strony' : (this._webFsFull ? 'cały ekran' : 'okno z Pozycji')) : '—');
     m.setItemHint('aset-autoplay', pol ? (pol.autoplay === 'gesture' ? 'po dotknięciu' : 'dozwolone') : '—');
     m.setItemHint('aset-car', pol ? (pol.carData === 'off' ? 'wyłączone' : 'aplikacje czytają, co zgłoszą') : '—');
+    m.setItemHint('aset-video', pol ? (pol.video === 'any' ? 'wyłączone: każdy format' : 'H.264 do 720p, 30 kl/s') : '—');
     m.setItemHint('aset-diag', pol ? (pol.carDiag === 'off' ? 'wyłączona' : 'odczyt ze sterowników') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
@@ -5879,7 +5880,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintApps();
         return true;
     }
-    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag') {
+    if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag' || name === 'aset-video') {
         var selfSet = this;
         var ZOOMS = [1, 1.25, 1.5, 1.75, 2];
         s = this._web ? this._web.state() : null;
@@ -5895,6 +5896,8 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
             this._web.send({ op: 'policy', key: 'autoplay', value: pol.autoplay === 'gesture' ? 'allow' : 'gesture' });
         } else if (name === 'aset-car') {
             this._web.send({ op: 'policy', key: 'carData', value: pol.carData === 'off' ? 'apps' : 'off' });
+        } else if (name === 'aset-video') {
+            this._web.send({ op: 'policy', key: 'video', value: pol.video === 'any' ? 'light' : 'any' });
         } else if (name === 'aset-diag') {
             this._web.send({ op: 'policy', key: 'carDiag', value: pol.carDiag === 'off' ? 'apps' : 'off' });
         } else if (m && typeof m.startEdit === 'function') {
@@ -6323,7 +6326,12 @@ AirPlayApp.prototype._mouseMove = function (dx, dy) {
 AirPlayApp.prototype._mouseBox = function () {
     var s = this._web ? this._web.state() : null;
     var b = s && s.fs ? this._webFsBox() : this._webPageBox();
-    return { x: b.x || 0, y: b.y || 0, w: b.w || 1, h: b.h || 1 };
+    // The picture is drawn at its own size from the area's top left corner, and at some zooms it is a few pixels
+    // smaller than the area. The cursor's place in the page is counted from the picture, not from the area: it
+    // used to be stretched over the area and pointed up to 20 px beside what it showed.
+    var w = !s || s.fs || !(s.w > 0) || s.w > b.w ? b.w : s.w;
+    var h = !s || s.fs || !(s.h > 0) || s.h > b.h ? b.h : s.h;
+    return { x: b.x || 0, y: b.y || 0, w: w || 1, h: h || 1 };
 };
 
 // the cursor to the middle of the page

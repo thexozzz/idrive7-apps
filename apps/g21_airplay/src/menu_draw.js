@@ -149,6 +149,8 @@ var EN = {
     'Kursor w menu': 'Cursor in the menu',
     'Rozciągnij': 'Stretch',
     'Zamknij': 'Close',
+    'wyczyść': 'clear',
+    'Lekkie wideo': 'Light video',
     'Wyłącznik': 'Kill switch',
     'Obszar zegarów': 'Gauge area',
     'Strony chrome': 'Chrome pages',
@@ -797,6 +799,8 @@ var APPS_SET_ITEMS = [
     { name: 'aset-picture', title: 'Rozdzielczość', hint: '75%', icon: 'desktop' },
     { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
+    // films in the format this head unit decodes without stutter
+    { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
@@ -1810,6 +1814,15 @@ function keyLabel(key) {
     if (key === 'DEL') {
         return tr('usuń');
     }
+    if (key === 'CLR') {
+        return tr('wyczyść');
+    }
+    if (key === 'LT') {
+        return '<';
+    }
+    if (key === 'RT') {
+        return '>';
+    }
     if (key === 'SH') {
         return 'Aa';
     }
@@ -1885,13 +1898,16 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     count = value.length + (uiLang === 'en' ? ' of ' : ' z ') + (edit.max || 0);
     draw.text(count, fieldX + fieldW - 28 - draw.textWidth(count, 3), fieldY + Math.floor((fieldH - 21) / 2), 3, MUTED);
     maxChars = Math.max(4, Math.floor((fieldW - 200) / 30));
-    shown = value.length > maxChars ? value.slice(value.length - maxChars) : value;
+    // the part of the text around the caret
+    var caretAt = typeof edit.caret === 'number' && edit.caret >= 0 && edit.caret <= value.length ? edit.caret : value.length;
+    var from = value.length > maxChars ? Math.max(0, Math.min(value.length - maxChars, caretAt - Math.floor(maxChars * 0.7))) : 0;
+    shown = value.slice(from, from + maxChars);
     if (shown.length) {
         draw.text(shown, fieldX + 28, fieldY + Math.floor((fieldH - 35) / 2), 5, INK);
     } else {
         draw.text(tr('wpisz tekst'), fieldX + 28, fieldY + Math.floor((fieldH - 28) / 2), 4, LINE, 'label');
     }
-    draw.rect(fieldX + 28 + draw.textWidth(shown, 5) + (shown.length ? 4 : 0), fieldY + 22, 4, 40, ACCENT);
+    draw.rect(fieldX + 28 + draw.textWidth(shown.slice(0, caretAt - from), 5) + (caretAt - from > 0 ? 2 : 0), fieldY + 22, 4, 40, ACCENT);
 
     // the tray and the keys, every row centred; widths from knob_keyboard (the knob's up / down uses them)
     roundBox(draw, trayX, trayY, trayW, trayH, 22, KB_PANEL);
@@ -1911,7 +1927,7 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
             w = Math.round((sp.x1 - sp.x0) * unitPx);
             focus = k === edit.keyIndex;
             held = !!(edit.popup && edit.popup.keyIndex === k);
-            fn = key === 'SH' || key === 'SPC' || key === 'DEL' || key === 'ANU';
+            fn = key === 'SH' || key === 'SPC' || key === 'DEL' || key === 'ANU' || key === 'CLR' || key === 'LT' || key === 'RT';
             fill = fn ? KB_FN : KB_KEY;
             ink = fn ? HINT : INK;
             if (key === 'OK') {
@@ -3496,7 +3512,7 @@ function buildWebFrame(width, height, web) {
         var bkx = appBack.x + Math.floor(appBack.w / 2);
         var hmx = appHome.x + Math.floor(appHome.w / 2);
         var nvy = navY + Math.floor(APP_NAV_H / 2);
-        draw.video(appBox.x, appBox.y, appBox.w, appBox.h, 1);
+        draw.video(appBox.x, appBox.y, info.w > 0 && info.w <= appBox.w ? info.w : appBox.w, info.h > 0 && info.h <= appBox.h ? info.h : appBox.h, 1);
         draw.rect(CONTENT.x, navY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
         draw.quad([[bkx - 9, nvy], [bkx + 7, nvy - 11], [bkx + 7, nvy + 11]], HINT);
         draw.stroke(hmx - 11, nvy - 11, 22, 22, 11, 2.5, HINT);

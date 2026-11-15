@@ -764,7 +764,7 @@ function startPage(recent) {
         + '.r b{display:block;font-weight:400;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r span{display:block;color:#8c7d6c;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
         + 'p{color:#8c7d6c;font-size:14px;margin:18px 0 0}</style></head><body><h1><b>THE</b>iPlay · Przeglądarka</h1><div class="g">' + tiles + '</div>'
         + (rec ? '<h2>Ostatnio otwierane</h2>' + rec : '')
-        + '<p>Adres albo szukane słowa: pole adresu na górze. Strony przeglądarki: <a style="color:#e6a15c" href="#chrome://about">chrome://about</a></p></body></html>';
+        + '<p>Adres albo szukane słowa: pole adresu na górze. Strony przeglądarki: <a style="color:#e6a15c" href="about:blank#chrome://about">chrome://about</a></p></body></html>';
     return 'data:text/html;charset=utf-8;base64,' + Buffer.from(html, 'utf8').toString('base64');
 }
 // what the user typed -> an http(s) URL (a search for anything that is not an address); null: refused
@@ -831,6 +831,24 @@ function sysInfo() {
     return out;
 }
 
+/*
+ * Light video. The head unit decodes film in software on four slow cores. Sites offer the engine VP9 or AV1 first
+ * (YouTube does), which cost several times what H.264 costs to decode: the picture stuttered and then the sound.
+ * With the rule "video": "light" (the default) a page is told, before its own scripts run, that the engine plays
+ * H.264 only, up to 720 lines and 30 frames a second; the player then picks such a stream itself. Nothing is said
+ * when the engine has no H.264, so a film is never left without any format.
+ */
+const LIGHT_VIDEO = '(function(){try{'
+    + 'var heavy=/vp0?9|vp8|av01|av1|hev1|hvc1/i;'
+    + 'function fits(t){t=String(t||"");if(heavy.test(t))return false;var m=/framerate=(\\d+)/i.exec(t);if(m&&Number(m[1])>30)return false;m=/height=(\\d+)/i.exec(t);if(m&&Number(m[1])>720)return false;return true;}'
+    + 'function wrap(ms){if(!ms||!ms.isTypeSupported)return;var o=ms.isTypeSupported.bind(ms);if(!o(\'video/mp4; codecs="avc1.42E01E"\'))return;ms.isTypeSupported=function(t){return fits(t)&&o(t);};}'
+    + 'var base=window.MediaSource;if(!base||!base.isTypeSupported||!base.isTypeSupported(\'video/mp4; codecs="avc1.42E01E"\'))return;'
+    + 'wrap(window.MediaSource);wrap(window.ManagedMediaSource);'
+    + 'var c=HTMLMediaElement.prototype.canPlayType;HTMLMediaElement.prototype.canPlayType=function(t){return fits(t)?c.call(this,t):"";};'
+    + 'var mc=navigator.mediaCapabilities;if(mc&&mc.decodingInfo){var d=mc.decodingInfo.bind(mc);mc.decodingInfo=function(q){var v=q&&q.video;'
+    + 'if(v&&!fits(String(v.contentType||"")+(v.height?"; height="+v.height:"")+(v.framerate?"; framerate="+Math.round(Number(v.framerate)||0):"")))return Promise.resolve({supported:false,smooth:false,powerEfficient:false});return d(q);};}'
+    + '}catch(e){}})();';
+
 // ---------------------------------------------------------------- chrome:// pages
 /*
  * The engine is Chrome's headless shell: it has none of Chrome's own pages a person expects (chrome://version,
@@ -863,7 +881,7 @@ function chromeDoc(name, body) {
     return 'data:text/html;charset=utf-8;base64,' + Buffer.from(html, 'utf8').toString('base64');
 }
 function chromeRows(rows) { return '<table>' + rows.map((r) => '<tr><td>' + esc(r[0]) + '</td><td>' + (r[2] ? r[1] : esc(r[1])) + '</td></tr>').join('') + '</table>'; }
-function chromeLinks(names) { return '<div class="l">' + names.map((n) => '<a href="#chrome://' + n + '">chrome://' + n + '</a>').join('') + '</div>'; }
+function chromeLinks(names) { return '<div class="l">' + names.map((n) => '<a href="about:blank#chrome://' + n + '">chrome://' + n + '</a>').join('') + '</div>'; }
 // the page for chrome://name made here; null: the engine's own page (or none)
 const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===document.body)return "";var t=e.tagName,k="";'
     + 'if(t==="TEXTAREA"||e.isContentEditable)k="text";else if(t==="INPUT"){var y2=(e.type||"text").toLowerCase();if(["text","search","url","email","tel","password","number"].indexOf(y2)>=0)k=y2;}'
@@ -896,6 +914,8 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *             "off"       no app reads anything of the car
  *   carDiag   "apps"      an app may also ask the control units it declares (diagnostic READS: services 22 and 01 only)
  *             "off"       no app asks a control unit anything
+ *   video     "light"     pages are told the engine plays H.264 only, up to 720 lines and 30 frames a second (default)
+ *             "any"       every format the engine has (VP9, AV1: heavy for this head unit)
  *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
  *                         the car's speakers while a page plays and gives them back after (default)
  *             "off"       pages are silent
@@ -904,7 +924,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -912,7 +932,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -924,6 +944,7 @@ function readPolicy(file) {
         pick('fullscreen', (v) => v === 'screen' || v === 'page');
         pick('carData', (v) => v === 'apps' || v === 'off');
         pick('carDiag', (v) => v === 'apps' || v === 'off');
+        pick('video', (v) => v === 'light' || v === 'any');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
         const n = raw.network;
         if (n !== undefined) {
@@ -989,7 +1010,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag }, fs: !!this.fs };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video }, fs: !!this.fs };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1191,13 +1212,13 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any',
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay;
+        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video;
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -1207,7 +1228,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
@@ -1915,6 +1936,9 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     // on the screen): errors only, 60 lines an engine run at most
     e.notes = 0;
     try { await send('Log.enable', {}); } catch (x) { /* not in this engine */ }
+    if (this.policy().video !== 'any') {
+        try { await send('Page.addScriptToEvaluateOnNewDocument', { source: LIGHT_VIDEO }); } catch (x) { this.log('light video: ' + x.message); }
+    }
     try { await send('Media.enable', {}); } catch (x) { /* not in this engine */ }
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -2029,7 +2053,11 @@ Daemon.prototype.onEvent = function (e, m) {
     case 'Page.screencastFrame': this.onFrame(e, p); return;
     case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) this.set({ loading: true, err: '', editable: false }); return;
     case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
-    case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = ''; e.mainFrame = p.frame.id; this.set({ url: p.frame.url + (p.frame.urlFragment || '') }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = '';
+        // a link of a page made here ("about:blank#chrome://name": a link with only a fragment on a data: page is
+        // refused by the engine as a navigation to a data: address, car 2026-11-15)
+        { const own = /^about:blank#(chrome:\/\/[a-z0-9-]{1,40})$/.exec(String(p.frame.url || '') + String(p.frame.urlFragment || '')); const to = own ? this.resolve(own[1]) : null;
+            if (to) { e.mainFrame = p.frame.id; this.set({ loading: true }); this.guard(() => this.go(e, to)); return; } } e.mainFrame = p.frame.id; this.set({ url: p.frame.url + (p.frame.urlFragment || '') }); this.guard(() => this.refresh(e)); } return;
     case 'Page.navigatedWithinDocument':
         if (p.frameId === e.mainFrame) {
             const link = /^data:/.test(p.url) ? /#(chrome:\/\/[a-z0-9-]{1,40})$/.exec(p.url) : null;
