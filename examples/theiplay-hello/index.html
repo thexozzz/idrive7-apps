@@ -39,10 +39,10 @@
   #say { color: var(--ok); min-height: 1.35em; }
   .big { font-size: 84px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
   .unit { color: var(--dim); font-size: 22px; }
-  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 8px; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(64px, 1fr); gap: 8px; overflow-y: auto; }
   .cell { background: #0e141b; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: center; min-height: 0; overflow: hidden; }
-  .cell .k { color: var(--dim); font-size: 14px; white-space: nowrap; }
-  .cell .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+  .cell .k { color: var(--dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell .v { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
   .cell .v small { font-size: 15px; font-weight: 400; color: var(--dim); }
   .cell.off .v { color: var(--dim); }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
@@ -103,12 +103,12 @@
     <section>
       <h2>Prędkość</h2>
       <div><span class="big" id="speed">—</span> <span class="unit">km/h</span></div>
-      <h2>Tryb jazdy</h2>
-      <div class="cell" style="flex:none"><span class="v" id="c-mode">—</span></div>
+      <h2>Grupy</h2>
+      <div class="list" id="groups"></div>
       <p id="carState">sprawdzam…</p>
     </section>
     <section>
-      <h2>Na żywo z auta (tylko odczyt, co 3 s)</h2>
+      <h2 id="gridTitle">Na żywo z auta (tylko odczyt)</h2>
       <div class="grid" id="grid"></div>
     </section>
   </div>
@@ -254,97 +254,106 @@ fetch('/_car/' + app + '/get?i=' + interfejs + '&amp;n=' + pole)
     function get(iface, name) { return car('get?i=' + encodeURIComponent(iface) + '&n=' + encodeURIComponent(name)); }
 
     /*
-     * The dashboard. Each cell names a field that answered on a G21 (2026-11-15) and how its raw number is shown.
-     * A raw value that means "no signal" (the field's largest number) is shown as a dash. The scalings are the ones
-     * BMW's signals commonly use and gave plausible numbers on the car; they are not from a specification.
+     * The dashboard: signals.json, the catalog of what the car sends the head unit (from the Live Data app of
+     * cauliflowermossgrape/idrive7-apps, MIT), in groups. For each value: the interface, the field, the member of
+     * the field, and how the raw number is shown (value = raw * k + o). The fields of the group on the screen are
+     * read one after another every 3 s; the speed every second.
      */
-    var KOMBI = 'de.bmw.infotainment.KombiIF', TPMS = 'de.bmw.infotainment.vehicle.TPMS', FES = 'de.bmw.infotainment.drivingexcitement.FES', V2 = 'de.bmw.infotainment.vehicle.Vehicle2';
-    function num(v, bad) { return typeof v === 'number' && bad.indexOf(v) < 0 ? v : null; }
-    function r1(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
-    function four(v, keys, f, unit) {
-        var out = keys.map(function (k) { var n = num(v[k], [255, 254]); return n === null ? '—' : f(n); });
-        return out.join(' · ') + ' <small>' + unit + '</small>';
+    var V2 = 'de.bmw.infotainment.vehicle.Vehicle2';
+    var cat = null, group = 0, last = {}, fails = {}, dashOn = false, turn = 0;
+    function words(x) { var t = String(x).replace(/_+/g, ' ').trim().toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); }
+    function show(it, v) {
+        var raw = it.m !== undefined && v && typeof v === 'object' ? v[it.m] : v, n, t;
+        if (raw === undefined || raw === null) { return null; }
+        if (it.e) { t = it.e[raw]; if (t === null) { return null; } return t !== undefined ? t : (/UNGUELTIG|UNBEFUELLT|INITIALISIERUNG|NICHT_VERFUEGBAR/.test(String(raw)) ? null : words(raw)); }
+        if (typeof raw !== 'number') { return /UNGUELTIG|UNBEFUELLT|INITIALISIERUNG|NICHT_VERFUEGBAR/.test(String(raw)) ? null : words(raw); }
+        if (it.s16 && raw > 32767) { raw -= 65536; }
+        if ((it.bad && it.bad.indexOf(raw) >= 0) || (typeof it.max === 'number' && raw >= it.max)) { return null; }
+        if (it.raw) { return (it.x ? '0x' + raw.toString(16).toUpperCase() : String(raw)) + ' <small>surowa</small>'; }
+        n = raw * (it.k === undefined ? 1 : it.k) + (it.o || 0);
+        if (it.lim && (n < it.lim[0] || n > it.lim[1])) { return null; }
+        return n.toFixed(it.d === undefined ? 1 : it.d).replace('.', ',') + (it.u ? ' <small>' + it.u + (it.q ? ' ?' : '') + '</small>' : (it.q ? ' <small>?</small>' : ''));
     }
-    var READS = [
-        { i: V2, n: 'statusCarSpeed2', every: 1 },
-        { i: KOMBI, n: 'statusRangeTankStatus' }, { i: KOMBI, n: 'statusKombiExternalDisplay' }, { i: KOMBI, n: 'statusBordcomputerAverage' },
-        { i: KOMBI, n: 'statusBordcomputerTravelData' }, { i: TPMS, n: 'statusTyrePressure' }, { i: TPMS, n: 'statusTyreTemperature' },
-        { i: FES, n: 'statusFESVehicleDynamicSwitchHMI' }, { i: FES, n: 'statusSwitchDriveDynamicSport2' }, { i: FES, n: 'statusVehicleDynamicEngineMaxValue' }
-    ];
-    var CELLS = [
-        { k: 'Zasięg', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.range, [65535, 4095]); return n === null ? null : n + ' <small>km</small>'; } },
-        { k: 'Paliwo', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.fluidLevelFuelTank, [255]); return n === null ? null : n + ' <small>l</small>'; } },
-        { k: 'Przebieg', from: 'statusRangeTankStatus', f: function (v) { var n = num(v.mileageKilometre, [16777215, 4294967295]); return n === null ? null : String(n).replace(/\B(?=(\d{3})+$)/g, ' ') + ' <small>km</small>'; } },
-        { k: 'Temperatura na zewnątrz', from: 'statusKombiExternalDisplay', f: function (v) { var n = num(v.displayTemperatureExterior, [255]); return n === null ? null : r1(n * 0.5 - 40) + ' <small>°C</small>'; } },
-        { k: 'Ciśnienie opon  PL · PP · TL · TP', from: 'statusTyrePressure', f: function (v) { return four(v, ['actualValuePressureTyreFLH', 'actualValuePressureTyreFRH', 'actualValuePressureTyreRLH', 'actualValuePressureTyreRRH'], function (n) { return r1(n / 10); }, 'bar'); } },
-        { k: 'Temperatura opon  PL · PP · TL · TP', from: 'statusTyreTemperature', f: function (v) { return four(v, ['actualValueTemperatureTyreFLH', 'actualValueTemperatureTyreFRH', 'actualValueTemperatureTyreRLH', 'actualValueTemperatureTyreRRH'], function (n) { return String(n - 40); }, '°C'); } },
-        { k: 'Podróż', from: 'statusBordcomputerTravelData', f: function (v) { var d = num(v.wayPassed, [65535]); return d === null ? null : d + ' <small>km, ' + (v.rideDurationHours || 0) + ' h ' + two(v.rideDurationMinutes || 0) + ' min</small>'; } },
-        { k: 'Średnia prędkość', from: 'statusBordcomputerAverage', f: function (v) { var n = num(v.speedAverage1BC1, [4095, 65535]); return n === null ? null : n + ' <small>km/h</small>'; } },
-        { k: 'Średnie zużycie', from: 'statusBordcomputerAverage', f: function (v) { var n = num(v.consumptionAverage1BC1, [4095, 65535]); return n === null ? null : r1(n / 10) + ' <small>l/100 km</small>'; } },
-        { k: 'Doładowanie (wskaźnik)', from: 'statusSwitchDriveDynamicSport2', f: function (v) { var n = num(v.displayBoostPressure, [255]), mx = num(v.displayMaximumValueBoostPressure, [255]); return n === null ? null : n + (mx === null ? '' : ' <small>z ' + mx + '</small>'); } },
-        { k: 'Przeciążenie wzdłuż · w poprzek', from: 'statusSwitchDriveDynamicSport2', f: function (v) { var a = num(v.displayLongitudinalAcceleration, [255, 65535]), b = num(v.displayLateralAcceleration, [255, 65535]); return a === null || b === null ? null : r1((a - 200) / 100) + ' · ' + r1((b - 200) / 100) + ' <small>g</small>'; } },
-        { k: 'Silnik: moc · moment (skala)', from: 'statusVehicleDynamicEngineMaxValue', f: function (v) { var p = num(v.displayMaximumValuePower, [65535]), t = num(v.displayMaximumValueTorque, [65535]); return p === null ? null : p + ' <small>kW</small> · ' + (t === null ? '—' : t) + ' <small>Nm</small>'; } }
-    ];
-    var MODES = { COMFORT: 'Comfort', SPORT: 'Sport', SPORT_PLUS: 'Sport+', ECO_PRO: 'Eco Pro', ADAPTIVE: 'Adaptive', SPORT_INDIVIDUAL: 'Sport Individual' };
-    var last = {}, dashOn = false, turn = 0, fails = {};
-    function cellEls() {
+    function key(it) { return it.i + '|' + it.f; }
+    function drawGroups() {
+        var box = $('groups');
+        box.textContent = '';
+        cat.groups.forEach(function (g, idx) {
+            var b = document.createElement('button');
+            b.textContent = g.group + '  (' + g.items.length + ')';
+            if (idx === group) { b.classList.add('on'); }
+            b.addEventListener('click', function () { group = idx; turn = 0; drawGroups(); cells(); poll(); });
+            box.appendChild(b);
+        });
+    }
+    function cells() {
         var g = $('grid');
-        CELLS.forEach(function (c, idx) {
+        g.textContent = '';
+        $('gridTitle').textContent = cat.groups[group].group + ' — na żywo z auta (tylko odczyt)';
+        cat.groups[group].items.forEach(function (it, idx) {
             var d = document.createElement('div'), k = document.createElement('span'), v = document.createElement('span');
             d.className = 'cell off';
             d.id = 'cell' + idx;
             k.className = 'k';
-            k.textContent = c.k;
+            k.textContent = it.name;
             v.className = 'v';
             v.textContent = '—';
             d.appendChild(k);
             d.appendChild(v);
             g.appendChild(d);
         });
+        draw();
     }
     function draw() {
-        var sp = last.statusCarSpeed2, raw = sp ? sp.speedVehicleCentreOfGravity : null;
+        var sp = last[V2 + '|statusCarSpeed2'], raw = sp ? sp.speedVehicleCentreOfGravity : null;
         $('speed').textContent = typeof raw === 'number' && raw !== 65535 ? String(Math.round(raw * 0.015625)) : '—';
-        var md = last.statusFESVehicleDynamicSwitchHMI ? String(last.statusFESVehicleDynamicSwitchHMI.actualValueModeDrivingExperience || '') : '';
-        $('c-mode').textContent = md ? (MODES[md] || md.replace(/_/g, ' ').toLowerCase()) : '—';
-        CELLS.forEach(function (c, idx) {
-            var el = $('cell' + idx), v = last[c.from], text = null;
-            if (v) { try { text = c.f(v); } catch (e) { text = null; } }
+        cat.groups[group].items.forEach(function (it, idx) {
+            var el = $('cell' + idx), v = last[key(it)], text = null;
+            if (!el) { return; }
+            if (v !== undefined) { try { text = show(it, v); } catch (e) { text = null; } }
             el.classList.toggle('off', text === null);
-            el.lastChild.innerHTML = text === null ? '—' : text;
+            el.lastChild.innerHTML = text === null ? (fails[key(it)] >= 3 ? 'brak w tym aucie' : '—') : text;
         });
     }
     function poll() {
-        if (!dashOn || !shown('car')) { return; }
+        var todo = [], seen = {}, p = Promise.resolve();
+        if (!dashOn || !cat || !shown('car')) { return; }
         turn += 1;
-        var todo = READS.filter(function (r) {
-            // a field that does not answer is asked again only now and then
-            if (fails[r.n] >= 3 && turn % 15 !== 0) { return false; }
-            return r.every === 1 || turn % 3 === 1;
-        });
-        var p = Promise.resolve();
+        todo.push([V2, 'statusCarSpeed2']);
+        seen[V2 + '|statusCarSpeed2'] = true;
+        if (turn % 3 === 1) {
+            cat.groups[group].items.forEach(function (it) {
+                var k = key(it);
+                // a field this car does not have is asked again only now and then
+                if (seen[k] || (fails[k] >= 3 && turn % 30 !== 1)) { return; }
+                seen[k] = true;
+                todo.push([it.i, it.f]);
+            });
+        }
         todo.forEach(function (r) {
-            p = p.then(function () { return get(r.i, r.n); }).then(function (a) {
-                if (a.ok && a.value && typeof a.value === 'object') { last[r.n] = a.value; fails[r.n] = 0; }
-                else { fails[r.n] = (fails[r.n] || 0) + 1; if (fails[r.n] >= 3) { delete last[r.n]; } }
+            p = p.then(function () { return get(r[0], r[1]); }).then(function (a) {
+                var k = r[0] + '|' + r[1];
+                if (a.ok) { last[k] = a.value; fails[k] = 0; } else { fails[k] = (fails[k] || 0) + 1; if (fails[k] >= 3) { delete last[k]; } }
             });
         });
         p.then(function () {
-            var okN = READS.filter(function (r) { return last[r.n]; }).length;
-            $('carState').textContent = okN + ' z ' + READS.length + ' sygnałów odpowiada';
-            $('carState').className = okN ? '' : 'err';
+            var items = cat.groups[group].items, okN = items.filter(function (it) { return last[key(it)] !== undefined; }).length;
+            $('carState').textContent = okN + ' z ' + items.length + ' wartości w tej grupie odpowiada';
+            $('carState').className = '';
             draw();
         });
     }
     function dashStart() {
         if (dashOn) { return; }
         dashOn = true;
-        if (!$('grid').firstChild) { cellEls(); }
-        car('list').then(function (r) {
-            if (!r.ok) { dashOn = false; $('carState').textContent = r.err || 'dane auta niedostępne'; $('carState').className = 'err'; return; }
+        Promise.all([fetch('signals.json', { cache: 'no-store' }).then(function (r) { return r.json(); }), car('list')]).then(function (r) {
+            if (!r[1].ok) { dashOn = false; $('carState').textContent = r[1].err || 'dane auta niedostępne'; $('carState').className = 'err'; return; }
+            cat = r[0];
+            drawGroups();
+            cells();
             setInterval(poll, 1000);
             poll();
-        });
+        }, function () { dashOn = false; $('carState').textContent = 'nie udało się wczytać katalogu sygnałów'; $('carState').className = 'err'; });
     }
 
     // ---- every readable signal: pick an interface, a field, read it (once; again on the button)

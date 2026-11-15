@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.172
+
+- Hello THEiPlay: karta „Auto” rysuje katalog 60 sygnałów w 5 grupach (Silnik, Paliwo i podróż, Jazda, Opony, Podwozie) z przeliczeniami — `signals.json`, wygenerowany skryptem `tools/gen_hello_signals.js` z aplikacji Live Data z `cauliflowermossgrape/idrive7-apps` (MIT). Katalog jest w naszym repozytorium, nic nie trzeba doinstalowywać. Sprawdzone na aucie 2026-11-15 przy pracującym silniku: odpowiada 47 z 60 (m.in. obroty 778, moment, płyn i olej 67 °C, paliwo 19 l, zasięg 231 km, przebieg, opony 2,0 / 1,9 / 2,3 / 2,2 bar, akumulator 83%, poziom oleju).
+- `g21-browser` 0.1.26: czytnik danych auta czeka na zgłoszenie się usługi przed pierwszym odczytem (do 2,5 s). Bez tego pierwsze pytanie o pole z KombiIF, TPMS i Vehicle2 wracało jako „niedostępne”, choć auto je ma. Filtr prywatności nie blokuje już pól z „Driver” w nazwie (np. kąt kierownicy, hamowanie kierowcy); VIN, pozycja, telefon, kontakty i profile zostają zablokowane.
+- Dane diagnostyczne sterowników (to, co czytają Live Data „Useful”, ZF 8HP, Service) idą inną drogą — zapytania UDS przez TASU do sterowników — i nie są dodane.
+
 - Pisanie kursorem: gdy na ekranie jest klawiatura THEiPlay (pole adresu, pole na stronie, nazwa), kursor z gładzika pisze po niej — stuknięcie albo wciśnięcie pokrętła to dotknięcie klawisza pod kursorem; strona pod klawiaturą niczego wtedy nie dostaje. Niesprawdzone w aucie.
 
 ## 0.1.171

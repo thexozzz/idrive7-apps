@@ -25,7 +25,7 @@ const CATALOG = process.env.G21_CAR_CATALOG || '/etc/oap/someip/someip-interface
 const SOMEIP = process.env.G21_CAR_SOMEIP || '/usr/lib/someip.node';
 const NAME_RE = /^[A-Za-z][A-Za-z0-9_.]{0,159}$/;
 // never given out: who and where
-const DENY = /vin(?![a-z])|vehicleidentification|chassis|position|gps|geo|latitude|longitude|location|address|destination|route|phone|contact|person|driver|profile|account|user|key|pin(?![a-z])|password|token|certificate|secret/i;
+const DENY = /vin(?![a-z])|vehicleidentification|chassis|position|gps|geo|latitude|longitude|location|address|destination|route|phone|contact|person|profile|account|user|key|pin(?![a-z])|password|token|certificate|secret/i;
 
 let cat = null;
 let gen = null;
@@ -67,6 +67,18 @@ function proxy(iface) {
             return someip.buildProxy(gen(iface), '1').then(function (p) { return p.init().then(function () { return p; }); });
         }).then(function (p) {
             return tick(function () { try { return p.subscribeToAvailability(function () {}); } catch (e) { return null; } }).then(function () { return p; });
+        }).then(function (p) {
+            // A service is found a moment after its proxy is made; a field asked for before that is "unavailable"
+            // although the car has it (car, 2026-11-15: KombiIF, TPMS and Vehicle2 at the first question). So the
+            // first question waits until the service is there, 2.5 s at most.
+            const end = Date.now() + 2500;
+            const wait = function () {
+                return tick(function () { return typeof p.isAvailable === 'function' ? p.isAvailable() : true; }).then(function (a) {
+                    if (a || Date.now() > end) return p;
+                    return new Promise(function (r) { setTimeout(r, 120); }).then(wait);
+                }, function () { return p; });
+            };
+            return wait();
         });
         proxies[iface].catch(function () { delete proxies[iface]; });
     }
