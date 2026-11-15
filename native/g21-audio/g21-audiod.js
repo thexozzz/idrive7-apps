@@ -129,7 +129,7 @@ function startWriter() {
     // (0.1.6 took the browser's sound at once as well. Wrong: with nothing holding it the engine wrote 49 times
     // faster than time passes and the page's film raced: car, 2026-11-15, frames 1005856 dropped 48570080. The
     // engine has no clock of its own for its sound; being held by this writer IS its clock.)
-    const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : []), opts);
+    const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : ['plain']), opts);
     st.writer = child;
     let buf = '';
     child.stderr.setEncoding('utf8');

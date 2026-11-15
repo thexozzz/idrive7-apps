@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.198
+
+- Cofniete: przeliczanie dzwieku do 36 000 probek na sekunde (g21-audio 0.1.9). Auto, 2026-11-15: dzwiek byl za wysoki i za szybki (efekt wiewiorki), z przerwami. Urzadzenie gra wiec probki w tempie 48 kHz, a jedynie pobiera je przez trzy czwarte czasu; w logu: odebrane 1 982 464 probki, oddane 1 489 531 w ok. 41 s. Tej wady urzadzenia (plug:smartx:CarLifeMedia_CF_48_STEREO) zaden sposob pisania nie usuwa. g21-audio 0.1.10: AirPlay jak w 0.1.8 (calosc dzwieku, lekkie ciecia), Przegladarka jak przed 0.1.6.
+- Wniosek: wlasciwa droga to ta, ktorej uzywa RideTube - dzwiek odtwarza odtwarzacz multimediow auta (zrodlo 1046), a nie urzadzenie CarLifeMedia. To nastepny krok, jeszcze nie zrobiony.
+
 ## 0.1.197
 
 - Pomiar `probe` w aucie (2026-11-15, `g21-audio` 0.1.8), cisza pisana czterema sposobami: przez `plug:` po 480 próbek 36 194/s, po 1024 próbki 36 043/s, wprost do urządzenia 36 049/s, z blokowaniem 35 946/s. Urządzenie głośników zabiera więc 36 000 próbek na sekundę niezależnie od sposobu pisania, choć w nazwie ma 48. Dźwięk pisany jako 48 kHz trwał przez to o jedną trzecią dłużej: AirPlay musiał wyrzucać ćwierć dźwięku (cięcia), a silnik Przeglądarki, który liczy czas filmu po zapisanym dźwięku, odtwarzał filmy w trzech czwartych tempa.

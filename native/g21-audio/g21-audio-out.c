@@ -224,7 +224,11 @@ static int engine(const char *dev, int greedy)
     unsigned long taken = 0, frames = 0, skipped = 0, xruns = 0, gaps = 0;
     unsigned made = 0, sent = 0;          /* frames in `one`: made, and given to the device already */
     double phase = 0.0;                   /* where the next frame out lies between ring[head] and ring[head + 1] */
-    double step = (double)RATE / 36000.0; /* frames in for one frame out: what the car's device was measured at */
+    /* Frames in for one frame out. 0.1.9 had 48000 / 36000 here and a step that followed the store: the device took
+     * the fitted frames and played them at 48 kHz, a third too high and too fast, with pauses (car, 2026-11-15).
+     * So the device does play at 48 kHz and simply takes only three quarters of the time; nothing written here
+     * mends that. One for one again. */
+    double step = 1.0;
     double integ = 0.0, budget = 0.0;
     snd_pcm_t *pcm = NULL;
     int playing = 0;
@@ -288,9 +292,7 @@ static int engine(const char *dev, int greedy)
                 integ += err * 0.0002;   /* slowly: a few hundred looks a second */
                 if (integ > 0.4) integ = 0.4;
                 if (integ < -0.4) integ = -0.4;
-                s = step * (1.0 + 0.5 * err) + integ;
-                if (s < 0.9) s = 0.9;
-                if (s > 2.0) s = 2.0;
+                s = step;       /* (not fitted: see above) */
                 made = sent = 0;
                 while (made < CHUNK && fill >= 2) {
                     const int16_t *a = &ring[head * CH], *b = &ring[((head + 1) % RING) * CH];
