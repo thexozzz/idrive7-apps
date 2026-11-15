@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.184
+
+- Film na stronie (`g21-browser` 0.1.38): całe miejsce wideo jest zakryte czarnym kafelkiem – nie widać ani nie da się nacisnąć żadnych przycisków odtwarzacza strony – z dużym przyciskiem „▶ Odtwórz” na środku (kafelek stoi w miejscu, nie przesuwa się pod kursorem). Naciśnięcie: obracające się kółko i „Ładowanie…”; gdy film jest gotowy, przycisk zmienia kolor i pyta jeszcze raz „▶ Odtwórz” – dopiero to naciśnięcie pokazuje film na pełnym ekranie. Wideo chronione DRM (EME) nie jest zatrzymywane ani zakrywane.
+- Film z YouTube kliknięty na stronie odtwarza odtwarzacz YouTube aplikacji (RideTube): dźwięk przez odtwarzacz multimediów auta, obraz jego dekoderem na zegarze tego odtwarzacza, ze wszystkimi jego przyciskami, zegarami i HUD. Dla YouTube nie ma drugiego potwierdzenia: po „Ładowanie…” otwiera się odtwarzacz YouTube.
+- THEiPlay Player dla pozostałych stron dostał przyciski jak w RideTube: pasek z czasem, −10 s, pauza/odtwarzanie, +10 s, jakość (Auto/720/480/360) i „Rozciągnij”; gałka: obrót ±10 s, wciśnięcie pauza, w lewo wyjście. Przyciski pokazują się na 5 s po dotknięciu oraz w pauzie. Przewijanie działa dla strumieni będących jednym plikiem MP4 z indeksem (pobieranie zakresami od wybranego fragmentu); dźwięk jest zegarem – dekoder nie jest spowalniany, więc dźwięk nie czeka na pobieranie. Pobierane zakresami po 1 MB, zapamiętany adres strumienia przez 30 min.
+- Całość tej wersji NIESPRAWDZONA w aucie.
+
 ## 0.1.183
 
 - THEiPlay Player, wynik z auta (2026-11-15, `g21-browser` 0.1.36): obraz lepszy (767 klatek w 34 s), ale dźwięk mocno przerywał – do głośników docierał ułamek dźwięku, bo serwer filmu spowalnia jedno długie pobieranie. `g21-browser` 0.1.37: strumienie są pobierane krótkimi zakresami po 1 MB (każdy z pełną prędkością); log zapisuje parametry strumieni i liczbę klatek na sekundę. Niesprawdzone w aucie.

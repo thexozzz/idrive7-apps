@@ -2115,6 +2115,15 @@ function drawIconBtn(draw, box, kind, on) {
     if (kind === 'close') {
         draw.quad([[cx - a - 2, cy - a + 2], [cx - a + 2, cy - a - 2], [cx + a + 2, cy + a - 2], [cx + a - 2, cy + a + 2]], ink);
         draw.quad([[cx + a - 2, cy - a - 2], [cx + a + 2, cy - a + 2], [cx - a + 2, cy + a + 2], [cx - a - 2, cy + a - 2]], ink);
+    } else if (kind === 'play') {
+        draw.quad([[cx - 10, cy - 16], [cx - 10, cy + 16], [cx + 16, cy]], ink);
+    } else if (kind === 'pause') {
+        draw.rect(cx - 12, cy - 15, 8, 30, ink);
+        draw.rect(cx + 4, cy - 15, 8, 30, ink);
+    } else if (kind === 'rw' || kind === 'ff') {
+        var sgn = kind === 'ff' ? 1 : -1;
+        draw.quad([[cx - sgn * 14, cy - 12], [cx - sgn * 14, cy + 12], [cx, cy]], ink);
+        draw.quad([[cx, cy - 12], [cx, cy + 12], [cx + sgn * 14, cy]], ink);
     } else if (kind === 'stretch') {
         draw.rect(cx - 7, cy - 2, 14, 4, ink);
         draw.quad([[cx - 15, cy], [cx - 6, cy - 8], [cx - 6, cy + 8]], ink);
@@ -2127,6 +2136,57 @@ function drawIconBtn(draw, box, kind, on) {
             draw.rect(c[0] < 0 ? px : px - t + 1, c[1] < 0 ? py : py - 8 + 1, t, 8, ink);
         });
     }
+}
+
+// THEiPlay Player's buttons over a film in full screen, as RideTube's player has them: the bar with the time, back
+// 10 s, play / pause, on 10 s, the quality (a press takes the next one) and the stretch. They show for 5 s after a
+// touch or a turn of the knob, and while the film is paused or on its way.
+var FILM_UI = { until: 0 };
+function clockText(sec) {
+    var s = Math.max(0, sec | 0);
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var x = s % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (x < 10 ? '0' : '') + x;
+}
+function drawFilmUi(draw, film, hits) {
+    var cx = 960;
+    var cy = 632;
+    var bar = { x: 220, y: 556, w: 1480, h: 8 };
+    var play = { name: 'web-film-play', x: cx - 40, y: cy - 40, w: 80, h: 80 };
+    var rw = { name: 'web-film-rw', x: cx - 160, y: cy - 32, w: 64, h: 64 };
+    var ff = { name: 'web-film-ff', x: cx + 96, y: cy - 32, w: 64, h: 64 };
+    var q = { name: 'web-film-q', x: 1410, y: cy - 24, w: 130, h: 48 };
+    var zoom = { name: 'web-film-zoom', x: 1560, y: cy - 24, w: 200, h: 48 };
+    var wait;
+    var tw;
+    if (film.loading) {
+        wait = tr('Ładowanie…');
+        tw = draw.textWidth(wait, 4);
+        draw.round(cx - Math.floor(tw / 2) - 36, 320, tw + 72, 72, 36, 0x000000C8);
+        draw.text(wait, cx - Math.floor(tw / 2), 342, 4, INK);
+    }
+    if (!film.loading && !film.paused && Date.now() >= FILM_UI.until) {
+        return;
+    }
+    draw.grad(0, 480, 1920, 240, 0x00000000, 0x000000E6);
+    draw.round(bar.x, bar.y, bar.w, bar.h, 4, 0xFFFFFF50);
+    if (film.dur > 0) {
+        draw.round(bar.x, bar.y, Math.max(8, Math.round(bar.w * Math.max(0, Math.min(1, film.pos / film.dur)))), bar.h, 4, ACCENT);
+    }
+    draw.text(clockText(film.pos) + (film.dur > 0 ? ' / ' + clockText(film.dur) : ''), bar.x, cy - 12, 3, INK);
+    drawIconBtn(draw, play, film.paused ? 'play' : 'pause', false);
+    hits.push(play);
+    if (film.seek) {
+        drawIconBtn(draw, rw, 'rw', false);
+        drawIconBtn(draw, ff, 'ff', false);
+        hits.push(rw);
+        hits.push(ff);
+    }
+    drawChip(draw, q, false, film.q === 'auto' ? 'Auto' : film.q + 'p');
+    drawChip(draw, zoom, !!film.fill, tr('Rozciągnij'));
+    hits.push(q);
+    hits.push(zoom);
 }
 
 function drawSlider(draw, x, y, w, value, min, max, hot) {
@@ -3565,6 +3625,10 @@ function buildWebFrame(width, height, web) {
         // one round sign, the same and in the same place as AirPlay's full screen has
         var fsOut = { name: 'web-fs-exit', x: FULL_EXIT.x, y: FULL_EXIT.y, w: FULL_EXIT.w, h: FULL_EXIT.h };
         drawIconBtn(draw, fsOut, 'close', false);
+        var fsHits = [fsOut];
+        if (info.film) {
+            drawFilmUi(draw, info.film, fsHits);
+        }
         if (info.mouse) {
             var fx = fsBox.x + Math.max(0, Math.min(fsBox.w - 1, Math.round(info.cx || 0)));
             var fy = fsBox.y + Math.max(0, Math.min(fsBox.h - 1, Math.round(info.cy || 0)));
@@ -3574,7 +3638,7 @@ function buildWebFrame(width, height, web) {
         return {
             frame: packFrame(draw),
             rects: draw.rects,
-            layout: { webHits: [fsOut], webPage: fsBox, web: lay, video: true, fs: true }
+            layout: { webHits: fsHits, webPage: fsBox, web: lay, video: true, fs: true, film: !!info.film }
         };
     }
     if (showVideo) {
@@ -4023,7 +4087,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', video: native
             };
             var webBuilt;
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
@@ -4637,6 +4701,21 @@ function createMenuSurface(opts) {
         lastOp = operation;
         lastTilt = tilt;
         if (webView && webView.on && !edit) {
+            if (webView.film) {
+                // THEiPlay Player: a turn is 10 s back or on, a press is play / pause, left leaves
+                FILM_UI.until = Date.now() + 5000;
+                if (step) {
+                    choose(step > 0 ? 'web-film-ff' : 'web-film-rw');
+                } else if (tilted && tilt === 'w') {
+                    choose('web-fs-exit');
+                } else if (push === 1 && lastPush !== 1) {
+                    choose('web-film-play');
+                } else if (tilted) {
+                    paintSoon();
+                }
+                lastPush = push;
+                return;
+            }
             // Przeglądarka: the knob scrolls the page, left / right is back / forward, a press opens the address
             if (step && typeof opts.onWebScroll === 'function') {
                 opts.onWebScroll(0, step * 96);
@@ -5025,6 +5104,16 @@ function createMenuSurface(opts) {
         var i;
         var px;
         var py;
+        if (webView && webView.film && phase === 1) {
+            // THEiPlay Player: a touch brings its buttons; the buttons take a touch only once they are there
+            var filmShown = webView.film.paused || webView.film.loading || Date.now() < FILM_UI.until;
+            FILM_UI.until = Date.now() + 5000;
+            paintSoon();
+            if (!filmShown && !(webHits[0] && pointIn(webHits[0], tx, ty))) {
+                webTouch = null;
+                return;
+            }
+        }
         if (phase === 1) {
             for (i = webHits.length - 1; i >= 0; i -= 1) {
                 if (pointIn(webHits[i], tx, ty)) {
@@ -5034,6 +5123,8 @@ function createMenuSurface(opts) {
             }
             if (hit) {
                 webTouch = { hit: hit };
+            } else if (webView.film) {
+                webTouch = null;       // (nothing of the page is under a film)
             } else if (webPage && pointIn(webPage, tx, ty) && webView.live) {
                 webTouch = { page: true };
                 webMoveAt = Date.now();
@@ -5615,7 +5706,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.app || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }

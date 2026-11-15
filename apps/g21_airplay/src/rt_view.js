@@ -90,6 +90,8 @@ module.exports = {
         const model = new Model((o) => ctl.send(o));
         ctx.model = model;                               // THEiPlay: the cluster / HUD read the same film
         ctx.noVideo = noVideo;
+        // THEiPlay: a film picked somewhere else (a YouTube film of a page in Przeglądarka) straight into the player
+        ctx.playId = (id) => play(id, { id: id, title: '' });
         let mode = 'home', browse = 'home', dirty = true;   // browse: the list the player goes back to
         const changed = () => { dirty = true; if (ctx.background) ctx.background('playing', model.active()); labels(); };
         const isFeed = (m) => FEEDS.indexOf(m) >= 0;

@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.183',
+        version: (this._packageJson && this._packageJson.version) || '0.1.184',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.183') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.184') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5269,6 +5269,9 @@ AirPlayApp.prototype._webClient = function () {
             onEdit: function (ev) {
                 self._onWebEdit(ev);
             },
+            onTube: function (id) {
+                self._onWebTube(id);
+            },
             onSys: function (info) {
                 self._sysInfo = info;
                 self._paintSysInfo();
@@ -5369,6 +5372,7 @@ AirPlayApp.prototype._paintWeb = function () {
         cx: this._mouseX,
         cy: this._mouseY,
         fs: !!s.fs,
+        film: s.film || null,
         fsBox: this._webFsBox(),
         fsFull: !!this._webFsFull,
         app: this._webApp || ''
@@ -5381,6 +5385,24 @@ AirPlayApp.prototype._webPageBox = function () {
         return this._menu.webAppPage();
     }
     return this._menu.webPage();
+};
+
+// A YouTube film of a page (its "Odtwórz" was pressed): the app's own YouTube player plays it, as a film picked in
+// Multimedia > YouTube. Without that player the browser tool plays it itself.
+AirPlayApp.prototype._onWebTube = function (id) {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(String(id))) {
+        return;
+    }
+    if (!this._rt || typeof this._rt.playId !== 'function') {
+        if (this._web) {
+            this._web.send({ op: 'film', a: 'own' });
+        }
+        return;
+    }
+    noteStart('web film -> YouTube player ' + id);
+    this._closeBrowser();
+    this._openRideTube();
+    this._rt.playId(String(id));
 };
 
 // Where a page's full screen is drawn on the centre screen: the window of Ustawienia > Pozycja, as everything
@@ -5999,6 +6021,10 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         if (s.ask === 'sandbox') {
             web.send({ op: 'sandbox-off' });
         }
+    } else if (name.indexOf('web-film-') === 0) {
+        // THEiPlay Player's buttons
+        web.send(name === 'web-film-play' ? { op: 'film', a: 'toggle' } : (name === 'web-film-rw' ? { op: 'film', a: 'seek', d: -10 } : (name === 'web-film-ff' ? { op: 'film', a: 'seek', d: 10 }
+            : (name === 'web-film-q' ? { op: 'film', a: 'quality' } : { op: 'film', a: 'zoom' }))));
     } else if (name === 'web-fs-exit') {
         // out of a player's full screen
         web.send({ op: 'key', k: 'Escape' });

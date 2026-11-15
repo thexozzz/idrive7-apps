@@ -1015,7 +1015,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video }, fs: !!this.fs };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1261,6 +1261,7 @@ Daemon.prototype.onCommand = async function (m) {
         await this.startEngine(null);
         return;
     }
+    if (m.op === 'film') { if (e) this.filmCmd(e, m); return; }
     if (this.film && this.film.shown && m.op === 'mouse') { if (m.t === 'up') this.filmPause(); return; }
     if (this.film && (m.op === 'nav' || m.op === 'home' || m.op === 'back' || m.op === 'fwd' || m.op === 'reload')) this.filmStop('the page changes', '');
     if (!e) {
@@ -1376,7 +1377,7 @@ Daemon.prototype.key = async function (e, k) {
     const K = { Enter: [13, '\r'], Backspace: [8, ''], Tab: [9, ''], Escape: [27, ''] }[k];
     if (!K) return;
     // THEiPlay Player: the cross (Escape) ends the film, the knob's press pauses it
-    if (this.film) { if (k === 'Escape') this.filmStop('closed by the owner', ''); else if (k === 'Enter') this.filmPause(); return; }
+    if (this.film && this.film.shown) { if (k === 'Escape') this.filmStop('closed by the owner', ''); else if (k === 'Enter') this.filmPause(); return; }
     // Out of a player's full screen: the engine without a window of its own does not leave full screen on the
     // Escape key (that is the browser's doing, not the page's), so the page is told directly.
     if (k === 'Escape' && this.fs) {
@@ -1654,7 +1655,10 @@ Daemon.prototype.appUrl = async function (id) {
  * THEiPlay Player. A film inside a page is drawn by the engine, photographed (screencast, JPEG) and decoded again:
  * on the head unit that is what stutters, not the film's own decoding (car, 2026-11-15: H.264 1280 x 720 costs the
  * processor about a fifth of one core). So a film does not play inside a page at all (owner, 2026-11-15): every
- * <video> is held paused and gets a large button in its middle, "Odtwórz"; then g21-film.py (yt-dlp) brings the stream, gputest/ffmpeg-va decodes it and scales it to the
+ * <video> is held paused and covered whole (none of the page's own player is left to see or to press) with a
+ * large button in the middle, "Odtwórz". A press loads the film (a turning ring, "Ładowanie…"); when it is
+ * ready the button asks once more, "Odtwórz", and that press shows it in full screen. A YouTube film is given
+ * to the app's YouTube player (RideTube), which plays through the car's own media player. For any other film, g21-film.py (yt-dlp) brings the stream, gputest/ffmpeg-va decodes it and scales it to the
  * centre screen, and the frames go as they are into the video file through g21-webframe; the sound goes to the
  * G21 Audio stream the engine has. The app sees it as a page in full screen: the cross leaves, the knob's press
  * (Enter) or a click pauses.
@@ -1670,28 +1674,8 @@ Daemon.prototype.appUrl = async function (id) {
  * costs an eighth of the processor's time, but bringing each frame back to memory costs 30 ms of processor time
  * against 11 ms for decoding and scaling on the processor.
  */
-const PLAYER_HOOK = '(function(){try{if(window.__g21Film)return;window.__g21Film=1;'
-    + 'var T="\\u25B6 Odtw\\u00F3rz",W="\\u0141adowanie filmu\\u2026",map=new WeakMap(),last=0;'
-    // a film does not play inside the page at all: whatever starts one (the page itself, a tap) is stopped at once
-    + 'function hold(ev){var v=ev.target;if(v&&v.tagName==="VIDEO"){try{v.pause();}catch(e){}}}'
-    + 'document.addEventListener("play",hold,true);document.addEventListener("playing",hold,true);'
-    + 'function ask(v,b){var now=Date.now();if(now-last<1500)return;last=now;try{v.pause();}catch(e){}b.textContent=W;'
-    + 'var q=JSON.stringify({src:String(v.currentSrc||v.src||""),page:String(location.href)});'
-    + 'setTimeout(function(){try{if(window.top===window.self)window.prompt("theiplay-player:"+q);else window.open("about:blank#theiplay-player:"+encodeURIComponent(q));}catch(e){}'
-    + 'setTimeout(function(){b.textContent=T;},45000);},350);}'
-    + 'function make(v){var b=document.createElement("button");b.type="button";b.textContent=T;'
-    + 'b.style.cssText="position:fixed;z-index:2147483647;display:none;margin:0;padding:22px 46px;border:0;border-radius:48px;background:rgba(0,0,0,.86);color:#fff;font:700 32px/1.15 sans-serif;white-space:nowrap;cursor:pointer;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.7),0 6px 28px rgba(0,0,0,.6)";'
-    + 'var go=function(ev){ev.preventDefault();ev.stopPropagation();ask(v,b);};b.addEventListener("click",go,true);b.addEventListener("touchend",go,true);'
-    + '(document.body||document.documentElement).appendChild(b);return b;}'
-    + 'function scan(){var vs=document.querySelectorAll("video"),i,v,b,r,x,y;for(i=0;i<vs.length;i++){v=vs[i];b=map.get(v);if(!b){b=make(v);map.set(v,b);}'
-    + 'if(!v.paused){try{v.pause();}catch(e){}}'
-    + 'if(!b.isConnected)(document.body||document.documentElement).appendChild(b);r=v.getBoundingClientRect();'
-    + 'if(r.width<160||r.height<90||r.bottom<40||r.right<40||r.top>window.innerHeight-40||r.left>window.innerWidth-40||document.fullscreenElement){b.style.display="none";continue;}'
-    // in the middle of the film's picture (of the part of it that is on the screen)
-    + 'x=(Math.max(0,r.left)+Math.min(window.innerWidth,r.right))/2;y=(Math.max(0,r.top)+Math.min(window.innerHeight,r.bottom))/2;'
-    + 'b.style.left=x+"px";b.style.top=y+"px";b.style.display="block";}}'
-    + 'setInterval(scan,700);'
-    + '}catch(e){}})();';
+// (the text of this script is kept readable in the repository's history: one statement a line)
+const PLAYER_HOOK = "(function(){try{if(window.__g21Film)return;window.__g21Film=1;\nvar T=\"▶ Odtwórz\",L=\"Ładowanie…\",map=new WeakMap(),all=[],last=0;\nvar st=document.createElement(\"style\");st.textContent=\"@keyframes g21spin{to{transform:rotate(360deg)}}\";\nfunction root(){return document.body||document.documentElement;}\nfunction hold(ev){var v=ev.target;if(v&&v.tagName===\"VIDEO\"&&!v.mediaKeys){try{v.pause();}catch(e){}}}\ndocument.addEventListener(\"play\",hold,true);document.addEventListener(\"playing\",hold,true);\nfunction send(v,step){var q=JSON.stringify({src:String(v.currentSrc||v.src||\"\"),page:String(location.href),step:step});\ntry{if(window.top===window.self)window.prompt(\"theiplay-player:\"+q);else window.open(\"about:blank#theiplay-player:\"+encodeURIComponent(q));}catch(e){}}\nfunction paint(c){var b=c.firstChild,sp;while(b.firstChild)b.removeChild(b.firstChild);\nif(c.g21===\"load\"){sp=document.createElement(\"span\");sp.style.cssText=\"display:inline-block;width:34px;height:34px;margin-right:18px;vertical-align:-8px;border:5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:g21spin 1s linear infinite\";b.appendChild(sp);b.appendChild(document.createTextNode(L));}\nelse b.appendChild(document.createTextNode(T));\nb.style.background=c.g21===\"ready\"?\"#e8762c\":\"rgba(28,28,28,.96)\";}\nfunction press(v,c){var now=Date.now();if(now-last<700)return;last=now;if(c.g21===\"load\")return;\nif(c.g21===\"ready\"){c.g21=\"idle\";paint(c);send(v,\"play\");return;}\nc.g21=\"load\";paint(c);setTimeout(function(){send(v,\"load\");},300);\nclearTimeout(c.t);c.t=setTimeout(function(){if(c.g21===\"load\"){c.g21=\"ready\";paint(c);}},20000);}\nwindow.__g21FilmReady=function(){all.forEach(function(c){if(c.g21===\"load\"){clearTimeout(c.t);c.g21=\"ready\";paint(c);}});};\nwindow.__g21FilmIdle=function(){all.forEach(function(c){clearTimeout(c.t);if(c.g21!==\"idle\"){c.g21=\"idle\";paint(c);}});};\nfunction make(v){var c=document.createElement(\"div\"),b=document.createElement(\"div\");c.g21=\"idle\";c.v=v;\nc.style.cssText=\"position:fixed;z-index:2147483647;display:none;margin:0;padding:0;border:0;background:#000;cursor:pointer;overflow:hidden\";\nb.style.cssText=\"position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:22px 46px;border-radius:48px;color:#fff;font:700 32px/1.15 sans-serif;white-space:nowrap;box-shadow:0 0 0 2px rgba(255,255,255,.7)\";\nc.appendChild(b);paint(c);\nvar go=function(ev){ev.preventDefault();ev.stopPropagation();if(ev.type===\"click\"||ev.type===\"touchend\")press(v,c);};\n[\"click\",\"touchend\",\"touchstart\",\"mousedown\",\"mouseup\",\"pointerdown\",\"pointerup\",\"dblclick\",\"contextmenu\"].forEach(function(n){c.addEventListener(n,go,true);});\nroot().appendChild(c);all.push(c);return c;}\nfunction place(){var vs=document.querySelectorAll(\"video\"),i,v,c,r;\nif(!st.isConnected){try{(document.head||root()).appendChild(st);}catch(e){}}\nfor(i=0;i<all.length;i++){if(!all[i].v.isConnected)all[i].style.display=\"none\";}\nfor(i=0;i<vs.length;i++){v=vs[i];c=map.get(v);if(!c){c=make(v);map.set(v,c);}\nif(v.mediaKeys){c.style.display=\"none\";continue;}\nif(!v.paused){try{v.pause();}catch(e){}}\nif(!c.isConnected)root().appendChild(c);r=v.getBoundingClientRect();\nif(r.width<160||r.height<90||r.bottom<=0||r.right<=0||r.top>=window.innerHeight||r.left>=window.innerWidth||document.fullscreenElement){c.style.display=\"none\";continue;}\nc.style.left=r.left+\"px\";c.style.top=r.top+\"px\";c.style.width=r.width+\"px\";c.style.height=r.height+\"px\";c.style.display=\"block\";}}\nsetInterval(place,400);window.addEventListener(\"scroll\",place,true);window.addEventListener(\"resize\",place,true);\n}catch(e){}})();";
 const TUBE_RE = /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i;
 Daemon.prototype.filmAsk = function (e, text) {
     let q = null;
@@ -1700,20 +1684,86 @@ Daemon.prototype.filmAsk = function (e, text) {
     const page = ok(q && q.page), src = ok(q && q.src);
     if (!page && !src) { this.log('film: asked without an address'); return; }
     // (the same film asked again while it is on its way: the button was pressed twice)
-    if (this.film && !this.film.shown && this.film.key === page + '|' + src) return;
-    this.guard(() => this.filmStart(e, page, src));
+    const key = page + '|' + src;
+    if (q.step === 'play') {
+        // the confirmation: the film is ready (or will be shown the moment it is)
+        if (this.film && this.film.key === key) { this.filmGo(); return; }
+        this.guard(() => this.filmStart(e, { page: page, src: src, at: 0 }));
+        return;
+    }
+    if (this.film && !this.film.shown && this.film.key === key) return;
+    // A YouTube film goes to the YouTube player the app has (RideTube: sound through the car's own media player,
+    // the picture by its decoder on that player's clock; it plays smoothly and has every button). The app answers
+    // with op "film", a "own" when it has no such player.
+    let host = '';
+    try { host = new URL(page || src).hostname; } catch (x) { host = ''; }
+    const id = TUBE_RE.test(host) ? tubeId(page) : '';
+    if (id && this.client) {
+        this.tubeAsk = { page: page, src: src };
+        this.log('film: YouTube ' + id + ' -> the YouTube player of the app');
+        this.emit({ ev: 'tube', id: id });
+        setTimeout(() => this.filmTell(e, '__g21FilmIdle'), 2500);
+        return;
+    }
+    this.guard(() => this.filmStart(e, { page: page, src: src, at: 0, hold: true }));
 };
-Daemon.prototype.filmStart = async function (e, page, src) {
+// the film's id in a YouTube address (watch?v=, youtu.be/, /embed/, /shorts/, /live/); '' when there is none
+function tubeId(url) {
+    let u = null;
+    try { u = new URL(url); } catch (x) { return ''; }
+    const m = /^\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})(?:[\/?]|$)/.exec(u.pathname) || (/(^|\.)youtu\.be$/i.test(u.hostname) ? /^\/([A-Za-z0-9_-]{11})(?:[\/?]|$)/.exec(u.pathname) : null);
+    const v = u.searchParams.get('v') || '';
+    return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(v) ? v : '');
+}
+// a word to the page's buttons (its covers over the films): "__g21FilmReady", "__g21FilmIdle"
+Daemon.prototype.filmTell = function (e, fn) {
+    if (this.engine !== e || !e.session || !/^__g21Film[A-Za-z]+$/.test(fn)) return;
+    e.cdp.send('Runtime.evaluate', { expression: 'window.' + fn + '&&window.' + fn + '()' }, e.session).catch(() => {});
+};
+// the owner confirmed "Odtwórz": the film that waits is shown; one still on its way is shown when it comes
+Daemon.prototype.filmGo = function () {
+    const f = this.film;
+    if (!f) return;
+    f.hold = false;
+    if (!f.held) return;
+    f.held = false;
+    clearTimeout(f.timer);
+    f.reveal();
+    f.procs.forEach((p) => { try { p.kill('SIGCONT'); } catch (x) { /* gone */ } });
+};
+// "Jakość" of the player, in the button's order (as RideTube's): auto is the stream whose lines fit the picture
+const FILM_Q = ['auto', '720', '480', '360'];
+// where the film is, in seconds: where this run began plus the frames it has given since
+Daemon.prototype.filmPos = function (f) { return f.at + (f.frames + f.dropped) / (f.fps > 1 ? f.fps : 25); };
+// what the app draws its buttons from
+Daemon.prototype.filmView = function () {
+    const f = this.film;
+    if (!f || !f.shown) return null;
+    const want = this.filmSeek ? this.filmSeek.to : this.filmPos(f);
+    return { loading: !f.live, paused: !!f.paused, pos: Math.round(want), dur: Math.round(f.dur || 0), q: f.q, fill: !!f.fill, seek: !!f.seek };
+};
+/*
+ * o: { page, src, at, keep, dur }. keep: the player has the screen already (a seek, another quality, the stretch):
+ * the film's processes are started again at second `at` and the app stays in full screen meanwhile.
+ * The clock: with a sound stream the decoder is not slowed down here at all; it writes the sound into G21 Audio's
+ * pipe, which takes it at the speakers' speed, and gives the frames that belong to it in between, so the sound
+ * leads and never waits for a download timer. Without sound the decoder reads at the film's own speed (-re).
+ */
+Daemon.prototype.filmStart = async function (e, o) {
     if (this.engine !== e || !this.want) return;
-    this.filmStop('another film', '');
-    const o = this.opts;
-    const bin = o.filmDecoder, helper = o.filmHelper;
-    const missing = [o.python, o.ytdlp, bin, helper].filter((f) => !fs.existsSync(f));
+    const keep = !!o.keep && !!this.film && this.film.shown;
+    this.filmStop(keep ? 'starts again' : 'another film', '', keep);
+    const op = this.opts;
+    const bin = op.filmDecoder, helper = op.filmHelper;
+    const missing = [op.python, op.ytdlp, bin, helper].filter((f) => !fs.existsSync(f));
     if (missing.length || !this.frame) {
         this.log('film: cannot start, missing ' + (missing.join(', ') || 'g21-webframe'));
+        if (keep) this.filmLeave();
         this.set({ err: 'Odtwarzacz THEiPlay: brak ' + (missing.length ? path.basename(missing[0]) : 'g21-webframe') });
         return;
     }
+    const opt = this.filmOpt || (this.filmOpt = { q: 'auto', fill: false });
+    const page = o.page, src = o.src;
     let host = '';
     try { host = new URL(page || src).hostname; } catch (x) { host = ''; }
     const tube = TUBE_RE.test(host);
@@ -1722,86 +1772,153 @@ Daemon.prototype.filmStart = async function (e, page, src) {
     const fw = this.want.fw || this.want.w, fh = this.want.fh || this.want.h;
     const k = fw > 1280 ? 2 / 3 : 1;
     const W = Math.round(fw * k) & ~3, H = Math.round(fh * k) & ~1, size = W * H * 3 / 2;
-    const f = { W: W, H: H, fw: fw, fh: fh, key: page + '|' + src, procs: [], frames: 0, dropped: 0, paused: false, shown: false, notes: 0 };
+    const f = { W: W, H: H, fw: fw, fh: fh, key: page + '|' + src, page: page, src: src, tube: tube, at: Math.max(0, Number(o.at) || 0), q: opt.q, fill: !!opt.fill,
+        dur: Number(o.dur) || 0, fps: 0, seek: tube, procs: [], frames: 0, dropped: 0, paused: false, shown: keep, live: false, notes: 0, hold: !!o.hold && !keep, held: false };
     this.film = f;
-    this.log('film: ' + (tube ? 'YouTube' : (originOf(url) || 'address')) + ', picture ' + W + 'x' + H + (this.audio ? '' : ', no sound stream'));
+    this.log('film: ' + (tube ? 'YouTube' : (originOf(url) || 'address')) + ', picture ' + W + 'x' + H + ', quality ' + f.q + (f.fill ? ', stretched' : '') + (f.at ? ', from ' + Math.round(f.at) + ' s' : '') + (this.audio ? '' : ', no sound stream'));
     const env = { PATH: '/usr/bin:/bin', HOME: '/', LANG: 'C.UTF-8' };
-    const note = (who, child) => { let rest = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { rest += d; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim(); rest = rest.slice(i + 1); if (l && f.notes < 40 && (who !== 'decoder' || /Stream #|Duration|rror|arning|blocking|nvalid|ailed/.test(l))) { f.notes += 1; this.log('film ' + who + ': ' + l.slice(0, 220)); } } }); };
-    const fetch = (fmt) => {
-        const args = [helper, '--pyz', o.ytdlp, '--lease', o.leaseFile, '--node', process.execPath, '--format', fmt].concat(url === src && page ? ['--referer', page] : [], ['--', url]);
-        const c = cp.spawn(o.python, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'pipe', 'pipe'] }));
+    const lines = (child, each) => { let rest = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { rest += d; let i; while ((i = rest.indexOf('\n')) >= 0) { const l = rest.slice(0, i).trim(); rest = rest.slice(i + 1); if (l) each(l); } }); };
+    const note = (who, l) => { if (f.notes < 40) { f.notes += 1; this.log('film ' + who + ': ' + l.slice(0, 220)); } };
+    const memoDir = path.join(op.runDir, 'film');
+    try { mkdirp(memoDir); if (!op.noSetuid) fs.chownSync(memoDir, this.uid, this.uid); } catch (x) { /* the fetcher then asks the site each time */ }
+    const fetch = (fmt, picture) => {
+        const args = [helper, '--pyz', op.ytdlp, '--lease', op.leaseFile, '--node', process.execPath, '--format', fmt, '--at', String(f.at), '--memo', path.join(memoDir, 'memo.json')]
+            .concat(url === src && page ? ['--referer', page] : [], ['--', url]);
+        const c = cp.spawn(op.python, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'pipe', 'pipe'] }));
         c.on('error', (x) => this.log('film fetch: ' + x.message));
-        note('fetch', c);
+        lines(c, (l) => {
+            if (/^info /.test(l)) {
+                let i = null;
+                try { i = JSON.parse(l.slice(5)); } catch (x) { i = null; }
+                if (i && picture) { if (i.duration > 0) f.dur = Number(i.duration); if (i.fps > 1) f.fps = Number(i.fps); f.seek = !!i.seek; this.log('film: ' + (i.height || '?') + ' lines, ' + (i.fps || '?') + ' frames a second, ' + Math.round(i.duration || 0) + ' s' + (i.seek ? '' : ', no seeking')); }
+                return;
+            }
+            if (/^start /.test(l)) { if (picture && this.film === f) { const b = Number(l.slice(6)); if (b >= 0 && f.at > 0) f.at = b; } return; }
+            note('fetch', l);
+        });
         f.procs.push(c);
         return c;
     };
     // the stream whose lines fit the picture (480 for the whole centre screen), so that nothing is scaled
-    const top = H >= 720 ? 720 : (H >= 480 ? 480 : 360);
+    const top = f.q !== 'auto' ? Number(f.q) : (H >= 720 ? 720 : (H >= 480 ? 480 : 360));
     // YouTube gives the picture and the sound apart; other sites one stream with both
-    const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=' + top + '][fps<=30]/bv*[vcodec^=avc1][height<=' + top + ']/b[height<=' + top + ']/b'), fetch('ba[ext=m4a]/ba')]
-        : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*')];
-    const vf = 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
-    const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-nostats', '-thread_queue_size', '512', '-re', '-i', 'pipe:0'].concat(feeds[1] ? ['-thread_queue_size', '512', '-re', '-i', 'pipe:3'] : [],
-        ['-map', '0:v:0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
+    const feeds = tube ? [fetch('bv*[vcodec^=avc1][height<=' + top + '][fps<=30]/bv*[vcodec^=avc1][height<=' + top + ']/b[height<=' + top + ']/b', true), fetch('ba[ext=m4a]/ba', false)]
+        : [fetch('b[height<=' + top + ']/b[height<=720]/b/bv*[height<=720]/bv*', true)];
+    const vf = f.fill ? 'scale=' + W + ':' + H + ',format=yuv420p'
+        : 'scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease:force_divisible_by=2,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2:black,format=yuv420p';
+    const bySound = !!this.audio && !!feeds[1];
+    const input = (name) => ['-thread_queue_size', '512'].concat(bySound ? [] : ['-re'], ['-i', name]);
+    const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-nostats'].concat(feeds[1] ? ['-copyts'] : [], input('pipe:0'), feeds[1] ? input('pipe:3') : [],
+        ['-map', '0:v:0', '-vsync', '0', '-sws_flags', 'fast_bilinear', '-vf', vf, '-f', 'rawvideo', 'pipe:1'],
         this.audio ? ['-map', feeds[1] ? '1:a:0' : '0:a:0?', '-ar', '48000', '-ac', '2', '-f', 's16le', '-y', this.audio.fifo] : []);
     let dec;
     try {
         dec = cp.spawn(bin, args, Object.assign(this.ids(), { cwd: '/', env: env, stdio: [feeds[0].stdout, 'pipe', 'pipe'].concat(feeds[1] ? [feeds[1].stdout] : []) }));
     } catch (x) { this.filmStop('decoder: ' + x.message, 'Odtwarzacz THEiPlay: dekoder nie ruszył'); return; }
     f.procs.push(dec);
-    note('decoder', dec);
+    lines(dec, (l) => { if (/Stream #|Duration|rror|arning|blocking|nvalid|ailed/.test(l)) note('decoder', l); });
     dec.on('error', (x) => { this.log('film decoder: ' + x.message); if (this.film === f) this.filmStop('decoder: ' + x.message, 'Odtwarzacz THEiPlay: dekoder nie ruszył'); });
     const head = Buffer.alloc(16);
     head.writeUInt32LE(12 + size, 0); head.write('G21R', 4, 'latin1'); head.writeUInt32LE(W, 8); head.writeUInt32LE(H, 12);
     let pend = [], have = 0;
-    dec.stdout.on('data', (d) => {
-        if (this.film !== f) return;
+    // the page's picture stops coming, the app is told "full screen"
+    f.reveal = () => {
+        f.shownAt = Date.now();
         if (!f.shown) {
-            // the first of the film: the page's picture stops coming, the app is told "full screen"
             f.shown = true;
-            f.shownAt = Date.now();
-            clearTimeout(f.timer);
             this.cast(false).catch(() => {});
             this.fs = { w: f.fw, h: f.fh, scale: f.fw / W, film: true };
             this.set({ w: f.fw, h: f.fh, err: '' });
-            this.push(true);
+        }
+        this.push(true);
+    };
+    dec.stdout.on('data', (d) => {
+        if (this.film !== f) return;
+        if (!f.live) {
+            // the first of the film
+            f.live = true;
+            clearTimeout(f.timer);
+            if (f.hold) {
+                // loaded, and waiting for the owner's "Odtwórz" on the page: everything stands still until then
+                f.held = true;
+                f.procs.forEach((p) => { try { p.kill('SIGSTOP'); } catch (x) { /* gone */ } });
+                this.filmTell(e, '__g21FilmReady');
+                this.log('film: ready, waits for "Odtwórz"');
+                f.timer = setTimeout(() => { if (this.film === f && f.held) this.filmStop('not confirmed in 120 s', ''); }, 120000);
+            } else f.reveal();
         }
         pend.push(d); have += d.length;
         while (have >= size) {
             const all = pend.length === 1 ? pend[0] : Buffer.concat(pend, have);
             const rest = all.subarray(size);
             pend = rest.length ? [rest] : []; have = rest.length;
+            if (!f.shown) continue;      // (what the decoder had on its way when it was made to wait)
             const fr = this.frame;
             // (the video file's writer is behind: this frame is left out rather than kept in memory)
             if (!fr || fr.stdin.writableLength > 2 * size) { f.dropped += 1; continue; }
             try { fr.stdin.write(head); fr.stdin.write(all.subarray(0, size)); f.frames += 1; } catch (x) { f.dropped += 1; }
         }
     });
-    dec.on('exit', (code, sig) => { if (this.film === f) this.filmStop(code === 0 ? 'the end' : 'decoder exit ' + (sig || code), f.frames ? '' : 'Odtwarzacz THEiPlay: tego filmu nie udało się odtworzyć'); });
-    f.timer = setTimeout(() => { if (this.film === f && !f.shown) this.filmStop('no picture in 90 s', 'Odtwarzacz THEiPlay: film nie nadszedł'); }, 90000);
+    dec.on('exit', (code, sig) => { if (this.film === f) this.filmStop(code === 0 ? 'the end' : 'decoder exit ' + (sig || code), f.frames || f.shown ? '' : 'Odtwarzacz THEiPlay: tego filmu nie udało się odtworzyć'); });
+    f.timer = setTimeout(() => { if (this.film === f && !f.live) this.filmStop('no picture in 90 s', 'Odtwarzacz THEiPlay: film nie nadszedł'); }, 90000);
+    f.tick = setInterval(() => { if (this.film === f) this.push(); }, 1000);
+    this.push(true);
 };
 Daemon.prototype.filmPause = function () {
     const f = this.film;
-    if (!f || !f.shown) return;
+    if (!f || !f.live || f.held) return;
     f.paused = !f.paused;
     f.procs.forEach((p) => { try { p.kill(f.paused ? 'SIGSTOP' : 'SIGCONT'); } catch (x) { /* gone */ } });
     this.log('film: ' + (f.paused ? 'paused' : 'plays on'));
+    this.push(true);
 };
-Daemon.prototype.filmStop = function (why, err) {
+// the buttons of the player (the app's op "film"): toggle, stop, seek by d seconds, the next quality, the stretch
+Daemon.prototype.filmCmd = function (e, m) {
+    const a = String(m.a || '');
+    if (a === 'own') { const t = this.tubeAsk; this.tubeAsk = null; if (t) this.guard(() => this.filmStart(e, { page: t.page, src: t.src, at: 0 })); return; }
+    const f = this.film;
+    if (!f) return;
+    if (a === 'toggle') { this.filmPause(); return; }
+    if (a === 'stop') { this.filmStop('closed by the owner', ''); return; }
+    const opt = this.filmOpt || (this.filmOpt = { q: 'auto', fill: false });
+    const again = (at) => this.guard(() => this.filmStart(e, { page: f.page, src: f.src, at: f.seek ? at : 0, keep: true, dur: f.dur }));
+    if (a === 'seek') {
+        if (!f.seek) return;
+        // steps add up while they keep coming (the knob turned, the button pressed again); one start when they rest
+        const d = Math.max(-600, Math.min(600, Number(m.d) || 0));
+        let to = (this.filmSeek ? this.filmSeek.to : this.filmPos(f)) + d;
+        to = Math.max(0, f.dur > 10 ? Math.min(to, f.dur - 5) : to);
+        if (this.filmSeek) clearTimeout(this.filmSeek.timer);
+        this.filmSeek = { to: to, timer: setTimeout(() => { const s = this.filmSeek; this.filmSeek = null; if (s && this.film && this.film.key === f.key) { this.log('film: to ' + Math.round(s.to) + ' s'); again(s.to); } }, 450) };
+        this.push(true);
+        return;
+    }
+    if (a === 'quality') opt.q = FILM_Q[(FILM_Q.indexOf(opt.q) + 1) % FILM_Q.length];
+    else if (a === 'zoom') opt.fill = !opt.fill;
+    else return;
+    again(this.filmPos(f));
+};
+// the page again: its own size, its picture coming
+Daemon.prototype.filmLeave = function () {
+    const e = this.engine;
+    if (!e) return;
+    this.fsStale = true;
+    this.guard(async () => { await this.applyFs(e, false); await this.cast(true); });
+};
+Daemon.prototype.filmStop = function (why, err, keep) {
     const f = this.film;
     if (!f) return;
     this.film = null;
     clearTimeout(f.timer);
+    clearInterval(f.tick);
+    if (!keep && this.filmSeek) { clearTimeout(this.filmSeek.timer); this.filmSeek = null; }
     f.procs.forEach((p) => { try { p.kill('SIGCONT'); } catch (x) { /* gone */ } try { p.kill('SIGKILL'); } catch (x) { /* gone */ } });
     const secs = f.shownAt ? (Date.now() - f.shownAt) / 1000 : 0;
     this.log('film: stopped (' + why + '), ' + f.frames + ' frames shown' + (secs > 1 ? ' in ' + secs.toFixed(0) + ' s (' + (f.frames / secs).toFixed(1) + ' a second)' : '') + (f.dropped ? ', ' + f.dropped + ' left out' : ''));
-    const e = this.engine;
-    if (f.shown && e) {
-        // the page again: its own size, its picture coming
-        this.fsStale = true;
-        this.guard(async () => { await this.applyFs(e, false); await this.cast(true); });
-    }
+    if (f.shown && !keep) this.filmLeave();
+    if (!keep && this.engine) this.filmTell(this.engine, '__g21FilmIdle');
     if (err) this.set({ err: err });
+    else this.push(true);
 };
 Daemon.prototype.openAudio = function () {
     this.closeAudio();

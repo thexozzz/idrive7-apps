@@ -318,6 +318,8 @@ function createRideTube(opts) {
         model,
         ui, settings, display,
         open: () => host.show(),
+        /** the player, on this film (a YouTube film of a page in Przeglądarka) */
+        playId: (id) => { if (typeof ctx.playId === 'function') ctx.playId(id); },
         /** back to THEiPlay's menu (onExit) */
         exit: () => host.exit(false),
         /** closed without onExit (THEiPlay's "Wyłącz aplikację") */

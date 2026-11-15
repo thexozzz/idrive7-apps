@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false
+        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false, film: null
     };
 }
 
@@ -94,9 +94,15 @@ function createBrowserClient(opts) {
                 pol: m.pol && typeof m.pol === 'object' ? { sandbox: String(m.pol.sandbox || ''), picture: Number(m.pol.picture) || 0, memoryLimitMb: Number(m.pol.memoryLimitMb) || 0,
                     homepage: String(m.pol.homepage || ''), autoplay: String(m.pol.autoplay || ''), fullscreen: String(m.pol.fullscreen || ''), carData: String(m.pol.carData || ''), carDiag: String(m.pol.carDiag || ''), video: String(m.pol.video || ''), audio: String(m.pol.audio || ''), sound: String(m.pol.sound || '') } : null,
                 // a player of the page is in full screen and the picture is the whole centre screen
-                fs: !!m.fs
+                fs: !!m.fs,
+                // THEiPlay Player has the screen: what its buttons show
+                film: m.film && typeof m.film === 'object' ? { loading: !!m.film.loading, paused: !!m.film.paused, pos: Number(m.film.pos) || 0, dur: Number(m.film.dur) || 0,
+                    q: String(m.film.q || 'auto'), fill: !!m.film.fill, seek: !!m.film.seek } : null
             };
             tell();
+        } else if (m.ev === 'tube' && typeof options.onTube === 'function') {
+            // a YouTube film of a page: for the app's YouTube player
+            options.onTube(String(m.id || ''));
         } else if (m.ev === 'sysinfo' && typeof options.onSys === 'function') {
             // the head unit, for Ustawienia > O systemie: short texts
             var sys = {};
