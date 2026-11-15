@@ -17,33 +17,40 @@ assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['m
 assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['Multimedia', 'Aplikacje', 'Ustawienia']);
 assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
 assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-store', 'apps-settings', 'apps-back']);
-assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'set-kill', 'position', 'air-quality', 'cluster-place', 'set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'sys-info', 'system-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['sg-display', 'sg-input', 'sg-browser', 'sg-apps', 'sg-general', 'system-back']);
+// the picture's settings are in one place
+assert.deepStrictEqual(menu.SET_DISPLAY_ITEMS.map(function (i) { return i.name; }), ['position', 'air-quality', 'cluster-place', 'settings', 'sgd-back']);
+assert.deepStrictEqual(menu.SET_INPUT_ITEMS.map(function (i) { return i.name; }), ['set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'set-kill', 'sgi-back']);
+assert.deepStrictEqual(menu.SET_APPS_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-car', 'sga-back']);
+assert.deepStrictEqual(menu.SET_GENERAL_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'sys-info', 'sgg-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-import', 'store-demo', 'store-back']);
-assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-car', 'aset-pages', 'aset-back']);
+assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-pages', 'aset-back']);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
-// tiles: large, side by side, in one row; a list page stays rows one under another
+// tiles: a gallery of small tiles, row by row, in up to three rows; a page with sliders stays a list
 [menu.ROOT_ITEMS, menu.MEDIA_ITEMS, menu.APPS_ITEMS].forEach(function (list) {
     var lay = menu.buildFrame(list, 0, 1920, 720).layout;
-    assert.ok(lay.bubbles.length >= 3 && lay.bubbles.every(function (b) { return b.home && b.h === 300 && b.w >= 300 && b.y === lay.bubbles[0].y; }), 'tiles in one row');
+    assert.ok(lay.bubbles.length === list.length && lay.bubbles.every(function (b) { return b.home && b.grid && b.h < 160 && b.w < 350; }), 'small tiles');
+    assert.ok(lay.bubbles.every(function (b) { return b.y === lay.bubbles[0].y; }), 'up to five of them: one row');
     assert.ok(lay.bubbles[1].x >= lay.bubbles[0].x + lay.bubbles[0].w && lay.bubbles[lay.bubbles.length - 1].x + lay.bubbles[lay.bubbles.length - 1].w <= 1900, 'side by side, inside the page');
 });
-assert.ok(menu.buildFrame(menu.SYSTEM_ITEMS, 0, 1920, 720).layout.bubbles.every(function (b) { return b.home; }), 'Ustawienia is tiles too');
 assert.ok(menu.buildFrame(menu.SCREENS['pos-box'], 0, 1920, 720).layout.bubbles.every(function (b) { return !b.home; }), 'a page with sliders stays a list');
-// more tiles than fit: the row slides so that the chosen one is in sight
 (function () {
     var many = [];
     var k;
-    for (k = 0; k < 9; k += 1) {
+    var rows = {};
+    for (k = 0; k < 30; k += 1) {
         many.push({ name: 'tile-' + k, title: 'Kafel ' + k, hint: '', icon: 'play' });
     }
-    many.tiles = true;
     var at0 = menu.buildFrame(many, 0, 1920, 720).layout;
-    var at8 = menu.buildFrame(many, 8, 1920, 720).layout;
-    assert.ok(at0.bubbles.length >= 3 && at0.bubbles.length < 9, 'only what fits is drawn: ' + at0.bubbles.length);
-    assert.strictEqual(at0.bubbles[0].index, 0);
-    assert.strictEqual(at8.bubbles[at8.bubbles.length - 1].index, 8, 'the row slid to the last tile');
-    assert.ok(at8.bubbles.some(function (b) { return b.index === 8 && b.selected; }));
-    assert.strictEqual(at0.count, 9);
+    var at29 = menu.buildFrame(many, 29, 1920, 720).layout;
+    at0.bubbles.forEach(function (b) { rows[b.y] = (rows[b.y] || 0) + 1; });
+    assert.strictEqual(Object.keys(rows).length, 3, 'three rows');
+    assert.ok(at0.bubbles.length === 15 && at0.bubbles[0].index === 0, 'five in a row, three rows: ' + at0.bubbles.length);
+    assert.ok(at0.bubbles[4].y === at0.bubbles[0].y && at0.bubbles[5].y > at0.bubbles[4].y && at0.bubbles[5].x === at0.bubbles[0].x, 'filled row by row');
+    assert.ok(menu.buildFrame(menu.SYSTEM_ITEMS, 0, 1920, 720).layout.bubbles.every(function (b) { return b.grid; }), 'Ustawienia is a gallery too');
+    assert.ok(at29.bubbles.some(function (b) { return b.index === 29 && b.selected; }), 'the rows slid to the last tile');
+    assert.ok(at29.bubbles.every(function (b) { return b.y + b.h <= 720 - 96 && b.y >= 88 + 68; }), 'between the header and the foot');
+    assert.strictEqual(at0.count, 30);
 }());
 assert.strictEqual(menu.SCREENS.youtube[0].name, 'yt-where');
 assert.strictEqual(menu.SCREENS.youtube[1].name, 'yt-login');
@@ -52,7 +59,7 @@ assert.strictEqual(menu.SCREENS.settings[0].name, 'set-render');
 assert.strictEqual(menu.SCREENS.settings[0].hint, 'GPU');
 assert.strictEqual(menu.MEDIA_ITEMS[1].hint, 'lustro iPhone');
 assert.strictEqual(menu.MEDIA_ITEMS[1].icon, 'airplay');
-assert.strictEqual(menu.SYSTEM_ITEMS[0].icon, 'tag');
+assert.strictEqual(menu.SYSTEM_ITEMS[0].icon, 'desktop');
 assert.ok(menu.ICONS.airplay);
 assert.ok(menu.ICONS.play);
 assert.ok(!menu.ROOT_ITEMS.some(function (item) { return item.name === 'host'; }));
@@ -83,7 +90,7 @@ assert.ok(selected.layout.bubbles.some(function (bubble) { return bubble.index !
 var many = [];
 var n;
 for (n = 0; n < 9; n += 1) {
-    many.push({ name: 'row-' + n, title: 'Pozycja ' + n, hint: 'opis', icon: 'play' });
+    many.push({ name: 'row-' + n, title: 'Pozycja ' + n, hint: 'opis', icon: 'play', adjust: n === 0 });   // (a slider keeps the page a list of rows)
 }
 var scrolled = menu.buildFrame(many, 8, 1920, 720, '', 'Lista');
 assert.ok(scrolled.layout.bubbles.length < many.length);

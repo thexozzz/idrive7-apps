@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.170',
+        version: (this._packageJson && this._packageJson.version) || '0.1.171',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.170') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.171') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -1277,7 +1277,8 @@ AirPlayApp.prototype._onQualityChoice = function (name) {
     }
     if (name === 'q-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('system');
+            this._menu.setScreen('set-display');
+            this._paintSystem();
         }
         this._sync();
         return true;
@@ -3010,7 +3011,8 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     if (name === 'label-back') {
         this._labelMove = false;
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('system');
+            this._menu.setScreen('set-general');
+            this._paintSystem();
         }
         this._sync();
         return;
@@ -3032,7 +3034,8 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
             this._menu.setBoxPreview(null);
         }
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('system');
+            this._menu.setScreen('set-display');
+            this._paintSystem();
         }
         return;
     }
@@ -3297,7 +3300,8 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'set-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('system');
+            this._menu.setScreen('set-display');
+            this._paintSystem();
         }
         return;
     }
@@ -5403,7 +5407,7 @@ AirPlayApp.prototype._onWebState = function (state) {
         this._mouseY = Math.floor(state.h / 2);
         this._mouseHome();
     }
-    if (this._menuScreen() === 'apps-settings') {
+    if (this._menuScreen() === 'apps-settings' || this._menuScreen() === 'set-apps') {
         this._paintApps();
     }
     if (!this._webOn) {
@@ -5706,7 +5710,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     if (name === 'sys-info' || name.indexOf('si-') === 0) {
         // the page, and on any of its tiles: read again
         if (name === 'si-back') {
-            go('system');
+            go('set-general');
             this._paintSystem();
             return true;
         }
@@ -5832,16 +5836,31 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return true;
     }
     if (name === 'apps-settings') {
-        go('apps-settings');
+        // (Aplikacje > Ustawienia: the same Ustawienia as on the first page)
+        go('system');
+        return true;
+    }
+    if (name === 'sg-display' || name === 'sg-input' || name === 'sg-general') {
+        go({ 'sg-display': 'set-display', 'sg-input': 'set-input', 'sg-general': 'set-general' }[name]);
+        this._paintSystem();
+        return true;
+    }
+    if (name === 'sg-browser' || name === 'sg-apps') {
+        // their values are the browser tool's: its daemon is asked
+        go(name === 'sg-browser' ? 'apps-settings' : 'set-apps');
         this._webClient().look();
         this._paintApps();
         return true;
     }
-    if (name === 'aset-back') {
+    if (name === 'sgd-back' || name === 'sgi-back' || name === 'sgg-back') {
+        go('system');
+        return true;
+    }
+    if (name === 'aset-back' || name === 'sga-back') {
         if (this._web && !this._webOn) {
             this._web.leave();
         }
-        go('apps');
+        go('system');
         return true;
     }
     if (name === 'aset-cluster' || name === 'aset-hud') {
@@ -6268,6 +6287,10 @@ AirPlayApp.prototype._mouseMove = function (dx, dy) {
     this._scrX = Math.max(0, Math.min(scr.w - 1, (this._scrX || 0) + dx * gain));
     this._scrY = Math.max(0, Math.min(scr.h - 1, (this._scrY || 0) + dy * gain));
     this._mouseIn = this._scrX >= box.x && this._scrX < box.x + box.w && this._scrY >= box.y && this._scrY < box.y + box.h;
+    // THEiPlay's keyboard is over the page: the cursor types on it, the page under it gets nothing
+    if (this._menu && typeof this._menu.editing === 'function' && this._menu.editing()) {
+        this._mouseIn = false;
+    }
     if (this._mouseIn) {
         this._mouseX = Math.max(0, Math.min(p.w - 1, (this._scrX - box.x) * p.w / box.w));
         this._mouseY = Math.max(0, Math.min(p.h - 1, (this._scrY - box.y) * p.h / box.h));
@@ -6320,6 +6343,9 @@ AirPlayApp.prototype._mouseTapMenu = function () {
 };
 
 AirPlayApp.prototype._mouseButton = function (down) {
+    if (this._mouseActive && this._menu && typeof this._menu.editing === 'function' && this._menu.editing()) {
+        this._mouseIn = false;
+    }
     if (this._mouseActive && this._mouseIn === false) {
         if (down) {
             this._mouseTapMenu();
@@ -6336,6 +6362,9 @@ AirPlayApp.prototype._mouseButton = function (down) {
 
 // a light tap on the pad: one click. Not while the knob holds the button, nor right after it (one click, not two).
 AirPlayApp.prototype._mouseTap = function () {
+    if (this._mouseActive && this._menu && typeof this._menu.editing === 'function' && this._menu.editing()) {
+        this._mouseIn = false;
+    }
     if (this._mouseActive && this._mouseIn === false) {
         this._mouseTapMenu();
         return;

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Pisanie kursorem: gdy na ekranie jest klawiatura THEiPlay (pole adresu, pole na stronie, nazwa), kursor z gładzika pisze po niej — stuknięcie albo wciśnięcie pokrętła to dotknięcie klawisza pod kursorem; strona pod klawiaturą niczego wtedy nie dostaje. Niesprawdzone w aucie.
+
+## 0.1.171
+
+- Menu jak galeria: małe kafelki z małą ikoną, układane wierszami w maksymalnie trzech rzędach (pięć w rzędzie, 15 na stronie); przy większej liczbie rzędy się przesuwają. Dotąd był jeden rząd dużych kafelków.
+- Ustawienia podzielone na pięć grup: „Obraz i ekrany” (Pozycja, Rozdzielczość, Obszar zegarów, Renderowanie — wszystko o obrazie w jednym miejscu, dla AirPlay, YouTube, Przeglądarki i aplikacji), „Sterowanie” (mysz z gładzika, szybkość, kursor w menu, wyłącznik), „Przeglądarka” (strona startowa, powiększenie, rozdzielczość strony, pełny ekran, autoodtwarzanie, piaskownica, limit pamięci, strony chrome), „Aplikacje” (Zegary, HUD, Dane auta) i „Ogólne” (napis, język, o systemie). „Ustawienia” w Aplikacjach otwierają te same Ustawienia. Niesprawdzone w aucie.
+
 ## 0.1.170
 
 - Płynność wideo w Przeglądarce (`g21-browser` 0.1.25). Pomiar na aucie 2026-11-15: jednostka jest stale obciążona (średnie obciążenie 9–10 na 4 rdzeniach), a silnik przeglądarki działał z obniżonym priorytetem (`Nice=5`), więc film dekodowany programowo przegrywał o procesor ze wszystkim innym — przycinał obraz, a po chwili dźwięk. Usługa ma teraz zwykły priorytet (`Nice=0`). Klatki strony idą jako JPEG o jakości 72 zamiast 82 (mniej pracy przy kodowaniu i dekodowaniu każdej klatki).

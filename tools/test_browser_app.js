@@ -157,7 +157,9 @@ function glueApp() {
     assert.ok(g._onAppsChoice('multimedia') && g.screen === 'multimedia' && g._onAppsChoice('media-back') && g.screen === 'root', 'Multimedia opens and goes back');
     assert.ok(g._onAppsChoice('system') && g.screen === 'system' && g._onAppsChoice('system-back') && g.screen === 'root', 'Ustawienia opens and goes back');
     assert.ok(g._onAppsChoice('apps') && g._onAppsChoice('apps-store') && g.screen === 'apps-store' && g._onAppsChoice('store-soon') && g._onAppsChoice('store-back') && g.screen === 'apps', 'Sklep says it is to come and goes back');
-    assert.ok(g._onAppsChoice('apps-settings') && g.screen === 'apps-settings');
+    assert.ok(g._onAppsChoice('apps-settings') && g.screen === 'system', 'Aplikacje > Ustawienia is the one Ustawienia');
+    assert.ok(g._onAppsChoice('sg-display') && g.screen === 'set-display' && g._onAppsChoice('sgd-back') && g.screen === 'system', 'a group opens and goes back');
+    assert.ok(g._onAppsChoice('sg-browser') && g.screen === 'apps-settings', 'the group of Przegladarka');
     assert.ok(g.calls.length > 0 && g.calls.every(function (c) { return c === 'look'; }), 'the settings only look at the daemon: no page is opened');
     g.sent.length = 0;
     assert.strictEqual(g.hints['aset-picture'], '—', 'no daemon yet: a dash, not a made-up value');
@@ -194,7 +196,7 @@ function glueApp() {
     g._webOn = false; g._webGaugeAt = 0; g._takeWeb();
     assert.deepStrictEqual(g.dropped, ['cluster', 'hud'], 'the browser closed: its picture leaves the cluster and the HUD');
     g._onAppsChoice('aset-back');
-    assert.ok(g.screen === 'apps' && g.calls.indexOf('leave') !== -1, 'leaving the settings lets the daemon go');
+    assert.ok(g.screen === 'system' && g.calls.indexOf('leave') !== -1, 'leaving the group lets the daemon go');
     console.log('ok Aplikacje: Przeglądarka, YouTube, Ustawienia; rules through the daemon; the page on the cluster and the HUD');
 }());
 // ---- G21 Input: the cursor only in an app with mouse: yes, in front, with the switch on

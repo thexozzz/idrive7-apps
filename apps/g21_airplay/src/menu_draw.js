@@ -154,6 +154,9 @@ var EN = {
     'Strony chrome': 'Chrome pages',
     'Dane auta': 'Car data',
     'O systemie': 'About the system',
+    'Obraz i ekrany': 'Picture and screens',
+    'Sterowanie': 'Controls',
+    'Ogólne': 'General',
     'Miejsce: aplikacje': 'Room: apps',
     'Miejsce: dysk': 'Room: disk',
     'Pamięć': 'Memory',
@@ -705,26 +708,48 @@ var MEDIA_ITEMS = [
 MEDIA_ITEMS.tiles = true;
 
 // what the old main list held besides the players
+/*
+ * Ustawienia: five groups by what a setting is about. The picture (where it sits, how many pixels, which part of
+ * the gauges, how it is drawn) is in ONE place, "Obraz i ekrany", and is for everything THEiPlay shows. Which
+ * screens an app uses stays with that app.
+ */
 var SYSTEM_ITEMS = [
-    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
-    { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
-    { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
-    // a button over everything that ends the app, whatever it shows
-    { name: 'set-kill', title: 'Wyłącznik', hint: 'wyłączony', icon: 'stop' },
-    // where the picture sits and how many pixels it has on each screen: for everything THEiPlay shows (AirPlay,
-    // YouTube, Przeglądarka), and only here. Which screens an app uses stays that app's own choice.
+    { name: 'sg-display', title: 'Obraz i ekrany', hint: 'pozycja, rozdzielczość', icon: 'desktop' },
+    { name: 'sg-input', title: 'Sterowanie', hint: 'mysz, kursor, wyłącznik', icon: 'gear' },
+    { name: 'sg-browser', title: 'Przeglądarka', hint: 'strona, wideo, pamięć', icon: 'globe' },
+    { name: 'sg-apps', title: 'Aplikacje', hint: 'zegary, HUD, dane auta', icon: 'grid' },
+    { name: 'sg-general', title: 'Ogólne', hint: 'napis, język, system', icon: 'tag' },
+    { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+];
+// Obraz i ekrany: for AirPlay, YouTube, Przeglądarka and the apps alike
+var SET_DISPLAY_ITEMS = [
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
     { name: 'air-quality', title: 'Rozdzielczość', hint: '600x400, 400x240', icon: 'desktop' },
-    // the part of the gauges everything is drawn in (was in AirPlay > Ekrany > Zegary, but it is for YouTube and
-    // Przeglądarka as well)
     { name: 'cluster-place', title: 'Obszar zegarów', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
-    // the controller's touchpad as a mouse (the same switch as the icon in an app's bar) and how fast it moves
+    { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
+    { name: 'sgd-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
+];
+// Sterowanie: the controller's touchpad as a mouse, the cursor on THEiPlay's own pages, the button that ends the app
+var SET_INPUT_ITEMS = [
     { name: 'set-mouse', title: 'Mysz z gładzika', hint: 'włączona', icon: 'gear' },
     { name: 'set-mouse-speed', title: 'Szybkość myszy', hint: '3 z 5', icon: 'gear' },
-    // the cursor on THEiPlay's own pages too (menus, lists), not only inside an app
     { name: 'set-menu-mouse', title: 'Kursor w menu', hint: 'wyłączony', icon: 'gear' },
+    { name: 'set-kill', title: 'Wyłącznik', hint: 'wyłączony', icon: 'stop' },
+    { name: 'sgi-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
+];
+// Aplikacje: where an app (and Przeglądarka) shows besides the centre, and whether apps read the car
+var SET_APPS_ITEMS = [
+    { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
+    { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
+    { name: 'aset-car', title: 'Dane auta', hint: 'dla aplikacji', icon: 'gear' },
+    { name: 'sga-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
+];
+// Ogólne
+var SET_GENERAL_ITEMS = [
+    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
+    { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'sys-info', title: 'O systemie', hint: 'miejsce, procesor, pamięć', icon: 'tag' },
-    { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
+    { name: 'sgg-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 
 // Aplikacje: what runs inside THEiPlay. (A shop with more of them is to come.)
@@ -762,21 +787,18 @@ var SYSINFO_ITEMS = [
     { name: 'si-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 
+// Przeglądarka (the screen's name 'apps-settings' is from when these were Aplikacje > Ustawienia)
 var APPS_SET_ITEMS = [
-    { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
-    { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
     { name: 'aset-home', title: 'Strona startowa', hint: 'wbudowana', icon: 'globe' },
     { name: 'aset-zoom', title: 'Powiększenie', hint: '150%', icon: 'desktop' },
     { name: 'aset-picture', title: 'Rozdzielczość', hint: '75%', icon: 'desktop' },
-    { name: 'aset-fs', title: 'Pełny ekran', hint: 'okno z Pozycji', icon: 'desktop' },
+    { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
-    // whether apps from Sklep may read the car's signals (read only, what each declares)
-    { name: 'aset-car', title: 'Dane auta', hint: 'dla aplikacji', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
     { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
-    { name: 'aset-back', title: 'Wstecz', hint: 'aplikacje', icon: 'back' }
+    { name: 'aset-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 
 var AIRPLAY_ITEMS = [
@@ -931,6 +953,10 @@ var SCREENS = {
     apps: APPS_ITEMS,
     'apps-settings': APPS_SET_ITEMS,
     'sys-info': SYSINFO_ITEMS,
+    'set-display': SET_DISPLAY_ITEMS,
+    'set-input': SET_INPUT_ITEMS,
+    'set-apps': SET_APPS_ITEMS,
+    'set-general': SET_GENERAL_ITEMS,
     youtube: YOUTUBE_ITEMS,
     'yt-login': YT_LOGIN_ITEMS,
     'yt-browse': YT_BROWSE_ITEMS,
@@ -1357,7 +1383,56 @@ function menuLayout(items, selected, width, height, detail, heading, previewSpac
     var rowW;
     var rowH;
     var first = 0;
-    if (home) {
+    if (tiles) {
+        // A gallery, as a phone's: small tiles in up to three rows, filled row by row; more of them than fit and the
+        // rows slide so that the chosen one stays in sight.
+        var gGap = 14;
+        var gW = 332;   // five in a row: a title of 15 letters fits
+        var areaX = page.ox + 40;
+        var areaW = page.boxW - 80;
+        var areaY = page.oy + headerH + 14;
+        var areaH = page.boxH - headerH - footerH - 24;
+        var gH = Math.floor((areaH - 2 * gGap) / 3);
+        var cols = Math.max(1, Math.floor((areaW + gGap) / (gW + gGap)));
+        var useCols = Math.min(cols, count);
+        var rowsAll = Math.ceil(count / useCols);
+        var rowsSeen = Math.min(3, rowsAll);
+        var firstRow = 0;
+        var gx0;
+        var gy0;
+        if (rowsAll > 3) {
+            firstRow = Math.floor(selected / useCols) - 1;
+            if (firstRow < 0) {
+                firstRow = 0;
+            }
+            if (firstRow > rowsAll - 3) {
+                firstRow = rowsAll - 3;
+            }
+        }
+        first = firstRow * useCols;
+        gx0 = areaX + Math.floor((areaW - (useCols * gW + (useCols - 1) * gGap)) / 2);
+        gy0 = areaY + Math.floor((areaH - (rowsSeen * gH + (rowsSeen - 1) * gGap)) / 2);
+        for (i = first; i < items.length && i < first + rowsSeen * useCols; i += 1) {
+            bubbles.push({
+                x: gx0 + ((i - first) % useCols) * (gW + gGap),
+                y: gy0 + Math.floor((i - first) / useCols) * (gH + gGap),
+                w: gW,
+                h: gH,
+                hitX: gx0 + ((i - first) % useCols) * (gW + gGap),
+                hitY: gy0 + Math.floor((i - first) / useCols) * (gH + gGap),
+                hitW: gW,
+                hitH: gH,
+                scale: 4,
+                iconPx: 2,
+                home: true,
+                grid: true,
+                index: i,
+                selected: i === selected
+            });
+        }
+        rowW = gW;
+        rowH = gH;
+    } else if (home) {
         // as many tiles as fit; more than that and the row slides so that the chosen one stays in sight
         var fit = tiles ? Math.max(1, Math.floor((page.boxW - 120 + gap) / (380 + gap))) : count;
         var seen = Math.min(count, fit);
@@ -2935,6 +3010,23 @@ function drawRow(draw, bubble, item, title, hint, focus) {
         draw.stroke(x, y, w, h, r, 2.5, ACCENT);
     } else {
         draw.card(x, y, w, h, r, ROW_A, ROW_B);
+    }
+    if (bubble.grid) {
+        // a gallery tile: a small icon at its top left, the title under it, the hint under the title
+        well = 44;
+        wx = x + 14;
+        wy = y + 12;
+        draw.circle(wx + well / 2, wy + well / 2, well / 2, hot ? RED : (focus ? ACCENT : WELL));
+        draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
+        draw.text(draw.fit(title, bubble.scale, w - 28), x + 14, y + 64, bubble.scale, (hot || focus) ? INK : SOFT);
+        if (hint) {
+            draw.text(draw.fit(hint, 3, w - 28), x + 14, y + h - 36, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
+        }
+        if (item.on) {
+            draw.circle(x + w - 28, y + 28, 12, ACCENT);
+            checkMark(draw, x + w - 37, y + 19, 18, 3, PAGE);
+        }
+        return;
     }
     if (bubble.home) {
         // a large tile (pages of two): the icon in a round well, the words centred under it
@@ -5412,6 +5504,8 @@ function createMenuSurface(opts) {
         setItemTitle: setItemTitle,
         setItemIcon: setItemIcon,
         screen: function () { return screenName; },
+        /** the keyboard is on the screen (a field is being typed into) */
+        editing: function () { return !!edit; },
         /** what the menu shows now, for the panel on :1235: the page, its items with their hints and switches */
         snapshot: function () {
             var webOn = !!(webView && webView.on);
@@ -5722,6 +5816,10 @@ module.exports = {
     APPS_ITEMS: APPS_ITEMS,
     APPS_SET_ITEMS: APPS_SET_ITEMS,
     SYSINFO_ITEMS: SYSINFO_ITEMS,
+    SET_DISPLAY_ITEMS: SET_DISPLAY_ITEMS,
+    SET_INPUT_ITEMS: SET_INPUT_ITEMS,
+    SET_APPS_ITEMS: SET_APPS_ITEMS,
+    SET_GENERAL_ITEMS: SET_GENERAL_ITEMS,
     WEB_FILE: WEB_FILE,
     MOUSE_UI: MOUSE_UI,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,
