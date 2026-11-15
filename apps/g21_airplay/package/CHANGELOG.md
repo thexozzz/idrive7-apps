@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.163
+
+- Panel WWW na porcie 1235 jest teraz menu THEiPlay w przeglądarce: ta sama strona, te same pozycje z tymi samymi podpowiedziami i przełącznikami, a kliknięcie to ten sam wybór co dotknięcie na ekranie auta. Panel niczego nie wylicza sam — pyta aplikację, co menu pokazuje (`/api/menu`), i mówi jej, co wybrano (`/api/choose`), więc zawsze za menu nadąża. Wcześniej był to formularz adresu RDP (jest pod `/rdp`) i przy starcie w ogóle nie był uruchamiany. Wybrać można tylko to, co menu pokazuje w danej chwili; żądania z innych stron są odrzucane. Pola tekstowe (nazwa, adres, szukanie) otwierają klawiaturę na ekranie auta. Panel nie ma hasła: działa dla każdego w tej samej sieci co MGU. Sprawdzony na komputerze, nie w aucie.
+
+- Ustawienia > „Przycisk wyłączenia” (obok „Renderowania”): czerwony przycisk X w prawym dolnym rogu, rysowany nad wszystkim, co pokazuje THEiPlay (menu, Przeglądarka, pełny ekran, AirPlay), i sprawdzany przed każdym innym dotykiem. Dotknięcie kończy aplikację: najpierw porządnie (sesje, narzędzia, zamknięcie strony — HMI wraca do tego, co pokazywało), potem proces się kończy; jeśli porządne zamknięcie nie skończy się w 2 s, proces kończy się mimo to. Nie ma go na ekranie YouTube (RideTube rysuje własną powierzchnię). Niesprawdzone w aucie.
+
 ## 0.1.162
 
 - Naprawa: po zminimalizowaniu aplikacji i powrocie nie było kursora myszy. Menu nie mówiło aplikacji, że znów jest na pierwszym planie (renderer nie powtarza tego dla powierzchni, którą aplikacja sama przywraca).

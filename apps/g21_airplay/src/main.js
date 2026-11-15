@@ -298,6 +298,15 @@ function AirPlayApp() {
         store: this._store,
         port: 1235,
         log: noteStart,
+        // the panel shows THEiPlay's own menu and chooses in it
+        getMenu: function () {
+            return self._menu && typeof self._menu.snapshot === 'function' ? self._menu.snapshot() : null;
+        },
+        choose: function (name) {
+            if (self._menu && typeof self._menu.pick === 'function') {
+                self._menu.pick(name);
+            }
+        }
     });
     this._adapter = adapterFactory.createClusterRenderAdapter(this._client);
     this._clusterLayer = '';
@@ -408,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.162',
+        version: (this._packageJson && this._packageJson.version) || '0.1.163',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -486,6 +495,9 @@ function AirPlayApp() {
         this._menu.setMouse(this._mouseOn);
     }
     noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' (saved setting)');
+    if (this._menu && typeof this._menu.setKill === 'function') {
+        this._menu.setKill(!!(this._desk.killButton && this._desk.killButton()));
+    }
     this._bindRideTube();
     // 42 ms: at most 24 film frames a second for the cluster/HUD. Without
     // gauges _takeYoutube itself keeps to one look every 200 ms.
@@ -567,7 +579,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.162') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.163') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -592,7 +604,12 @@ AirPlayApp.prototype._appInitialized = function () {
         })
         .then(function () {
             noteStart('ready');
-            // Panel WWW :1235 był pod RDP — w THEiPlay wyłączony.
+            // Panel WWW :1235: THEiPlay's menu in a browser (the same items and choices as on the car's screen).
+            try {
+                self._panel.start();
+            } catch (panelErr) {
+                noteStart('panel ' + (panelErr && panelErr.message));
+            }
             self._watchNetwork();
             self._watchCar();
             var lastUuid = self.getLastExecutedEntryPointUuid && self.getLastExecutedEntryPointUuid();
@@ -2896,6 +2913,10 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     var screen = this._menuScreen();
     if (name === 'app-exit') {
         this._exitApp();
+        return;
+    }
+    if (name === 'app-kill') {
+        this._killApp();
         return;
     }
     if (name === 'mouse-toggle') {
@@ -5544,6 +5565,9 @@ AirPlayApp.prototype._paintSystem = function () {
         m.setItemHint('cluster-place', this._desk.airClusterTarget() === 'panel' ? 'panel: całe zegary, zasłania BC' : 'mapa: kieszeń, wskazówki zostają');
     }
     m.setItemHint('set-mouse', this._mouseOn ? 'włączona' : 'wyłączona');
+    if (this._desk && this._desk.killButton) {
+        m.setItemHint('set-kill', this._desk.killButton() ? 'włączony: prawy dolny róg' : 'wyłączony');
+    }
     if (this._desk && this._desk.menuMouse) {
         m.setItemHint('set-menu-mouse', this._desk.menuMouse() ? (this._mouseOn ? 'włączony' : 'włączony, ale mysz jest wyłączona') : 'wyłączony');
     }
@@ -5609,6 +5633,17 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         }
         noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' in Ustawienia');
         this._syncMouse('switch');
+        this._paintSystem();
+        return true;
+    }
+    if (name === 'set-kill') {
+        if (this._desk.setKillButton) {
+            this._desk.setKillButton(!this._desk.killButton());
+            this._saveDesk();
+        }
+        if (m && typeof m.setKill === 'function') {
+            m.setKill(this._desk.killButton());
+        }
         this._paintSystem();
         return true;
     }
@@ -6096,6 +6131,31 @@ AirPlayApp.prototype._webTouch = function (phase, x, y) {
 AirPlayApp.prototype._webScroll = function (dx, dy) {
     if (this._webOn && this._web) {
         this._web.send({ op: 'scroll', dx: dx, dy: dy });
+    }
+};
+
+// The emergency button: the app is ended whatever state it is in. First the orderly way (sessions stopped, the
+// tools told, the page closed: the HMI shows what it showed before), then the process ends; when the orderly way
+// does not finish in 2 s, the process ends anyway.
+AirPlayApp.prototype._killApp = function () {
+    var done = false;
+    function die() {
+        if (done) {
+            return;
+        }
+        done = true;
+        noteStart('app-kill exit');
+        process.exit(0);
+    }
+    noteStart('app-kill');
+    setTimeout(die, 2000);
+    try {
+        Promise.resolve(this._exitApp()).then(function () {
+            setTimeout(die, 200);
+        }, die);
+    } catch (err) {
+        noteStart('app-kill ' + (err && err.message));
+        die();
     }
 };
 

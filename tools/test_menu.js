@@ -17,7 +17,7 @@ assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['m
 assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['Multimedia', 'Aplikacje', 'Ustawienia']);
 assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
 assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-store', 'apps-settings', 'apps-back']);
-assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'air-quality', 'cluster-place', 'set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'system-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'set-kill', 'position', 'air-quality', 'cluster-place', 'set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'system-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-import', 'store-demo', 'store-back']);
 assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-pages', 'aset-back']);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);

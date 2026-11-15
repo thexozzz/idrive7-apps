@@ -147,6 +147,7 @@ var EN = {
     'Mysz z gładzika': 'Touchpad mouse',
     'Szybkość myszy': 'Mouse speed',
     'Kursor w menu': 'Cursor in the menu',
+    'Przycisk wyłączenia': 'Kill button',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
     'Poziomo': 'Across',
     'Pionowo': 'Down',
@@ -692,6 +693,8 @@ var SYSTEM_ITEMS = [
     { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
+    // a button over everything that ends the app, whatever it shows
+    { name: 'set-kill', title: 'Przycisk wyłączenia', hint: 'wyłączony', icon: 'stop' },
     // where the picture sits and how many pixels it has on each screen: for everything THEiPlay shows (AirPlay,
     // YouTube, Przeglądarka), and only here. Which screens an app uses stays that app's own choice.
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
@@ -1227,7 +1230,19 @@ FrameBuilder.prototype.atlases = function () {
 /** the FRAME message of a drawing; its .atlases names the glyph atlases to upload first */
 // The touchpad's cursor over a page of THEiPlay itself (paint() sets it for the frame it builds).
 var POINTER = null;
+// The owner's emergency button (Ustawienia > "Przycisk wyłączenia"): on every frame THEiPlay draws, over
+// everything, in the bottom right corner of the part of the screen the app gets touches from. A tap ends the app.
+var KILL = { on: false };
+var KILL_BOX = { name: 'app-kill', x: 104 + 1796 - 12 - 76, y: 88 + 632 - 12 - 76, w: 76, h: 76 };
 function packFrame(draw) {
+    if (KILL.on) {
+        var kx = KILL_BOX.x + KILL_BOX.w / 2;
+        var ky = KILL_BOX.y + KILL_BOX.h / 2;
+        draw.round(KILL_BOX.x - 3, KILL_BOX.y - 3, KILL_BOX.w + 6, KILL_BOX.h + 6, 41, 0x000000C0);
+        draw.round(KILL_BOX.x, KILL_BOX.y, KILL_BOX.w, KILL_BOX.h, 38, RED);
+        draw.line(kx - 15, ky - 15, kx + 15, ky + 15, 5, 0xFFFFFFFF);
+        draw.line(kx + 15, ky - 15, kx - 15, ky + 15, 5, 0xFFFFFFFF);
+    }
     if (POINTER) {
         var cx = Math.round(POINTER.x);
         var cy = Math.round(POINTER.y);
@@ -3554,6 +3569,7 @@ function createMenuSurface(opts) {
     var noted = false;
     var surfaced = false;
     var pointer = null;
+    var killDown = false;
     var claimNoted = false;
     var detail = '';
     var streamInfo = null;
@@ -4905,6 +4921,20 @@ function createMenuSurface(opts) {
                 var tx = body.readFloatLE(4);
                 var ty = body.readFloatLE(8);
                 var hit;
+                // the emergency button comes before everything else on the screen
+                if (KILL.on && pointIn(KILL_BOX, tx, ty)) {
+                    if (phase === 1) {
+                        killDown = true;
+                    } else if (phase === 3 && killDown) {
+                        killDown = false;
+                        note('menu-kill');
+                        choose('app-kill');
+                    }
+                    return;
+                }
+                if (phase === 3) {
+                    killDown = false;
+                }
                 if (webView && webView.on && !edit) {
                     onWebTouch(phase, tx, ty);
                     return;
@@ -5215,6 +5245,14 @@ function createMenuSurface(opts) {
         repaint: function () {
             paint();
         },
+        /** the emergency button that ends the app, drawn over everything */
+        setKill: function (on) {
+            if (KILL.on === !!on) {
+                return;
+            }
+            KILL.on = !!on;
+            paintSoon();
+        },
         /** the touchpad's cursor over THEiPlay's pages: { x, y } in screen pixels, or null for none */
         setPointer: function (p) {
             pointer = p ? { x: Number(p.x) || 0, y: Number(p.y) || 0 } : null;
@@ -5256,6 +5294,27 @@ function createMenuSurface(opts) {
         setItemTitle: setItemTitle,
         setItemIcon: setItemIcon,
         screen: function () { return screenName; },
+        /** what the menu shows now, for the panel on :1235: the page, its items with their hints and switches */
+        snapshot: function () {
+            var webOn = !!(webView && webView.on);
+            return {
+                screen: screenName,
+                crumb: crumbFor(screenName, heading, ''),
+                tiles: !!(SCREENS[screenName] && SCREENS[screenName].tiles),
+                note: webOn ? tr('Przeglądarka') + ': ' + String(webView.title || webView.url || '') : (edit ? 'na ekranie auta jest klawiatura' : (shown ? '' : 'menu nie jest teraz na ekranie auta')),
+                items: webOn
+                    ? [['web-back', 'Wstecz'], ['web-fwd', 'Dalej'], ['web-reload', 'Odśwież'], ['web-home', 'Strona startowa'], ['web-exit', 'Zamknij przeglądarkę']].map(function (w) {
+                        return { name: w[0], title: tr(w[1]), hint: '', on: false };
+                    })
+                    : items.map(function (item) {
+                        return { name: item.name, title: tr(String(item.title || '')), hint: tr(String(item.hint || '')), on: !!item.on };
+                    })
+            };
+        },
+        /** a choice made on the panel: the same as a tap on the item */
+        pick: function (name) {
+            choose(name);
+        },
         setStatus: function (text) {
             var next = String(text || '');
             if (next === detail) {

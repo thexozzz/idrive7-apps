@@ -236,6 +236,8 @@ function createDesktopSettings(stored) {
     var mouseOn = data.mouseOn !== false;
     // the cursor on THEiPlay's own pages (menus), not only inside an app: the owner's choice, off until asked for
     var menuMouse = data.menuMouse === true;
+    // the button over everything that ends the app
+    var killButton = data.killButton === true;
     var mouseSpeed = [1, 2, 3, 4, 5].indexOf(data.mouseSpeed) >= 0 ? data.mouseSpeed : 3;
     var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
@@ -392,6 +394,8 @@ function createDesktopSettings(stored) {
         setMouse: function (on) { mouseOn = !!on; return { ok: true }; },
         mouseSpeed: function () { return mouseSpeed; },
         menuMouse: function () { return menuMouse; },
+        killButton: function () { return killButton; },
+        setKillButton: function (on) { killButton = !!on; return { ok: true }; },
         setMenuMouse: function (on) { menuMouse = !!on; return { ok: true }; },
         setMouseSpeed: function (n) { if ([1, 2, 3, 4, 5].indexOf(n) < 0) { return { ok: false }; } mouseSpeed = n; return { ok: true }; },
         uiLang: function () { return uiLang; },
@@ -661,6 +665,7 @@ function createDesktopSettings(stored) {
                 mouseOn: mouseOn,
                 mouseSpeed: mouseSpeed,
                 menuMouse: menuMouse,
+                killButton: killButton,
                 uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,
