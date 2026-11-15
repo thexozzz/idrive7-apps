@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.155
+
+- Przegląd ustawień ekranów. „Gdzie rysować” (mapa albo cały panel zegarów) było w AirPlay > Ekrany > Zegary, choć dotyczy też YouTube i Przeglądarki; jest teraz w głównych Ustawieniach jako „Obszar na zegarach”. Do Ustawień doszły też „Mysz z gładzika” (ten sam przełącznik co ikona w pasku aplikacji) i „Szybkość myszy” (1–5; ustawienie istniało bez pozycji w menu).
+- Stan po przeglądzie: obraz na zegarach i HUD z AirPlay, YouTube i Przeglądarki idzie jedną ścieżką i używa tej samej Pozycji, Rozdzielczości treści i obszaru zegarów. Przeglądarka na ekranie środkowym celowo ich nie używa (strona interaktywna pod paskiem; ma własne Powiększenie i Rozdzielczość w Aplikacje > Ustawienia). Niesprawdzone w aucie.
+
 ## 0.1.154
 
 - Odtwarzanie multimediów w Przeglądarce: dźwięk nie może już zatrzymać odtwarzacza. Narzędzie `g21-audio` 0.1.1 samo odbiera i odrzuca strumień w tempie czasu rzeczywistego, gdy pisarz nie działa (urządzenia nie da się otworzyć, pisarz jest uruchamiany ponownie), i zabija pisarza, który w 4 s nie otworzył urządzenia. Wcześniej potok zapełniał się w 85 ms, wątek dźwięku silnika stawał w zapisie, film się zacinał i strona pokazywała „coś poszło nie tak”. To prawdopodobna, ale niepotwierdzona logiem przyczyna zgłoszonego błędu.

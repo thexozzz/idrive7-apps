@@ -143,6 +143,9 @@ var EN = {
     'włączony': 'on',
     'włączony na Start': 'on when you press Start',
     'Gdzie rysować': 'Where to draw',
+    'Obszar na zegarach': 'Area on the gauges',
+    'Mysz z gładzika': 'Touchpad mouse',
+    'Szybkość myszy': 'Mouse speed',
     'mapa: kieszeń, wskazówki zostają': 'map: pocket, gauges stay',
     'Poziomo': 'Across',
     'Pionowo': 'Down',
@@ -689,6 +692,12 @@ var SYSTEM_ITEMS = [
     // YouTube, Przeglądarka), and only here. Which screens an app uses stays that app's own choice.
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
     { name: 'air-quality', title: 'Rozdzielczość treści', hint: '600x400, 400x240', icon: 'desktop' },
+    // the part of the gauges everything is drawn in (was in AirPlay > Ekrany > Zegary, but it is for YouTube and
+    // Przeglądarka as well)
+    { name: 'cluster-place', title: 'Obszar na zegarach', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
+    // the controller's touchpad as a mouse (the same switch as the icon in an app's bar) and how fast it moves
+    { name: 'set-mouse', title: 'Mysz z gładzika', hint: 'włączona', icon: 'gear' },
+    { name: 'set-mouse-speed', title: 'Szybkość myszy', hint: '3 z 5', icon: 'gear' },
     { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 
@@ -737,7 +746,7 @@ var AIRPLAY_ITEMS = [
 
 var AIR_OUT_ITEMS = [
     { name: 'air-out-central', title: 'Środek', hint: 'opcje tego ekranu', icon: 'desktop' },
-    { name: 'air-out-cluster', title: 'Zegary', hint: 'mapa albo cały panel', icon: 'grid' },
+    { name: 'air-out-cluster', title: 'Zegary', hint: 'opcje tego ekranu', icon: 'grid' },
     { name: 'air-out-hud', title: 'HUD', hint: 'opcje tego ekranu', icon: 'tag' },
     { name: 'air-out-back', title: 'Wstecz', hint: 'AirPlay', icon: 'back' }
 ];
@@ -746,14 +755,6 @@ function screenOptions(name) {
     var items = [
         { name: 'air-box-power', title: 'Włącz', hint: 'wyłączony', icon: 'play' }
     ];
-    if (name === 'cluster') {
-        items.push({
-            name: 'air-box-place',
-            title: 'Gdzie rysować',
-            hint: 'mapa: kieszeń, wskazówki zostają',
-            icon: 'grid'
-        });
-    }
     items.push(
         { name: 'air-box-back', title: 'Wstecz', hint: 'ekrany', icon: 'back' }
     );

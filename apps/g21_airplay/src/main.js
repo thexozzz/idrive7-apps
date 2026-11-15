@@ -408,7 +408,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.154',
+        version: (this._packageJson && this._packageJson.version) || '0.1.155',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -567,7 +567,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.154') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.155') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -4025,14 +4025,6 @@ AirPlayApp.prototype._paintAirBox = function () {
     var on = this._settings.outputs().indexOf(name) !== -1;
     var panelOn = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
     this._menu.setItemHint('air-box-power', on ? 'włączony na Start' : 'wyłączony', true);
-    if (name === 'cluster') {
-        this._menu.setItemTitle('air-box-place', 'Gdzie rysować', true);
-        this._menu.setItemHint(
-            'air-box-place',
-            panelOn ? 'Panel: całe zegary, zasłania BC' : 'Mapa: kieszeń, wskazówki zostają',
-            true
-        );
-    }
     if (name === 'central' && typeof this._menu.setAirWindow === 'function') {
         this._menu.setAirWindow(this._settings.picture(name));
     }
@@ -5504,6 +5496,27 @@ AirPlayApp.prototype._onStoreProgress = function (ev) {
     this._syncStoreMenu();
 };
 
+// the hints of the main Ustawienia
+AirPlayApp.prototype._paintSystem = function () {
+    var m = this._menu;
+    if (!m || typeof m.setItemHint !== 'function') {
+        return;
+    }
+    if (typeof this._qualityHint === 'function') {
+        m.setItemHint('air-quality', this._qualityHint());
+    }
+    if (this._desk && this._desk.airClusterTarget) {
+        m.setItemHint('cluster-place', this._desk.airClusterTarget() === 'panel' ? 'panel: całe zegary, zasłania BC' : 'mapa: kieszeń, wskazówki zostają');
+    }
+    m.setItemHint('set-mouse', this._mouseOn ? 'włączona' : 'wyłączona');
+    if (this._desk && this._desk.mouseSpeed) {
+        m.setItemHint('set-mouse-speed', this._desk.mouseSpeed() + ' z 5');
+    }
+    if (typeof m.repaint === 'function') {
+        m.repaint();
+    }
+};
+
 /** true: the choice was of Aplikacje or its Ustawienia */
 AirPlayApp.prototype._onAppsChoice = function (name) {
     var m = this._menu;
@@ -5527,9 +5540,46 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     }
     if (name === 'multimedia' || name === 'system') {
         go(name);
-        if (name === 'system' && m && typeof m.setItemHint === 'function' && typeof this._qualityHint === 'function') {
-            m.setItemHint('air-quality', this._qualityHint());
+        if (name === 'system') {
+            this._paintSystem();
         }
+        return true;
+    }
+    if (name === 'cluster-place') {
+        // map pocket or the whole panel: for everything drawn on the gauges
+        this._desk.setAirClusterTarget(this._desk.airClusterTarget() === 'panel' ? 'map' : 'panel');
+        this._saveDesk();
+        this._clusterLayer = '';
+        this._dropMirrorFace('cluster');
+        this._webGaugeOuts = '';
+        this._ytGaugeOuts = '';
+        if (this._lastFrame && this._streamProtocol === 'airplay') {
+            this._faceAt = 0;
+            this._placeMirrorFaces(this._lastFrame.i420, this._lastFrame.w, this._lastFrame.h);
+        }
+        this._paintSystem();
+        return true;
+    }
+    if (name === 'set-mouse') {
+        this._mouseOn = !this._mouseOn;
+        if (this._desk.setMouse) {
+            this._desk.setMouse(this._mouseOn);
+            this._saveDesk();
+        }
+        if (m && typeof m.setMouse === 'function') {
+            m.setMouse(this._mouseOn);
+        }
+        noteStart('[G21-INPUT] mouse ' + (this._mouseOn ? 'enabled' : 'disabled') + ' in Ustawienia');
+        this._syncMouse('switch');
+        this._paintSystem();
+        return true;
+    }
+    if (name === 'set-mouse-speed') {
+        if (this._desk.setMouseSpeed) {
+            this._desk.setMouseSpeed((this._desk.mouseSpeed() % 5) + 1);
+            this._saveDesk();
+        }
+        this._paintSystem();
         return true;
     }
     if (name === 'media-back' || name === 'system-back') {

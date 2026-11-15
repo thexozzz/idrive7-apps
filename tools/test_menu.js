@@ -17,7 +17,7 @@ assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['m
 assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['Multimedia', 'Aplikacje', 'Ustawienia']);
 assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
 assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['browser', 'apps-store', 'apps-settings', 'apps-back']);
-assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'air-quality', 'system-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'settings', 'position', 'air-quality', 'cluster-place', 'set-mouse', 'set-mouse-speed', 'system-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-soon', 'store-back']);
 assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-cluster', 'aset-hud', 'aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-sandbox', 'aset-memory', 'aset-back']);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
@@ -144,7 +144,7 @@ assert.ok(plainNav.layout.nav.ok.y > plainNav.layout.oy + plainNav.layout.boxH -
 assert.strictEqual(menu.SCREENS['air-box'][0].name, 'air-box-power');
 assert.ok(!menu.screenOptions('central').some(function (item) { return item.name === 'air-box-x'; }));
 assert.strictEqual(menu.SCREENS.label.filter(function (item) { return item.name === 'label-font' || item.name === 'label-size' || item.name === 'label-color'; }).length, 3);
-assert.strictEqual(menu.screenOptions('cluster')[1].name, 'air-box-place');
+assert.ok(!menu.screenOptions('cluster').some(function (item) { return item.name === 'air-box-place'; }), 'the area on the gauges is a main setting');
 assert.ok(!menu.screenOptions('central').some(function (item) { return item.name === 'air-box-place'; }));
 assert.ok(!menu.screenOptions('hud').some(function (item) { return item.name === 'air-box-place'; }));
 assert.strictEqual(menu.SCREENS['air-box'][menu.SCREENS['air-box'].length - 1].name, 'air-box-back');
