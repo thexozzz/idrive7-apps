@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.197
+
+- Pomiar `probe` w aucie (2026-11-15, `g21-audio` 0.1.8), cisza pisana czterema sposobami: przez `plug:` po 480 próbek 36 194/s, po 1024 próbki 36 043/s, wprost do urządzenia 36 049/s, z blokowaniem 35 946/s. Urządzenie głośników zabiera więc 36 000 próbek na sekundę niezależnie od sposobu pisania, choć w nazwie ma 48. Dźwięk pisany jako 48 kHz trwał przez to o jedną trzecią dłużej: AirPlay musiał wyrzucać ćwierć dźwięku (cięcia), a silnik Przeglądarki, który liczy czas filmu po zapisanym dźwięku, odtwarzał filmy w trzech czwartych tempa.
+- `g21-audio` 0.1.9: jeden sposób pisania dla wszystkich źródeł – dźwięk jest przeliczany do tempa urządzenia (z zapasu powstają próbki w tempie, w jakim urządzenie je bierze, ok. 4 wejściowe na 3 wyjściowe; dokładna proporcja podąża za wypełnieniem zapasu, więc inne tempo urządzenia albo zegar telefonu też są śledzone). AirPlay: potok opróżniany natychmiast. Przeglądarka i film: potok czytany w tempie zegara (48 000/s), co wstrzymuje źródło dokładnie do czasu rzeczywistego. Raport co 5 s podaje też próbki odebrane i bieżącą proporcję. NIESPRAWDZONE w aucie: jeżeli urządzenie odtwarza próbki w tempie 48 kHz z przerwami (a nie 36 kHz), dźwięk będzie za wysoki – wtedy wracam do poprzedniego sposobu (`play DEVICE plain` zostaje w programie).
+
 ## 0.1.196
 
 - Dźwięk AirPlay, wynik z auta (2026-11-15, `g21-audio` 0.1.6 / `g21-airplay-open` 0.1.62): dźwięk dociera w całości (0 przerw), ale jest lekko przycinany. Trzy kolejne raporty co 5 s: telefon dostarcza ok. 48 300 próbek na sekundę, urządzenie głośników (`plug:smartx:CarLifeMedia_CF_48_STEREO`) zabiera dokładnie 36 000 – równo 75% – więc zapas rośnie do 600 ms i jest przycinany (ok. 12 200 próbek na sekundę wyrzuconych). To samo 75% widać w pomiarze z 0.1.2 („dropped” 25%). Konfiguracja SmartX auta dla tego urządzenia: okres 1024, 3 okresy.

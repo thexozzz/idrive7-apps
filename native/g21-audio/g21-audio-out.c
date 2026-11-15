@@ -193,42 +193,65 @@ static int play(const char *dev)
 }
 
 /*
- * play DEVICE live: for a player that passes on sound it gets from somewhere else as it comes (AirPlay: from a
- * phone, over Wi-Fi), and that throws sound away the moment it is not taken at once. UxPlay's own pipeline has a
- * queue of 8 buffers that leaks: every time the plain writer above held the pipe (waiting for the device) sound
- * was lost there, and with its sink told to wait for time stamps that were sometimes wrong nothing came at all
- * (car, 2026-11-15: 11 s of sound in 29 s with no loss counted here, then none).
- * So here the pipe is emptied at once, always, into a store of 2 s; the device is fed from the store when it has
- * room. Playing begins when 180 ms have gathered (what comes in bursts is evened out), again after the store ran
- * dry; more than 600 ms waiting (a burst, or the phone's clock a little faster than the car's) is cut back to
- * 180 ms, so the sound never lags further behind the picture than that.
+ * The writer, for every player. Measured on the car (2026-11-15, "probe", silence written four ways: through
+ * "plug:" 480 and 1024 frames a write, the device itself, blocking): the speakers' device takes 36 000 frames a
+ * second whichever way it is written to, though its name says 48. What is written as 48 kHz sound therefore lasts a
+ * third longer than it should. Seen from the players: AirPlay gives 48 000 a second and a quarter had to be thrown
+ * away (cuts); the browser's engine, which keeps a film's time by the sound it has written, ran its films at three
+ * quarters of their speed.
+ * So the sound is fitted to the device: a store of what came, and from it frames are made at the device's pace
+ * (straight-line interpolation), about 4 frames in for 3 out. How many exactly is not fixed: the step follows how
+ * full the store is (more waits than wanted: a little faster through it), so a device that takes another number of
+ * frames, or a phone whose clock is a little off, is followed too.
+ *   live (AirPlay): the pipe is emptied at once, always. UxPlay's own pipeline has a queue of 8 buffers that
+ *     leaks: whenever it was held, sound was lost there.
+ *   otherwise (the browser, a film): the pipe is read at the pace of the clock, 48 000 frames a second, and what
+ *     is not read yet holds the player. The browser's engine has no clock of its own for its sound; unheld it
+ *     wrote 49 times faster than time passes.
+ * Playing begins when 180 ms have gathered, again after the store ran dry; more than 600 ms waiting is cut back.
  */
 #define RING (RATE * 2)
 #define LIVE_TARGET (RATE * 180 / 1000)
 #define LIVE_MAX (RATE * 600 / 1000)
-static int live(const char *dev)
+static int engine(const char *dev, int greedy)
 {
     static int16_t ring[RING * CH];
     static int16_t one[CHUNK * CH];
     static char in[16384];
     const size_t fb = CH * sizeof(int16_t);
     size_t part = 0;                      /* bytes of a frame that has not come whole yet */
-    unsigned long head = 0, fill = 0;     /* frames: the first that waits, how many wait */
-    unsigned long frames = 0, skipped = 0, xruns = 0, gaps = 0;
+    unsigned long head = 0, fill = 0;     /* frames of the store: the first that waits, how many wait */
+    unsigned long taken = 0, frames = 0, skipped = 0, xruns = 0, gaps = 0;
+    unsigned made = 0, sent = 0;          /* frames in `one`: made, and given to the device already */
+    double phase = 0.0;                   /* where the next frame out lies between ring[head] and ring[head + 1] */
+    double step = (double)RATE / 36000.0; /* frames in for one frame out: what the car's device was measured at */
+    double integ = 0.0, budget = 0.0;
     snd_pcm_t *pcm = NULL;
     int playing = 0;
-    double last_in = mono_ms(), report = 0, now;
+    double last_in = mono_ms(), last = mono_ms(), report = 0, now;
     long d = 0;
     fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+    if (!greedy) fcntl(0, F_SETPIPE_SZ, 16384);   /* a short pipe: what waits in it is delay (16 KiB = 85 ms) */
     fprintf(stderr, "[G21-AUDIO] out: waiting for sound\n");
     for (;;) {
         struct pollfd p = { 0, POLLIN, 0 };
         int got = 0;
         if (stopping) break;
-        if (poll(&p, 1, pcm ? 5 : 1000) < 0 && errno != EINTR) break;
+        if (poll(&p, 1, pcm ? 4 : 1000) < 0 && errno != EINTR) break;
+        now = mono_ms();
+        /* how much may be read: all of it (live), or what the clock allows since the last look */
+        budget += (now - last) * RATE / 1000.0;
+        if (budget > RATE / 10) budget = RATE / 10;      /* no catching up after a pause */
+        last = now;
         for (;;) {
-            ssize_t n = read(0, in + part, sizeof in - part);
-            size_t bytes, whole, i;
+            size_t want = sizeof in - part, bytes, whole, i;
+            ssize_t n;
+            if (!greedy) {
+                size_t may = budget >= 1.0 ? (size_t)budget * fb : 0;
+                if (may < fb) break;
+                if (want > may) want = may;
+            }
+            n = read(0, in + part, want);
             if (n <= 0) break;            /* nothing waits (or the pipe's other end is closed for now) */
             got = 1;
             bytes = part + (size_t)n;
@@ -238,42 +261,64 @@ static int live(const char *dev)
                 memcpy(&ring[((head + fill) % RING) * CH], in + i * fb, fb);
                 fill++;
             }
+            taken += whole;
+            budget -= (double)whole;
             part = bytes - whole * fb;
             if (part) memmove(in, in + whole * fb, part);
         }
-        now = mono_ms();
         if (got) last_in = now;
         if (!pcm) {
-            if (!fill) continue;
+            if (!fill) { budget = 0.0; continue; }
             fprintf(stderr, "[G21-AUDIO] out: active\n");
             pcm = dev_open(dev);
             if (!pcm) leave(1);
-            fprintf(stderr, "[G21-AUDIO] out: live: plays from 180 ms gathered, at most 600 ms behind\n");
+            fprintf(stderr, "[G21-AUDIO] out: %s, fitted to the device's pace: plays from 180 ms gathered, at most 600 ms behind\n", greedy ? "live" : "held to the clock");
             report = now + 5000;
+            last = mono_ms();
+            budget = 0.0;
         }
         if (fill > LIVE_MAX) { const unsigned long cut = fill - LIVE_TARGET; head = (head + cut) % RING; fill -= cut; skipped += cut; }
-        if (!playing && fill >= LIVE_TARGET) playing = 1;
-        while (playing && fill > 0) {
-            const unsigned long n = fill < CHUNK ? fill : CHUNK;
-            unsigned long i;
+        if (!playing && fill >= LIVE_TARGET) { playing = 1; phase = 0.0; }
+        while (playing) {
             long w;
-            for (i = 0; i < n; i++) memcpy(&one[i * CH], &ring[((head + i) % RING) * CH], fb);
-            w = A.writei(pcm, one, n);
+            if (sent == made) {
+                /* the next frames out, as many as the store has for: each lies between two that came in */
+                double err = ((double)fill - (double)LIVE_TARGET) / (double)RATE;     /* seconds too much in the store */
+                double s;
+                integ += err * 0.0002;   /* slowly: a few hundred looks a second */
+                if (integ > 0.4) integ = 0.4;
+                if (integ < -0.4) integ = -0.4;
+                s = step * (1.0 + 0.5 * err) + integ;
+                if (s < 0.9) s = 0.9;
+                if (s > 2.0) s = 2.0;
+                made = sent = 0;
+                while (made < CHUNK && fill >= 2) {
+                    const int16_t *a = &ring[head * CH], *b = &ring[((head + 1) % RING) * CH];
+                    int c;
+                    for (c = 0; c < CH; c++) one[made * CH + c] = (int16_t)((double)a[c] + ((double)b[c] - (double)a[c]) * phase);
+                    made++;
+                    phase += s;
+                    while (phase >= 1.0 && fill >= 2) { phase -= 1.0; head = (head + 1) % RING; fill--; }
+                    if (phase >= 1.0) break;       /* the store has no more for now */
+                }
+                if (!made) break;
+            }
+            w = A.writei(pcm, one + sent * CH, (unsigned long)(made - sent));
             if (w == -EAGAIN || w == 0) break;                 /* the device is full: when it has room */
-            if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); playing = 0; break; }
-            head = (head + (unsigned long)w) % RING;
-            fill -= (unsigned long)w;
+            if (w < 0) { xruns++; A.recover(pcm, (int)w, 1); playing = 0; made = sent = 0; break; }
+            sent += (unsigned)w;
             frames += (unsigned long)w;
         }
-        if (playing && fill == 0) { playing = 0; gaps++; }    /* ran dry: gathered again before it goes on */
+        if (playing && fill < 2 && sent == made) { playing = 0; gaps++; }    /* ran dry: gathered again before it goes on */
         if (now >= report) {
             report = now + 5000;
             if (A.delay(pcm, &d) < 0) d = 0;
-            fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full 0) xruns %lu delay_ms %ld waiting_ms %lu gaps %lu\n", frames, skipped, xruns, d * 1000 / RATE, fill * 1000 / RATE, gaps);
+            fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full 0) xruns %lu delay_ms %ld waiting_ms %lu gaps %lu taken %lu step %.4f\n",
+                frames, skipped, xruns, d * 1000 / 36000, fill * 1000 / RATE, gaps, taken, step + integ);
         }
-        if (now - last_in > IDLE_MS && fill == 0) break;
+        if (now - last_in > IDLE_MS && fill < 2) break;
     }
-    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full 0) xruns %lu gaps %lu\n", stopping ? "stopped" : "idle", frames, skipped, xruns, gaps);
+    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full 0) xruns %lu gaps %lu taken %lu\n", stopping ? "stopped" : "idle", frames, skipped, xruns, gaps, taken);
     leave(0);
     return 0;
 }
@@ -363,8 +408,9 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
     if (argc >= 4 && !strcmp(argv[1], "probe")) return alsa_load() ? probe(argv[2], argv[3]) : 1;
-    if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "live")) return alsa_load() ? live(argv[2]) : 1;
-    if (argc >= 3 && !strcmp(argv[1], "play")) return alsa_load() ? play(argv[2]) : 1;
+    if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "live")) return alsa_load() ? engine(argv[2], 1) : 1;
+    if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "plain")) return alsa_load() ? play(argv[2]) : 1;   /* the writer before 0.1.9 */
+    if (argc >= 3 && !strcmp(argv[1], "play")) return alsa_load() ? engine(argv[2], 0) : 1;
     if (argc >= 4 && !strcmp(argv[1], "tone")) {
         /* amplitude out of 32767: 1036 is about -30 dBFS (the default), at most 8000 (about -12 dBFS) */
         int amp = argc >= 5 ? atoi(argv[4]) : 1036;
