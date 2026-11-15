@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.176',
+        version: (this._packageJson && this._packageJson.version) || '0.1.177',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.176') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.177') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5622,6 +5622,7 @@ AirPlayApp.prototype._paintSysInfo = function () {
     ['apps', 'disk', 'mem', 'cpu', 'gpu', 'os', 'usb'].forEach(function (k) {
         m.setItemHint('si-' + k, info[k] || '—');
     });
+    m.setItemHint('si-gputest', info.gputest || 'dotknij, aby uruchomić');
     if (typeof m.repaint === 'function') {
         m.repaint();
     }
@@ -5723,7 +5724,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         }
         this._paintSysInfo();
         this._webClient().look();
-        this._web.send({ op: 'sysinfo' });
+        this._web.send({ op: name === 'si-gputest' ? 'gputest' : 'sysinfo' });
         return true;
     }
     if (name === 'set-kill') {

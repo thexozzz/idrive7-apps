@@ -789,6 +789,8 @@ var SYSINFO_ITEMS = [
     { name: 'si-gpu', title: 'Grafika', hint: '—', icon: 'desktop' },
     { name: 'si-os', title: 'System', hint: '—', icon: 'tag' },
     { name: 'si-usb', title: 'USB', hint: '—', icon: 'tag' },
+    // decodes a short film once on the graphics chip and once on the processor, and says how long each took
+    { name: 'si-gputest', title: 'Test GPU', hint: 'dotknij, aby uruchomić', icon: 'desktop' },
     { name: 'si-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 

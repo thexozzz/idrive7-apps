@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.177
+
+- „Test GPU” w Ustawienia > Ogólne > O systemie: ten sam 20‑sekundowy film H.264 1280×720 jest dekodowany raz przez układ graficzny (VA-API, `/dev/dri/renderD128`) i raz przez procesor; wynik (klatki, czas, czas procesora) pojawia się na kafelku i w logu `g21-browser`. Odczyt z auta 2026-11-15: sterownik Intel (VA-API 0.99) zgłasza dekodowanie H.264, HEVC, VP8, VP9 i JPEG. `g21-browser` 0.1.31 niesie do tego `gputest/ffmpeg-va` (FFmpeg 4.4.4 zbudowany pod `libva.so.1` auta) i próbkę filmu. To pomiar przed budową odtwarzacza na GPU; samo dekodowanie w aucie niesprawdzone.
+
 ## 0.1.176
 
 - Pełny ekran bez napisów: zamiast dwóch przycisków z tekstem („Pełny ekran” i „Pozycja” nad oknem AirPlay, „Wyjdź” i „Pełny ekran” w Przeglądarce, „Rozciągnij” i pasek „Wyjdź z trybu pełnoekranowego” w AirPlay) są okrągłe znaki. Okno AirPlay: jeden znak (cztery narożniki) – pełny ekran; położenie okna ustawia się w Ustawienia > Obraz > Pozycja. Pełny ekran AirPlay: krzyżyk (wyjście, zawsze widoczny) i strzałka w obie strony (rozciągnięcie na 1920×720). Pełny ekran Przeglądarki: tylko krzyżyk, w tym samym miejscu.

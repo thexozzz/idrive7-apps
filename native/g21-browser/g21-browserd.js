@@ -1232,7 +1232,8 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
-    if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: sysInfo() }); return; }
+    if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: Object.assign(sysInfo(), { gputest: this.gpuText || '' }) }); return; }
+    if (m.op === 'gputest') { this.gpuTest(); return; }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -1325,6 +1326,39 @@ Daemon.prototype.onCommand = async function (m) {
     case 'key': await this.key(e, String(m.k)); return;
     default: return;
     }
+};
+/*
+ * "Test GPU" (Ustawienia > Ogólne > O systemie), asked for by the owner: the same 20 s H.264 1280 x 720 film is
+ * decoded as fast as it goes, once by the graphics chip (VA-API, /dev/dri/renderD128, frames copied back to
+ * memory) and once by the processor. Only decoding: nothing is shown and nothing is written but the log.
+ * gputest/ffmpeg-va is FFmpeg 4.4.4 (LGPL parts only) built for the car's old libva (libva.so.1).
+ */
+Daemon.prototype.gpuTest = function () {
+    if (this.gpuBusy) return;
+    const bin = path.join(__dirname, 'gputest', 'ffmpeg-va'), film = path.join(__dirname, 'gputest', 'test720.mp4');
+    const say = (t) => { this.gpuText = t; this.log('gpu test: ' + t); this.emit({ ev: 'sysinfo', info: Object.assign(sysInfo(), { gputest: t }) }); };
+    if (!fs.existsSync(bin) || !fs.existsSync(film)) { say('brak plików testu'); return; }
+    this.gpuBusy = true;
+    const run = (name, pre) => new Promise((done) => {
+        const t0 = Date.now();
+        cp.execFile(bin, ['-hide_banner', '-nostdin', '-benchmark'].concat(pre, ['-i', film, '-an', '-f', 'null', '-']),
+            { timeout: 90000, maxBuffer: 4 * 1024 * 1024, env: { PATH: '/usr/bin:/bin', LD_LIBRARY_PATH: '/usr/lib', LIBVA_DRIVERS_PATH: '/usr/lib/dri' } }, (err, so, se) => {
+                const text = String(se || '');
+                const frames = (text.match(/frame=\s*(\d+)/g) || []).pop();
+                const b = /bench: utime=([\d.]+)s stime=([\d.]+)s rtime=([\d.]+)s/.exec(text);
+                const bad = /hwaccel initiali[sz]ation returned error|Failed setup for format|Device creation failed|No VA display|Failed to initialise VAAPI|Impossible to convert/.exec(text);
+                text.split('\n').filter((l) => l.trim() && !/^frame=/.test(l.trim())).slice(-8).forEach((l) => this.log('gpu test ' + name + ': ' + l.trim().slice(0, 200)));
+                if (err && !b) { done(name + ': błąd (' + String(err.message).split('\n')[0].slice(0, 60) + ')'); return; }
+                if (bad) { done(name + ': nie ruszyło (' + bad[0] + ')'); return; }
+                const n = frames ? Number(/\d+/.exec(frames)[0]) : 0, wall = b ? Number(b[3]) : (Date.now() - t0) / 1000, cpu = b ? Number(b[1]) + Number(b[2]) : 0;
+                done(name + ': ' + n + ' klatek w ' + wall.toFixed(1) + ' s (' + (wall > 0 ? Math.round(n / wall) : 0) + ' kl./s), procesor ' + cpu.toFixed(1) + ' s');
+            });
+    });
+    say('trwa…');
+    run('GPU', ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128']).then((a) => {
+        say(a + ' · procesor: trwa…');
+        return run('procesor', ['-threads', '4']).then((b) => { say(a + ' · ' + b); });
+    }).catch((x) => say('błąd: ' + x.message)).then(() => { this.gpuBusy = false; });
 };
 Daemon.prototype.key = async function (e, k) {
     const K = { Enter: [13, '\r'], Backspace: [8, ''], Tab: [9, ''], Escape: [27, ''] }[k];
