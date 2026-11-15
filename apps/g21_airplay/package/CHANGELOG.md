@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.140
+
+- Przeglądarka: obraz nie zamiera po włączeniu pełnego ekranu w odtwarzaczu. Na aucie (0.1.139) silnik zaczynał wtedy wysyłać klatki w innym rozmiarze, a dekoder nie mógł podmienić pliku obrazu należącego do roota (253 razy „Operation not permitted”), więc ekran stał. Narzędzie `g21-browser` 0.1.4: ekran, który widzi strona, ma rozmiar jej okna, więc pełny ekran wypełnia obszar strony; gdy rozmiar klatki jednak się zmieni, demon usuwa stary plik i dekoder tworzy nowy.
+- Pełny ekran odtwarzacza = cały obszar strony pod paskiem (pasek przeglądarki zostaje). W tym trybie silnik rysuje jeden piksel na piksel CSS, więc film mniej obciąża procesor.
+- Lżejszy obraz: strona jest rysowana w 75% pikseli ekranu (np. 1332×396 zamiast 1788×546 przy 150%), a renderer skaluje ją na GPU do tego samego miejsca. To 56% pikseli do narysowania, zakodowania i zdekodowania na procesorze auta. Układ strony i dotyk się nie zmieniają.
+- Dźwięk stron jest nadal wyłączony (silnik startuje z `--mute-audio`); wyprowadzenie go na głośniki auta to osobna praca. Filmy z YouTube z dźwiękiem: pozycja „YouTube” w menu.
+- Sprawdzone: pełny test na Ubuntu 18.04 z jądrem 4.14.195 na prawdziwym silniku Google, w tym nowy test pełnego ekranu. Na aucie jeszcze niesprawdzone.
+
 ## 0.1.139
 
 - Przeglądarka: widać stronę. Na aucie (0.1.138) renderer odrzucał plik obrazu strony („is not the app's (owner uid 12710)”), bo zapisywał go użytkownik silnika, i pod paskiem było puste tło. Narzędzie `g21-browser` 0.1.3 przejmuje plik na roota zaraz po utworzeniu; dekoder pisze dalej przez otwarty uchwyt.

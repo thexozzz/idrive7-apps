@@ -263,11 +263,14 @@ async function testChain(base, eng) {
     fs.chmodSync(path.join(base, 'shm'), 0o1777); // as /dev/shm: the frame decoder is not root
     process.env.G21_BROWSER_RING = path.join(base, 'shm', 'mgu-video-g21browser');
     process.env.G21_BROWSER_ALLOW_LOCAL = '1';
+    process.env.G21_BROWSER_PICTURE = '1'; // this chain: picture pixels = screen pixels (the 75% picture is the sandbox part below)
     if (root) process.env.G21_BROWSER_UID = '65534'; else process.env.G21_BROWSER_NOSETUID = '1';
     const srv = http.createServer((q, s) => {
         s.setHeader('content-type', 'text/html; charset=utf-8');
         if (q.url === '/two') s.end('<!doctype html><title>Druga</title><h1>druga strona</h1>');
         else if (q.url === '/three') s.end('<!doctype html><title>Trzecia</title><h1>z nowego okna</h1>');
+        else if (q.url === '/fs') s.end('<!doctype html><title>Pelny</title><body style="margin:0"><div id="v" style="width:300px;height:150px;background:#06c"></div><script>var v=document.getElementById("v");'
+            + 'v.addEventListener("click",function(){v.requestFullscreen().then(function(){setTimeout(function(){document.title="fs "+innerWidth+"x"+innerHeight+" "+screen.width+"x"+screen.height+" "+v.clientWidth+"x"+v.clientHeight},300)},function(e){document.title="fs failed "+e})})</script>');
         else if (q.url === '/engine.zip') { s.setHeader('content-type', 'application/zip'); s.setHeader('content-length', fs.statSync(eng.zip).size); fs.createReadStream(eng.zip).pipe(s); }
         else s.end(PAGE);
     });
@@ -397,13 +400,13 @@ async function testChain(base, eng) {
     } finally {
         if (c) c.close();
         await daemon.close();
-        srv.close();
+        if (!root) srv.close(); // (as root the sandbox part below still needs the test site)
     }
     assert.deepStrictEqual(daemon.engineProcs(), []);
     if (root) {
         // an engine that will not start with its sandbox (here: as root) does not start without it on the tool's
         // own decision: the state asks, and only the owner's answer ("sandbox-off") starts it and is remembered
-        const d2 = new d.Daemon({ testUid: null, noSetuid: true, forceSandbox: true });
+        const d2 = new d.Daemon({ testUid: null, noSetuid: true, forceSandbox: true, picture: 0.75 });
         const sandboxFile = path.join(base, 'state', 'sandbox');
         let c2 = null;
         try {
@@ -427,9 +430,36 @@ async function testChain(base, eng) {
             assert.strictEqual(fs.existsSync(sandboxFile), false);
             c2.send({ op: 'sandbox-off' });
             const s2 = await c2.until('engine up without its sandbox', (x) => x.engine === 'ready' && x.live, 60000);
-            assert.deepStrictEqual([s2.w, s2.h], [1788, 546], 'the car\'s page area 1796x548 at zoom 1.5: whole pixels, width % 4, even height');
-            assert.deepStrictEqual([1, 1.25, 1.5, 1.75, 2].map((z) => { const p = d.pageCss(1796, 548, z); return (p.w * z) % 4 === 0 && (p.h * z) % 2 === 0 && p.w * z <= 1796 && p.h * z <= 548 && p.w * z > 1760 && p.h * z > 530; }), [true, true, true, true, true]);
+            // the car's page area 1796x548 at zoom 1.5, rendered at 75%: on the screen 1776x528, the video file 1332x396
+            assert.deepStrictEqual([s2.w, s2.h], [1776, 528]);
+            const head2 = fs.readFileSync(d2.opts.ring).subarray(0, 16);
+            assert.deepStrictEqual([head2.readUInt32LE(8), head2.readUInt32LE(12)], [1332, 396], 'the picture: width % 4, even height, 56% of the pixels');
+            assert.deepStrictEqual([1, 1.25, 1.5, 1.75, 2].map((z) => { const p = d.pageCss(1796, 548, z); return [1, 0.75, 0.5].every((q) => { const r = d.pageCss(1796, 548, z, q); return Number.isInteger(r.pw) && r.pw % 4 === 0 && Number.isInteger(r.ph) && r.ph % 2 === 0 && r.dw <= 1796 && r.dh <= 548 && r.dw > 1700 && r.dh > 500; }) && p.w > 0; }), [true, true, true, true, true]);
             assert.strictEqual(s2.ask, '');
+            // a player that goes full screen fills the page area and the picture keeps its size (the car's page area, zoom 1.5)
+            c2.send({ op: 'nav', url: site + '/fs' });
+            await c2.until('the full screen page', (x) => x.title === 'Pelny' && !x.loading && x.live, 30000);
+            const ino2 = c2.state().ino;
+            c2.send({ op: 'touch', p: 1, x: 150, y: 100 }); c2.send({ op: 'touch', p: 3, x: 150, y: 100 });
+            const fsState = await c2.until('full screen', (x) => /^fs /.test(x.title), 20000);
+            assert.strictEqual(fsState.title, 'fs 1184x352 1184x352 1184x352', 'the element fills the window, the screen is the window');
+            await sleep(1500);
+            // (while it changes over, the engine may send a picture of another size: the daemon removes root's file and the decoder
+            // makes a new one, so the file may be another; what counts is that the picture goes on, at its size)
+            const fsNow = await c2.until('the picture goes on in full screen', (x) => x.live && x.ino > 0, 20000);
+            assert.deepStrictEqual([fsNow.w, fsNow.h], [1776, 528]);
+            const head3 = () => { const b = fs.readFileSync(d2.opts.ring).subarray(0, 24); return { w: b.readUInt32LE(8), h: b.readUInt32LE(12), seq: b.readUInt32LE(16) }; };
+            // in full screen the engine renders one picture pixel per CSS pixel (1184x352 here, not 1332x396): the renderer
+            // scales it to the same place on the screen, and a film costs the car's CPU less
+            assert.deepStrictEqual([head3().w, head3().h], [1184, 352], 'the video file has the full screen picture\'s size: width % 4, even height');
+            assert.strictEqual(fs.statSync(d2.opts.ring).ino, fsNow.ino, 'the app is told the file that is there');
+            const seq3 = head3().seq;
+            c2.send({ op: 'touch', p: 1, x: 900, y: 300 }); c2.send({ op: 'touch', p: 3, x: 900, y: 300 });
+            c2.send({ op: 'scroll', dx: 0, dy: 120 });
+            await sleep(1500);
+            assert.ok((fs.readFileSync(logFile, 'utf8').match(/video file: /g) || []).length <= 3, 'no stream of video file errors');
+            void ino2; void seq3;
+            console.log('ok full screen: an element that goes full screen fills the page area; the picture goes on at the same place on the screen');
             assert.strictEqual(fs.existsSync(sandboxFile), false, 'the answer is not kept on disk');
             assert.ok(/sandbox off: allowed by the owner/.test(fs.readFileSync(logFile, 'utf8')));
             // the answer holds for this opening only: closed and opened again, the daemon asks again

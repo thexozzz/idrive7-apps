@@ -77,6 +77,20 @@ VERIFIED na aucie (0.1.138 / 0.1.2, jądro 4.14.198-apl):
 - **Po powrocie nic nie działa:** log aplikacji `menu-closed` … `menu-show open`, `menu-frame 46`, bez ponownego SHOW/CLAIM. Naprawa: `CLOSED` i `showSurface` zerują `surfaced` (i nazwę pliku wideo).
 - **Piaskownica:** `/proc/self/ns` nie ma `user` (jądro bez CONFIG_USER_NS; `max_user_namespaces` 22563 nic tu nie znaczy), są `pid` i `net`. LSM: `capability,yama`. Demon: bez seccomp, pełne capability. `/dev/shm` i `/run` są `nosuid`; `/var/opt` (ext4) — opcje do odczytania w całości. Piaskownica wymaga więc pomocnika setuid `chrome-sandbox` (tak robi pllanaio/mgu-browser); zip `chrome-headless-shell` go nie ma. Decyzja właściciela: do czasu działającej piaskownicy pytać przy każdym otwarciu; cel: piaskownica.
 
+### Wynik 0.1.139 / 0.1.3 na aucie (2026-11-15, 10:45 UTC)
+
+- VERIFIED (właściciel + logi): **stronę widać.** Plik `/dev/shm/mgu-video-g21browser` jest `0:12710 0644`, 5857552 B (1788×546), `seq` rośnie; renderer nie zgłasza już „is not the app's” ani „outside the apps' claims”; dotyk dochodzi do aplikacji.
+- VERIFIED: pytanie o piaskownicę przy otwarciu, zgoda „for this opening”, `state/sandbox` z 0.1.2 usunięty.
+- UNVERIFIED: stuknięcie „Menu” i powrót po wyjściu do iDrive (w logu jeszcze nie wystąpiły po aktualizacji); płynność (przy ładowaniu youtube.pl 0–4% bezczynności procesora, główny proces silnika ok. 23%).
+
+### 0.1.140 / g21-browser 0.1.4 (2026-11-15)
+
+- VERIFIED na aucie (log 0.1.3, 10:47 UTC): po pełnym ekranie w odtwarzaczu YouTube `webframe: video file: Operation not permitted` ×253 — klatki w innym rozmiarze, `rename()` na plik roota w `/dev/shm` (sticky) odmówione; obraz stał („aplikacja się zawiesza”). Aplikacja i demon działały.
+- Naprawa: `Emulation.setDeviceMetricsOverride` z `screenWidth/Height` = okno (ekran silnika bez tego to 800×600); przy błędzie `video file` demon usuwa plik i zeruje `live/ino`. W pełnym ekranie silnik daje klatki w rozmiarze CSS (np. 1184×352), nie ×skala.
+- `pageCss(w, h, zoom, q)`: obraz w `q` = 0.75 pikseli ekranu (opcja `picture`, env `G21_BROWSER_PICTURE` 1 / 0.75 / 0.5), stan `w`,`h` = rozmiar na ekranie (css × zoom), plik = css × zoom × q. Decyzja właściciela: zmniejszyć rozdzielczość tak, żeby nie było widać.
+- Dźwięk: brak (`--mute-audio`). pllanaio/mgu-browser ma własny most do AudioManager/SmartX (`native/audio_bridge.c`, `docs/AUDIO.md`) — wzór na przyszłość; u nas `g21-audio-route.js` (AirPlay) łączy źródło 287/273 z wyjściem 1024, słyszalność UNVERIFIED.
+- UNVERIFIED na aucie: wszystko powyżej; płynność po zmniejszeniu obrazu.
+
 ## Ograniczenia tej wersji
 
 - Bez dźwięku stron (`--mute-audio`), bez pobierania plików, jedna karta, bez WebGL (`--disable-software-rasterizer`), bez emoji i pisma CJK (brak czcionek).

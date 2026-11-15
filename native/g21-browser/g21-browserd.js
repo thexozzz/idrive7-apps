@@ -76,6 +76,7 @@ function defaults() {
         noSetuid: env.G21_BROWSER_NOSETUID === '1',   // tests not run as root
         testUid: env.G21_BROWSER_UID ? Number(env.G21_BROWSER_UID) : null, // tests run as root
         allowLocal: env.G21_BROWSER_ALLOW_LOCAL === '1', // tests: pages on 127.0.0.1
+        picture: [1, 0.75, 0.5].indexOf(Number(env.G21_BROWSER_PICTURE)) >= 0 ? Number(env.G21_BROWSER_PICTURE) : 0.75, // share of the screen's pixels the page is rendered at
         idleMs: 90000,        // the engine stays this long after the app went away
         frameGapMs: 50,       // at most 20 page frames a second
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
@@ -916,9 +917,18 @@ Daemon.prototype.startFrame = function () {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
-            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); this.set({ w: Number(l[1]), h: Number(l[2]), ino: Number(l[3]), live: false }); }
+            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.opts.picture) : null; this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
             else if (l[0] === 'f') { if (!this.s.live) this.set({ live: true }); this.frameDone(); }
-            else if (l[0] === 'e') { this.log('webframe: ' + l.slice(1).join(' ')); this.frameDone(); }
+            else if (l[0] === 'e') {
+                const what = l.slice(1).join(' ');
+                // The engine sent a picture of another size and the decoder could not put a new video file in place of the
+                // one root took over (on the car, 0.1.3: a player went full screen, 253 x "Operation not permitted", the
+                // picture stood still). Root removes the old file; the decoder makes the new one with the next frame.
+                if (/^video file/.test(what)) { try { fs.unlinkSync(this.opts.ring); } catch (x) { /* none */ } if (this.s.live) this.set({ live: false, ino: 0 }); }
+                const now = Date.now();
+                if (what !== this.frameErr || now - (this.frameErrAt || 0) > 5000) { this.frameErr = what; this.frameErrAt = now; this.log('webframe: ' + what); }
+                this.frameDone();
+            }
         }
     });
     child.stdin.on('error', () => { /* exit follows */ });
@@ -968,17 +978,24 @@ Daemon.prototype.sandboxPossible = function () {
     return n > 0 && clone !== '0';
 };
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-function pageCss(w, h, z) {
-    const k = Math.round(z * 4), sw = 16 / gcd(k, 16), sh = 8 / gcd(k, 8);
-    return { w: Math.max(sw, Math.floor(w / z / sw) * sw), h: Math.max(sh, Math.floor(h / z / sh) * sh) };
+/*
+ * The page's window in CSS pixels for a page area of w x h screen pixels at zoom z, rendered at q of the screen's
+ * pixels (q = 0.75: 56% of the pixels to rasterize, encode and decode on the car's CPU; the renderer scales the
+ * picture up to the page area on the GPU). scale = z * q is what the engine renders at; the picture (css x scale) is
+ * whole pixels, its width a multiple of 4 and its height even; dw x dh is its size on the screen (css x z).
+ */
+function pageCss(w, h, z, q) {
+    const k = Math.max(4, Math.round(z * (q || 1) * 16)), sw = 64 / gcd(k, 64), sh = 32 / gcd(k, 32);
+    const cw = Math.max(sw, Math.floor(w / z / sw) * sw), ch = Math.max(sh, Math.floor(h / z / sh) * sh);
+    return { w: cw, h: ch, scale: k / 16, pw: cw * k / 16, ph: ch * k / 16, dw: Math.round(cw * z), dh: Math.round(ch * z) };
 }
 Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
     // height even (what the renderer's video layer takes): never larger than the page area the app has.
-    const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z), w = cssSize.w, h = cssSize.h;
+    const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z, this.opts.picture), w = cssSize.w, h = cssSize.h;
     const args = [
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
-        '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + z,
+        '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + cssSize.scale,
         '--disable-gpu', '--disable-software-rasterizer', '--disable-accelerated-video-decode', '--disable-accelerated-video-encode',
         '--mute-audio', '--password-store=basic', '--use-mock-keychain', '--disable-smooth-scrolling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
         '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
@@ -1102,6 +1119,12 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     await send('Page.enable', {});
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    // The screen the page sees is its own window. Without this the headless engine's screen is 800x600: a player that
+    // goes full screen changed the picture's size (the car, 0.1.3). Now full screen fills the page area.
+    try {
+        const css = pageCss(this.want.w, this.want.h, this.zoom, this.opts.picture);
+        await send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: false, screenWidth: css.w, screenHeight: css.h });
+    } catch (x) { this.log('screen size: ' + x.message); }
     const major = dirs.major;
     try {
         await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + major + '.0.0.0 Safari/537.36', acceptLanguage: 'pl-PL,pl,en-US,en', platform: 'Linux x86_64',
