@@ -99,6 +99,7 @@ sp.on('lost', function () { st.lost += 1; st.claimed = false; log('speakers lost
  * stopped BMW's player with every stream.
  */
 let keeper = null;
+let heals = [];                 // when the writer left because the device was slow (the last minute)
 function keeperStart() {
     if (keeper || conf().clock !== true || DEVICE) return Promise.resolve();
     let K;
@@ -288,6 +289,9 @@ function startWriter() {
     stopDrain();
     let openWatch = null;
     const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
+    // (the writer leaves by itself when its opening of the device got three quarters of the pace: see below. After
+    // eight such tries in a minute it is told to stay whatever the pace)
+    { const now = Date.now(); heals = heals.filter(function (t) { return now - t < 60000; }); if (heals.length >= 8) { opts.env = Object.assign({}, process.env, { G21_AUDIO_NOHEAL: '1' }); log('out: eight openings in a minute at three quarters of the pace: this one stays'); heals = []; } }
     if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
     // AirPlay passes on what a phone sends and throws away what is not taken at once: its writer never holds it.
     // The browser's engine as well: it writes its sound by its own clock and counts a film's time by what it has
@@ -322,8 +326,13 @@ function startWriter() {
         if (st.writer !== child) return;
         st.writer = null;
         st.active = false;
-        if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
-        release('no sound').then(function () { if (st.holder) setTimeout(startWriter, code || sig ? 2000 : 100); });
+        // Code 3: this opening of the device took three quarters of the pace (g21-audio-out.c, "The pace"). Not a
+        // failure: the writer is started again at once and opens the device anew, the stream stays held meanwhile
+        // (nothing is read and dropped: the browser's engine, unheld, races its film).
+        const pace = code === 3 && !sig;
+        if (pace) { heals.push(Date.now()); log('out: the device took three quarters of the pace, opened again (try ' + heals.length + ')'); }
+        else if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
+        release(pace ? 'slow device' : 'no sound').then(function () { if (st.holder) setTimeout(startWriter, (code || sig) && !pace ? 2000 : 100); });
     });
 }
 function closeStream(why) {

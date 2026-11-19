@@ -75,6 +75,31 @@ static int alsa_load(void)
     fprintf(stderr, "[G21-AUDIO] out: libasound.so.2 lacks a function\n");
     return 0;
 }
+/*
+ * The pace. The SmartX input takes either the full 48 000 frames a second or three quarters of that, and which
+ * of the two is settled when the device is opened: it stays so until the writer leaves, and the next opening may
+ * get the other (car, 2026-11-19, with the owner: the first stream after a start of the head unit right, later
+ * ones mostly not; a writer stopped while it played and started again: 36 000 before, 48 000 after, three times;
+ * once 36 000 again). Why is not known. So the pace is measured here, 1.5 s after the opening, in windows of 0.8 s
+ * in which the player gave enough: two slow windows in a row and the writer leaves with code 3, and g21-audiod
+ * starts it again at once. G21_AUDIO_NOHEAL=1 (set by the daemon after too many tries) switches it off.
+ */
+#define PACE_FROM_MS 1500.0
+#define PACE_WIN_MS 800.0
+#define PACE_SLOW 43000.0
+#define PACE_NONE 30000.0     /* less than this is not the slow pace: nobody reads the device yet (the speakers are still being claimed) */
+static int heal_on(void) { const char *e = getenv("G21_AUDIO_NOHEAL"); return !(e && *e == '1'); }
+/* one window: 1 = the device was slow twice in a row (leave), 0 otherwise */
+static int pace_window(double ms, unsigned long frames, int enough, int *slow)
+{
+    const double a_second = ms > 0 ? (double)frames * 1000.0 / ms : 0.0;
+    if (!enough) return 0;                     /* the player gave too little: says nothing about the device */
+    if (a_second >= PACE_SLOW || a_second < PACE_NONE) { *slow = 0; return 0; }
+    if (++*slow < 2) return 0;
+    fprintf(stderr, "[G21-AUDIO] out: slow, the device takes %.0f frames a second\n", a_second);
+    return 1;
+}
+
 static snd_pcm_t *dev_open(const char *dev)
 {
     snd_pcm_t *pcm = NULL;
@@ -144,6 +169,10 @@ static int play(const char *dev)
     double report;
     long d = 0;
     int r;
+    const int heal = heal_on();
+    double win0 = 0, in_wait = 0, before;
+    unsigned long win_frames = 0;
+    int slow = 0;
     /* a short pipe: what waits in it is delay between the picture and the sound (16 KiB = 85 ms) */
     fcntl(0, F_SETPIPE_SZ, 16384);
     fprintf(stderr, "[G21-AUDIO] out: waiting for sound\n");
@@ -159,6 +188,7 @@ static int play(const char *dev)
         fprintf(stderr, "[G21-AUDIO] out: device holds %ld frames, cushion %d ms\n", room, cushion * 10);
     }
     report = mono_ms() + 5000;
+    win0 = mono_ms() + PACE_FROM_MS;
     for (;;) {
         double now;
         if (need) {
@@ -184,7 +214,15 @@ static int play(const char *dev)
             if (A.delay(pcm, &d) < 0) d = 0;
             fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full %lu) xruns %lu delay_ms %ld\n", frames, dropped, full, xruns, d * 1000 / RATE);
         }
+        if (now >= win0 && !win_frames && in_wait == 0) { win0 = now; win_frames = frames + 1; }       /* a window begins */
+        else if (win_frames && now - win0 >= PACE_WIN_MS) {
+            /* (enough: the writer waited for the player less than a fifth of the window) */
+            if (heal && pace_window(now - win0, frames + 1 - win_frames, in_wait < (now - win0) / 5, &slow)) { fflush(stderr); leave(3); }
+            win0 = now; win_frames = frames + 1; in_wait = 0;
+        }
+        before = mono_ms();
         r = read_chunk(buf, IDLE_MS);
+        if (win_frames) in_wait += mono_ms() - before;
         if (r <= 0) break;
     }
     fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full %lu) xruns %lu\n", r < 0 ? "stopped" : "idle", frames, dropped, full, xruns);
@@ -234,6 +272,10 @@ static int engine(const char *dev, int greedy)
     int playing = 0;
     double last_in = mono_ms(), last = mono_ms(), report = 0, now;
     long d = 0;
+    const int heal = heal_on();
+    double win0 = 0;
+    unsigned long win_frames = 0, win_gaps = 0;
+    int slow = 0, win_on = 0;
     fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
     if (!greedy) fcntl(0, F_SETPIPE_SZ, 16384);   /* a short pipe: what waits in it is delay (16 KiB = 85 ms) */
     fprintf(stderr, "[G21-AUDIO] out: waiting for sound\n");
@@ -280,6 +322,7 @@ static int engine(const char *dev, int greedy)
             report = now + 5000;
             last = mono_ms();
             budget = 0.0;
+            win0 = now + PACE_FROM_MS;
         }
         if (fill > LIVE_MAX) { const unsigned long cut = fill - LIVE_TARGET; head = (head + cut) % RING; fill -= cut; skipped += cut; }
         if (!playing && fill >= LIVE_TARGET) { playing = 1; phase = 0.0; }
@@ -325,6 +368,13 @@ static int engine(const char *dev, int greedy)
             if (A.delay(pcm, &d) < 0) d = 0;
             fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full 0) xruns %lu delay_ms %ld waiting_ms %lu gaps %lu taken %lu step %.4f\n",
                 frames, skipped, xruns, d * 1000 / RATE, fill * 1000 / RATE, gaps, taken, used);
+        }
+        if (!win_on && now >= win0) { win_on = 1; win0 = now; win_frames = frames; win_gaps = gaps; }
+        else if (win_on && now - win0 >= PACE_WIN_MS) {
+            /* (enough: it played through the window and more than the wanted store still waits, so it is the device
+             * that did not take it) */
+            if (heal && pace_window(now - win0, frames - win_frames, playing && gaps == win_gaps && fill >= LIVE_TARGET, &slow)) { fflush(stderr); leave(3); }
+            win0 = now; win_frames = frames; win_gaps = gaps;
         }
         if (now - last_in > IDLE_MS && fill < 2) break;
     }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.205
+
+- Trop właściciela (2026-11-19): pierwszy dźwięk po restarcie MGU jest prawidłowy, po zmianie filmu albo ponownym połączeniu znowu źle. Potwierdzone w logu i próbami w aucie: o tym, czy wejście dźwięku auta bierze pełne 48 000 próbek na sekundę, czy trzy czwarte, decyduje chwila otwarcia urządzenia i tak zostaje do jego zamknięcia; następne otwarcie może trafić inaczej. Zatrzymanie naszego programu zapisującego w trakcie grania i ponowny start: 36 000 → 48 000 trzy razy, raz znowu 36 000. Dlaczego tak jest – nie wiadomo.
+- `g21-audio` 0.1.15: program zapisujący sam mierzy tempo urządzenia (od 1,5 s po otwarciu, okna 0,8 s) i gdy jest to trzy czwarte, kończy się, a demon od razu otwiera urządzenie od nowa – do ośmiu prób na minutę, potem zostaje. Dotyczy AirPlay i przeglądarki. Dźwięk przeglądarki jest w tym czasie wstrzymany, nie odrzucany (po ręcznym ubiciu film się wysypywał, bo ścieżka awaryjna czytała dźwięk bez hamowania).
+- Skutek uboczny: na początku odtwarzania może być kilka krótkich przerw (każda próba to ok. 3–4 s), zanim trafi się pełne tempo. Sprawdzone tylko na atrapie urządzenia na maszynie deweloperskiej (`tools/fake_alsa.c`); w aucie niesprawdzone.
+
 ## 0.1.204
 
 - Auto, 2026-11-19, z właścicielem. Przeglądarka: nowy tor obrazu działa w aucie po przełączeniu „Silnik” na pełny Chrome (lekki silnik go nie obsługuje): 40–50 klatek/s na stronie i 28–32 przy filmie zamiast 12–15, koszt klatki w narzędziu klatek 0,6–5 ms zamiast 13–26 ms. Auto było przy tym przeciążone (obciążenie 10–21, sprawdzenia MGU Store po aktualizacji, film VP9 720p dekodowany programowo – „Lekkie wideo” było wyłączone).
