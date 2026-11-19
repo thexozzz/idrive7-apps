@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.207
+
+- Każda aplikacja ma menu w swoim kolorze i z podpisem, czyje to menu (właściciel, 2026-11-20): AirPlay niebieski („Menu: AirPlay”), YouTube czerwony, Przeglądarka zielony (jej pasek i jej ustawienia), aplikacje ze Sklepu fioletowy; strony samego THEiPlay zostają bursztynowe. Pasek przeglądarki ma kolor, ale bez podpisu – nie ma na niego miejsca.
+- Aplikacja ze Sklepu jest oddzielona od Przeglądarki: przy starcie ma własny ekran z nazwą aplikacji i napisem „Uruchamiam aplikację” (było: pasek przeglądarki i „Uruchamiam przeglądarkę”), a na dolnym pasku jej nazwę. `g21-browser` 0.1.47: przy przejściu między przeglądarką a aplikacją historia „wstecz” jest czyszczona, więc „wstecz” w aplikacji nie pokazuje już strony, którą wcześniej miała przeglądarka, tylko z pierwszej strony wychodzi z aplikacji; przeglądarka otwarta po aplikacji zaczyna od strony startowej, nie od strony aplikacji.
+- Sprawdzone na podglądzie ekranów (`tools/preview_ui.js`) i testami; czyszczenie historii w aucie niesprawdzone.
+
 ## 0.1.206
 
 - Ustawienia przeglądarki z auta właściciela (2026-11-19) są teraz domyślne po instalacji (`g21-browser` 0.1.46): pełny Chrome, tor obrazu bezpośredni do 60 kl./s, tryb mobilny, lekkie wideo, rozdzielczość 100% (było 75%), powiększenie 100% (było 150%), piaskownica „wymagana” (było „pytaj”), limit pamięci 1500 MB (było 900). Dotyczy tylko instalacji bez własnych ustawień: istniejący plik reguł i zapisane powiększenie zostają.

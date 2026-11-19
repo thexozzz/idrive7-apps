@@ -321,6 +321,9 @@ var EN = {
     'strony internetowe': 'web pages',
     'Wpisz adres albo szukaj': 'Type an address or search',
     'Uruchamiam przeglądarkę': 'Starting the browser',
+    'Uruchamiam aplikację': 'Starting the app',
+    'Menu': 'Menu',
+    'Aplikacja': 'App',
     'Pobieram silnik przeglądarki': 'Downloading the browser engine',
     'jednorazowo, około 100 MB': 'once, about 100 MB',
     'Sprawdzam i rozpakowuję silnik': 'Checking and unpacking the engine',
@@ -365,6 +368,49 @@ var ICON_ACCENT = 0xF0C48AFF;
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
 var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
+/*
+ * Every app has its menu in its own colour, and the menu says whose it is (owner, 2026-11-20): THEiPlay's own pages
+ * amber as before, AirPlay blue, YouTube red, Przeglądarka green, an app from Sklep violet. A theme is the accent
+ * (marks, the chosen row, the way back), the head band and the name written in the head ("Menu: AirPlay").
+ * useTheme() is called before a frame is drawn; the colours below are read while drawing.
+ */
+var THEMES = {
+    base: { label: '', accent: 0xE6A15CFF, dim: 0x7A4A22FF, glow: 0x3A2414FF, headA: 0x1C1612FF, headB: 0x110E0BFF, hiA: 0x3A2D20FF, hiB: 0x251D16FF, icon: 0xF0C48AFF },
+    airplay: { label: 'AirPlay', accent: 0x5CB4F0FF, dim: 0x224E7AFF, glow: 0x14263AFF, headA: 0x121A24FF, headB: 0x0B1017FF, hiA: 0x20303FFF, hiB: 0x161F2AFF, icon: 0x8ACBF5FF },
+    youtube: { label: 'YouTube', accent: 0xF0605CFF, dim: 0x7A2624FF, glow: 0x3A1514FF, headA: 0x241312FF, headB: 0x170C0BFF, hiA: 0x3F2220FF, hiB: 0x2A1716FF, icon: 0xF59A8AFF },
+    browser: { label: 'Przeglądarka', accent: 0x5CD6A4FF, dim: 0x227A56FF, glow: 0x143A2AFF, headA: 0x12221BFF, headB: 0x0B1611FF, hiA: 0x203F31FF, hiB: 0x162A21FF, icon: 0x8AF5C6FF },
+    store: { label: 'Aplikacja', accent: 0xB48CF5FF, dim: 0x52337AFF, glow: 0x26143AFF, headA: 0x1A1424FF, headB: 0x110C17FF, hiA: 0x30223FFF, hiB: 0x20172AFF, icon: 0xCDB0F8FF }
+};
+var THEME = THEMES.base;
+function themeFor(screen) {
+    if (screen === 'airplay' || screen === 'air-out' || screen === 'air-box' || screen === 'stream' || screen === 'quality' || screen === 'quality-central' || screen === 'quality-kombi') {
+        return 'airplay';
+    }
+    if (screen === 'youtube' || screen === 'yt-login' || screen === 'yt-browse') {
+        return 'youtube';
+    }
+    if (screen === 'apps-settings') {
+        return 'browser';
+    }
+    if (screen === 'apps-store') {
+        return 'store';
+    }
+    return 'base';
+}
+function useTheme(name) {
+    var t = THEMES[name] || THEMES.base;
+    THEME = t;
+    ACCENT = t.accent;
+    ACCENT_DIM = t.dim;
+    ACCENT_GLOW = t.glow;
+    HEAD_A = t.headA;
+    HEAD_B = t.headB;
+    ROW_HI_A = t.hiA;
+    ROW_HI_B = t.hiB;
+    ICON_ACCENT = t.icon;
+    return t;
+}
+
 // the bar under an app from Sklep (back, home)
 var APP_NAV_H = 52;
 
@@ -1705,6 +1751,14 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         lay.backHit = { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 };
         textX = lay.ox + 198;
     }
+    if (THEME.label) {
+        // whose menu this is, in that app's colour
+        var whose = tr('Menu') + ': ' + tr(THEME.label);
+        var whoseW = draw.textWidth(whose, 3, 'bold') + 36;
+        draw.round(textX, lay.oy + 14, whoseW, 40, 20, ACCENT_GLOW);
+        draw.text(whose, textX + 18, lay.oy + 24, 3, ACCENT, 'bold');
+        textX += whoseW + 18;
+    }
     maxW = lay.ox + lay.boxW - textX - 780;
     if (!showBack) {
         // the home page: the name as a mark, "THE" light and "iPlay" in the accent
@@ -2901,7 +2955,7 @@ var RT_CARD = CARD_HI;
 var RT_PH = CARD;
 var RT_TEXT = INK;
 var RT_DIM = HINT;
-var RT_PINK = ACCENT;
+var RT_PINK = THEMES.youtube.accent;     // YouTube's own colour (the theme "youtube")
 var RT_HEAD = PAGE_TOP;
 
 function drawQrBlock(draw, text, x, y, mod) {
@@ -3613,6 +3667,8 @@ function buildWebFrame(width, height, web) {
         draw.rect(CONTENT.x, navY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
         draw.quad([[bkx - 9, nvy], [bkx + 7, nvy - 11], [bkx + 7, nvy + 11]], HINT);
         draw.stroke(hmx - 11, nvy - 11, 22, 22, 11, 2.5, HINT);
+        // whose bar this is: the app's name, in the colour of apps
+        draw.text(draw.fit((info.appName || tr('Aplikacja')), 3, navMid - 190 - CONTENT.x - 48), CONTENT.x + 24, navY + 14, 3, ACCENT, 'bold');
         if (info.mouse) {
             var ax = appBox.x + Math.max(0, Math.min(appBox.w - 1, Math.round(info.cx || 0)));
             var ay = appBox.y + Math.max(0, Math.min(appBox.h - 1, Math.round(info.cy || 0)));
@@ -3623,6 +3679,46 @@ function buildWebFrame(width, height, web) {
             frame: packFrame(draw),
             rects: draw.rects,
             layout: { webHits: [appBack, appHome], webPage: appBox, web: lay, video: true, app: true }
+        };
+    }
+    if (info.app && !showVideo) {
+        // An app that is starting (or could not): its own page, not the browser's bar with "Uruchamiam przeglądarkę"
+        // (owner, 2026-11-20). The same bar under it as the running app has: back and home both leave it.
+        var waitNavY = CONTENT.y + CONTENT.h - APP_NAV_H;
+        var waitMid = CONTENT.x + Math.floor(CONTENT.w / 2);
+        var waitY = CONTENT.y + Math.floor((CONTENT.h - APP_NAV_H) / 2);
+        var waitBack = { name: 'web-exit', x: waitMid - 190, y: waitNavY, w: 170, h: APP_NAV_H };
+        var waitHome = { name: 'web-exit', x: waitMid + 20, y: waitNavY, w: 170, h: APP_NAV_H };
+        var waitHits = [waitBack, waitHome];
+        var waitSt = webStatus(info);
+        var waitTitle = waitSt.busy && waitSt.title === 'Uruchamiam przeglądarkę' ? tr('Uruchamiam aplikację') : tr(waitSt.title);
+        var waitName = info.appName || '';
+        draw.grad(CONTENT.x, CONTENT.y, CONTENT.w, CONTENT.h - APP_NAV_H, PAGE_A, PAGE_B);
+        if (waitSt.busy) {
+            drawSpinner(draw, waitMid, waitY - 112);
+        }
+        if (waitName) {
+            draw.text(waitName, waitMid - Math.floor(draw.textWidth(waitName, 5, 'bold') / 2), waitY - 30, 5, ACCENT, 'bold');
+        }
+        draw.text(waitTitle, waitMid - Math.floor(draw.textWidth(waitTitle, 4) / 2), waitY + 36, 4, waitSt.busy ? INK : SOFT);
+        if (waitSt.hint) {
+            draw.text(tr(waitSt.hint), waitMid - Math.floor(draw.textWidth(tr(waitSt.hint), 3) / 2), waitY + 90, 3, MUTED);
+        }
+        if (waitSt.ask === 'sandbox') {
+            var waitW = draw.textWidth(tr('Uruchom bez piaskownicy'), 3);
+            var waitAsk = { name: 'web-sandbox-off', x: waitMid - Math.floor(waitW / 2) - 36, y: waitY + 130, w: waitW + 72, h: 64 };
+            draw.round(waitAsk.x, waitAsk.y, waitAsk.w, waitAsk.h, 18, RED_CARD);
+            draw.text(tr('Uruchom bez piaskownicy'), waitAsk.x + 36, waitAsk.y + 22, 3, INK);
+            waitHits.push(waitAsk);
+        }
+        draw.rect(CONTENT.x, waitNavY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
+        draw.quad([[waitMid - 105 - 9, waitNavY + 26], [waitMid - 105 + 7, waitNavY + 15], [waitMid - 105 + 7, waitNavY + 37]], HINT);
+        draw.stroke(waitMid + 105 - 11, waitNavY + 15, 22, 22, 11, 2.5, HINT);
+        draw.text(draw.fit((waitName || tr('Aplikacja')), 3, waitMid - 190 - CONTENT.x - 48), CONTENT.x + 24, waitNavY + 14, 3, ACCENT, 'bold');
+        return {
+            frame: packFrame(draw),
+            rects: draw.rects,
+            layout: { webHits: waitHits, webPage: null, web: lay, video: false, app: true }
         };
     }
     if (showVideo && info.fs) {
@@ -4099,9 +4195,10 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', video: native
             };
             var webBuilt;
+            useTheme(webView.app ? 'store' : 'browser');
             sendMirror(!!(webView.live && native), webView.ring || WEB_FILE);
             webBuilt = buildWebFrame(screen.w || 1920, screen.h || 720, webInfo);
             webHits = webBuilt.layout.webHits;
@@ -4161,6 +4258,7 @@ function createMenuSurface(opts) {
         }
         var place = edit ? placeName(edit.field, edit.title) : '';
         var crumb = crumbFor(screenName, heading, place);
+        useTheme(themeFor(screenName));
         var airArg = airState || (screenName === 'youtube' && ytState ? { yt: ytState } : null);
         var built = edit
             ? buildKeyboardFrame(edit, screen.w || 1920, screen.h || 720, crumb, airArg, version)
@@ -5718,7 +5816,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -5973,6 +6071,9 @@ module.exports = {
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,
+    useTheme: useTheme,
+    themeFor: themeFor,
+    THEMES: THEMES,
     buildStreamFrame: buildStreamFrame,
     streamWindow: streamWindow,
     buildKeyboardFrame: buildKeyboardFrame,

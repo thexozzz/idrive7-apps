@@ -50,6 +50,7 @@ function menuFrame(screen, sel, detail, heading, air, extra) {
         list[0].title = 'Zakończ'; list[0].icon = 'stop'; list[0].hint = air.online ? 'iPhone połączony' : 'czeka na iPhone'; list[1].hint = 'środek + zegary';
     }
     if (extra.armed) { list[sel].armed = true; list[sel].adjust = true; }
+    menu.useTheme(menu.themeFor(screen));
     return menu.buildFrame(list, sel, 1920, 720, detail || '', heading || 'THEiPlay', '0.1.136', extra.stream || null, extra.preview || null, null,
         menu.crumbFor(screen, heading || 'THEiPlay', ''), air, null);
 }
@@ -73,6 +74,15 @@ done.push(save('05-position', menuFrame('pos-out', 2, '', 'Pozycja', airOff, { p
 done.push(save('06-position-armed', menuFrame('pos-out', 2, '', 'Pozycja', airOff, { preview: winPreview, armed: true })));
 done.push(save('07-position-each', menuFrame('pos-each', 0, '', 'Pozycja', airOff, { preview: framesPreview })));
 done.push(save('08-settings', menuFrame('settings', 0, '', 'THEiPlay', airOff)));
+done.push(save('40-theme-youtube', menuFrame('youtube', 1, '', 'THEiPlay', null)));
+done.push(save('41-theme-browser-settings', menuFrame('apps-settings', 2, '', 'Ustawienia', null)));
+done.push(save('42-theme-store', menuFrame('apps-store', 0, '', 'Sklep', null)));
+menu.useTheme('store');
+done.push(save('43-app-starting', menu.buildWebFrame(1920, 720, { connected: true, engine: 'starting', app: 'hello', appName: 'Hello THEiPlay' })));
+done.push(save('44-app-running', menu.buildWebFrame(1920, 720, { connected: true, engine: 'ready', live: true, video: true, w: 1796, h: 580, app: 'hello', appName: 'Hello THEiPlay' })));
+menu.useTheme('browser');
+done.push(save('45-browser', menu.buildWebFrame(1920, 720, { connected: true, engine: 'ready', live: true, video: true, w: 1796, h: 548, url: 'https://example.com/', title: 'Example', zoom: 1 })));
+menu.useTheme('base');
 done.push(save('09-label', menuFrame('label', 6, 'napis', 'Napis', airOff)));
 var where = JSON.parse(JSON.stringify(airWait)); where.whereOpen = true; where.whereCursor = 0;
 done.push(save('10-where', menuFrame('airplay', 1, '', 'THEiPlay', where)));

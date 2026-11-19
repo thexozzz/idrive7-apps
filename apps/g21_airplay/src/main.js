@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.206',
+        version: (this._packageJson && this._packageJson.version) || '0.1.207',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.206') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.207') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5398,8 +5398,21 @@ AirPlayApp.prototype._paintWeb = function () {
         film: s.film || null,
         fsBox: this._webFsBox(),
         fsFull: !!this._webFsFull,
-        app: this._webApp || ''
+        app: this._webApp || '',
+        appName: this._webApp ? this._storeAppName(this._webApp) : ''
     });
+};
+
+// what an app from Sklep is called (its tile's name)
+AirPlayApp.prototype._storeAppName = function (id) {
+    var list = this._storeApps || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+        if (list[i] && list[i].id === id) {
+            return String(list[i].name || '');
+        }
+    }
+    return '';
 };
 
 // The page's place: under the browser's bar, or, for an app from Sklep (no bar), the whole touchable part.

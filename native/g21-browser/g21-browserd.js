@@ -1244,9 +1244,18 @@ Daemon.prototype.onCommand = async function (m) {
         const firstUrl = appUrl || (typeof m.url === 'string' && m.url ? this.resolve(m.url) : null);
         // (the proxy that runs was started before the apps' server: it does not let the engine reach it)
         if (this.engine && appUrl && String(this.proxyKey || '').indexOf('127.0.0.1:' + this.appsPort) < 0) await this.stopEngine('an app is opened');
+        // An app from Sklep and Przeglądarka are two things (owner, 2026-11-20: "wstecz" in an app showed the page
+        // the browser had before it). Whenever the one follows the other in the engine that runs, the way back is
+        // emptied once the new page is there, and Przeglądarka after an app starts on its start page, not on the
+        // app's.
+        const mode = m.app ? String(m.app) : '';
+        const changed = !!this.engine && mode !== (this.appMode || '');
+        this.appMode = mode;
         if (this.engine) {
             await this.cast(true);
-            if (firstUrl) { this.set({ err: '', loading: true }); await this.go(this.engine, firstUrl); }
+            if (changed) this.engine.forget = true;
+            if (firstUrl) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.go(this.engine, firstUrl); }
+            else if (changed) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.engine.cdp.send('Page.navigate', { url: this.home() }, this.engine.session); }
             this.push(true);
             return;
         }
@@ -2627,7 +2636,7 @@ Daemon.prototype.onEvent = function (e, m) {
     switch (m.method) {
     case 'Page.screencastFrame': this.onFrame(e, p); return;
     case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) { this.loadT0 = Date.now(); this.set({ loading: true, err: '', editable: false }); } return;
-    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.perfLoaded(); this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { if (e.forget) { e.forget = false; e.cdp.send('Page.resetNavigationHistory', {}, e.session).then(() => this.refresh(e), (x) => this.log('history: ' + x.message)); } this.perfLoaded(); this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
     case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = '';
         // a link of a page made here ("about:blank#chrome://name": a link with only a fragment on a data: page is
         // refused by the engine as a navigation to a data: address, car 2026-11-15)
