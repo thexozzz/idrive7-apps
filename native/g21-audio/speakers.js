@@ -150,7 +150,11 @@ class Speakers extends EventEmitter {
         this.record = opts.record || RECORD;
         this.pid = opts.pid || process.pid;
         this.alive = opts.alive || isAlive;
-        this.device = DEVICE;
+        // (g21-audio: another source and its device. own: false = the source is not ours to mark available or to
+        // tidy up at a start: BMW's media source, 1046, which RideTube uses as well)
+        this.source = opts.source || SOURCE;
+        this.device = opts.device || DEVICE;
+        this.own = opts.own !== false;
         this.connectionID = 0;
         this.claimed = false;
         this.claiming = null;
@@ -199,7 +203,8 @@ class Speakers extends EventEmitter {
     }
 
     _setAvailable(obs, on) {
-        return obs.callMethod('hookSourceAvailablityStatusChange', { sourceID: SOURCE, availability: on ? AVAILABLE : UNAVAILABLE }, T);
+        if (!this.own) return Promise.resolve();
+        return obs.callMethod('hookSourceAvailablityStatusChange', { sourceID: this.source, availability: on ? AVAILABLE : UNAVAILABLE }, T);
     }
 
     /* The speakers are ours once this resolves (with the device to play
@@ -222,7 +227,7 @@ class Speakers extends EventEmitter {
                 const r = this._read() || { holders: [], previous: 0 };
                 if (!r.holders.filter((p) => p !== this.pid).length) {
                     // nobody else holds them: what plays now is what we give back
-                    const other = list.filter((c) => c.sinkID === SINK && c.sourceID !== SOURCE)[0];
+                    const other = list.filter((c) => c.sinkID === SINK && c.sourceID !== this.source)[0];
                     if (other) r.previous = other.sourceID;
                 }
                 if (r.holders.indexOf(this.pid) < 0) r.holders.push(this.pid);
@@ -230,7 +235,7 @@ class Speakers extends EventEmitter {
                 this.claimed = true;
                 return this._setAvailable(px.obs, true);
             })
-            .then(() => px.cc.callMethod('connect', { sourceID: SOURCE, sinkID: SINK }, T))
+            .then(() => px.cc.callMethod('connect', { sourceID: this.source, sinkID: SINK }, T))
             .then((r) => {
                 if (r.amError !== 'E_OK' && r.amError !== 'E_ALREADY_EXISTS') throw new Error('connect: ' + r.amError);
                 return this._waitConnected(px.cc, Date.now() + this.connectMs);
@@ -240,7 +245,7 @@ class Speakers extends EventEmitter {
                 const r = this._read();
                 this.log('speakers: ours (connection ' + id + ', gives back source ' + ((r && r.previous) || RADIO) + ')');
                 this._watch(px.cc);
-                return DEVICE;
+                return this.device;
             });
     }
 
@@ -255,7 +260,7 @@ class Speakers extends EventEmitter {
 
     _waitConnected(cc, until) {
         return this._connections(cc).then((list) => {
-            const c = list.filter((x) => x.sourceID === SOURCE && x.sinkID === SINK)[0];
+            const c = list.filter((x) => x.sourceID === this.source && x.sinkID === SINK)[0];
             if (c && c.connectionState === 'CS_CONNECTED') return c.mainConnectionID;
             if (Date.now() > until) throw new Error('not connected: ' + (c ? c.connectionState : 'no connection'));
             return new Promise((r) => setTimeout(r, 250)).then(() => this._waitConnected(cc, until));
@@ -269,7 +274,7 @@ class Speakers extends EventEmitter {
             if (busy) return;
             busy = true;
             this._connections(cc).then((list) => {
-                const c = list.filter((x) => x.sourceID === SOURCE && x.sinkID === SINK)[0];
+                const c = list.filter((x) => x.sourceID === this.source && x.sinkID === SINK)[0];
                 if (this.connectionID && (!c || c.connectionState === 'CS_DISCONNECTED')) {
                     this.log('speakers: lost (' + (c ? c.connectionState : 'connection gone') + ')');
                     clearInterval(this.timer);
@@ -284,7 +289,7 @@ class Speakers extends EventEmitter {
         const step = (what, p) => p.catch((e) => this.log('speakers: ' + what + ': ' + (e && e.message || e)));
         return this._connections(px.cc)
             .then((list) => {
-                const ours = list.filter((c) => c.sourceID === SOURCE && c.sinkID === SINK)[0];
+                const ours = list.filter((c) => c.sourceID === this.source && c.sinkID === SINK)[0];
                 return ours ? step('disconnect', px.cc.callMethod('disconnect', { mainConnectionID: ours.mainConnectionID }, T)) : null;
             })
             .then(() => step('unavailable', this._setAvailable(px.obs, false)))
@@ -309,7 +314,7 @@ class Speakers extends EventEmitter {
         this.connectionID = 0;
         return this._proxies().then((p) => { px = p; return this._connections(px.cc); })
             .then((list) => {
-                const ours = list.filter((c) => c.sourceID === SOURCE && c.sinkID === SINK)[0];
+                const ours = list.filter((c) => c.sourceID === this.source && c.sinkID === SINK)[0];
                 return ours ? px.cc.callMethod('disconnect', { mainConnectionID: ours.mainConnectionID }, T) : null;
             })
             .then(() => this._waitGone(px.cc, Date.now() + 1500))
@@ -324,7 +329,7 @@ class Speakers extends EventEmitter {
 
     _waitGone(cc, until) {
         return this._connections(cc).then((list) => {
-            const c = list.filter((x) => x.sourceID === SOURCE && x.sinkID === SINK)[0];
+            const c = list.filter((x) => x.sourceID === this.source && x.sinkID === SINK)[0];
             if (!c || c.connectionState === 'CS_DISCONNECTED' || Date.now() > until) return null;
             return new Promise((r) => setTimeout(r, 100)).then(() => this._waitGone(cc, until));
         });
@@ -356,10 +361,11 @@ class Speakers extends EventEmitter {
      * CarLife connected with no holder at all (the audio manager resumed it
      * after a head unit restart), are given back. Never rejects. */
     recover() {
+        if (!this.own) return Promise.resolve();
         const r = this._read();
         if (r && r.holders.filter((p) => p !== this.pid).length) return Promise.resolve();
         return this._proxies().then((px) => this._connections(px.cc).then((list) => {
-            const stale = list.filter((c) => c.sourceID === SOURCE && c.sinkID === SINK)[0];
+            const stale = list.filter((c) => c.sourceID === this.source && c.sinkID === SINK)[0];
             if (!r && !stale) return;
             this.log('speakers: left claimed (' + (r ? 'its holder is gone' : 'no holder') + '): giving them back');
             this._write(null);

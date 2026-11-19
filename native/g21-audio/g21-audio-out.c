@@ -40,6 +40,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <grp.h>
 
 typedef struct snd_pcm snd_pcm_t;
 static struct {
@@ -100,6 +101,26 @@ static int pace_window(double ms, unsigned long frames, int enough, int *slow)
     return 1;
 }
 
+/*
+ * G21_AUDIO_DROP="uid:gid": the writer was started as root because the device is one only root may open (the
+ * media player's own SmartX input: car, 2026-11-20, nobody with the group mgu_alsa got "Operation not permitted",
+ * root opened it). Once the device is open root is given up for good: that user, that group, no other groups.
+ * A writer that cannot give it up does not play.
+ */
+static void drop_root(void)
+{
+    const char *e = getenv("G21_AUDIO_DROP");
+    unsigned long uid = 0, gid = 0;
+    gid_t g;
+    if (!e || !*e) return;
+    if (sscanf(e, "%lu:%lu", &uid, &gid) != 2 || !uid || !gid) { fprintf(stderr, "[G21-AUDIO] out: G21_AUDIO_DROP is not uid:gid\n"); leave(1); }
+    g = (gid_t)gid;
+    if (setgroups(1, &g) != 0 || setgid((gid_t)gid) != 0 || setuid((uid_t)uid) != 0 || getuid() == 0 || geteuid() == 0) {
+        fprintf(stderr, "[G21-AUDIO] out: root not given up: %s\n", strerror(errno));
+        leave(1);
+    }
+}
+
 static snd_pcm_t *dev_open(const char *dev)
 {
     snd_pcm_t *pcm = NULL;
@@ -109,6 +130,7 @@ static snd_pcm_t *dev_open(const char *dev)
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: open %s: %s\n", dev, A.strerror(rc)); return NULL; }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: set_params %s: %s\n", dev, A.strerror(rc)); return NULL; }
+    drop_root();
     fprintf(stderr, "[G21-AUDIO] out: open %s, S16LE %d Hz %d ch, buffer %u us\n", dev, RATE, CH, buffer_us());
     return pcm;
 }
@@ -409,6 +431,7 @@ static int probe(const char *dev, const char *mode)
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: open %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: set_params %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
+    drop_root();
     t0 = mono_ms();
     while ((t = mono_ms()) - t0 < 6000 && !stopping) {
         long w;

@@ -69,9 +69,29 @@ function groupId(name) {
 }
 const ALSA_GID = env.G21_AUDIO_GID ? Number(env.G21_AUDIO_GID) : groupId('mgu_alsa');
 
+/*
+ * Which input of the car the sound goes into. "media" (default since 0.1.18): the media player's own SmartX input,
+ * MediaSink_AudioOut_Front, with BMW's media source (1046) connected to the front speakers: what RideTube's sound
+ * goes through, which plays right at once. Car, 2026-11-20, with the owner: silence written into it five times,
+ * 47 997 to 48 007 frames a second each time, and a tone the owner heard. The CarLife input used until then takes
+ * 48 000 or only 36 000 frames a second, by chance, at every connection ("input": "carlife" in config.json brings
+ * it back; what was built around that, the tries for the full pace, stays for it).
+ * Only root may open that device, so its writer starts as root and gives root up once the device is open
+ * (g21-audio-out.c, G21_AUDIO_DROP). The source is BMW's, shared with RideTube: it is not marked available or
+ * tidied up by this tool, and the two cannot sound at once.
+ */
+const MEDIA_INPUT = (function () { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')).input !== 'carlife'; } catch (e) { return true; } })() && !DEVICE;
+const MEDIA_DEVICE = 'smartx:MediaSink_AudioOut_Front_CF_48_COMBINED_STEREO_MULTICHANNEL';
+// how the writer is started: as nobody in the group mgu_alsa, or (the media input) as root that gives root up
+function asWriter(opts) {
+    if (NOSETUID) return opts;
+    if (MEDIA_INPUT) { opts.env = Object.assign({}, opts.env || process.env, { G21_AUDIO_DROP: WRITER_UID + ':' + ALSA_GID }); return opts; }
+    opts.uid = WRITER_UID; opts.gid = ALSA_GID;
+    return opts;
+}
 const mod = require(SPEAKERS);
-const sp = new mod.Speakers({ log: function (t) { log(String(t)); }, record: path.join(RUN, 'speakers.json') });
-const device = function () { return DEVICE || ('plug:' + mod.DEVICE); };
+const sp = new mod.Speakers(Object.assign({ log: function (t) { log(String(t)); }, record: path.join(RUN, 'speakers.json') }, MEDIA_INPUT ? { source: 1046, device: MEDIA_DEVICE, own: false } : {}));
+const device = function () { return DEVICE || ('plug:' + sp.device); };
 
 // the one stream
 const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, claimed: false, stats: '', since: 0, lost: 0 };
@@ -142,8 +162,30 @@ function claim() {
     if (st.claimed) return;
     st.claimed = true;
     const t0 = Date.now();
-    keeperStart().then(function () { return sp.claim(); }).then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); },
+    keeperStart().then(function () { return sp.claim(); }).then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); quietPlayer(); },
         function (e) { st.claimed = false; log('speakers not claimed: ' + (e && e.message || e)); });
+}
+/*
+ * The media input: the speakers now belong to BMW's media source, and its player may take that as its turn and play
+ * on what it had last (a RideTube film's sound). So the player is looked at twice after the claim and, if it
+ * plays, stopped (the STOP button, as RideTube sends it). Later it is left alone: a film started in RideTube while
+ * a stream of ours sounds is the owner's doing.
+ */
+let playerLook = null;
+function quietPlayer() {
+    if (!MEDIA_INPUT) return;
+    let K;
+    try { K = require(path.join(__dirname, 'mediaout.js')).MediaOut; } catch (e) { return; }
+    if (!playerLook) playerLook = new K({ log: function (t) { if (!/PLAYER_STATE/.test(String(t))) log(String(t)); }, mode: 'file' });
+    const k = playerLook;
+    const look = function () {
+        if (!st.claimed || !k.mp) return;
+        if (k.state === 'PLAYER_STATE_PLAY') {
+            log('media player: it began to play as the speakers were claimed; stopped');
+            k.mp.callMethod('sendButtonEvent', { button: 'STOP', action: 'PRESS' }, 3000).then(function () {}, function (e) { log('media player: STOP ' + (e && e.message || e)); });
+        }
+    };
+    k._proxies().then(function () { setTimeout(look, 500); setTimeout(look, 2000); }, function (e) { log('media player: ' + (e && e.message || e)); });
 }
 function release(why) {
     if (!st.claimed) return Promise.resolve();
@@ -292,7 +334,7 @@ function startWriter() {
     // (the writer leaves by itself when its opening of the device got three quarters of the pace: see below. After
     // eight such tries in a minute it is told to stay whatever the pace)
     { const now = Date.now(); heals = heals.filter(function (t) { return now - t < 60000; }); if (heals.length >= 8) { opts.env = Object.assign({}, process.env, { G21_AUDIO_NOHEAL: '1' }); log('out: eight openings in a minute at three quarters of the pace: this one stays'); heals = []; } }
-    if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
+    asWriter(opts);
     // AirPlay passes on what a phone sends and throws away what is not taken at once: its writer never holds it.
     // The browser's engine as well: it writes its sound by its own clock and counts a film's time by what it has
     // written, so a writer that held it made the page's film run slow, sound and picture both (car, 2026-11-15:
@@ -429,7 +471,7 @@ function tone(m) {
         log('tone: speakers claimed in ' + (Date.now() - t0) + ' ms');
         return new Promise(function (resolve) {
             const opts = { stdio: ['ignore', 'ignore', 'pipe'] };
-            if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
+            asWriter(opts);
             const child = cp.spawn(OUT, ['tone', device(), String(secs), String(amp)], opts);
             let err = '';
             child.stderr.on('data', function (d) { err += d; });
@@ -455,7 +497,7 @@ function probe() {
     const one = function (mode) {
         return new Promise(function (resolve) {
             const opts = { stdio: ['ignore', 'ignore', 'pipe'] };
-            if (!NOSETUID) { opts.uid = WRITER_UID; opts.gid = ALSA_GID; }
+            asWriter(opts);
             const child = cp.spawn(OUT, ['probe', device(), mode], opts);
             let err = '';
             child.stderr.on('data', function (d) { err += d; });
@@ -516,7 +558,7 @@ function serve() {
     const mask = process.umask(0o177);
     server.listen(SOCK, function () {
         process.umask(mask);
-        log('g21-audiod ' + VERSION + ' listening on ' + SOCK + ', device ' + device() + ', writer ' + (NOSETUID ? 'as this user' : 'nobody:' + ALSA_GID));
+        log('g21-audiod ' + VERSION + ' listening on ' + SOCK + ', device ' + device() + ', source ' + sp.source + ', writer ' + (NOSETUID ? 'as this user' : (MEDIA_INPUT ? 'root until the device is open, then ' : '') + 'nobody:' + ALSA_GID));
     });
     const stop = function () {
         log('stopping');

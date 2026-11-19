@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.210
+
+- Właściwa droga dźwięku (właściciel: „RideTube jakoś podaje ten dźwięk prawidłowo”). Auto, 2026-11-20: odtwarzacz multimediów BMW, przez który gra RideTube, pisze do własnego wejścia dźwięku auta (MediaSink_AudioOut_Front), nie do wejścia CarLife, którego używaliśmy. Pomiar ciszą na tym wejściu: 47 997–48 007 próbek na sekundę w pięciu rundach na pięć (CarLife: losowo 48 000 albo 36 000), ton testowy przyjęty w całości i słyszany przez właściciela.
+- `g21-audio` 0.1.18: dźwięk AirPlay i przeglądarki idzie na żywo wprost do tego wejścia, ze źródłem multimediów BMW (1046) na głośnikach – bez pliku i bez odtwarzacza po drodze. Mechanizm prób pełnego tempa zostaje tylko dla starego wejścia (`"input": "carlife"` w `/var/opt/g21-audio/config.json` przywraca je).
+- To wejście otwiera tylko root (zwykły użytkownik z grupą mgu_alsa dostał odmowę), więc program zapisujący startuje jako root i zaraz po otwarciu urządzenia trwale zrzuca uprawnienia do nobody:mgu_alsa.
+- Ograniczenia: źródło jest wspólne z RideTube, więc AirPlay/przeglądarka i YouTube nie zagrają dźwięku jednocześnie. Gdy odtwarzacz BMW sam zacznie grać ostatni utwór w chwili przejęcia głośników, jest zatrzymywany. Całość NIESPRAWDZONA w aucie w tej postaci – sprawdzone były pomiar tempa i ton z ręcznej próby.
+
 ## 0.1.209
 
 - Auto, 2026-11-20 (`g21-audio` 0.1.16): gorzej niż w 0.1.15. Osiem prób z rzędu zostało w tempie trzech czwartych i dźwięk przeglądarki został zły. Samo ponowne otwarcie urządzenia nie pomaga (4 z 4 prób złe), a „nowe połączenie” nie było naprawdę zrywane – menedżer dźwięku oddawał to samo połączenie (ten sam numer w logu). Pełne tempo przywraca dopiero faktyczne zerwanie i ponowne zestawienie połączenia, jak w 0.1.15.
