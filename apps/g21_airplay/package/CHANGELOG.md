@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.208
+
+- Auto, 2026-11-20 (`g21-audio` 0.1.15): mechanizm ponownego otwierania działa – w logu po kilku próbach tempo wraca do pełnego i zostaje (raz po 1 próbie, raz dopiero po ok. 8). Ale między próbami głośniki były oddawane poprzedniemu źródłu, więc przez sekundę grało radio, kilka razy z rzędu.
+- `g21-audio` 0.1.16: w trakcie prób głośniki zostają przy nas, radio się nie włącza. Pierwsze cztery próby otwierają od nowa tylko urządzenie; od piątej dodatkowo nasze połączenie jest zrywane i zestawiane ponownie (bez oddawania głośników). Niesprawdzone w aucie: nie wiadomo, czy samo ponowne otwarcie urządzenia wystarcza do trafienia w pełne tempo – log pokaże, przy której próbie się udaje.
+
 ## 0.1.207
 
 - Każda aplikacja ma menu w swoim kolorze i z podpisem, czyje to menu (właściciel, 2026-11-20): AirPlay niebieski („Menu: AirPlay”), YouTube czerwony, Przeglądarka zielony (jej pasek i jej ustawienia), aplikacje ze Sklepu fioletowy; strony samego THEiPlay zostają bursztynowe. Pasek przeglądarki ma kolor, ale bez podpisu – nie ma na niego miejsca.

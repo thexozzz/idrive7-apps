@@ -292,6 +292,32 @@ class Speakers extends EventEmitter {
             .then(() => this.log('speakers: given back to source ' + (previous || RADIO)));
     }
 
+    /* Our connection taken away and made anew while the speakers stay ours: they are given to no other source in
+     * between (g21-audiod's tries for the device's full pace: giving them back each time let the radio play for a
+     * second between the tries, car 2026-11-20). Resolves when connected again; rejects when not. */
+    reconnect() {
+        let px;
+        if (this.claiming || !this.claimed) return Promise.resolve();
+        clearInterval(this.timer);
+        this.timer = null;
+        this.connectionID = 0;
+        return this._proxies().then((p) => { px = p; return this._connections(px.cc); })
+            .then((list) => {
+                const ours = list.filter((c) => c.sourceID === SOURCE && c.sinkID === SINK)[0];
+                return ours ? px.cc.callMethod('disconnect', { mainConnectionID: ours.mainConnectionID }, T) : null;
+            })
+            .then(() => px.cc.callMethod('connect', { sourceID: SOURCE, sinkID: SINK }, T))
+            .then((r) => {
+                if (r.amError !== 'E_OK' && r.amError !== 'E_ALREADY_EXISTS') throw new Error('connect: ' + r.amError);
+                return this._waitConnected(px.cc, Date.now() + this.connectMs);
+            })
+            .then((id) => {
+                this.connectionID = id;
+                this.log('speakers: connection made anew (' + id + ')');
+                this._watch(px.cc);
+            });
+    }
+
     /* Lets go of the speakers; the last holder gives them back. During a
      * claim, once it has ended. Never rejects. */
     release() {

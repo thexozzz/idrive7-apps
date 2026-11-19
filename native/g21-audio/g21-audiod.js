@@ -330,8 +330,19 @@ function startWriter() {
         // failure: the writer is started again at once and opens the device anew, the stream stays held meanwhile
         // (nothing is read and dropped: the browser's engine, unheld, races its film).
         const pace = code === 3 && !sig;
-        if (pace) { heals.push(Date.now()); log('out: the device took three quarters of the pace, opened again (try ' + heals.length + ')'); }
-        else if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
+        if (pace) {
+            // The speakers stay ours through the tries (0.1.15 gave them back each time and the radio played for a
+            // second between two tries: owner, 2026-11-20). The first four: only the device is opened again. From
+            // the fifth: our connection is taken away and made anew as well (what the tries of 0.1.15 did, less the
+            // giving back), in case the pace hangs on the connection. The log tells which it was.
+            heals.push(Date.now());
+            const n = heals.length, again = function () { if (st.holder) setTimeout(startWriter, 100); };
+            log('out: the device took three quarters of the pace, opened again (try ' + n + (n > 4 ? ', with a new connection' : '') + ')');
+            if (n > 4 && st.claimed && typeof sp.reconnect === 'function') sp.reconnect().then(again, function (e) { log('speakers: not connected anew: ' + (e && e.message || e)); st.claimed = false; again(); });
+            else again();
+            return;
+        }
+        if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
         release(pace ? 'slow device' : 'no sound').then(function () { if (st.holder) setTimeout(startWriter, (code || sig) && !pace ? 2000 : 100); });
     });
 }
