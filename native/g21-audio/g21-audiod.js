@@ -331,15 +331,28 @@ function startWriter() {
         // (nothing is read and dropped: the browser's engine, unheld, races its film).
         const pace = code === 3 && !sig;
         if (pace) {
-            // The speakers stay ours through the tries (0.1.15 gave them back each time and the radio played for a
-            // second between two tries: owner, 2026-11-20). The first four: only the device is opened again. From
-            // the fifth: our connection is taken away and made anew as well (what the tries of 0.1.15 did, less the
-            // giving back), in case the pace hangs on the connection. The log tells which it was.
+            /*
+             * What brings the full pace back is taking our connection away and making it anew: 0.1.15 did that by
+             * giving the speakers back each time (it worked, once at the first try, once at the eighth, and the
+             * radio played between the tries); 0.1.16 only opened the device again and "reconnected" without the
+             * connection ever being gone: eight tries in a row stayed slow (car, 2026-11-20). Now the connection is
+             * really taken away, but given to no other source:
+             *   tries 1 to 3: connected again first, the device opened after that;
+             *   tries 4 to 6: the device opened first, connected 0.4 s later (the order 0.1.15 had);
+             *   tries 7 and 8: as 0.1.15, the speakers given back in between (the radio may be heard).
+             * The log tells which one it was.
+             */
             heals.push(Date.now());
-            const n = heals.length, again = function () { if (st.holder) setTimeout(startWriter, 100); };
-            log('out: the device took three quarters of the pace, opened again (try ' + n + (n > 4 ? ', with a new connection' : '') + ')');
-            if (n > 4 && st.claimed && typeof sp.reconnect === 'function') sp.reconnect().then(again, function (e) { log('speakers: not connected anew: ' + (e && e.message || e)); st.claimed = false; again(); });
-            else again();
+            const n = heals.length, how = n <= 3 ? 'connected first' : (n <= 6 ? 'device first' : 'speakers given back');
+            const again = function () { if (st.holder) setTimeout(startWriter, 100); };
+            const giveBack = function (e) { if (e) log('speakers: ' + (e && e.message || e)); release('slow device').then(again); };
+            log('out: the device took three quarters of the pace, opened again (try ' + n + ', ' + how + ')');
+            if (!st.claimed || typeof sp.park !== 'function' || n > 6) { giveBack(); return; }
+            if (n <= 3) { sp.park().then(function () { return sp.unpark(); }).then(again, giveBack); return; }
+            sp.park().then(function () {
+                again();
+                setTimeout(function () { sp.unpark().catch(function (e) { log('speakers: not connected again: ' + (e && e.message || e)); st.claimed = false; }); }, 400);
+            }, giveBack);
             return;
         }
         if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }

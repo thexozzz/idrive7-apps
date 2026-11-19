@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.209
+
+- Auto, 2026-11-20 (`g21-audio` 0.1.16): gorzej niż w 0.1.15. Osiem prób z rzędu zostało w tempie trzech czwartych i dźwięk przeglądarki został zły. Samo ponowne otwarcie urządzenia nie pomaga (4 z 4 prób złe), a „nowe połączenie” nie było naprawdę zrywane – menedżer dźwięku oddawał to samo połączenie (ten sam numer w logu). Pełne tempo przywraca dopiero faktyczne zerwanie i ponowne zestawienie połączenia, jak w 0.1.15.
+- `g21-audio` 0.1.17: przy próbie połączenie jest naprawdę zrywane (czekamy, aż zniknie) i zestawiane od nowa, ale głośniki nie są oddawane żadnemu innemu źródłu. Próby 1–3: najpierw połączenie, potem urządzenie; 4–6: najpierw urządzenie (kolejność z 0.1.15); 7–8: jak w 0.1.15, z oddaniem głośników (może być słychać radio). Niesprawdzone w aucie: nie wiadomo, czy menedżer dźwięku auta sam nie włączy radia, gdy głośniki zostają na chwilę bez źródła, ani czy do trafienia w pełne tempo nie jest potrzebne właśnie przejście przez inne źródło.
+
 ## 0.1.208
 
 - Auto, 2026-11-20 (`g21-audio` 0.1.15): mechanizm ponownego otwierania działa – w logu po kilku próbach tempo wraca do pełnego i zostaje (raz po 1 próbie, raz dopiero po ok. 8). Ale między próbami głośniki były oddawane poprzedniemu źródłu, więc przez sekundę grało radio, kilka razy z rzędu.

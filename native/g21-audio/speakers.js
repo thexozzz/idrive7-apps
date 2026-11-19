@@ -292,10 +292,16 @@ class Speakers extends EventEmitter {
             .then(() => this.log('speakers: given back to source ' + (previous || RADIO)));
     }
 
-    /* Our connection taken away and made anew while the speakers stay ours: they are given to no other source in
-     * between (g21-audiod's tries for the device's full pace: giving them back each time let the radio play for a
-     * second between the tries, car 2026-11-20). Resolves when connected again; rejects when not. */
-    reconnect() {
+    /*
+     * park(): our connection is taken away and our source said to be away, and the speakers are given to NO other
+     * source (release() gives them back to the one that played before: between two tries for the device's full
+     * pace the radio then played for a second, car 2026-11-20). They stay claimed here; the source to give back
+     * to in the end stays noted. unpark(): available and connected again.
+     * (0.1.16 had reconnect(): disconnect and connect at once. The audio manager answered the connect with the
+     * connection that was still there, so nothing was made anew: car 2026-11-20, "connection made anew (71)"
+     * after connection 71, and eight tries in a row stayed slow.)
+     */
+    park() {
         let px;
         if (this.claiming || !this.claimed) return Promise.resolve();
         clearInterval(this.timer);
@@ -306,16 +312,22 @@ class Speakers extends EventEmitter {
                 const ours = list.filter((c) => c.sourceID === SOURCE && c.sinkID === SINK)[0];
                 return ours ? px.cc.callMethod('disconnect', { mainConnectionID: ours.mainConnectionID }, T) : null;
             })
-            .then(() => px.cc.callMethod('connect', { sourceID: SOURCE, sinkID: SINK }, T))
-            .then((r) => {
-                if (r.amError !== 'E_OK' && r.amError !== 'E_ALREADY_EXISTS') throw new Error('connect: ' + r.amError);
-                return this._waitConnected(px.cc, Date.now() + this.connectMs);
-            })
-            .then((id) => {
-                this.connectionID = id;
-                this.log('speakers: connection made anew (' + id + ')');
-                this._watch(px.cc);
-            });
+            .then(() => this._waitGone(px.cc, Date.now() + 1500))
+            .then(() => this._setAvailable(px.obs, false))
+            .then(() => this.log('speakers: let go for a moment (given to no source)'));
+    }
+
+    unpark() {
+        if (!this.claimed) return Promise.reject(new Error('not claimed'));
+        return this._claim().then(() => {});
+    }
+
+    _waitGone(cc, until) {
+        return this._connections(cc).then((list) => {
+            const c = list.filter((x) => x.sourceID === SOURCE && x.sinkID === SINK)[0];
+            if (!c || c.connectionState === 'CS_DISCONNECTED' || Date.now() > until) return null;
+            return new Promise((r) => setTimeout(r, 100)).then(() => this._waitGone(cc, until));
+        });
     }
 
     /* Lets go of the speakers; the last holder gives them back. During a
