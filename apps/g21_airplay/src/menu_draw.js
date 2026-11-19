@@ -810,6 +810,9 @@ var APPS_SET_ITEMS = [
     { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
     // the full Chrome (sites that refuse a browser made for programs; protected films) or the light headless shell
     { name: 'aset-engine', title: 'Silnik', hint: 'pełny Chrome', icon: 'gear' },
+    // how the page's picture reaches the screen: the engine's window straight into the video file (60 or 30 frames a
+    // second at most) or DevTools photographs (JPEG, 20 at most; the only way of the light engine)
+    { name: 'aset-frames', title: 'Tor obrazu', hint: 'bezpośredni 60 kl./s', icon: 'desktop' },
     // pages in their phone form (a touch screen) or in their desktop form
     { name: 'aset-mobile', title: 'Tryb mobilny', hint: 'włączony', icon: 'desktop' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },

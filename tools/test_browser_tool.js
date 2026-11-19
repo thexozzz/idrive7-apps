@@ -261,15 +261,15 @@ function socks(port, host, dport) {
 function testPolicy(base) {
     const file = path.join(base, 'policy-test.json');
     let r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
     assert.deepStrictEqual([r.problems, r.file], [[], false]);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
     assert.deepStrictEqual(r.problems, []);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, audio: 'loud', memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
     assert.strictEqual(r.problems.length, 11, r.problems.join(' | '));
     fs.writeFileSync(file, '{ sandbox: off }');
     r = d.readPolicy(file);
@@ -280,7 +280,23 @@ function testPolicy(base) {
     assert.ok(flags.indexOf('--disable-audio-output') >= 0 && flags.indexOf('--mute-audio') >= 0 && flags.indexOf('--no-sandbox') < 0 && flags.indexOf('--alsa-output-device=g21out') < 0, 'without G21 Audio: no sound device');
     const flagsSound = d.Daemon.prototype.engineArgs.call({ zoom: 1.5, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75, audio: { fifo: '/x' } }, { profile: '/p', major: '153' }, 'about:blank', true);
     assert.ok(flagsSound.indexOf('--alsa-output-device=g21out') >= 0 && flagsSound.indexOf('--disable-audio-output') < 0 && flagsSound.indexOf('--mute-audio') < 0, 'with G21 Audio: the engine plays into its own ALSA device');
-    console.log('ok policy: defaults without a file, the owner\'s values taken, values not allowed keep their default and are named');
+    // the picture's path: the rule, and what each path asks of the engine
+    assert.strictEqual(d.POLICY_DEFAULT.frames, 'direct', 'the direct frame path is the default');
+    fs.writeFileSync(file, JSON.stringify({ frames: 'direct30' }));
+    assert.strictEqual(d.readPolicy(file).policy.frames, 'direct30');
+    fs.writeFileSync(file, JSON.stringify({ frames: 'fast' }));
+    r = d.readPolicy(file);
+    assert.deepStrictEqual([r.policy.frames, r.problems.length], ['direct', 1], 'a path that does not exist keeps the default');
+    fs.unlinkSync(file);
+    const self = (direct) => ({ zoom: 1.25, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75, direct: direct });
+    const fDirect = d.Daemon.prototype.engineArgs.call(self(true), { profile: '/p', major: '153', kind: 'chrome' }, 'about:blank', true);
+    assert.ok(fDirect.indexOf('--ozone-platform=wayland') >= 0 && fDirect.indexOf('--kiosk') >= 0 && fDirect.indexOf('--headless=new') < 0 && fDirect.indexOf('--window-size=1320,390') >= 0 && !fDirect.some((a) => /^--force-device-scale-factor/.test(a)), 'direct: a window as large as the picture, no windowless mode, no forced scale');
+    assert.ok(fDirect.indexOf('--no-sandbox') < 0 && fDirect.indexOf('--disable-gpu') >= 0, 'direct: the sandbox stays, the graphics rules stay');
+    const fCast = d.Daemon.prototype.engineArgs.call(self(false), { profile: '/p', major: '153', kind: 'chrome' }, 'about:blank', true);
+    assert.ok(fCast.indexOf('--headless=new') >= 0 && fCast.indexOf('--ozone-platform=wayland') < 0 && fCast.indexOf('--window-size=1408,416') >= 0 && fCast.indexOf('--force-device-scale-factor=0.9375') >= 0, 'cast: as before');
+    const fShell = d.Daemon.prototype.engineArgs.call(self(true), { profile: '/p', major: '153' }, 'about:blank', true);
+    assert.ok(fShell.indexOf('--ozone-platform=wayland') < 0 && fShell.indexOf('--force-device-scale-factor=0.9375') >= 0, 'the headless shell has no window: the photographs');
+    console.log('ok policy: defaults without a file, the owner\'s values taken, values not allowed keep their default and are named; frame paths');
 }
 async function testProxy(port) {
     const child = cp.spawn(process.execPath, [path.join(tool, 'g21-browserd.js'), '--proxy', '/nonexistent/lease.json'], { stdio: ['pipe', 'pipe', 'pipe'] });

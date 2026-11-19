@@ -1,7 +1,7 @@
 {
   "id": "g21-browser",
   "kind": "tool",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "license": "GPL-3.0-or-later",
   "title": "Przeglądarka",
   "description": "Silnik przeglądarki dla THEiPlay: Google chrome-headless-shell z własnymi bibliotekami, obraz strony prosto do warstwy wideo. Sterowanie przez /run/g21-browser/ctl.sock.",
@@ -41,6 +41,7 @@
     { "path": "g21-chrome-sandbox", "mode": "0755" },
     { "path": "g21-film.py", "mode": "0644" },
     { "path": "g21-webframe", "mode": "0755" },
+    { "path": "g21-wlframe", "mode": "0755" },
     { "path": "gputest/README.txt", "mode": "0644" },
     { "path": "gputest/ffmpeg-va", "mode": "0755" },
     { "path": "gputest/test720.mp4", "mode": "0644" },
@@ -160,7 +161,8 @@
   "crashNames": [
     "chrome-headless-shell",
     "chrome-headless",
-    "g21-webframe"
+    "g21-webframe",
+    "g21-wlframe"
   ],
   "recmgr": [
     "g21-browser"

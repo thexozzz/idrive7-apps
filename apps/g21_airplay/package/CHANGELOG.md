@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.203
+
+- Wydajność przeglądarki (`g21-browser` 0.1.45), pełny opis i tabele: `docs/09-wydajnosc-przegladarki.md`. Pomiar wskazał wąskie gardło: nie rysowanie strony, tylko droga obrazu z silnika na ekran (każda klatka fotografowana przez DevTools, kodowana do JPEG, przesyłana jako tekst i dekodowana ponownie) – ok. 80% kosztu klatki.
+- Nowy tor obrazu „bezpośredni” (domyślny dla pełnego Chrome): silnik rysuje do okna Wayland, którego drugim końcem jest nowy program `g21-wlframe`; klatka idzie przez pamięć współdzieloną prosto do pliku wideo, bez JPEG, i przeliczany jest tylko zmieniony fragment. Na maszynie deweloperskiej, te same sceny: 60 zamiast 20 klatek/s przy mniej niż połowie procesora (przewijanie: 379 → 152 ms procesora na sekundę). Pełny ekran filmu w tym torze ma 1280 × 480 zamiast 960 × 360.
+- Aplikacje > Ustawienia > „Tor obrazu”: bezpośredni do 60 kl./s / bezpośredni do 30 kl./s / zrzuty JPEG (stary tor, bez zmian). Gdy tor bezpośredni nie ruszy, przeglądarka sama wraca do zrzutów i zapisuje to w logu („direct frames:”).
+- Diagnostyka: wiersze `graphics:` (co silnik mówi o grafice) i `perf:` (klatki/s, odstępy klatek, procesor silnika i narzędzia klatek, pamięć, czas wczytania strony, czas od dotknięcia do obrazu) w logu przeglądarki co 30 s oraz strona `chrome://perf`. Skrypty pomiarowe: `tools/browser-bench/`.
+- NIESPRAWDZONE W AUCIE (auto było poza siecią): cały nowy tor działał tylko na stanowisku. Sprzętowej akceleracji w silniku nadal nie ma (kompozycja i raster programowe; powody i następny krok w dokumencie). Piaskownica bez zmian – włączona. Do sprawdzenia w aucie: czy tor rusza, liczby `perf:` dla obu torów, strony z listami rozwijanymi (okna podręczne silnika nie są pokazywane).
+
 ## 0.1.202
 
 - Opóźnienie obrazu AirPlay (`g21-airplay-open` 0.1.63). Opóźnienie w AirPlay jest zamierzone: odbiornik wstrzymuje obraz i dźwięk o ten sam stały zapas (UxPlay zgłasza telefonowi 0,25 s), żeby to, co przychodzi nierówno przez Wi‑Fi, wyszło równo i żeby usta zgadzały się z głosem. U nas dźwięk był opóźniony o ok. 0,3 s (zapas 240 ms w G21 Audio i 64 ms bufora urządzenia), a obraz wychodził od razu. `g21-yuvring` trzyma teraz każdą klatkę przez zadany czas i dopiero wtedy ją pokazuje; czas jest w pliku `<airplay-size>.delay` (ms, 0–1500, bez pliku 300).

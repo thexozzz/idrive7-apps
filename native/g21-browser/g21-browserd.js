@@ -12,7 +12,9 @@
  *
  *   app  <-- /run/g21-browser/ctl.sock (JSON lines) -->  this daemon (root)
  *   daemon --DevTools pipe--> engine (uid "engine")  --SOCKS5--> g21-browserd.js --proxy (same uid)
- *   engine --Page.screencastFrame (JPEG)--> daemon --pipe--> g21-webframe --> /dev/shm/mgu-video-g21browser
+ *   the picture, rule "frames" (docs/09-wydajnosc-przegladarki.md):
+ *   direct: engine (full Chrome, a Wayland window, shared memory) --> g21-wlframe --> /dev/shm/mgu-video-g21browser
+ *   cast:   engine --Page.screencastFrame (JPEG)--> daemon --pipe--> g21-webframe --> the same file
  *
  * The page picture never passes through the app: mgu-render draws the video file (op 19), as it
  * does for YouTube and AirPlay.
@@ -61,6 +63,7 @@ function defaults() {
         libDir: env.G21_BROWSER_LIB || path.join(here, 'lib'),
         fontsDir: path.join(here, 'fonts'),
         webframe: path.join(here, 'g21-webframe'),
+        wlframe: path.join(here, 'g21-wlframe'),      // the engine's window drawn straight into the video file (rule "frames")
         // THEiPlay Player: the decoder, the stream fetcher, and what it borrows from two other tools
         filmDecoder: env.G21_BROWSER_FILM_DECODER || path.join(here, 'gputest', 'ffmpeg-va'),
         filmHelper: path.join(here, 'g21-film.py'),
@@ -92,7 +95,8 @@ function defaults() {
         carNode: env.G21_BROWSER_CAR_NODE || '/usr/bin/node',                // the head unit's Node 8: g21-car.js needs its someip.node
         carEnv: env.G21_CAR_CATALOG ? { G21_CAR_CATALOG: env.G21_CAR_CATALOG, G21_CAR_SOMEIP: env.G21_CAR_SOMEIP || '' } : {},                                  // apps imported from git (Sklep): one folder each
         idleMs: 90000,        // the engine stays this long after the app went away
-        frameGapMs: 50,       // at most 20 page frames a second
+        frameGapMs: 50,       // at most 20 page frames a second (the photographs; the direct path: rule "frames")
+        directWaitMs: 8000,   // an engine window that shows no picture in this time: back to the photographs
         memLimitMb: 900,      // the engine's processes together; above it the engine is stopped
         startMs: 15000,
         pollMs: 1500          // title and back / forward are read again this often (a script that sets document.title sends no event)
@@ -875,7 +879,7 @@ const LIGHT_VIDEO = '(function(){try{'
  *   - chrome://about lists both kinds.
  * A web page cannot open any of them: only the address bar (the app's "nav") and the links of these pages themselves.
  */
-const CHROME_OWN = { about: 'Strony chrome://', 'chrome-urls': 'Strony chrome://', help: 'Strony chrome://', version: 'Wersja', settings: 'Ustawienia', flags: 'Przełączniki silnika',
+const CHROME_OWN = { about: 'Strony chrome://', 'chrome-urls': 'Strony chrome://', help: 'Strony chrome://', version: 'Wersja', perf: 'Wydajność', settings: 'Ustawienia', flags: 'Przełączniki silnika',
     history: 'Historia', downloads: 'Pobrane', extensions: 'Rozszerzenia', bookmarks: 'Zakładki', apps: 'Aplikacje', 'password-manager': 'Hasła', policy: 'Reguły', newtab: '', 'new-tab-page': '' };
 const CHROME_ENGINE = ['gpu', 'media-internals', 'histograms', 'process-internals', 'indexeddb-internals', 'serviceworker-internals', 'quota-internals', 'webrtc-internals', 'network-errors', 'tracing'];
 // "chrome://name/...", "about:name" -> { name, url }; null: not such an address
@@ -941,7 +945,14 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
  */
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+/*
+ *   frames  "direct" (default): the full engine draws into a window of its own and g21-wlframe puts those pixels
+ *           straight into the video file, at most 60 frames a second; "direct30": the same, at most 30;
+ *           "cast": DevTools photographs of the page (JPEG), at most 20 a second, as before 0.1.45. The headless
+ *           shell knows only "cast". A direct path that does not work falls back to "cast" by itself.
+ */
+const FRAMES = ['direct', 'direct30', 'cast'];
+const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -949,7 +960,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, mobile: 1, timezone: 1, player: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, mobile: 1, frames: 1, timezone: 1, player: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -964,6 +975,7 @@ function readPolicy(file) {
         pick('video', (v) => v === 'light' || v === 'any');
         pick('engine', (v) => v === 'chrome' || v === 'shell');
         pick('mobile', (v) => v === 'on' || v === 'off');
+        pick('frames', (v) => FRAMES.indexOf(v) >= 0);
         pick('timezone', (v) => typeof v === 'string' && /^(UTC|[A-Z][A-Za-z_]{1,20}\/[A-Za-z_\/+-]{1,40})$/.test(v));
         pick('player', (v) => v === 'on' || v === 'off');
         pick('memoryLimitMb', (v) => Number.isInteger(v) && v >= 300 && v <= 3000);
@@ -1006,6 +1018,14 @@ function Daemon(opts) {
     this.frameBusy = false;
     this.pendingAck = null;
     this.popups = {};
+    this.direct = false;        // this engine draws into g21-wlframe's window (rule "frames")
+    this.directFailed = false;  // it was tried and did not work: the photographs until the tool starts again
+    this.frameSeen = false;
+    this.frameRunning = true;
+    this.framePaused = 0;
+    this.loadT0 = 0;
+    this.perf = { sumN: 0, sumMs: 0, sumUs: 0, sumMax: 0, sumP95: 0 };
+    this.castStat = { iv: [], last: 0, us: 0, n: 0, t0: 0 };
     this.s = { engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false, live: false, w: 0, h: 0, ino: 0, editable: false, pct: 0 };
 }
 Daemon.prototype.log = function (msg) {
@@ -1031,7 +1051,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
-            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile }, fs: !!this.fs, film: this.filmView() };
+            homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile, frames: this.policy().frames, framesNow: this.engine ? (this.direct ? 'direct' : 'cast') : '' }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
     if (!force && text === this.lastSent) return;
     this.lastSent = text;
@@ -1047,9 +1067,22 @@ Daemon.prototype.chromePage = function (name, missing) {
     if (!Object.prototype.hasOwnProperty.call(CHROME_OWN, name)) return null;
     if (name === 'newtab' || name === 'new-tab-page') return this.home();
     if (name === 'about' || name === 'chrome-urls' || name === 'help') {
-        return chromeDoc(name, '<h2>Strony tej przeglądarki</h2>' + chromeLinks(['version', 'settings', 'flags', 'policy', 'history', 'downloads', 'extensions', 'bookmarks', 'password-manager'])
+        return chromeDoc(name, '<h2>Strony tej przeglądarki</h2>' + chromeLinks(['version', 'perf', 'settings', 'flags', 'policy', 'history', 'downloads', 'extensions', 'bookmarks', 'password-manager'])
             + '<h2>Strony diagnostyczne silnika</h2>' + chromeLinks(CHROME_ENGINE)
             + '<p>Inne adresy <code>chrome://</code> można wpisać w polu adresu; jeśli silnik takiej strony nie ma, przeglądarka to powie.</p>');
+    }
+    if (name === 'perf') {
+        const p = this.perf, f = p.frames, c = p.cpu, g = p.gl;
+        return chromeDoc(name, chromeRows([
+            ['Tor obrazu', e ? (this.direct ? 'bezpośredni: okno silnika prosto do pliku wideo, najwyżej ' + this.frameFps() + ' klatek/s' : 'zrzuty (JPEG przez DevTools), najwyżej ' + Math.round(1000 / o.frameGapMs) + ' klatek/s') + (this.directFailed ? ' — tor bezpośredni nie zadziałał, zobacz log' : '') : '—'],
+            ['Klatki (ostatnie 2 s ruchu)', f ? (f.n * 1000 / (f.ms || 1)).toFixed(1) + ' klatek/s; odstęp: środkowy ' + f.med + ' ms, 95% ' + f.p95 + ' ms, najdłuższy ' + f.max + ' ms' : 'brak pomiaru (obraz stoi)'],
+            ['Koszt klatki w narzędziu klatek', f ? (f.us / 1000).toFixed(2) + ' ms' + (this.direct ? ' (' + f.pct + '% obrazu)' : ' (dekodowanie JPEG)') : '—'],
+            ['Procesor (udział jednego rdzenia z 4)', c ? 'silnik ' + c.engine + '%, narzędzie klatek ' + c.frame + '%, demon ' + c.daemon + '%' : 'pomiar za 5 s'],
+            ['Pamięć silnika', p.memMb ? p.memMb + ' MB' : '—'],
+            ['Grafika silnika', g ? (g.renderer || 'bez GL') + ' ' + g.impl + '; kompozycja: ' + g.compositing + ', raster: ' + g.raster + ', dekodowanie wideo: ' + g.video + ', WebGL: ' + g.webgl : '—'],
+            ['Ostatnia strona wczytana w', p.loadMs ? p.loadMs + ' ms' : '—'],
+            ['Od dotknięcia do nowego obrazu', p.tapMs ? p.tapMs + ' ms' : (this.direct ? '—' : 'mierzone tylko w torze bezpośrednim')]
+        ]) + '<p>Otwórz stronę ponownie, aby zobaczyć nowe liczby. To samo trafia co 30 s do logu (wiersze „perf:”).</p>' + back);
     }
     if (name === 'version') {
         let tool = '';
@@ -1180,6 +1213,7 @@ Daemon.prototype.onClient = function (c) {
 Daemon.prototype.away = async function () {
     const e = this.engine;
     if (e) { try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* gone */ } }
+    this.frameRun(false);
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => this.guard(() => { this.sandboxOff = false; return this.stopEngine('idle'); }), this.opts.idleMs);
 };
@@ -1233,13 +1267,14 @@ Daemon.prototype.onCommand = async function (m) {
         // network rule: those are the owner's to write in state/policy.json. The file is written whole, as it is in force.
         // (an address for the start page: what the owner typed, made an address as the address bar does)
         if (String(m.key) === 'homepage' && typeof m.value === 'string') m.value = m.value.trim() === '' ? '' : (toUrl(m.value) || '\u0000');
-        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any', engine: (v) => v === 'chrome' || v === 'shell', mobile: (v) => v === 'on' || v === 'off',
+        const ok = { homepage: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || /^https?:\/\/[^\s]+$/.test(v)), autoplay: (v) => v === 'allow' || v === 'gesture', fullscreen: (v) => v === 'screen' || v === 'page', carData: (v) => v === 'apps' || v === 'off', carDiag: (v) => v === 'apps' || v === 'off', video: (v) => v === 'light' || v === 'any', engine: (v) => v === 'chrome' || v === 'shell', mobile: (v) => v === 'on' || v === 'off', frames: (v) => FRAMES.indexOf(v) >= 0,
             audio: (v) => v === 'on' || v === 'off', picture: (v) => [1, 0.75, 0.5].indexOf(v) >= 0, memoryLimitMb: (v) => Number.isInteger(v) && v >= 300 && v <= 3000, sandbox: (v) => v === 'ask' || v === 'required' };
         const key = String(m.key);
         if (!Object.prototype.hasOwnProperty.call(ok, key) || !ok[key](m.value)) { this.log('policy: "' + key.slice(0, 20) + '" from the app refused'); return; }
         const next = readPolicy(this.opts.policyFile).policy;
         if (key === 'sandbox' && next.sandbox === 'off') { this.log('policy: "sandbox": "off" is in the file; the app cannot change it'); this.push(true); return; }
-        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video, engineWas = this.policy().engine, mobileWas = this.policy().mobile;
+        const pictureWas = this.picture(), audioWas = this.policy().audio, autoplayWas = this.policy().autoplay, videoWas = this.policy().video, engineWas = this.policy().engine, mobileWas = this.policy().mobile, framesWas = this.policy().frames;
+        if (key === 'frames') this.directFailed = false; // the owner asks for it again: tried again
         next[key] = m.value;
         mkdirp(this.opts.stateDir, 0o700);
         const tmp = this.opts.policyFile + '.new';
@@ -1249,7 +1284,7 @@ Daemon.prototype.onCommand = async function (m) {
         this.loadPolicy();
         this.push(true);
         // a new picture size needs the engine started again, on the page it shows
-        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas || this.policy().mobile !== mobileWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
+        if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas || this.policy().mobile !== mobileWas || this.policy().frames !== framesWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
     if (m.op === 'apps') { this.tellApps(); return; }
@@ -1309,7 +1344,7 @@ Daemon.prototype.onCommand = async function (m) {
     case 'touch': {
         const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / z;
         const p = Number(m.p);
-        if (p === 1) { e.down = { x: x, y: y, moved: false }; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x, y: y }] }); }
+        if (p === 1) { this.frameTell('mark'); e.down = { x: x, y: y, moved: false }; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x, y: y }] }); }
         else if (p === 2 && e.down) { if (Math.abs(x - e.down.x) + Math.abs(y - e.down.y) > 12) e.down.moved = true; await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x, y: y }] }); }
         else if (p === 3 && e.down) {
             const d = e.down;
@@ -1325,7 +1360,7 @@ Daemon.prototype.onCommand = async function (m) {
         // screen pixels, as touch. Hover, links, buttons, text selection and dragging are the engine's own.
         const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / z;
         if (m.t === 'move') await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x, y: y, button: m.down ? 'left' : 'none', buttons: m.down ? 1 : 0 });
-        else if (m.t === 'down') { e.mouseDown = { x: x, y: y }; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x, y: y, button: 'left', buttons: 1, clickCount: 1 }); }
+        else if (m.t === 'down') { this.frameTell('mark'); e.mouseDown = { x: x, y: y }; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x, y: y, button: 'left', buttons: 1, clickCount: 1 }); }
         else if (m.t === 'up') {
             const d = e.mouseDown;
             e.mouseDown = null;
@@ -2000,8 +2035,11 @@ Daemon.prototype.applyFs = async function (e, on) {
         // pixel for pixel. Car, 2026-11-15, a film in full screen at two thirds (1280 x 480): the head unit at
         // 92-98 % with half of this tool's share spent on carrying the picture (each frame coded and decoded as a
         // JPEG), not on the film. A film's own lines are 360 to 480 here, so little is lost.
-        const k = w.fw > 1280 ? 1 / 2 : 1;
+        // The direct path (the engine's window straight into the video file) costs about a fifth of that a pixel
+        // (development machine, 2026-11-19): two thirds there, 1280 x 480. Not yet measured on the car.
+        const k = w.fw > 1280 ? (this.direct ? 2 / 3 : 1 / 2) : 1;
         const cw = Math.round(w.fw * k) & ~3, ch = Math.round(w.fh * k) & ~1;
+        this.frameSize(cw, ch);
         await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: this.policy().mobile !== 'off', screenWidth: cw, screenHeight: ch });
         this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
         this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');
@@ -2009,6 +2047,7 @@ Daemon.prototype.applyFs = async function (e, on) {
     } else {
         const css = pageCss(w.w, w.h, this.zoom, this.picture());
         this.fs = null;
+        this.frameSize(css.pw, css.ph);
         await send({ width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h });
         this.log('full screen left: the page area again');
         this.set({ w: css.dw, h: css.dh });
@@ -2016,13 +2055,25 @@ Daemon.prototype.applyFs = async function (e, on) {
     } finally { this.fsBusy = false; }
     this.push(true);
 };
+Daemon.prototype.frameFps = function () { return this.policy().frames === 'direct30' ? 30 : 60; };
+// a line to g21-wlframe (nothing when the photographs are in use)
+Daemon.prototype.frameTell = function (line) { const f = this.frame; if (f && f.g21wl) { try { f.stdin.write(line + '\n'); } catch (x) { /* its exit follows */ } } };
+// nobody is watching: the engine is not asked for frames (it stops drawing); somebody is: it draws again
+Daemon.prototype.frameRun = function (on) { this.frameRunning = !!on; if (!on) this.framePaused = Date.now(); this.frameTell('run ' + (on ? 1 : 0)); };
+Daemon.prototype.frameSize = function (w, h) { this.frameTell('size ' + w + ' ' + h); };
 Daemon.prototype.startFrame = function () {
+    const direct = !!this.direct, css = this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null;
+    // (a frame tool of the other kind, or a window of the last engine: a new one)
+    if (this.frame && (direct || this.frame.g21wl)) { const old = this.frame; this.frame = null; try { old.stdin.end(); old.kill('SIGTERM'); } catch (x) { /* gone */ } }
     if (this.frame) return;
     let colour = (lines(path.join(this.opts.stateDir, 'color'))[0] || '').trim();
     if (['601', '709', 'full'].indexOf(colour) < 0) colour = '601';
     try { fs.unlinkSync(this.opts.ring); } catch (e) { /* none */ }
     try { fs.unlinkSync(this.opts.ring + '.ring'); } catch (e) { /* none */ }
-    const child = cp.spawn(this.opts.webframe, [this.opts.ring, colour], Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'ignore'] }));
+    const how = Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = direct && css ? cp.spawn(this.opts.wlframe, [this.opts.ring, colour, this.wlSock, String(css.pw), String(css.ph), String(this.frameFps())], how) : cp.spawn(this.opts.webframe, [this.opts.ring, colour], how);
+    child.g21wl = !!(direct && css);
+    this.frameSeen = false;
     this.frame = child;
     let buf = '';
     child.stdout.setEncoding('utf8');
@@ -2033,7 +2084,10 @@ Daemon.prototype.startFrame = function () {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
             if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.fs ? { dw: this.fs.w, dh: this.fs.h } : (this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null); this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
-            else if (l[0] === 'f') { if (!this.s.live) this.set({ live: true }); this.frameDone(); }
+            else if (l[0] === 'f') { this.frameSeen = true; if (!child.g21wl) this.perfCast(Number(l[2])); if (!this.s.live) this.set({ live: true }); this.frameDone(); }
+            else if (l[0] === 's') this.perfFrames({ n: Number(l[1]) || 0, ms: Number(l[2]) || 0, med: Number(l[3]) || 0, p95: Number(l[4]) || 0, max: Number(l[5]) || 0, us: Number(l[6]) || 0, pct: Number(l[7]) || 0 });
+            else if (l[0] === 'm') this.perf.tapMs = Math.round(Number(l[1]) / 1000);
+            else if (l[0] === 'c') this.log('wlframe: ' + l.slice(1).join(' '));
             else if (l[0] === 'e') {
                 const what = l.slice(1).join(' ');
                 // The engine sent a picture of another size and the decoder could not put a new video file in place of the
@@ -2053,6 +2107,8 @@ Daemon.prototype.startFrame = function () {
         this.frame = null;
         this.frameBusy = false;
         this.set({ live: false, ino: 0 });
+        // (the engine loses its window with it and ends)
+        if (child.g21wl) { if (this.engine || this.starting) { this.log('wlframe exited ' + (sig || code)); this.directFail('the frame tool stopped'); } return; }
         if (this.engine) { this.log('webframe exited ' + (sig || code) + ', starting it again'); this.startFrame(); this.frameDone(); }
     });
 };
@@ -2075,6 +2131,90 @@ Daemon.prototype.frameDone = function () {
     const wait = Math.max(0, this.opts.frameGapMs - (Date.now() - this.lastFrameAt));
     this.lastFrameAt = Date.now() + wait;
     if (wait) setTimeout(ack, wait); else ack();
+};
+
+/*
+ * How the picture path does, measured where it runs (not assumed): frames a second and the time between them,
+ * what a frame costs in the frame tool, the CPU of the engine, of the frame tool and of this daemon (share of one
+ * core; the head unit has four), the engine's memory, what the engine says about its graphics, how long a page
+ * took to load and how long after a tap the next new picture came. A line "perf:" goes to the log every 30 s
+ * while frames flow; chrome://perf shows the same. The rule "frames" switches between the two paths, so the same
+ * page can be measured both ways on the car.
+ */
+Daemon.prototype.perfFrames = function (f) {
+    const p = this.perf;
+    p.frames = f;
+    p.sumN += f.n; p.sumMs += f.ms; p.sumUs += f.us * f.n;
+    if (f.max > p.sumMax) p.sumMax = f.max;
+    if (f.p95 > p.sumP95) p.sumP95 = f.p95;
+};
+// the photographs: one call a frame (us: g21-webframe's decode and write time)
+Daemon.prototype.perfCast = function (us) {
+    const c = this.castStat, now = Date.now();
+    if (c.last) c.iv.push(now - c.last);
+    c.last = now; c.us += us || 0; c.n++;
+    if (!c.t0) c.t0 = now;
+    if (now - c.t0 < 2000) return;
+    c.iv.sort((a, b) => a - b);
+    const q = (x) => (c.iv.length ? c.iv[Math.min(c.iv.length - 1, Math.floor(c.iv.length * x))] : 0);
+    this.perfFrames({ n: c.n, ms: now - c.t0, med: q(0.5), p95: q(0.95), max: q(1), us: Math.round(c.us / c.n), pct: 100 });
+    this.castStat = { iv: [], last: 0, us: 0, n: 0, t0: 0 };
+};
+// user + system clock ticks (10 ms each) of one process
+function procTicks(procDir, pid) {
+    const st = lines(path.join(procDir, String(pid), 'stat'))[0] || '';
+    const f = st.slice(st.lastIndexOf(')') + 2).split(' ');
+    return f.length > 13 ? Number(f[11]) + Number(f[12]) : 0;
+}
+Daemon.prototype.perfSample = function () {
+    const p = this.perf, o = this.opts, now = Date.now();
+    let eng = 0;
+    this.engineProcs().forEach((pid) => { eng += procTicks(o.procDir, pid); });
+    const fr = this.frame && this.frame.pid ? procTicks(o.procDir, this.frame.pid) : 0;
+    const me = process.cpuUsage(), own = (me.user + me.system) / 1000;
+    if (p.cpuAt && now > p.cpuAt) {
+        const dt = now - p.cpuAt;
+        p.cpu = { engine: Math.max(0, Math.round((eng - p.cpuEng) * 1000 / dt)), frame: Math.max(0, Math.round((fr - p.cpuFr) * 1000 / dt)), daemon: Math.max(0, Math.round((own - p.cpuOwn) * 100 / dt)) };
+    }
+    p.cpuAt = now; p.cpuEng = eng; p.cpuFr = fr; p.cpuOwn = own;
+    if (p.sumN && now - (p.logAt || 0) >= 30000) {
+        p.logAt = now;
+        this.log('perf: ' + this.perfLine());
+        p.sumN = 0; p.sumMs = 0; p.sumUs = 0; p.sumMax = 0; p.sumP95 = 0;
+    }
+};
+Daemon.prototype.perfLine = function () {
+    const p = this.perf, f = p.frames, c = p.cpu;
+    const load = (lines('/proc/loadavg')[0] || '').split(' ')[0] || '';
+    return 'frames ' + (this.direct ? 'direct (the engine window, at most ' + this.frameFps() + ' a second)' : 'cast (photographs, at most ' + Math.round(1000 / this.opts.frameGapMs) + ' a second)')
+        + ', ' + (p.sumMs ? (p.sumN * 1000 / p.sumMs).toFixed(1) : '0') + ' fps shown while the picture moved'
+        + (f ? ', between frames ' + f.med + ' ms middle / ' + p.sumP95 + ' ms 95% / ' + p.sumMax + ' ms longest, ' + (p.sumN ? (p.sumUs / p.sumN / 1000).toFixed(2) : '0') + ' ms a frame in the frame tool' + (this.direct ? ' (' + f.pct + '% of the picture)' : '') : '')
+        + (c ? '; CPU of one core: engine ' + c.engine + '%, frame tool ' + c.frame + '%, daemon ' + c.daemon + '%' : '') + (p.memMb ? '; engine memory ' + p.memMb + ' MB' : '') + (load ? '; load ' + load : '')
+        + (p.loadMs ? '; last page loaded in ' + p.loadMs + ' ms' : '') + (p.tapMs ? '; tap to next picture ' + p.tapMs + ' ms' : '');
+};
+Daemon.prototype.perfLoaded = function () { if (this.loadT0) { this.perf.loadMs = Date.now() - this.loadT0; this.loadT0 = 0; } };
+// what the engine itself says about its graphics (the same data as chrome://gpu): into the log once a start
+Daemon.prototype.perfGraphics = async function (e) {
+    try {
+        const r = await e.cdp.send('SystemInfo.getInfo', {});
+        const g = r.gpu || {}, a = g.auxAttributes || {}, st = g.featureStatus || {};
+        const x = { renderer: String(a.glRenderer || ''), impl: String(a.glImplementationParts || ''), compositing: String(st.gpu_compositing || ''), raster: String(st.rasterization || ''), video: String(st.video_decode || ''), webgl: String(st.webgl || '') };
+        this.perf.gl = x;
+        this.log('graphics: ' + (x.renderer || 'no GL renderer') + ' ' + x.impl + '; compositing ' + x.compositing + ', raster ' + x.raster + ', video decode ' + x.video + ', webgl ' + x.webgl + '; frames ' + (this.direct ? 'direct' : 'cast'));
+    } catch (x) { this.log('graphics: ' + x.message); }
+};
+/*
+ * The direct frame path did not work (the frame tool stopped, or the engine's window showed nothing): the engine is
+ * started again with the photographs, on the page it had, and stays so until this tool starts again or the rule
+ * "frames" is set anew.
+ */
+Daemon.prototype.directFail = function (why) {
+    if (this.directFailed || !this.direct) return;
+    this.directFailed = true;
+    this.log('direct frames: ' + why + '; the photographs are used until the tool starts again');
+    if (this.starting) return; // startEngine() goes on from its own failure
+    const url = /^https?:/.test(this.s.url) ? this.s.url : null;
+    this.guard(async () => { await this.stopEngine('direct frames failed'); if (this.want) await this.startEngine(url); });
 };
 
 /*
@@ -2135,9 +2275,12 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
     // height even (what the renderer's video layer takes): never larger than the page area the app has.
     const z = this.zoom, cssSize = pageCss(this.want.w, this.want.h, z, this.picture()), w = cssSize.w, h = cssSize.h;
+    // The direct frame path: the engine has a real window (in g21-wlframe), as large as the picture in pixels; the
+    // scale of the page is set with the device metrics (launch), not for the whole engine.
+    const direct = !!this.direct && dirs.kind === 'chrome';
     const args = [
         '--remote-debugging-pipe', '--user-data-dir=' + dirs.profile, '--disk-cache-dir=' + path.join(dirs.profile, 'cache'), '--disk-cache-size=52428800', '--media-cache-size=1048576',
-        '--window-size=' + w + ',' + h, '--force-device-scale-factor=' + cssSize.scale,
+        '--window-size=' + (direct ? cssSize.pw + ',' + cssSize.ph : w + ',' + h)].concat(direct ? [] : ['--force-device-scale-factor=' + cssSize.scale], [
         '--disable-gpu', '--disable-software-rasterizer', '--disable-accelerated-video-decode', '--disable-accelerated-video-encode',
         // No sound device for the engine: on the head unit ALSA's "default" is hw:0,0, the hands-free telephone's PCM
         // (/dev/snd/pcmC0D0p, root:audio 0660), which the engine's uid cannot open. --mute-audio alone still opens the
@@ -2151,7 +2294,7 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
         '--user-agent=' + userAgent(dirs.major, this.policy && this.policy().mobile !== 'off'),
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
         '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--js-flags=--max-old-space-size=512'
-    ];
+    ]);
     // The full Chrome: its windowless mode (the headless shell knows no other), and none of the things a desktop
     // browser does on its own (asking to be the default browser, its extensions, its crash reports).
     // (Without a graphics chip its compositor still runs in the graphics process, in software: with the software
@@ -2159,7 +2302,11 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     // car, 2026-11-15: the full engine died 160 ms after its start; the reason was not in the log, this is the
     // likeliest one.)
     if (dirs.kind === 'chrome') { const i = args.indexOf('--disable-software-rasterizer'); if (i >= 0) args.splice(i, 1); }
-    if (dirs.kind === 'chrome') args.push('--headless=new', '--no-default-browser-check', '--disable-extensions', '--disable-component-extensions-with-background-pages', '--disable-crash-reporter', '--noerrdialogs');
+    // With the direct frame path it is not windowless: it draws into the one window g21-wlframe gives it (Wayland,
+    // shared memory), whole (--kiosk: no tabs, no address bar). --test-type=gpu takes away the bar "Chrome for
+    // Testing is only for automated testing" this build draws in a window (development machine, 2026-11-19).
+    if (dirs.kind === 'chrome') args.push.apply(args, direct ? ['--ozone-platform=wayland', '--kiosk', '--test-type=gpu', '--hide-crash-restore-bubble', '--disable-search-engine-choice-screen'] : ['--headless=new']);
+    if (dirs.kind === 'chrome') args.push('--no-default-browser-check', '--disable-extensions', '--disable-component-extensions-with-background-pages', '--disable-crash-reporter', '--noerrdialogs');
     // Sound: with G21 Audio the engine plays into its own ALSA device "g21out" (asound.conf made by openAudio: a file
     // device that writes S16LE 48 kHz stereo into G21 Audio's FIFO). Without it: no device at all (see above).
     if (this.audio) args.push('--alsa-output-device=g21out');
@@ -2244,6 +2391,16 @@ Daemon.prototype.startEngine = function (url) {
         this.killEngine();
         // The full Chrome did not come up (not a question to the owner, not a refusal with its own words): the light
         // engine takes over until this tool starts again, so that a browser is there either way.
+        // The engine with a window of its own (rule "frames") did not come up: once more with the photographs, which
+        // every engine here has run with.
+        if (this.direct && this.want && !e.ask && !e.user) {
+            this.directFailed = true;
+            this.direct = false;
+            this.log('direct frames: the engine did not start with its window; the photographs are used until the tool starts again');
+            this.set({ engine: 'starting', err: '', ask: '', loading: true, live: false });
+            setTimeout(() => { if (this.want && !this.engine && !this.starting) this.startEngine(url); }, 200);
+            return;
+        }
         if (this.fullEngine && !this.engineFallback && !e.ask && !e.user && this.want) {
             this.engineFallback = true;
             this.log('the full engine did not start: the headless shell is used until the tool starts again');
@@ -2261,6 +2418,9 @@ Daemon.prototype.startEngine2 = async function (url) {
     this.loadPolicy();
     const dirs = await this.prepare();
     if (!this.want) return;
+    // (THEiPlay Player feeds its own frames to g21-webframe: with it the photographs stay)
+    this.direct = dirs.kind === 'chrome' && this.policy().frames !== 'cast' && this.policy().player !== 'on' && !this.directFailed && fs.existsSync(o.wlframe);
+    this.wlSock = path.join(dirs.tmp, 'g21wl');
     this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
     await this.startApps();
     await this.startProxy();
@@ -2305,6 +2465,8 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const env = { LD_LIBRARY_PATH: o.libDir + ':' + dirs.engine, HOME: dirs.profile, TMPDIR: dirs.tmp, XDG_CONFIG_HOME: path.join(dirs.profile, 'xdg'), XDG_CACHE_HOME: path.join(dirs.profile, 'xdg-cache'),
         FONTCONFIG_FILE: dirs.conf, DBUS_SESSION_BUS_ADDRESS: 'disabled:', DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=' + path.join(o.runDir, 'no-dbus') };
     env.TZ = this.policy().timezone || process.env.TZ || 'UTC';
+    // the engine's window: g21-wlframe's socket in the engine's own temporary directory (0700, the engine's uid)
+    if (this.direct) { env.XDG_RUNTIME_DIR = dirs.tmp; env.WAYLAND_DISPLAY = 'g21wl'; for (let i = 0; i < 40 && !fs.existsSync(this.wlSock); i++) await sleep(50); }
     if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
     if (this.audio) env.ALSA_CONFIG_PATH = this.audio.conf;
     const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
@@ -2341,6 +2503,8 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     try { await send('Media.enable', {}); } catch (x) { /* not in this engine */ }
     try { await e.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' }); } catch (x) { this.log('downloads: ' + x.message); }
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    // a window without a keyboard of its own: the page is told it has the focus (the caret, :focus, autoplay rules)
+    if (this.direct) { try { await send('Emulation.setFocusEmulationEnabled', { enabled: true }); } catch (x) { this.log('focus: ' + x.message); } }
     // The screen the page sees is its own window. Without this the headless engine's screen is 800x600: a player that
     // goes full screen changed the picture's size (the car, 0.1.3). Now full screen fills the page area.
     try {
@@ -2362,6 +2526,11 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     // the logins of the last engine; the first page began to load without them: once more, with them
     try { if (await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
     await this.cast(true);
+    if (this.direct) {
+        const t0 = Date.now();
+        setTimeout(() => { if (this.engine === e && this.direct && !this.frameSeen && this.client && this.frameRunning && !(this.framePaused > t0)) this.directFail('no picture from the engine window in ' + o.directWaitMs + ' ms'); }, o.directWaitMs);
+    }
+    this.guard(() => this.perfGraphics(e));
     // the first page began to load before Page.enable: its "stopped loading" may be past already
     try {
         const rs = await send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
@@ -2373,6 +2542,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
 Daemon.prototype.cast = async function (on) {
     const e = this.engine;
     if (!e || !e.session) return;
+    if (this.direct) { this.frameRun(on); return; }
     try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* was off */ }
     if (on) await e.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 64, everyNthFrame: 1 }, e.session);
 };
@@ -2454,8 +2624,8 @@ Daemon.prototype.onEvent = function (e, m) {
     const p = m.params || {};
     switch (m.method) {
     case 'Page.screencastFrame': this.onFrame(e, p); return;
-    case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) this.set({ loading: true, err: '', editable: false }); return;
-    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) { this.loadT0 = Date.now(); this.set({ loading: true, err: '', editable: false }); } return;
+    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.perfLoaded(); this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
     case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = '';
         // a link of a page made here ("about:blank#chrome://name": a link with only a fragment on a data: page is
         // refused by the engine as a navigation to a data: address, car 2026-11-15)
@@ -2569,6 +2739,8 @@ Daemon.prototype.checkMemory = function () {
         if (roll) kb += Number((/(\d+)/.exec(roll) || [0, 0])[1]);
         else kb += Number(((/VmRSS:\s+(\d+)/.exec(lines(path.join(this.opts.procDir, String(pid), 'status')).join('\n')) || [0, 0])[1])) / 2;
     });
+    this.perf.memMb = Math.round(kb / 1024);
+    this.perfSample();
     const limit = Number((lines(path.join(this.opts.stateDir, 'mem-limit-mb'))[0] || '').trim()) || (this.opts.memLimitMb !== 900 ? this.opts.memLimitMb : this.policy().memoryLimitMb);
     // (the full Chrome is several hundred MB larger than the headless shell: with the shell's limit it was stopped
     // in the middle of ordinary pages, car 2026-11-15: "engine uses 1238 MB (limit 1200)")
