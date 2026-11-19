@@ -88,13 +88,22 @@ static int alsa_load(void)
 #define PACE_FROM_MS 1500.0
 #define PACE_WIN_MS 800.0
 #define PACE_SLOW 43000.0
+#define PACE_DEAD 4          /* so many windows in a row with nearly nothing taken: the device is not read at all */
 #define PACE_NONE 30000.0     /* less than this is not the slow pace: nobody reads the device yet (the speakers are still being claimed) */
 static int heal_on(void) { const char *e = getenv("G21_AUDIO_NOHEAL"); return !(e && *e == '1'); }
-/* one window: 1 = the device was slow twice in a row (leave), 0 otherwise */
+/* G21_AUDIO_DEAD=1 (the media input): a device that takes next to nothing for PACE_DEAD windows in a row, though the
+ * player gives enough, is not being read (car, 2026-11-20: the first stream sounded, the next ones not at all). The
+ * writer then leaves with code 4 and g21-audiod goes back to the CarLife input. */
+static int dead_on(void) { const char *e = getenv("G21_AUDIO_DEAD"); return e && *e == '1'; }
+/* one window: 1 = the device was slow twice in a row (leave with 3), 2 = it takes nothing (leave with 4), 0 otherwise */
 static int pace_window(double ms, unsigned long frames, int enough, int *slow)
 {
+    static int dead;
     const double a_second = ms > 0 ? (double)frames * 1000.0 / ms : 0.0;
     if (!enough) return 0;                     /* the player gave too little: says nothing about the device */
+    if (a_second < 4800.0) {
+        if (dead_on() && ++dead >= PACE_DEAD) { fprintf(stderr, "[G21-AUDIO] out: dead, the device takes %.0f frames a second\n", a_second); return 2; }
+    } else dead = 0;
     if (a_second >= PACE_SLOW || a_second < PACE_NONE) { *slow = 0; return 0; }
     if (++*slow < 2) return 0;
     fprintf(stderr, "[G21-AUDIO] out: slow, the device takes %.0f frames a second\n", a_second);
@@ -239,7 +248,7 @@ static int play(const char *dev)
         if (now >= win0 && !win_frames && in_wait == 0) { win0 = now; win_frames = frames + 1; }       /* a window begins */
         else if (win_frames && now - win0 >= PACE_WIN_MS) {
             /* (enough: the writer waited for the player less than a fifth of the window) */
-            if (heal && pace_window(now - win0, frames + 1 - win_frames, in_wait < (now - win0) / 5, &slow)) { fflush(stderr); leave(3); }
+            { const int pw = pace_window(now - win0, frames + 1 - win_frames, in_wait < (now - win0) / 5, &slow); if (pw == 2) leave(4); if (pw == 1 && heal) leave(3); }
             win0 = now; win_frames = frames + 1; in_wait = 0;
         }
         before = mono_ms();
@@ -395,7 +404,7 @@ static int engine(const char *dev, int greedy)
         else if (win_on && now - win0 >= PACE_WIN_MS) {
             /* (enough: it played through the window and more than the wanted store still waits, so it is the device
              * that did not take it) */
-            if (heal && pace_window(now - win0, frames - win_frames, playing && gaps == win_gaps && fill >= LIVE_TARGET, &slow)) { fflush(stderr); leave(3); }
+            { const int pw = pace_window(now - win0, frames - win_frames, playing && gaps == win_gaps && fill >= LIVE_TARGET, &slow); if (pw == 2) leave(4); if (pw == 1 && heal) leave(3); }
             win0 = now; win_frames = frames; win_gaps = gaps;
         }
         if (now - last_in > IDLE_MS && fill < 2) break;

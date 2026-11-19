@@ -85,17 +85,34 @@ const MEDIA_DEVICE = 'smartx:MediaSink_AudioOut_Front_CF_48_COMBINED_STEREO_MULT
 // how the writer is started: as nobody in the group mgu_alsa, or (the media input) as root that gives root up
 function asWriter(opts) {
     if (NOSETUID) return opts;
-    if (MEDIA_INPUT) { opts.env = Object.assign({}, opts.env || process.env, { G21_AUDIO_DROP: WRITER_UID + ':' + ALSA_GID }); return opts; }
+    if (onMedia()) { opts.env = Object.assign({}, opts.env || process.env, { G21_AUDIO_DROP: WRITER_UID + ':' + ALSA_GID, G21_AUDIO_DEAD: '1' }); return opts; }
     opts.uid = WRITER_UID; opts.gid = ALSA_GID;
     return opts;
 }
 const mod = require(SPEAKERS);
-const sp = new mod.Speakers(Object.assign({ log: function (t) { log(String(t)); }, record: path.join(RUN, 'speakers.json') }, MEDIA_INPUT ? { source: 1046, device: MEDIA_DEVICE, own: false } : {}));
+// Two ways to the speakers: the media input (when it is the rule) and the CarLife input. `sp` is the one in use.
+// A media input that does not work (its device does not open, the speakers are not connected, or the device takes
+// nothing though it is open: car, 2026-11-20, 0.1.18: the first stream sounded at once, every one after it not at
+// all) is left for the CarLife input until this tool starts again: fallBack(). Sound in the old way, with its
+// faults, rather than none; the log says why.
+const spOpts = { log: function (t) { log(String(t)); }, record: path.join(RUN, 'speakers.json') };
+const spCar = new mod.Speakers(spOpts);
+const spMedia = MEDIA_INPUT ? new mod.Speakers(Object.assign({}, spOpts, { source: 1046, device: MEDIA_DEVICE, own: false })) : null;
+let sp = spMedia || spCar;
+function onMedia() { return sp === spMedia; }
 const device = function () { return DEVICE || ('plug:' + sp.device); };
 
 // the one stream
 const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, claimed: false, stats: '', since: 0, lost: 0 };
-sp.on('lost', function () { st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); });
+[spCar, spMedia].filter(Boolean).forEach(function (x) { x.on('lost', function () { if (x !== sp) return; st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); }); });
+function fallBack(why) {
+    if (!onMedia()) return Promise.resolve();
+    const old = sp, was = st.claimed;
+    log('media input: ' + why + '; the CarLife input is used until the tool starts again');
+    sp = spCar;
+    st.claimed = false;
+    return (was ? old.release() : Promise.resolve()).then(function () {}, function () {});
+}
 
 /*
  * The clock. The SmartX input this tool writes into takes sound at the full pace only while BMW's media player is
@@ -163,7 +180,11 @@ function claim() {
     st.claimed = true;
     const t0 = Date.now();
     keeperStart().then(function () { return sp.claim(); }).then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); quietPlayer(); },
-        function (e) { st.claimed = false; log('speakers not claimed: ' + (e && e.message || e)); });
+        function (e) {
+            st.claimed = false;
+            log('speakers not claimed: ' + (e && e.message || e));
+            if (onMedia()) fallBack('the speakers were not connected').then(function () { if (st.active) claim(); });
+        });
 }
 /*
  * The media input: the speakers now belong to BMW's media source, and its player may take that as its turn and play
@@ -173,7 +194,7 @@ function claim() {
  */
 let playerLook = null;
 function quietPlayer() {
-    if (!MEDIA_INPUT) return;
+    if (!onMedia()) return;
     let K;
     try { K = require(path.join(__dirname, 'mediaout.js')).MediaOut; } catch (e) { return; }
     if (!playerLook) playerLook = new K({ log: function (t) { if (!/PLAYER_STATE/.test(String(t))) log(String(t)); }, mode: 'file' });
@@ -343,6 +364,7 @@ function startWriter() {
     // faster than time passes and the page's film raced: car, 2026-11-15, frames 1005856 dropped 48570080. The
     // engine has no clock of its own for its sound; being held by this writer IS its clock.)
     const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : ['plain']), opts);
+    child.g21media = onMedia();
     st.writer = child;
     let buf = '';
     child.stderr.setEncoding('utf8');
@@ -371,6 +393,12 @@ function startWriter() {
         // Code 3: this opening of the device took three quarters of the pace (g21-audio-out.c, "The pace"). Not a
         // failure: the writer is started again at once and opens the device anew, the stream stays held meanwhile
         // (nothing is read and dropped: the browser's engine, unheld, races its film).
+        // The media input: its device did not open (1) or is not read (4, and the speakers are ours): the CarLife input
+        // from here on, the stream held meanwhile.
+        if (child.g21media && onMedia() && !sig && (code === 1 || (code === 4 && st.claimed))) {
+            fallBack(code === 4 ? 'the device is open and the speakers are ours, but it takes nothing' : 'the device did not open').then(function () { if (st.holder) setTimeout(startWriter, 200); });
+            return;
+        }
         const pace = code === 3 && !sig;
         if (pace) {
             /*
@@ -558,7 +586,7 @@ function serve() {
     const mask = process.umask(0o177);
     server.listen(SOCK, function () {
         process.umask(mask);
-        log('g21-audiod ' + VERSION + ' listening on ' + SOCK + ', device ' + device() + ', source ' + sp.source + ', writer ' + (NOSETUID ? 'as this user' : (MEDIA_INPUT ? 'root until the device is open, then ' : '') + 'nobody:' + ALSA_GID));
+        log('g21-audiod ' + VERSION + ' listening on ' + SOCK + ', device ' + device() + ', source ' + sp.source + ', writer ' + (NOSETUID ? 'as this user' : (onMedia() ? 'root until the device is open, then ' : '') + 'nobody:' + ALSA_GID));
     });
     const stop = function () {
         log('stopping');
@@ -570,7 +598,7 @@ function serve() {
     process.on('uncaughtException', function (e) { log('fault: ' + (e && e.stack || e)); });
     process.on('unhandledRejection', function (e) { log('fault: ' + (e && e.stack || e)); });
     // what a crash or a power-off left claimed goes back
-    sp.recover().then(function () { log('speakers checked at start'); });
+    spCar.recover().then(function () { log('speakers checked at start'); });
 }
 
 if (require.main === module) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.211
+
+- Auto, 2026-11-20 (`g21-audio` 0.1.18, właściciel): pierwszy dźwięk gra od razu, ale po zmianie treści nie gra wcale, „jakby coś trzymało”, w przeglądarce i w AirPlay. Auto było poza siecią, więc przyczyna NIE jest znana – logu z tej próby nie ma.
+- `g21-audio` 0.1.19: zabezpieczenie. Gdy nowe wejście (odtwarzacza BMW) zawiedzie w dowolny sposób – urządzenie się nie otworzy, głośniki nie zostaną połączone albo urządzenie jest otwarte i głośniki są nasze, a mimo to nie pobiera dźwięku przez ok. 3 s – narzędzie samo wraca do wejścia CarLife do swojego następnego startu i zapisuje powód w logu („media input: …”). Dźwięk jest wtedy po staremu (z próbami pełnego tempa), ale jest. Sprawdzone na atrapie urządzenia; w aucie niesprawdzone. Właściwa poprawka wymaga logu z auta.
+
 ## 0.1.210
 
 - Właściwa droga dźwięku (właściciel: „RideTube jakoś podaje ten dźwięk prawidłowo”). Auto, 2026-11-20: odtwarzacz multimediów BMW, przez który gra RideTube, pisze do własnego wejścia dźwięku auta (MediaSink_AudioOut_Front), nie do wejścia CarLife, którego używaliśmy. Pomiar ciszą na tym wejściu: 47 997–48 007 próbek na sekundę w pięciu rundach na pięć (CarLife: losowo 48 000 albo 36 000), ton testowy przyjęty w całości i słyszany przez właściciela.
