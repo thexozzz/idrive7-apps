@@ -248,6 +248,9 @@ function createDesktopSettings(stored) {
     // (on unless switched off: a player's full screen is the whole screen; off: the Pozycja window)
     var webFsFull = data.webFsFull !== false;
     var airStretch = data.airStretch === true;
+    // how long AirPlay's picture waits for its sound, in ms (the sound is gathered before it plays)
+    var AIR_DELAYS = [0, 100, 200, 300, 400, 500, 700];
+    var airDelay = AIR_DELAYS.indexOf(data.airDelay) >= 0 ? data.airDelay : 300;
     var mouseSpeed = [1, 2, 3, 4, 5].indexOf(data.mouseSpeed) >= 0 ? data.mouseSpeed : 3;
     var uiRender = data.uiRender === 'software' ? 'software' : 'gpu';
     var airFit = data.airFit === 'cover' ? 'cover' : 'contain';
@@ -409,6 +412,8 @@ function createDesktopSettings(stored) {
         setWebFsFull: function (on) { webFsFull = !!on; return { ok: true }; },
         airStretch: function () { return airStretch; },
         setAirStretch: function (on) { airStretch = !!on; return { ok: true }; },
+        airDelay: function () { return airDelay; },
+        nextAirDelay: function () { airDelay = AIR_DELAYS[(AIR_DELAYS.indexOf(airDelay) + 1) % AIR_DELAYS.length]; return airDelay; },
         setKillButton: function (on) { killButton = !!on; return { ok: true }; },
         setMenuMouse: function (on) { menuMouse = !!on; return { ok: true }; },
         setMouseSpeed: function (n) { if ([1, 2, 3, 4, 5].indexOf(n) < 0) { return { ok: false }; } mouseSpeed = n; return { ok: true }; },
@@ -682,6 +687,7 @@ function createDesktopSettings(stored) {
                 killButton: killButton,
                 webFsFull: webFsFull,
                 airStretch: airStretch,
+                airDelay: airDelay,
                 uiRender: uiRender,
                 airClusterTarget: airClusterTarget,
                 airFit: airFit,

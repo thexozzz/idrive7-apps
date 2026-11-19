@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.202
+
+- Opóźnienie obrazu AirPlay (`g21-airplay-open` 0.1.63). Opóźnienie w AirPlay jest zamierzone: odbiornik wstrzymuje obraz i dźwięk o ten sam stały zapas (UxPlay zgłasza telefonowi 0,25 s), żeby to, co przychodzi nierówno przez Wi‑Fi, wyszło równo i żeby usta zgadzały się z głosem. U nas dźwięk był opóźniony o ok. 0,3 s (zapas 240 ms w G21 Audio i 64 ms bufora urządzenia), a obraz wychodził od razu. `g21-yuvring` trzyma teraz każdą klatkę przez zadany czas i dopiero wtedy ją pokazuje; czas jest w pliku `<airplay-size>.delay` (ms, 0–1500, bez pliku 300).
+- Ustawienia > Obraz > „Opóźnienie obrazu AirPlay”: 0, 100, 200, 300 (domyślnie), 400, 500, 700 ms; zmiana działa od następnej klatki. Obraz na zegarach i HUD nie jest opóźniany. Niesprawdzone w aucie – właściwą wartość trzeba dobrać na filmie z mówiącą osobą.
+
 ## 0.1.201
 
 - Dźwięk AirPlay po 0.1.12 (właściciel, 2026-11-19): obraz prawidłowy, dźwięk „przerywa co chwilę, blisko płynności”. Auto było poza siecią, więc bez logu z tej próby; poprawione jest to, co wynika z konstrukcji.

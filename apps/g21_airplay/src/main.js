@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.201',
+        version: (this._packageJson && this._packageJson.version) || '0.1.202',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.201') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.202') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2117,6 +2117,19 @@ AirPlayApp.prototype._setAirFull = function (on) {
 
 // "Rozciągnij" of the full screen: the ring makes the frame in the screen's shape while this file names it
 // (g21-yuvring reads it for every frame). Only in full screen: a window keeps the picture's own shape.
+// How long AirPlay's picture waits for its sound: g21-yuvring reads the number of milliseconds from this file.
+AirPlayApp.prototype._syncAirDelay = function () {
+    var file = this._paths && this._paths.airplaySize ? this._paths.airplaySize + '.delay' : '';
+    if (!file || !this._desk || !this._desk.airDelay) {
+        return;
+    }
+    try {
+        fs.writeFileSync(file, String(this._desk.airDelay()) + '\n');
+    } catch (err) {
+        noteStart('air-delay ' + (err && err.message));
+    }
+};
+
 AirPlayApp.prototype._syncAirStretch = function () {
     var file = this._paths && this._paths.airplaySize ? this._paths.airplaySize + '.stretch' : '';
     var scr;
@@ -3384,6 +3397,9 @@ AirPlayApp.prototype._choose = function (name) {
     }
     this._chosen = name;
     noteStart('choose ' + name);
+    if (name === 'airplay') {
+        this._syncAirDelay();
+    }
     // a picture from a phone or a computer is about to come: the browser's engine, if it still lives in the
     // background, stops now and leaves its processor and its memory
     if (!this._webOn && this._webClient && typeof this._webClient().stopNow === 'function') {
@@ -5669,6 +5685,9 @@ AirPlayApp.prototype._paintSystem = function () {
         m.setItemHint('air-quality', this._qualityHint());
     }
     if (this._desk && this._desk.airClusterTarget) {
+        if (this._desk.airDelay) {
+            m.setItemHint('air-delay', this._desk.airDelay() ? this._desk.airDelay() + ' ms: obraz czeka na dźwięk' : 'wyłączone: obraz od razu');
+        }
         m.setItemHint('cluster-place', this._desk.airClusterTarget() === 'panel' ? 'panel: całe zegary, zasłania BC' : 'mapa: kieszeń, wskazówki zostają');
     }
     m.setItemHint('set-mouse', this._mouseOn ? 'włączona' : 'wyłączona');
@@ -5712,6 +5731,16 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         if (name === 'system') {
             this._paintSystem();
         }
+        return true;
+    }
+    if (name === 'air-delay') {
+        // the next value; it holds from the next frame on
+        if (this._desk.nextAirDelay) {
+            this._desk.nextAirDelay();
+            this._saveDesk();
+            this._syncAirDelay();
+        }
+        this._paintSystem();
         return true;
     }
     if (name === 'cluster-place') {

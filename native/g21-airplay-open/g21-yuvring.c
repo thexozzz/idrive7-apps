@@ -238,14 +238,87 @@ static void kombi_frame(const unsigned char *y, int sw, int sh)
 static unsigned char *inbuf = NULL, *outbuf = NULL;
 static size_t incap = 0, outcap = 0;
 
+/*
+ * The picture waits for the sound. AirPlay is meant to have a small, fixed delay: the receiver holds picture and
+ * sound back by the same amount, so that what comes unevenly over Wi-Fi goes out evenly, and lips and voice meet
+ * (UxPlay itself reports 0.25 s to the phone). Here the sound goes through G21 Audio, which gathers 240 ms before
+ * it plays and whose device holds another 64 ms; the picture used to go out the moment it was decoded, so the
+ * sound trailed it by about 0.3 s. Now each frame is kept for <size file>.delay milliseconds (a number, 0 to
+ * 1500; no file: 300; the app writes it from Ustawienia > Obraz > "Opóźnienie obrazu AirPlay") and shown then.
+ * 0: shown at once, as before. The cluster / HUD frame is not delayed.
+ */
+#define QN 48
+static struct { unsigned char *b; size_t cap; int w, h; long long due; } q[QN];
+static int qhead = 0, qlen = 0;
+static unsigned char *shown = NULL;      /* the frame in the video file now (repeat_frame writes it again) */
+static size_t showncap = 0;
+static long long shown_at = 0;
+
+static int delay_ms(void)
+{
+    static int cached = -1;
+    static long long read_at = 0;
+    long long t = now_ns();
+    char path[512], text[32];
+    int fd, n, v = 300;
+    if (cached >= 0 && t - read_at < 1000000000LL) return cached;
+    read_at = t;
+    if (snprintf(path, sizeof path, "%s.delay", size_path) < (int)sizeof path && (fd = open(path, O_RDONLY)) >= 0) {
+        n = (int)read(fd, text, sizeof text - 1);
+        close(fd);
+        if (n > 0) { text[n] = 0; v = atoi(text); }
+    }
+    if (v < 0) v = 0;
+    if (v > 1500) v = 1500;
+    if (v != cached) fprintf(stderr, "g21-yuvring: the picture is held %d ms (for the sound)\n", v);
+    cached = v;
+    return v;
+}
+
+/* a frame into the video file; its buffer is taken (swapped with the one shown before) */
+static int show(unsigned char **pb, size_t *pcap, int w, int h)
+{
+    size_t frame = (size_t)w * h * 3 / 2;
+    unsigned char word[4], *tb;
+    size_t tc;
+    if (!*pb || *pcap < frame) return 0;
+    if (out_fd < 0 || w != out_w || h != out_h) {
+        if (open_ring(w, h) != 0) return 0;
+        write_status();
+    }
+    slot = (slot + 1) % NSLOT;
+    if (write_all(out_fd, *pb, frame, 64 + (off_t)slot * frame) != 0) return 0;
+    put32(word, slot);
+    write_all(out_fd, word, 4, 20);
+    seq++;
+    put32(word, seq);
+    write_all(out_fd, word, 4, 16);
+    tb = shown; shown = *pb; *pb = tb;
+    tc = showncap; showncap = *pcap; *pcap = tc;
+    have_frame = 1;
+    shown_at = now_ns();
+    return 1;
+}
+
+/* what waited long enough goes out, oldest first */
+static void show_due(void)
+{
+    long long t = now_ns();
+    while (qlen > 0 && q[qhead].due <= t) {
+        show(&q[qhead].b, &q[qhead].cap, q[qhead].w, q[qhead].h);
+        qhead = (qhead + 1) % QN;
+        qlen--;
+    }
+}
+
 static int one_frame(void)
 {
+    static int lw = 0, lh = 0;
     int fd = open(in_path, O_RDONLY);
     struct stat st;
     ssize_t got = 0;
-    int sw, sh, pw, ph, dw, dh;
+    int sw, sh, pw, ph, dw, dh, d;
     size_t need, frame;
-    unsigned char word[4];
     if (fd < 0) return 0;
     if (fstat(fd, &st) != 0 || st.st_size < 8 || st.st_size > 8 + MAX_W * MAX_H * 3 / 2) { close(fd); return 0; }
     if (incap < (size_t)st.st_size) { free(inbuf); incap = (size_t)st.st_size; inbuf = malloc(incap); if (!inbuf) { incap = 0; close(fd); return 0; } }
@@ -265,7 +338,7 @@ static int one_frame(void)
     fit_dims(sw, sh, pw, ph, &dw, &dh);
     stretch_dims(&dw, &dh);
     frame = (size_t)dw * dh * 3 / 2;
-    if (outcap < frame) { free(outbuf); outcap = frame; outbuf = malloc(outcap); if (!outbuf) { outcap = 0; return 0; } }
+    if (!outbuf || outcap < frame) { free(outbuf); outcap = frame; outbuf = malloc(outcap); if (!outbuf) { outcap = 0; return 0; } }
     {
         const unsigned char *y = inbuf + 8, *u = y + (size_t)sw * sh, *v = u + (size_t)(sw / 2) * (sh / 2);
         unsigned char *oy = outbuf, *ou = oy + (size_t)dw * dh, *ov = ou + (size_t)(dw / 2) * (dh / 2);
@@ -276,20 +349,20 @@ static int one_frame(void)
             scale_plane(v, sw / 2, sh / 2, ov, dw / 2, dh / 2);
         }
     }
-    if (out_fd < 0 || dw != out_w || dh != out_h) {
-        if (open_ring(dw, dh) != 0) return 0;
-        write_status();
-        fprintf(stderr, "g21-yuvring: %dx%d -> %dx%d (profile %dx%d)\n", sw, sh, dw, dh, pw, ph);
-    }
-    slot = (slot + 1) % NSLOT;
-    if (write_all(out_fd, outbuf, frame, 64 + (off_t)slot * frame) != 0) return 0;
-    put32(word, slot);
-    write_all(out_fd, word, 4, 20);
-    seq++;
-    put32(word, seq);
-    write_all(out_fd, word, 4, 16);
+    if (dw != lw || dh != lh) { lw = dw; lh = dh; fprintf(stderr, "g21-yuvring: %dx%d -> %dx%d (profile %dx%d)\n", sw, sh, dw, dh, pw, ph); }
     kombi_frame(inbuf + 8, sw, sh);
-    have_frame = 1;
+    d = delay_ms();
+    if (d <= 0 && qlen == 0) return show(&outbuf, &outcap, dw, dh);
+    /* kept until its time (the queue is never longer than QN: the oldest then goes out early) */
+    if (qlen == QN) { show(&q[qhead].b, &q[qhead].cap, q[qhead].w, q[qhead].h); qhead = (qhead + 1) % QN; qlen--; }
+    {
+        int at = (qhead + qlen) % QN;
+        unsigned char *tb = q[at].b;
+        size_t tc = q[at].cap;
+        q[at].b = outbuf; q[at].cap = outcap; q[at].w = dw; q[at].h = dh; q[at].due = now_ns() + (long long)d * 1000000LL;
+        outbuf = tb; outcap = tc;
+        qlen++;
+    }
     return 1;
 }
 
@@ -300,16 +373,17 @@ static void repeat_frame(void)
 {
     size_t frame;
     unsigned char word[4];
-    if (!have_frame || out_fd < 0 || !outbuf) return;
+    if (!have_frame || out_fd < 0 || !shown) return;
     frame = (size_t)out_w * out_h * 3 / 2;
-    if (frame > outcap) return;
+    if (frame > showncap) return;
     slot = (slot + 1) % NSLOT;
-    if (write_all(out_fd, outbuf, frame, 64 + (off_t)slot * frame) != 0) return;
+    if (write_all(out_fd, shown, frame, 64 + (off_t)slot * frame) != 0) return;
     put32(word, slot);
     write_all(out_fd, word, 4, 20);
     seq++;
     put32(word, seq);
     write_all(out_fd, word, 4, 16);
+    shown_at = now_ns();
 }
 
 int main(int argc, char **argv)
@@ -349,9 +423,14 @@ int main(int argc, char **argv)
             fd_set rd;
             struct timeval tv = {0, 500000};
             int ready;
+            if (qlen > 0) {
+                /* not longer than until the next frame that waits is due */
+                long long ns = q[qhead].due - now_ns();
+                if (ns < 0) ns = 0;
+                if (ns < 500000000LL) tv.tv_usec = (long)(ns / 1000);
+            }
             FD_ZERO(&rd); FD_SET(in, &rd);
             ready = select(in + 1, &rd, NULL, NULL, &tv);
-            if (ready == 0) repeat_frame();
             if (ready > 0) {
                 ssize_t n = read(in, evbuf, sizeof evbuf), i = 0;
                 while (n > 0 && i < n) {
@@ -365,9 +444,13 @@ int main(int argc, char **argv)
             usleep(5000);
             if (stat(in_path, &st) == 0 && (st.st_mtim.tv_sec != last.tv_sec || st.st_mtim.tv_nsec != last.tv_nsec)) { last = st.st_mtim; fresh = 1; }
         }
-        if (fresh && one_frame()) {
+        if (fresh) one_frame();
+        show_due();
+        /* the phone's screen stands still: the frame shown is written again twice a second */
+        if (!fresh && qlen == 0 && have_frame && now_ns() - shown_at >= 480000000LL) repeat_frame();
+        {
             static uint32_t told = 0;
-            if (seq - told >= 12 || seq == 1) { told = seq; write_status(); }
+            if (seq != told && (seq - told >= 12 || told == 0)) { told = seq; write_status(); }
         }
     }
     if (out_fd >= 0) close(out_fd);

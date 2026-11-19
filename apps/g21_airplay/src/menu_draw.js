@@ -155,6 +155,7 @@ var EN = {
     'Lekkie wideo': 'Light video',
     'Wyłącznik': 'Kill switch',
     'Obszar zegarów': 'Gauge area',
+    'Opóźnienie obrazu AirPlay': 'AirPlay picture delay',
     'Strony chrome': 'Chrome pages',
     'Dane auta': 'Car data',
     'Diagnostyka': 'Diagnostics',
@@ -731,6 +732,8 @@ var SET_DISPLAY_ITEMS = [
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
     { name: 'air-quality', title: 'Rozdzielczość', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'cluster-place', title: 'Obszar zegarów', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
+    // AirPlay's picture waits this long, so that it meets its sound
+    { name: 'air-delay', title: 'Opóźnienie obrazu AirPlay', hint: '300 ms', icon: 'play' },
     { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
     { name: 'sgd-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
