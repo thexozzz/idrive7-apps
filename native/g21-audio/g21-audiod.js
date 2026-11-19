@@ -99,7 +99,22 @@ function keeperStart() {
     const t0 = Date.now();
     k.watch = setInterval(function () {
         // (the file of silence is four hours long; and another program may have stopped the player)
-        if (keeper === k && k.started && k.state && k.state !== 'PLAYER_STATE_PLAY' && Date.now() - t0 > 5000) { log('clock: the media player is ' + k.state + ', started again'); k.again(); }
+        // Carefully: a start every 5 s whenever the player was not playing would itself break the clock every 5 s.
+        // Paused: asked to play on, at most every 20 s. Stopped (the file ended, or another program): the file again,
+        // at most once a minute. Each is written down, to be read from the log.
+        if (keeper !== k || !k.started || !k.state || k.state === 'PLAYER_STATE_PLAY' || Date.now() - t0 < 5000) return;
+        const now = Date.now();
+        if (k.state === 'PLAYER_STATE_PAUSE') {
+            if (now - (k.nudged || 0) < 20000) return;
+            k.nudged = now;
+            log('clock: the media player is paused, asked to play on');
+            if (k.mp) k.mp.callMethod('sendButtonEvent', { button: 'PLAY', action: 'PRESS' }, 3000).then(function () {}, function (e) { log('clock: PLAY ' + (e && e.message || e)); });
+            return;
+        }
+        if (now - (k.restarted || 0) < 60000) return;
+        k.restarted = now;
+        log('clock: the media player is ' + k.state + ', its file started again');
+        k.again();
     }, 5000);
     return k.start().then(function () {
         // the player needs a moment to really play

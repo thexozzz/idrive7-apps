@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.201
+
+- Dźwięk AirPlay po 0.1.12 (właściciel, 2026-11-19): obraz prawidłowy, dźwięk „przerywa co chwilę, blisko płynności”. Auto było poza siecią, więc bez logu z tej próby; poprawione jest to, co wynika z konstrukcji.
+- `g21-audio` 0.1.13: zamiast twardego przycinania zapasu o 420 ms (słyszalna przerwa, gdy zegar telefonu jest minimalnie szybszy od auta – w pomiarze z 2026-11-15 przychodziło ok. 48 170 próbek na sekundę) tempo odtwarzania podąża za wypełnieniem zapasu, najwyżej o 1,5%; przycięcie zostaje tylko na prawdziwy zator. Zapas startowy 240 ms (było 180), górna granica 800 ms (było 600). „Zegar”: odtwarzacz multimediów nie jest już uruchamiany od nowa co 5 s, gdy nie jest w stanie odtwarzania (samo to mogłoby rwać dźwięk) – przy pauzie dostaje „odtwarzaj dalej” najwyżej co 20 s, po zatrzymaniu plik startuje ponownie najwyżej raz na minutę, a każde takie zdarzenie trafia do logu. NIESPRAWDZONE w aucie.
+
 ## 0.1.200
 
 - Sesja w aucie 2026-11-15 z właścicielem (AirPlay grał). Odtwarzacz multimediów BMW jako wyjście na żywo odpada: adres strumienia odrzuca („ITEM_UNPLAYABLE”), a plik czyta ok. 52 s naprzód (odtwarzał 60. sekundę, przeczytane miał 112 s), więc dźwięk zapisywany tuż przed głowicą nie jest słyszany.

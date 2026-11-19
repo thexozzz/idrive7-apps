@@ -211,8 +211,8 @@ static int play(const char *dev)
  * Playing begins when 180 ms have gathered, again after the store ran dry; more than 600 ms waiting is cut back.
  */
 #define RING (RATE * 2)
-#define LIVE_TARGET (RATE * 180 / 1000)
-#define LIVE_MAX (RATE * 600 / 1000)
+#define LIVE_TARGET (RATE * 240 / 1000)
+#define LIVE_MAX (RATE * 800 / 1000)
 static int engine(const char *dev, int greedy)
 {
     static int16_t ring[RING * CH];
@@ -229,7 +229,7 @@ static int engine(const char *dev, int greedy)
      * So the device does play at 48 kHz and simply takes only three quarters of the time; nothing written here
      * mends that. One for one again. */
     double step = 1.0;
-    double integ = 0.0, budget = 0.0;
+    double integ = 0.0, budget = 0.0, used = 1.0;
     snd_pcm_t *pcm = NULL;
     int playing = 0;
     double last_in = mono_ms(), last = mono_ms(), report = 0, now;
@@ -276,7 +276,7 @@ static int engine(const char *dev, int greedy)
             fprintf(stderr, "[G21-AUDIO] out: active\n");
             pcm = dev_open(dev);
             if (!pcm) leave(1);
-            fprintf(stderr, "[G21-AUDIO] out: %s, fitted to the device's pace: plays from 180 ms gathered, at most 600 ms behind\n", greedy ? "live" : "held to the clock");
+            fprintf(stderr, "[G21-AUDIO] out: %s, fitted to the device's pace: plays from 240 ms gathered, at most 800 ms behind\n", greedy ? "live" : "held to the clock");
             report = now + 5000;
             last = mono_ms();
             budget = 0.0;
@@ -289,10 +289,18 @@ static int engine(const char *dev, int greedy)
                 /* the next frames out, as many as the store has for: each lies between two that came in */
                 double err = ((double)fill - (double)LIVE_TARGET) / (double)RATE;     /* seconds too much in the store */
                 double s;
-                integ += err * 0.0002;   /* slowly: a few hundred looks a second */
-                if (integ > 0.4) integ = 0.4;
-                if (integ < -0.4) integ = -0.4;
-                s = step;       /* (not fitted: see above) */
+                /* With the media player's clock running the device takes the full 48 000 a second (0.1.12), so what is
+                 * left is small: a phone's clock a few parts in a thousand off the car's (car, 2026-11-15: about 48 170
+                 * frames a second came in), which filled the store until it was cut back by 420 ms, a pause one hears
+                 * (owner, 2026-11-19: "przerywa co chwilę, blisko płynności"). So the step follows the store, by at
+                 * most 1.5 %: too little to hear, enough for any clock. The cut is left for a real burst. */
+                integ += err * 0.00002;
+                if (integ > 0.006) integ = 0.006;
+                if (integ < -0.006) integ = -0.006;
+                s = step + 0.04 * err + integ;
+                if (s < 0.985) s = 0.985;
+                if (s > 1.015) s = 1.015;
+                used = s;
                 made = sent = 0;
                 while (made < CHUNK && fill >= 2) {
                     const int16_t *a = &ring[head * CH], *b = &ring[((head + 1) % RING) * CH];
@@ -316,7 +324,7 @@ static int engine(const char *dev, int greedy)
             report = now + 5000;
             if (A.delay(pcm, &d) < 0) d = 0;
             fprintf(stderr, "[G21-AUDIO] out: frames %lu dropped %lu (full 0) xruns %lu delay_ms %ld waiting_ms %lu gaps %lu taken %lu step %.4f\n",
-                frames, skipped, xruns, d * 1000 / 36000, fill * 1000 / RATE, gaps, taken, step + integ);
+                frames, skipped, xruns, d * 1000 / RATE, fill * 1000 / RATE, gaps, taken, used);
         }
         if (now - last_in > IDLE_MS && fill < 2) break;
     }
