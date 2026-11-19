@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.204
+
+- Auto, 2026-11-19, z właścicielem. Przeglądarka: nowy tor obrazu działa w aucie po przełączeniu „Silnik” na pełny Chrome (lekki silnik go nie obsługuje): 40–50 klatek/s na stronie i 28–32 przy filmie zamiast 12–15, koszt klatki w narzędziu klatek 0,6–5 ms zamiast 13–26 ms. Auto było przy tym przeciążone (obciążenie 10–21, sprawdzenia MGU Store po aktualizacji, film VP9 720p dekodowany programowo – „Lekkie wideo” było wyłączone).
+- Dźwięk NIE jest naprawiony. Pomiar na żywo (AirPlay): co 5 s przychodzi 240 000 próbek, wejście auta przyjmuje 180 000, ok. 54 000 jest wycinane; sonda ciszą: 36 000 na sekundę czterema metodami. Przyczyna nieznana.
+- `g21-audio` 0.1.14: „zegar” (odtwarzacz multimediów BMW odtwarzający ciszę) wyłączony. Nie działał: odtwarzacz zatrzymuje się za każdym razem, gdy nasz dźwięk przejmuje głośniki, a w jedynej dobrej minucie z 15.11 też stał – więc to nie on dawał pełne tempo. Dokładał ok. 0,4 s do startu dźwięku. Powrót: `"clock": true` w `/var/opt/g21-audio/config.json`.
+- Sprawdzone i odrzucone: inny proces z otwartym wejściem SmartX (jest tylko nasz), parametry wejścia (okres 1024 × 3, jak CarPlay). Niesprawdzone: w konfiguracji BMW wejście CarLife ma opóźnienie zadeklarowane jak dla 24 kHz (128 ms; CarPlay i Android Auto 64 ms) – próba na wejściu Android Auto nie została wykonana.
+
 ## 0.1.203
 
 - Wydajność przeglądarki (`g21-browser` 0.1.45), pełny opis i tabele: `docs/09-wydajnosc-przegladarki.md`. Pomiar wskazał wąskie gardło: nie rysowanie strony, tylko droga obrazu z silnika na ekran (każda klatka fotografowana przez DevTools, kodowana do JPEG, przesyłana jako tekst i dekodowana ponownie) – ok. 80% kosztu klatki.

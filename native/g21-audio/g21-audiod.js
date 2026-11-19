@@ -87,11 +87,20 @@ sp.on('lost', function () { st.lost += 1; st.claimed = false; log('speakers lost
  * known; that it does was seen twice.
  * So while a stream has the speakers the media player plays silence (mediaout.js, a sparse file: it takes no
  * room): started before the speakers are claimed, stopped after they are given back, and the speakers go back to
- * the source that had them before. "clock": false in config.json switches it off.
+ * the source that had them before.
+ *
+ * OFF since 0.1.14 ("clock": true in config.json brings it back). The car, 2026-11-19, with the owner: it does not
+ * do what it was made for. The media player stops the moment this tool's source takes the speakers, every time
+ * (PLAY, then STOP 0.6 s later; after a minute of playing just the same), playFile without the speakers leaves it
+ * stopped, and the input still takes 36 000 of 48 000 frames a second (AirPlay, five reports: 240 000 in, 180 000
+ * written, 54 000 dropped every 5 s; the probe: 35 846 to 36 104 a second, four ways of writing). In the one good
+ * minute of 2026-11-15 the media player was stopped as well (the log of that minute), so its playing was not the
+ * reason. The reason for the 36 000 is not known. The keeper only made the sound start 0.4 s later and started and
+ * stopped BMW's player with every stream.
  */
 let keeper = null;
 function keeperStart() {
-    if (keeper || conf().clock === false || DEVICE) return Promise.resolve();
+    if (keeper || conf().clock !== true || DEVICE) return Promise.resolve();
     let K;
     try { K = require(path.join(__dirname, 'mediaout.js')).MediaOut; } catch (e) { log('clock: ' + e.message); return Promise.resolve(); }
     const k = new K({ log: log, mode: 'file', dir: path.join(ROOT, 'media') });
