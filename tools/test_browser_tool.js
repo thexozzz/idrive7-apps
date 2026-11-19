@@ -261,7 +261,7 @@ function socks(port, host, dport) {
 function testPolicy(base) {
     const file = path.join(base, 'policy-test.json');
     let r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
     assert.deepStrictEqual([r.problems, r.file], [[], false]);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
     r = d.readPolicy(file);
@@ -269,11 +269,11 @@ function testPolicy(base) {
     assert.deepStrictEqual(r.problems, []);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, audio: 'loud', memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
     assert.strictEqual(r.problems.length, 11, r.problems.join(' | '));
     fs.writeFileSync(file, '{ sandbox: off }');
     r = d.readPolicy(file);
-    assert.deepStrictEqual([r.policy.sandbox, r.problems.length], ['ask', 1], 'a file that is not JSON changes nothing');
+    assert.deepStrictEqual([r.policy.sandbox, r.problems.length], ['required', 1], 'a file that is not JSON changes nothing');
     fs.unlinkSync(file);
     // the engine never opens a sound device of the head unit (its "default" is the hands-free telephone's)
     const flags = d.Daemon.prototype.engineArgs.call({ zoom: 1.5, want: { w: 1796, h: 548 }, proxyPort: 1, opts: { stateDir: path.join(base, 'none') }, picture: () => 0.75 }, { profile: '/p', major: '153' }, 'about:blank', true);
@@ -347,6 +347,9 @@ async function testChain(base, eng) {
     fs.chmodSync(path.join(base, 'shm'), 0o1777); // as /dev/shm: the frame decoder is not root
     process.env.G21_BROWSER_RING = path.join(base, 'shm', 'mgu-video-g21browser');
     process.env.G21_BROWSER_ALLOW_LOCAL = '1';
+    // (this chain was written for the rules 0.1.45 began with; the defaults are the owner's settings since 0.1.46)
+    fs.mkdirSync(path.join(base, 'state'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'state', 'policy.json'), JSON.stringify({ sandbox: 'ask', picture: 0.75, memoryLimitMb: 900 }));
     process.env.G21_BROWSER_PICTURE = '1'; // this chain: picture pixels = screen pixels (the 75% picture is the sandbox part below)
     if (root) process.env.G21_BROWSER_UID = '65534'; else process.env.G21_BROWSER_NOSETUID = '1';
     const srv = http.createServer((q, s) => {

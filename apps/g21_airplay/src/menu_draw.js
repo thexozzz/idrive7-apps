@@ -802,8 +802,8 @@ var SYSINFO_ITEMS = [
 // Przeglądarka (the screen's name 'apps-settings' is from when these were Aplikacje > Ustawienia)
 var APPS_SET_ITEMS = [
     { name: 'aset-home', title: 'Strona startowa', hint: 'wbudowana', icon: 'globe' },
-    { name: 'aset-zoom', title: 'Powiększenie', hint: '150%', icon: 'desktop' },
-    { name: 'aset-picture', title: 'Rozdzielczość', hint: '75%', icon: 'desktop' },
+    { name: 'aset-zoom', title: 'Powiększenie', hint: '100%', icon: 'desktop' },
+    { name: 'aset-picture', title: 'Rozdzielczość', hint: '100%', icon: 'desktop' },
     { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
     // films in the format this head unit decodes without stutter
@@ -815,8 +815,8 @@ var APPS_SET_ITEMS = [
     { name: 'aset-frames', title: 'Tor obrazu', hint: 'bezpośredni 60 kl./s', icon: 'desktop' },
     // pages in their phone form (a touch screen) or in their desktop form
     { name: 'aset-mobile', title: 'Tryb mobilny', hint: 'włączony', icon: 'desktop' },
-    { name: 'aset-sandbox', title: 'Piaskownica', hint: 'pytaj', icon: 'tag' },
-    { name: 'aset-memory', title: 'Limit pamięci', hint: '900 MB', icon: 'gear' },
+    { name: 'aset-sandbox', title: 'Piaskownica', hint: 'wymagana', icon: 'tag' },
+    { name: 'aset-memory', title: 'Limit pamięci', hint: '1500 MB', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
     { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
     { name: 'aset-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }

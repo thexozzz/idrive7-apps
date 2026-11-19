@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.206
+
+- Ustawienia przeglądarki z auta właściciela (2026-11-19) są teraz domyślne po instalacji (`g21-browser` 0.1.46): pełny Chrome, tor obrazu bezpośredni do 60 kl./s, tryb mobilny, lekkie wideo, rozdzielczość 100% (było 75%), powiększenie 100% (było 150%), piaskownica „wymagana” (było „pytaj”), limit pamięci 1500 MB (było 900). Dotyczy tylko instalacji bez własnych ustawień: istniejący plik reguł i zapisane powiększenie zostają.
+
 ## 0.1.205
 
 - Trop właściciela (2026-11-19): pierwszy dźwięk po restarcie MGU jest prawidłowy, po zmianie filmu albo ponownym połączeniu znowu źle. Potwierdzone w logu i próbami w aucie: o tym, czy wejście dźwięku auta bierze pełne 48 000 próbek na sekundę, czy trzy czwarte, decyduje chwila otwarcia urządzenia i tak zostaje do jego zamknięcia; następne otwarcie może trafić inaczej. Zatrzymanie naszego programu zapisującego w trakcie grania i ponowny start: 36 000 → 48 000 trzy razy, raz znowu 36 000. Dlaczego tak jest – nie wiadomo.

@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1.5, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false, film: null
+        live: false, w: 0, h: 0, ino: 0, zoom: 1, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false, film: null
     };
 }
 
@@ -84,7 +84,7 @@ function createBrowserClient(opts) {
                 w: m.w | 0,
                 h: m.h | 0,
                 ino: Number(m.ino) || 0,
-                zoom: Number(m.zoom) || 1.5,
+                zoom: Number(m.zoom) || 1,
                 editable: !!m.editable,
                 pct: m.pct | 0,
                 ring: String(m.ring || ''),

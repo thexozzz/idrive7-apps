@@ -952,7 +952,9 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *           shell knows only "cast". A direct path that does not work falls back to "cast" by itself.
  */
 const FRAMES = ['direct', 'direct30', 'cast'];
-const POLICY_DEFAULT = { version: 1, sandbox: 'ask', gpu: 'off', picture: 0.75, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 900, network: { blockPrivate: true, allow: [] } };
+// (the defaults are the owner's own settings on the car, 2026-11-19: full Chrome, direct frames, the picture at the
+// screen's own pixels, pages at 100%, the sandbox required, 1500 MB)
+const POLICY_DEFAULT = { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -1009,7 +1011,7 @@ function Daemon(opts) {
     this.engine = null;     // { child, cdp, session, target, mainFrame }
     this.starting = null;   // promise of the running start
     this.want = null;       // { w, h } from the app's open
-    this.zoom = 1.5;
+    this.zoom = 1;
     this.idleTimer = null;
     this.memTimer = null;
     this.pollTimer = null;
@@ -1223,7 +1225,7 @@ Daemon.prototype.onCommand = async function (m) {
     switch (m.op) {
     case 'open': {
         const w = Math.max(320, Math.min(1920, Number(m.w) | 0)) & ~3, h = Math.max(200, Math.min(1080, Number(m.h) | 0)) & ~1;
-        const z = ZOOMS.indexOf(Number(m.zoom)) >= 0 ? Number(m.zoom) : (ZOOMS.indexOf(Number(this.settings().zoom)) >= 0 ? Number(this.settings().zoom) : 1.5);
+        const z = ZOOMS.indexOf(Number(m.zoom)) >= 0 ? Number(m.zoom) : (ZOOMS.indexOf(Number(this.settings().zoom)) >= 0 ? Number(this.settings().zoom) : 1);
         clearTimeout(this.idleTimer);
         if (this.engine && this.want && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
         // fw x fh: the whole centre screen, for a player that goes full screen
