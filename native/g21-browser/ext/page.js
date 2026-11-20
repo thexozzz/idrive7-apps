@@ -60,6 +60,8 @@
         else if (m.op === 'selectall') { selectAll(); reply(true); }
         else if (m.op === 'exitfs') { try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {}); } catch (e) { /* not in full screen */ } reply(true); }
         else if (m.op === 'stop') { window.stop(); reply(true); }
+        else if (m.op === 'back') { history.back(); reply(true); }
+        else if (m.op === 'fwd') { history.forward(); reply(true); }
         else if (m.op === 'quiet') {
             // the page is left behind another one: its films stop, it leaves full screen
             try { document.querySelectorAll('video,audio').forEach(function (x) { try { x.pause(); } catch (e) { /* not playing */ } }); if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) { /* nothing to quiet */ }

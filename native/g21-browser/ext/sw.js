@@ -4,8 +4,9 @@
  * with that interface says so to every page (navigator.webdriver), and pages that sort browsers by it refuse it
  * (owner, 2026-11-20: Google's sign-in "Ta przeglądarka lub aplikacja może nie być bezpieczna", Crunchyroll's
  * "Coś poszło nie tak"). So the engine runs without it, as a browser a person uses, and this extension is the
- * daemon's way to it: a WebSocket to the daemon (config.js, written by the daemon at each start, has its port and a
- * word only the two know), JSON lines both ways.
+ * daemon's way to it: a WebSocket to the daemon (config.json, written by the daemon at each start, has its port and a
+ * word only the two know; it is read from the disk at every connecting, because the engine keeps a copy of a
+ * background part's scripts and would connect with the port and the word of an earlier start), JSON lines both ways.
  *
  *   daemon -> here   {"id":n,"op":"...", ...}      answered with {"id":n,"ok":true,"r":...} or {"id":n,"ok":false,"err":"..."}
  *   here -> daemon   {"ev":"tab","tab":id,"status":"loading"|"complete","url":"...","title":"..."}
@@ -15,7 +16,6 @@
  *
  * Input (a finger, the cursor, keys) does not come through here: the engine gets it from its window (g21-wlframe).
  */
-importScripts('config.js');
 
 let ws = null, alive = null;
 const zooms = {};      // the zoom the daemon wants for a tab
@@ -34,8 +34,14 @@ async function keepZoom(tab) {
 }
 function say(o) { try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) { /* the next connection */ } }
 
-function connect() {
-    if (ws && ws.readyState <= 1) return;
+let connecting = false;
+async function connect() {
+    if (connecting || (ws && ws.readyState <= 1)) return;
+    connecting = true;
+    let G21 = null;
+    try { G21 = await (await fetch(chrome.runtime.getURL('config.json'), { cache: 'no-store' })).json(); } catch (e) { G21 = null; }
+    connecting = false;
+    if (!G21 || (ws && ws.readyState <= 1)) { if (!G21) setTimeout(connect, 500); return; }
     try { ws = new WebSocket('ws://127.0.0.1:' + G21.port + '/g21?w=' + G21.word); } catch (e) { setTimeout(connect, 500); return; }
     ws.onopen = async () => {
         const tabs = await chrome.tabs.query({});
@@ -45,7 +51,10 @@ function connect() {
     ws.onclose = () => { ws = null; setTimeout(connect, 500); };
     ws.onerror = () => { try { ws.close(); } catch (e) { /* closed */ } };
 }
-// (a background part with nothing to do is put to sleep after 30 s: the line to the daemon keeps it up)
+// (a background part with nothing to do is put to sleep after 30 s: the line to the daemon keeps it up; and should
+// it be put to sleep all the same, or the daemon be gone for a while, an alarm wakes it to connect again)
+chrome.alarms.create('g21-line', { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener(() => connect());
 clearInterval(alive);
 alive = setInterval(() => { if (ws && ws.readyState === 1) say({ ev: 'ping' }); else connect(); }, 20000);
 
@@ -61,13 +70,18 @@ async function run(c) {
     switch (c.op) {
     case 'tabs': return (await chrome.tabs.query({})).map((t) => ({ tab: t.id, url: t.url || t.pendingUrl || '', title: t.title || '', status: t.status, active: t.active }));
     case 'nav': await chrome.tabs.update(tab, { url: String(c.url) }); return null;
-    case 'back': await chrome.tabs.goBack(tab); return null;
-    case 'fwd': await chrome.tabs.goForward(tab); return null;
+    // (the page's own history.back(): the engine's "back" leaves out every page nothing was touched on, and the
+    // owner's "wstecz" then jumped over a page that had only been read. Pages without this extension's part in them,
+    // the engine's own, are left the engine's way.)
+    case 'back': if (!(await page(tab, c))) await chrome.tabs.goBack(tab); return null;
+    case 'fwd': if (!(await page(tab, c))) await chrome.tabs.goForward(tab); return null;
     case 'reload': await chrome.tabs.reload(tab); return null;
     case 'new': { const t = await chrome.tabs.create({ url: String(c.url || 'about:blank'), active: c.active !== false }); return t.id; }
     case 'show': await chrome.tabs.update(tab, { active: true }); return null;
     case 'close': try { await chrome.tabs.remove(tab); } catch (e) { /* gone already */ } return null;
     case 'zoom': zooms[tab] = Number(c.z) || 1; await keepZoom(tab); return null;
+    // the engine ends as a browser whose windows are closed: in order, with its cookies and the sites' data written
+    case 'quit': { const ws = await chrome.windows.getAll(); for (const w of ws) { try { await chrome.windows.remove(w.id); } catch (e) { /* gone */ } } return null; }
     case 'info': { const t = await chrome.tabs.get(tab); return { url: t.url || t.pendingUrl || '', title: t.title || '', status: t.status }; }
     // answered by the page's own part
     case 'state': case 'edit': case 'exitfs': case 'quiet': case 'stop': case 'selectall': case 'why':

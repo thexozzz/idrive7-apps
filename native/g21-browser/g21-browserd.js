@@ -42,6 +42,10 @@ const path = require('path');
 const net = require('net');
 const cp = require('child_process');
 const native = require('./g21-native.js');
+// What the owner is told (the line over the address, for as long as it holds): the engine had to be started with
+// DevTools after all, or its extension does not answer at the moment.
+const NOTE_FALLBACK = 'tryb awaryjny: część stron może odmawiać (logowanie, serwisy wideo)';
+const NOTE_LINK = 'sterowanie stroną nie odpowiada, łączę ponownie';
 const crypto = require('crypto');
 const zlib = require('zlib');
 
@@ -1062,7 +1066,7 @@ Daemon.prototype.push = function (force) {
     // (a page made here: the start page, or one that stands for a chrome:// address, named in its title)
     const own = start && /^chrome:\/\/[a-z0-9-]+$/.test(String(s.title || '')) ? s.title : '';
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
-        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '',
+        live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '', note: this.note || '',
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
             homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile, frames: this.policy().frames, framesNow: this.engine ? (this.direct ? 'direct' : 'cast') : '' }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
@@ -2491,7 +2495,11 @@ Daemon.prototype.startEngine2 = async function (url) {
      * once and kept; the proxy lets the engine reach it. If the extension does not come, this start goes on with
      * DevTools, and so does every later one until the tool starts again (nativeFailed).
      */
-    this.native = !!this.direct && (this.opts.control || this.policy().control) !== 'devtools' && !this.nativeFailed && fs.existsSync(path.join(__dirname, 'ext', 'manifest.json'));
+    // (a start without DevTools that failed is tried again five minutes later, not never)
+    if (this.nativeFailed && Date.now() - (this.nativeFailedAt || 0) > 300000) this.nativeFailed = false;
+    const wantNative = !!this.direct && (this.opts.control || this.policy().control) !== 'devtools';
+    this.note = wantNative && this.nativeFailed ? NOTE_FALLBACK : '';
+    this.native = wantNative && !this.nativeFailed && fs.existsSync(path.join(__dirname, 'ext', 'manifest.json'));
     if (this.native) {
         try {
             if (!this.link) { const l = new native.Link({ log: (t) => this.log('native: ' + t) }); await l.listen(); this.link = l; }
@@ -2520,8 +2528,22 @@ Daemon.prototype.startEngine2 = async function (url) {
     {
         try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x0) {
             let x = x0;
-            // (the engine's extension did not come: the same start once more, with DevTools)
-            if (this.native && this.nativeFailed) { this.killEngine(); this.native = false; try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x2) { x = x2; } }
+            // The engine's extension did not come. Once more the same way (a start that was only slow); if it does not
+            // come again, this start goes on with DevTools, and the owner is told that pages may refuse the browser
+            // (NOTE_FALLBACK): never silently.
+            if (this.native && this.nativeFailed) {
+                this.killEngine();
+                this.log('native: the engine is started once more without DevTools');
+                this.nativeFailed = false;
+                try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x2) { x = x2; }
+                if (!e && this.nativeFailed) {
+                    this.killEngine();
+                    this.native = false;
+                    this.note = NOTE_FALLBACK;
+                    this.log('native: no extension twice: this start is with DevTools (pages that refuse a driven browser will refuse this one); tried again in five minutes');
+                    try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x3) { x = x3; }
+                }
+            }
             if (!e) {
             // what the engine itself said (a missing library, a kernel it cannot run on): the only trace of a start that failed
             const said = this.engine ? String(this.engine.err).split('\n').filter((l) => l.trim() && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 600) : '';
@@ -2563,9 +2585,14 @@ Daemon.prototype.writeExt = function (dirs) {
         own(lf);
         man.content_scripts.push({ matches: ['<all_urls>'], js: ['light.js'], run_at: 'document_start', all_frames: true, match_about_blank: true, world: 'MAIN' });
     }
+    // (a version of its own at every start: the engine then takes the extension's files anew instead of its copies)
+    { const now = Math.floor(Date.now() / 1000); man.version = '1.' + (Math.floor(now / 86400) % 60000) + '.' + Math.floor((now % 86400) / 2); }
     { const mf = path.join(dir, 'manifest.json'); fs.writeFileSync(mf, JSON.stringify(man, null, 2) + '\n', { mode: 0o600 }); own(mf); }
-    const cfg = path.join(dir, 'config.js');
-    fs.writeFileSync(cfg, 'self.G21 = ' + JSON.stringify({ port: this.link.port, word: this.link.word }) + ';\n', { mode: 0o600 });
+    // The line's port and word: a file the background part reads from the disk at every connecting. As a script of
+    // the extension it was kept by the engine from one start to the next, and after the daemon had started again the
+    // extension knocked with the old word (stand, 2026-11-20).
+    const cfg = path.join(dir, 'config.json');
+    fs.writeFileSync(cfg, JSON.stringify({ port: this.link.port, word: this.link.word }) + '\n', { mode: 0o600 });
     own(cfg);
     return dir;
 };
@@ -2591,11 +2618,22 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
             exprs: { edit: EDIT_PROBE, quiet: QUIET_PAGE, why: PLAYER_WHY } });
         // (a page went into or out of full screen: looked at now, not at the next poll)
         e.cdp.onFullScreen = () => { if (this.engine === e) this.guard(() => this.refresh(e)); };
+        // The extension's line while the engine runs. Down (its background part was put to sleep or started again):
+        // the engine and its pages go on, input still reaches them through the window; the extension connects again
+        // by itself (it tries twice a second; an alarm wakes it within half a minute). The owner is told when it
+        // lasts, and nothing is restarted. Up again: the page's state is read anew.
+        e.cdp.onLink = (up, again) => {
+            if (this.engine !== e) return;
+            clearTimeout(this.linkTimer);
+            if (!up) { this.log('native: the extension\'s line is down; the engine runs on, waiting for it'); this.linkTimer = setTimeout(() => { if (this.engine === e && !e.cdp.up) { this.note = NOTE_LINK; this.push(true); } }, 4000); return; }
+            if (this.note === NOTE_LINK) { this.note = ''; this.push(true); }
+            if (again) { this.log('native: the extension is connected again (the same engine, the same pages)'); this.guard(() => this.refresh(e)); }
+        };
     } else e.cdp = new Cdp(child);
     e.cdp.onFault = (x) => this.fault(x);
     let ver;
     try { ver = await e.cdp.send('Browser.getVersion', {}, null, o.startMs); } catch (x) {
-        if (e.native) { this.nativeFailed = true; this.log('native: ' + x.message + ': the engine is started with DevTools until the tool starts again'); }
+        if (e.native) { this.nativeFailed = true; this.nativeFailedAt = Date.now(); this.log('native: ' + x.message); }
         throw x;
     }
     e.product = ver.product || '';
@@ -3088,6 +3126,9 @@ Daemon.prototype.stopEngine = async function (why) {
         try { await Promise.race([this.saveCookies(e, true), sleep(1500)]); } catch (x) { this.log('cookies: ' + x.message); }
         // the engine writes its profile (cookies, the sites' storage) while it closes: it gets up to 4 s for that
         const gone = new Promise((resolve) => { if (e.child.exitCode !== null || e.child.signalCode !== null) resolve(); else e.child.once('exit', resolve); });
+        // (without DevTools "close" is the extension closing the engine's windows: the engine then ends in order, its
+        // cookies written. Ended by a signal it lost the cookies and the sites' data of its last half minute, a sign-in
+        // made just before among them: stand, 2026-11-20.)
         try { await Promise.race([e.cdp.send('Browser.close', {}), sleep(1500)]); } catch (x) { /* killed below */ }
         await Promise.race([gone, sleep(4000)]);
         try { e.child.kill('SIGKILL'); } catch (x) { /* gone */ }

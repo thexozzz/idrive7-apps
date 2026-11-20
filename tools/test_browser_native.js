@@ -87,14 +87,24 @@ function ext(port, word, origin, onAsk) {
     e.say({ ev: 'nav', tab: 7, url: 'https://example.org/b', same: false });
     e.say({ ev: 'tab', tab: 7, status: 'complete', url: 'https://example.org/b', title: 'B' });
     e.say({ ev: 'nav', tab: 7, url: 'https://example.org/b#x', same: true });
-    e.say({ ev: 'new', tab: 8, opener: 7, url: 'https://example.org/new' });
+    // a window the page opens: over the page, as the page's own; gone: the page again
+    e.say({ ev: 'new', tab: 8, opener: 7, url: 'https://example.org/sign-in' });
+    e.say({ ev: 'tab', tab: 8, status: 'complete', url: 'https://example.org/sign-in', title: 'Sign in' });
+    await sleep(40);
+    assert.deepStrictEqual([(await cdp.send('Target.getTargets', {})).targetInfos.map((x) => x.targetId + ' ' + x.url).join(), cdp.top(7), cdp.root(8)], ['tab:7 https://example.org/sign-in', 8, 7], 'one page for the daemon, the window on top of it');
     e.say({ ev: 'gone', tab: 8 });
+    // (a tab nobody's page opened is told as a new one)
+    e.say({ ev: 'new', tab: 9, opener: 0, url: 'https://example.org/other' });
+    e.say({ ev: 'gone', tab: 9 });
     e.say({ ev: 'fs', tab: 7, on: true, top: true });
     await sleep(80);
     assert.deepStrictEqual(events.map((m) => m.method + (m.sessionId ? ' ' + m.sessionId : '')), ['Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameNavigated tab:7',
-        'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Page.navigatedWithinDocument tab:7', 'Target.targetCreated', 'Target.targetDestroyed'], 'the events g21-browserd waits for');
+        'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Page.navigatedWithinDocument tab:7',
+        'Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7',
+        'Page.frameNavigated tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Target.targetCreated', 'Target.targetDestroyed'], 'the events g21-browserd waits for');
     assert.deepStrictEqual(events[2].params, { frame: { id: 'main:7', url: 'https://example.org/b' } });
-    assert.deepStrictEqual([events[6].params.targetInfo.targetId, events[6].params.targetInfo.url, events[6].params.targetInfo.type], ['tab:8', 'https://example.org/new', 'page'], 'a window a page opened');
+    assert.deepStrictEqual(events[9].params, { frame: { id: 'main:7', url: 'https://example.org/b#x' } }, 'the window is gone: the page under it, where it was');
+    assert.deepStrictEqual([events[12].params.targetInfo.targetId, events[12].params.targetInfo.url], ['tab:9', 'https://example.org/other']);
     assert.deepStrictEqual(fsSeen, ['tab:7', true], 'full screen is told at once');
     console.log('ok native: hello, the targets, and a page\'s loading, arriving, new window and full screen as DevTools events');
 
@@ -152,7 +162,8 @@ function ext(port, word, origin, onAsk) {
     // the extension that ships: what it may do, and that it does not touch a page's world unless the light-video rule asks
     const man = JSON.parse(fs.readFileSync(path.join(root, 'native', 'g21-browser', 'ext', 'manifest.json'), 'utf8'));
     assert.strictEqual(man.manifest_version, 3);
-    assert.deepStrictEqual(man.permissions.slice().sort(), ['downloads', 'scripting', 'tabs', 'webNavigation']);
+    assert.deepStrictEqual(man.permissions.slice().sort(), ['alarms', 'downloads', 'tabs', 'webNavigation'], 'tabs and their addresses, navigation events, cancelling downloads, the alarm that wakes it: nothing more');
+    assert.ok(!man.host_permissions && !man.optional_permissions && !man.web_accessible_resources && !man.externally_connectable, 'no host permissions beyond its own page part; nothing of it can be read or called by a page');
     assert.ok(man.content_scripts.every((c) => c.world !== 'MAIN'), 'as shipped, nothing runs in a page\'s own world');
     ['sw.js', 'page.js'].forEach((f) => { const src = fs.readFileSync(path.join(root, 'native', 'g21-browser', 'ext', f), 'utf8'); assert.ok(!/\beval\(|new Function\(|chrome\.debugger/.test(src), f + ': no eval, no debugger API'); });
     // and the daemon: the engine's arguments without DevTools

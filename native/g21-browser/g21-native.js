@@ -149,18 +149,51 @@ function NativeCdp(opts) {
     this.up = false;
     this.upWait = [];
     this.native = true;
+    /*
+     * A window a page opens (window.open, a link with a target: sign-in windows of "log in with ...", which answer
+     * the page that opened them and close themselves) is a tab of its own over the page's tab. The daemon knows one
+     * page per view, so here such a tab stands in for its opener's: what is asked of the opener's session is asked of
+     * the tab on top, what the tab on top reports is reported as the opener's, and "back" on a window that has no
+     * way back closes it. When it is gone the opener's page is there again, as it was. Until 0.1.53 (and with
+     * DevTools) the window's address was loaded in the page itself, and its opener was lost.
+     */
+    this.over = {};                 // a page's tab -> the windows open over it, the last on top
+    this.owner = {};                // such a window's tab -> the page's tab
+    this.rel = {};
+    this.onLink = null;             // the extension's line went down (false) or is there again (true)
     const self = this;
     this.link.onEvent = function (m) { try { self.got(m); } catch (e) { if (self.onFault) self.onFault(e); } };
-    this.link.onDown = function () { self.up = false; };
+    this.link.onDown = function () { self.up = false; if (self.onLink) self.onLink(false); };
 }
+NativeCdp.prototype.root = function (tab) { return this.owner[tab] || tab; };
+NativeCdp.prototype.top = function (tab) { const o = this.over[tab]; return o && o.length ? o[o.length - 1] : tab; };
+// a window over a page is gone (or its page is): the page under it is on the screen again
+NativeCdp.prototype.uncover = function (tab) {
+    const root = this.owner[tab];
+    delete this.owner[tab];
+    if (!root || !this.over[root]) return;
+    const wasTop = this.top(root) === tab;
+    this.over[root] = this.over[root].filter(function (x) { return x !== tab; });
+    if (!wasTop || !this.tabs[root]) return;
+    const now = this.top(root), nt = this.tabs[now] || {};
+    this.link.ask('show', { tab: now }, 4000).catch(function () {});
+    this.emit('Page.frameNavigated', { frame: { id: 'main:' + root, url: nt.url || '' } }, root);
+    this.emit('Target.targetInfoChanged', { targetInfo: this.info(root) });
+    this.emit('Page.frameStoppedLoading', { frameId: 'main:' + root }, root);
+};
 NativeCdp.prototype.emit = function (method, params, tab) { if (this.onEvent) this.onEvent({ method: method, params: params, sessionId: tab ? 'tab:' + tab : undefined }); };
-NativeCdp.prototype.info = function (tab) { const t = this.tabs[tab] || {}; return { targetId: 'tab:' + tab, type: 'page', url: t.url || '', title: t.title || '', openerId: t.opener ? 'tab:' + t.opener : undefined }; };
+NativeCdp.prototype.info = function (tab) { const t = this.tabs[this.top(tab)] || {}; return { targetId: 'tab:' + tab, type: 'page', url: t.url || '', title: t.title || '', openerId: t.opener ? 'tab:' + t.opener : undefined }; };
 NativeCdp.prototype.got = function (m) {
     const tab = Number(m.tab) || 0;
     if (m.ev === 'hello') {
+        const before = this.tabs;
         this.tabs = {};
-        (m.tabs || []).forEach((t) => { this.tabs[t.tab] = { url: t.url, title: t.title, status: t.status, active: !!t.active }; });
+        (m.tabs || []).forEach((t) => { this.tabs[t.tab] = { url: t.url, title: t.title, status: t.status, active: !!t.active, opener: (before[t.tab] || {}).opener }; });
+        // (the extension came again while the engine ran: the windows over pages that are still there stay so)
+        Object.keys(this.owner).forEach((k) => { if (!this.tabs[k] || !this.tabs[this.owner[k]]) { const r = this.owner[k]; delete this.owner[k]; if (this.over[r]) this.over[r] = this.over[r].filter((x) => String(x) !== String(k)); } });
+        const again = !this.up && Object.keys(before).length > 0;
         this.up = true;
+        if (this.onLink) this.onLink(true, again);
         const w = this.upWait;
         this.upWait = [];
         w.forEach(function (f) { f(); });
@@ -172,26 +205,48 @@ NativeCdp.prototype.got = function (m) {
         const t = this.tabs[tab] || (this.tabs[tab] = { url: '', title: '', status: 'loading' });
         if (m.opener) t.opener = Number(m.opener);
         if (m.url) t.url = m.url;
-        this.emit(known ? 'Target.targetInfoChanged' : 'Target.targetCreated', { targetInfo: this.info(tab) });
+        if (this.owner[tab]) return;
+        const root = m.opener ? this.root(Number(m.opener)) : 0;
+        if (!known && root && this.tabs[root] && (this.over[root] || []).length < 3) {
+            // a window over the page that opened it, at the page's zoom
+            this.owner[tab] = root;
+            (this.over[root] = this.over[root] || []).push(tab);
+            if (this.rel[root] && this.rel[root] !== 1) this.link.ask('zoom', { tab: tab, z: this.rel[root] }, 4000).catch(function () {});
+            this.emit('Page.frameStartedLoading', { frameId: 'main:' + root }, root);
+            return;
+        }
+        this.emit(known ? 'Target.targetInfoChanged' : 'Target.targetCreated', { targetInfo: { targetId: 'tab:' + tab, type: 'page', url: t.url || '', title: t.title || '', openerId: t.opener ? 'tab:' + t.opener : undefined } });
         return;
     }
-    if (m.ev === 'gone') { delete this.tabs[tab]; delete this.scale[tab]; this.emit('Target.targetDestroyed', { targetId: 'tab:' + tab }); return; }
+    if (m.ev === 'gone') {
+        const mine = this.over[tab] || [];
+        delete this.tabs[tab]; delete this.scale[tab]; delete this.rel[tab];
+        if (this.owner[tab]) { this.uncover(tab); return; }
+        // a page's tab: its windows go with it
+        delete this.over[tab];
+        mine.forEach((w) => { delete this.owner[w]; this.link.ask('close', { tab: w }, 4000).catch(function () {}); });
+        this.emit('Target.targetDestroyed', { targetId: 'tab:' + tab });
+        return;
+    }
     const t = this.tabs[tab] || (this.tabs[tab] = { url: '', title: '', status: '' });
+    const as = this.root(tab), shown = this.top(as) === tab;
     if (m.ev === 'tab') {
         const was = t.status, title = t.title, url = t.url;
         t.status = m.status || t.status; t.url = m.url || t.url; t.title = m.title === undefined ? t.title : m.title;
-        if (t.status === 'loading' && was !== 'loading') this.emit('Page.frameStartedLoading', { frameId: 'main:' + tab }, tab);
-        if (t.title !== title || t.url !== url) this.emit('Target.targetInfoChanged', { targetInfo: this.info(tab) });
-        if (t.status === 'complete' && was !== 'complete') this.emit('Page.frameStoppedLoading', { frameId: 'main:' + tab }, tab);
+        if (!shown) return;
+        if (t.status === 'loading' && was !== 'loading') this.emit('Page.frameStartedLoading', { frameId: 'main:' + as }, as);
+        if (t.title !== title || t.url !== url) this.emit('Target.targetInfoChanged', { targetInfo: this.info(as) });
+        if (t.status === 'complete' && was !== 'complete') this.emit('Page.frameStoppedLoading', { frameId: 'main:' + as }, as);
         return;
     }
     if (m.ev === 'nav') {
         t.url = m.url || t.url;
-        if (m.same) this.emit('Page.navigatedWithinDocument', { frameId: 'main:' + tab, url: t.url }, tab);
-        else this.emit('Page.frameNavigated', { frame: { id: 'main:' + tab, url: t.url } }, tab);
+        if (!shown) return;
+        if (m.same) this.emit('Page.navigatedWithinDocument', { frameId: 'main:' + as, url: t.url }, as);
+        else this.emit('Page.frameNavigated', { frame: { id: 'main:' + as, url: t.url } }, as);
         return;
     }
-    if (m.ev === 'fs' && m.top !== false) { if (this.onFullScreen) this.onFullScreen('tab:' + tab, !!m.on); return; }
+    if (m.ev === 'fs' && m.top !== false) { if (shown && this.onFullScreen) this.onFullScreen('tab:' + as, !!m.on); return; }
 };
 // the extension's first word after the engine's start
 NativeCdp.prototype.ready = function (ms) {
@@ -216,27 +271,34 @@ NativeCdp.prototype.evaluate = async function (tab, expr) {
     return val(undefined);     // (a script for a page that this engine is not asked to run: THEiPlay Player's words)
 };
 NativeCdp.prototype.send = async function (method, params, session, timeoutMs) {
-    const p = params || {}, tab = tabOf(session), link = this.link;
+    const p = params || {}, page = tabOf(session), tab = this.top(page), link = this.link;
     const ask = (op, q) => link.ask(op, Object.assign({ tab: tab }, q || {}), timeoutMs);
     switch (method) {
     case 'Browser.getVersion': await this.ready(timeoutMs || 20000); return { product: this.product };
-    case 'Target.getTargets': return { targetInfos: Object.keys(this.tabs).map((k) => this.info(Number(k))) };
+    case 'Target.getTargets': return { targetInfos: Object.keys(this.tabs).filter((k) => !this.owner[k]).map((k) => this.info(Number(k))) };
     case 'Target.attachToTarget': return { sessionId: String(p.targetId) };
     case 'Target.createTarget': { const id = await link.ask('new', { url: p.url || 'about:blank' }, timeoutMs); if (!this.tabs[id]) this.tabs[id] = { url: p.url || 'about:blank', title: '', status: 'loading' }; return { targetId: 'tab:' + id }; }
     case 'Target.activateTarget': await link.ask('show', { tab: tabOf(p.targetId) }, timeoutMs); return {};
     case 'Target.closeTarget': await link.ask('close', { tab: tabOf(p.targetId) }, timeoutMs); return { success: true };
-    case 'Page.getFrameTree': return { frameTree: { frame: { id: 'main:' + tab, url: (this.tabs[tab] || {}).url || '' } } };
-    case 'Page.navigate': await ask('nav', { url: String(p.url) }); return { frameId: 'main:' + tab };
+    case 'Page.getFrameTree': return { frameTree: { frame: { id: 'main:' + page, url: (this.tabs[tab] || {}).url || '' } } };
+    case 'Page.navigate': await ask('nav', { url: String(p.url) }); return { frameId: 'main:' + page };
     case 'Page.reload': await ask('reload'); return {};
     case 'Page.stopLoading': await ask('stop'); return {};
     case 'Page.getNavigationHistory': {
         // (the engine does not show its list of pages to an extension: only whether there is a way back and forward)
         const s = (await ask('state')) || {}, t = this.tabs[tab] || {};
         const cur = { id: 2, url: s.url || t.url || '', title: s.title === undefined ? (t.title || '') : s.title };
-        const entries = (s.back ? [{ id: 1, url: 'g21:back', title: '' }] : []).concat([cur], s.fwd ? [{ id: 3, url: 'g21:forward', title: '' }] : []);
-        return { currentIndex: s.back ? 1 : 0, entries: entries };
+        // (a window over the page always has a way back: out of it)
+        const back = !!s.back || tab !== page;
+        const entries = (back ? [{ id: 1, url: 'g21:back', title: '' }] : []).concat([cur], s.fwd ? [{ id: 3, url: 'g21:forward', title: '' }] : []);
+        return { currentIndex: back ? 1 : 0, entries: entries };
     }
-    case 'Page.navigateToHistoryEntry': await ask(Number(p.entryId) < 2 ? 'back' : 'fwd'); return {};
+    case 'Page.navigateToHistoryEntry': {
+        if (Number(p.entryId) >= 2) { await ask('fwd'); return {}; }
+        if (tab !== page) { const s = (await ask('state')) || {}; if (!s.back) { await ask('close'); return {}; } }
+        await ask('back');
+        return {};
+    }
     case 'Runtime.evaluate': return this.evaluate(tab, String(p.expression || ''));
     case 'Input.insertText': await ask('text', { s: String(p.text || '') }); return {};
     case 'Input.dispatchKeyEvent': {
@@ -245,10 +307,10 @@ NativeCdp.prototype.send = async function (method, params, session, timeoutMs) {
         return {};
     }
     case 'Input.dispatchMouseEvent': {
-        const x = this.px(tab, p.x), y = this.px(tab, p.y);
+        const x = this.px(page, p.x), y = this.px(page, p.y);
         if (p.type === 'mouseWheel') {
             // (one wheel event of thousands of pixels is not taken by the engine: steps of a knob's size)
-            let d = Math.round((Number(p.deltaY) || 0) * (this.scale[tab] || 1) / 12);
+            let d = Math.round((Number(p.deltaY) || 0) * (this.scale[page] || 1) / 12);
             this.input('pm ' + x + ' ' + y);
             for (let i = 0; d && i < 40; i++) { const s = Math.max(-30, Math.min(30, d)); this.input('pa ' + s); d -= s; }
             return {};
@@ -261,22 +323,22 @@ NativeCdp.prototype.send = async function (method, params, session, timeoutMs) {
     case 'Input.dispatchTouchEvent': {
         const pts = p.touchPoints || [];
         if (p.type === 'touchEnd' || p.type === 'touchCancel') { this.input('tu 1'); return {}; }
-        if (pts[0]) this.input((p.type === 'touchStart' ? 'td' : 'tm') + ' 1 ' + this.px(tab, pts[0].x) + ' ' + this.px(tab, pts[0].y));
+        if (pts[0]) this.input((p.type === 'touchStart' ? 'td' : 'tm') + ' 1 ' + this.px(page, pts[0].x) + ' ' + this.px(page, pts[0].y));
         return {};
     }
     case 'Emulation.setDeviceMetricsOverride': {
         // the window's size is g21-wlframe's (the daemon tells it). The page's scale is the one the engine was started
         // with; another one (a player's full screen at a zoom other than 100 %) is the tab's zoom on top of it.
         const z = Number(p.deviceScaleFactor) || 1, rel = Math.round(z / this.base * 1000) / 1000;
-        this.scale[tab] = z;
-        if (rel !== (this.rel || {})[tab]) {
-            this.rel = this.rel || {}; this.rel[tab] = rel;
-            try { await ask('zoom', { z: rel }); } catch (e) { this.log('zoom: ' + e.message); }
+        this.scale[page] = z;
+        if (rel !== this.rel[page]) {
+            this.rel[page] = rel;
+            try { await link.ask('zoom', { tab: page, z: rel }, timeoutMs); if (tab !== page) await ask('zoom', { z: rel }); } catch (e) { this.log('zoom: ' + e.message); }
         }
         return {};
     }
     case 'Storage.getCookies': return { cookies: [] };
-    case 'Browser.close': return {};
+    case 'Browser.close': try { await link.ask('quit', {}, timeoutMs || 1500); } catch (e) { /* its line ends with it */ } return {};
     case 'Target.setDiscoverTargets': case 'Page.enable': case 'Log.enable': case 'Media.enable': case 'Browser.setDownloadBehavior':
     case 'Emulation.setTouchEmulationEnabled': case 'Emulation.setFocusEmulationEnabled': case 'Emulation.setUserAgentOverride':
     case 'Emulation.setTimezoneOverride': case 'Page.addScriptToEvaluateOnNewDocument': case 'Page.setWebLifecycleState': case 'Page.bringToFront':

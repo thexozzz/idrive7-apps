@@ -23,7 +23,13 @@ const PAGE = (name) => '<!doctype html><meta charset=utf-8><meta name=viewport c
     + '<a id=n href="/trzecia" target="_blank" style="position:absolute;left:400px;top:40px;width:300px;height:80px;background:#dce;display:block">nowe okno</a>'
     + '<form id=f style="position:absolute;left:40px;top:160px"><input id=i name=q style="font:22px sans-serif;width:600px;height:60px"></form>'
     + '<div id=fs style="position:absolute;left:760px;top:40px;width:300px;height:80px;background:#fc9">pełny ekran</div>'
-    + '<script>var S={n:' + JSON.stringify(name) + ',m:Math.floor(Math.random()*9000+1000),wd:String(navigator.webdriver),w:innerWidth,tap:0,key:"",val:"",sub:0,sc:0,fs:0,tr:1};'
+    + '<div id=op style="position:absolute;left:1120px;top:40px;width:300px;height:80px;background:#9cf">okno logowania</div>'
+    + '<div id=op2 style="position:absolute;left:1120px;top:160px;width:300px;height:80px;background:#9fc">okno, które zostaje</div>'
+    + '<script>var S={n:' + JSON.stringify(name) + ',m:Math.floor(Math.random()*9000+1000),wd:String(navigator.webdriver),w:innerWidth,tap:0,key:"",val:"",sub:0,sc:0,fs:0,tr:1,msg:"",ls:0,ck:0};'
+    + 'try{S.ck=/g21c=1/.test(document.cookie)?1:0;S.ls=Number(localStorage.getItem("g21n")||0)+1;localStorage.setItem("g21n",String(S.ls));document.cookie="g21c=1;max-age=999999;path=/"}catch(e){}'
+    + 'addEventListener("message",function(e){S.msg=String(e.data);T()});'
+    + 'document.getElementById("op").addEventListener("click",function(){window.open("/okno","_blank")});document.getElementById("op2").addEventListener("click",function(){window.open("/okno-stoi","_blank")});'
+    + (/^okno/.test(name) ? 'if(window.opener){window.opener.postMessage("zalogowano w "+' + JSON.stringify(name) + ',"*")}' + (name === 'okno' ? 'setTimeout(function(){window.close()},1800);' : '') : '')
     + 'function T(){document.title=Object.keys(S).map(function(k){return k+"="+S[k]}).join("|")}T();'
     + 'addEventListener("click",function(e){S.tap++;if(!e.isTrusted)S.tr=0;T()});'
     + 'addEventListener("keydown",function(e){S.key=e.key;if(!e.isTrusted)S.tr=0;T()});'
@@ -34,7 +40,11 @@ const PAGE = (name) => '<!doctype html><meta charset=utf-8><meta name=viewport c
     + 'document.addEventListener("fullscreenchange",function(){S.fs=document.fullscreenElement?1:0;S.w=innerWidth;T()});</script>';
 
 (async () => {
-    const srv = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(PAGE(decodeURIComponent(q.url.replace(/^\//, '').replace(/\?.*$/, '')) || 'start')); });
+    const srv = http.createServer((q, r) => {
+        // (a chain of redirects, as a sign-in that goes through other addresses and comes back)
+        if (/^\/przez1/.test(q.url)) { r.writeHead(302, { location: '/przez2' }); r.end(); return; }
+        if (/^\/przez2/.test(q.url)) { r.writeHead(303, { location: '/cel' }); r.end(); return; }
+        r.setHeader('content-type', 'text/html'); r.end(PAGE(decodeURIComponent(q.url.replace(/^\//, '').replace(/\?.*$/, '')) || 'start')); });
     await new Promise((r) => srv.listen(0, '127.0.0.1', r));
     const url = 'http://127.0.0.1:' + srv.address().port + '/';
     const stand = await require('./stand.js').start({ repo: repo, dir: dir, input: true, browser: true, idleMs: 90000, apps: { demo: { name: 'Demo', url: url + 'app-demo' } } });
@@ -117,11 +127,44 @@ const PAGE = (name) => '<!doctype html><meta charset=utf-8><meta name=viewport c
 
     // ---- a link that wants a new window opens in the page
     await tap(520, 80);
-    await until('a link for a new window opens in the same page', () => /trzecia$/.test(st().url) && T().n === 'trzecia', 10000);
+    await until('a link for a new window: the window is shown over the page', () => /trzecia$/.test(st().url) && T().n === 'trzecia', 10000);
     await stand.sleep(4500);
-    check('one page in the engine', Object.keys(dm().engine.cdp.tabs).length === 1, Object.keys(dm().engine.cdp.tabs));
+    check('it is a window of its own over the page (two tabs), with a way back out of it', Object.keys(dm().engine.cdp.tabs).length === 2 && st().back === true, [Object.keys(dm().engine.cdp.tabs), st().back]);
     app._web.send({ op: 'back' });
-    await until('back from it', () => /druga$/.test(st().url) && T().n === 'druga');
+    await until('back closes it: the page under it', () => /druga$/.test(st().url) && T().n === 'druga');
+    await stand.sleep(600);
+    check('the page under it was not loaded again; one tab is left', T().m === mark && Object.keys(dm().engine.cdp.tabs).length === 1, [T().m, mark, Object.keys(dm().engine.cdp.tabs)]);
+
+    // ---- a sign-in window: it answers the page that opened it and closes itself
+    await tap(1220, 80);
+    await until('a window opened by the page\'s script is shown', () => /okno$/.test(st().url) && T().n === 'okno', 10000);
+    await shot('window-over-page');
+    await until('it closed itself: the page that opened it is there again', () => /druga$/.test(st().url) && T().n === 'druga', 10000);
+    await stand.sleep(500);
+    check('and that page got the window\'s answer, without being loaded again', T().msg === 'zalogowano w okno' && T().m === mark, T());
+    // (one that does not close itself: "wstecz" closes it)
+    await tap(1220, 200);
+    await until('a window that stays', () => /okno-stoi$/.test(st().url) && T().n === 'okno-stoi', 10000);
+    app._web.send({ op: 'back' });
+    await until('"wstecz" closes it', () => /druga$/.test(st().url) && T().n === 'druga' && T().msg === 'zalogowano w okno-stoi', 10000);
+
+    // ---- redirects: the address that is reached is shown, and back leads before the chain
+    app._web.send({ op: 'nav', url: url + 'przez1' });
+    await until('a chain of redirects ends at its last address', () => /\/cel$/.test(st().url) && T().n === 'cel' && !st().loading, 10000);
+    app._web.send({ op: 'back' });
+    await until('back from it: the page before the chain', () => /druga$/.test(st().url) && T().n === 'druga', 10000);
+
+    // ---- the extension's line is lost while the engine runs: found again, nothing restarted
+    const up0 = Date.now();
+    dm().link.sock.destroy();
+    await stand.sleep(150);
+    check('the line is down', dm().engine.cdp.up === false, dm().engine.cdp.up);
+    await until('the extension connects again by itself', () => dm().engine.cdp.up === true, 8000);
+    console.log('     the line was down for ' + (Date.now() - up0) + ' ms');
+    app._web.send({ op: 'nav', url: url + 'po-przerwie' });
+    await until('and the browser is driven as before, in the same engine', () => T().n === 'po-przerwie' && dm().engine.child.pid === pid && !st().note, 10000);
+    app._web.send({ op: 'back' });
+    await until('back', () => T().n === 'druga');
 
     // ---- the settings over the page
     const mark2 = T().m;
@@ -145,6 +188,7 @@ const PAGE = (name) => '<!doctype html><meta charset=utf-8><meta name=viewport c
     await stand.until('the engine again', () => st().engine === 'ready' && st().live, 40000);
     await until('zoom 150 %: the same address, a narrower page', () => /druga$/.test(st().url) && Number(T().w) > 1100 && Number(T().w) < 1250, 15000);
     check('still without DevTools', !!dm().engine.native, dm().lastArgs.filter((a) => /debug/.test(a)));
+    check('the engine kept its cookies and the site\'s data over its start', T().ck === '1' && Number(T().ls) > 1, T());
     await tap(120 * 1.5, 80 * 1.5);
     await until('a tap lands where it should at 150 %', () => T().n === 'druga' && Number(T().tap) >= 1 || /druga$/.test(st().url));
     await shot('zoom-150');

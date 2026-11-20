@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.2.7
+
+- Przegląd nowego sposobu sterowania przeglądarką (0.2.6) na życzenie właściciela; `g21-browser` 0.1.54. Wszystko poniżej sprawdzone na stanowisku (prawdziwa aplikacja, demon i Chrome), nic w aucie.
+- Bez cichego powrotu do DevTools. Gdy rozszerzenie silnika się nie zgłosi, silnik jest uruchamiany jeszcze raz tak samo; dopiero po drugim niepowodzeniu ten start idzie z DevTools, a właściciel widzi to w linii obok adresu („tryb awaryjny: część stron może odmawiać (logowanie, serwisy wideo)"). Po pięciu minutach następny start znów próbuje bez DevTools i napis znika (`tools/sim/fallback.js`).
+- Połączenie rozszerzenia z demonem odzyskuje się samo, bez restartu Chrome: rozszerzenie próbuje dwa razy na sekundę, a alarm budzi je najpóźniej po pół minuty. Na stanowisku zerwane połączenie wróciło po 0,55 s – ten sam proces silnika, te same strony. Gdy trwa to dłużej niż 4 s, właściciel widzi „sterowanie stroną nie odpowiada, łączę ponownie"; dotyk i klawisze działają w tym czasie dalej (idą przez okno silnika, nie przez rozszerzenie).
+- Znaleziony błąd: dane połączenia (port i hasło) były skryptem rozszerzenia, a silnik trzyma kopię skryptów między uruchomieniami – po restarcie demona rozszerzenie pukałoby starym hasłem. Teraz są plikiem czytanym z dysku przy każdym łączeniu, a rozszerzenie dostaje przy każdym starcie własny numer wersji.
+- Okna otwierane przez strony (logowanie „przez Google/Apple/Facebook", linki do nowego okna) są teraz osobnym oknem nad stroną, a nie podmianą strony: okno może odpowiedzieć stronie, która je otworzyła, i samo się zamknąć; „wstecz" zamyka okno, które nie ma dokąd wrócić. Strona pod spodem zostaje nietknięta. Najwyżej trzy okna nad jedną stroną. (W trybie awaryjnym jak dawniej: adres okna otwiera się w stronie.)
+- „Wstecz" i „dalej" używają historii samej strony. Własne „wstecz" silnika pomija strony, na których niczego nie dotknięto, więc po wpisaniu nowego adresu przeskakiwało stronę tylko przeczytaną.
+- Ciasteczka i dane stron: silnik kończy pracę przez zamknięcie okien przez rozszerzenie i zapisuje wtedy profil. Zatrzymany sygnałem gubił ciasteczka z ostatnich ok. 30 s – także logowanie zrobione tuż przed zamknięciem widoku. Profil jest w `/var/opt/g21-browser/cache/profile` i zostaje między uruchomieniami i aktualizacjami; jest jeden (jak dotąd). Przy nagłym odcięciu zasilania może przepaść ostatnie pół minuty.
+- Rozszerzenie prosi tylko o: `tabs`, `webNavigation`, `downloads` (żeby anulować pobieranie), `alarms`. Bez dostępu do danych stron (`host_permissions`), bez `scripting`, bez interfejsu debugowania; nic z niego nie jest dostępne dla stron. Linia do demona: tylko `127.0.0.1`, hasło jednego uruchomienia (144 bity) w pliku czytelnym wyłącznie dla użytkownika silnika, wpuszczany jest tylko nadawca będący rozszerzeniem – strona internetowa nie może ani podać takiego nadawcy, ani poznać hasła.
+- Obraz bez zmian: `g21-wlframe` i pamięć współdzielona (nowy sposób działa wyłącznie z nimi). Pomiar na stanowisku, stuknięcie → pierwszy nowy obraz strony: 3 ms bez DevTools, 11 ms z DevTools (środkowa z 15); adres → załadowana strona: 81 ms w obu (`tools/sim/caps.js`).
+- Formaty i ochrona treści (to samo w obu sposobach): H.264, AAC, Opus tak; VP9 i AV1 tak, gdy reguła „lekkie wideo" jest wyłączona; HEVC nie. Widevine jest (programowy, poziom L3; sprzętowego nie ma), ClearKey jest, PlayReady nie ma. Nic nie jest odblokowywane ani obchodzone: serwis, który wymaga poziomu sprzętowego albo certyfikowanego urządzenia, może odmówić odtwarzania albo dać niższą jakość.
+- Serwisy bez DevTools: otwierają się strona logowania Google, YouTube (film gra po 170 s), Crunchyroll, Spotify (odtwarzacz w przeglądarce), Twitch, Netflix, Disney+. NIESPRAWDZONE: samo logowanie i odtwarzanie po zalogowaniu – wymagają kont właściciela, haseł tu nie wpisuję.
+
 ## 0.2.6
 
 - Właściciel, 2026-11-20: nie da się zalogować do Google z YouTube („Ta przeglądarka lub aplikacja może nie być bezpieczna", adres `signin/rejected`), Crunchyroll pokazuje „Coś poszło nie tak"; „przeglądarka ma działać tak, że wszystkie strony można na niej otworzyć".

@@ -373,6 +373,8 @@ var EN = {
     'silnik się zatrzymał: odśwież': 'the engine stopped: reload',
     'strona zużyła za dużo pamięci': 'the page used too much memory',
     'strona przestała działać: odśwież': 'the page stopped working: reload',
+    'tryb awaryjny: część stron może odmawiać (logowanie, serwisy wideo)': 'emergency mode: some pages may refuse (sign-in, video services)',
+    'sterowanie stroną nie odpowiada, łączę ponownie': 'page controls do not answer, connecting again',
     'zły adres': 'bad address'
 };
 
@@ -4195,12 +4197,14 @@ function buildWebFrame(width, height, web) {
     if (shown) {
         secure = /^https:/i.test(String(info.url));
         draw.icon(secure ? 'lock' : 'unlock', lay.url.x + 16, lay.url.y + 12, 2, secure ? HINT : MUTED);
-        title = String(info.title || '');
+        // (what the browser tool has to say for as long as it holds stands where the page's title does: the engine
+        // in its emergency way, or its controls not answering)
+        title = info.note ? tr(String(info.note)) : String(info.title || '');
         titleW = 0;
         if (title && title !== info.url) {
-            title = draw.fit(title, 3, Math.floor(lay.url.w * 0.36));
+            title = draw.fit(title, 3, Math.floor(lay.url.w * (info.note ? 0.6 : 0.36)));
             titleW = draw.textWidth(title, 3);
-            draw.text(title, lay.url.x + lay.url.w - 24 - titleW, lay.url.y + 18, 3, MUTED);
+            draw.text(title, lay.url.x + lay.url.w - 24 - titleW, lay.url.y + 18, 3, info.note ? ACCENT : MUTED);
         }
         urlW = lay.url.w - 60 - 24 - (titleW ? titleW + 28 : 0);
         draw.text(draw.fit(shown, 3, urlW), lay.url.x + 60, lay.url.y + 18, 3, INK);
