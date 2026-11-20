@@ -210,7 +210,7 @@ function claim() {
     if (st.claimed) return st.claiming || Promise.resolve(true);
     st.claimed = true;
     const t0 = Date.now();
-    st.claiming = keeperStart().then(function () { return sp.claim(); }).then(function () { st.claiming = null; log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); quietPlayer(); return true; },
+    st.claiming = keeperStart().then(function () { return sp.claim(); }).then(function () { st.claiming = null; log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); return true; },
         function (e) {
             st.claiming = null;
             st.claimed = false;
@@ -225,6 +225,15 @@ function claim() {
  * on what it had last (a RideTube film's sound). So the player is looked at twice after the claim and, if it
  * plays, stopped (the STOP button, as RideTube sends it). Later it is left alone: a film started in RideTube while
  * a stream of ours sounds is the owner's doing.
+ */
+/*
+ * NOT CALLED since 0.1.24. Car, 2026-11-20, read from the head unit while it happened: the daemon stood still right
+ * after "speakers claimed", every time since 0.1.18 (the log of each run ends with that line; 0.1.23 did not answer
+ * "status"; all its threads in futex_wait, no processor time used). This function is what ran there: it makes a
+ * second set of SOME/IP proxies (mediaout.js) in the process that already has speakers.js's, and the head unit's
+ * someip.node does not come back from that. So the first stream sounded (its writer was started before the claim and
+ * is a process of its own) and nothing after it did; with 0.1.22, where the writer starts after the claim, nothing
+ * sounded at all. If BMW's player has to be kept quiet, that must be done in another process.
  */
 let playerLook = null;
 function quietPlayer() {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.5
+
+- Właściciel, 2026-11-20 (`g21-audio` 0.1.23): dźwięk nie działa wcale. Odczyt z auta w trakcie: demon dźwięku stał w miejscu zaraz po wpisie „speakers claimed" – nie odpowiadał na „status", wszystkie jego wątki czekały (futex), zero czasu procesora. Tak samo kończy się log każdego uruchomienia od 0.1.18: po pierwszym przejęciu głośników nie ma już ani jednego wpisu aż do następnego startu jednostki.
+- Przyczyna: sprawdzanie odtwarzacza BMW zaraz po przejęciu głośników (dodane w 0.1.18, żeby zatrzymać odtwarzacz, gdyby sam zaczął grać). Tworzyło w procesie demona drugi zestaw połączeń SOME/IP obok tego, który przejmuje głośniki, i biblioteka jednostki z tego nie wracała. To jest właściwa przyczyna zgłoszeń „pierwszy dźwięk gra, po zmianie treści już nie" (0.1.18–0.1.21: pierwszy strumień grał, bo jego program zapisujący startował przed przejęciem i jest osobnym procesem; demon już nic więcej nie zrobił) oraz „dźwięk nie działa wcale" (0.1.22–0.1.23: program zapisujący startuje po przejęciu, więc nie wystartował nigdy).
+- `g21-audio` 0.1.24: to sprawdzanie nie jest już wywoływane. Reszta z 0.1.22–0.1.23 zostaje (własny strumień dla każdego modułu, głośniki dla tego, który gra). W aucie NIESPRAWDZONE po poprawce; przyczyna jest odczytana z auta, nie zgadnięta.
+
 ## 0.2.4
 
 - Właściciel, 2026-11-20: w aucie film nie urywa się, gdy przez 2 minuty niczego się nie dotyka – tylko po zminimalizowaniu aplikacji albo po zmianie na pełny ekran. Odmowa strumienia przez YouTube po 30–75 s, którą pokazało stanowisko (0.2.3), nie jest więc przyczyną w aucie. Na stanowisku minimalizacja i pełny ekran filmu nie psują (te same próby co w 0.2.3, ponownie); auto jest poza siecią, więc przyczyna NIE jest znana.
