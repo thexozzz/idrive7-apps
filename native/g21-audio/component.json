@@ -1,7 +1,7 @@
 {
   "id": "g21-audio",
   "kind": "tool",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "license": "GPL-3.0-or-later",
   "title": "G21 Audio",
   "description": "Dźwięk THEiPlay na głośnikach auta: strumień PCM przez SmartX (CarLifeMedia) i AudioManager BMW, z głośnością iDrive. Sterowanie przez /run/g21-audio/ctl.sock.",

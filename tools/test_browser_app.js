@@ -56,7 +56,8 @@ f.layout.webHits.forEach(function (h) { assert.ok(h.h >= 56 && h.w >= 64 && h.x 
 assert.ok(names.indexOf('app-exit') !== -1, '"Wyłącz aplikację" is on this screen too');
 // zoom at its ends
 assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 2 })).layout.webHits.every(function (h) { return h.name !== 'web-zoom-in'; }));
-assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).layout.webHits.every(function (h) { return h.name !== 'web-zoom-out'; }));
+assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 0.75 })).layout.webHits.every(function (h) { return h.name !== 'web-zoom-out'; }));
+assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).layout.webHits.some(function (h) { return h.name === 'web-zoom-out'; }), 'smaller than 100% can be chosen');
 // no daemon, engine being fetched, engine failed: no video, the way out stays
 [{ connected: false, engine: 'off' }, { connected: true, engine: 'downloading', pct: 37 }, { connected: true, engine: 'unpacking', pct: 80 }, { connected: true, engine: 'starting' },
     { connected: true, engine: 'failed', err: 'nie udało się pobrać silnika: sprawdź internet w aucie' }].forEach(function (st) {

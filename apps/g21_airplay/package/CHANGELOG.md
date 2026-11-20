@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.3
+
+- Właściciel, 2026-11-20: film w przeglądarce często kończy się komunikatem YouTube „Coś poszło nie tak" po zminimalizowaniu aplikacji albo po przejściu na pełny ekran; strony wydają się za niskie. Auto poza siecią, więc próby na stanowisku (prawdziwa aplikacja, prawdziwy demon przeglądarki, prawdziwy Chrome, film z YouTube): `tools/sim/video.js`.
+- Wynik prób: minimalizacja i powrót, pełny ekran i powrót, minimalizacja w pełnym ekranie – ten sam proces silnika, ta sama strona, film gra dalej. Komunikat „Coś poszło nie tak" pojawia się na stanowisku 30–75 s po starcie filmu także wtedy, gdy nic się nie robi; odtwarzacz YouTube podaje powód `ump.spsrejectfailure` (`HTML5_SPS_UMP_STATUS_REJECTED`): serwer YouTube odmawia tej przeglądarce dalszego strumienia. Nie zależy to od pełnego ekranu, od wersji mobilnej ani od reguły „lekkie wideo" (sprawdzone osobno). To zabezpieczenie YouTube, nie awaria silnika; nie jest obchodzone. Czy w aucie powód jest ten sam – NIE wiadomo.
+- `g21-browser` 0.1.51: powód podany przez odtwarzacz YouTube trafia do logu przeglądarki („player gave up: …"), więc log z auta rozstrzygnie. Powiększenie strony ma dwa stopnie poniżej 100 % (75 % i 88 %; „A−" na pasku i „Powiększenie" w ustawieniach): obszar strony ma 1796 × 548 punktów, szeroki i niski, a przy 75 % strona dostaje okno 2384 × 728.
+- `g21-audio` 0.1.23: gdy inne źródło zabierze głośniki (np. radio wybrane w menu BMW), dźwięk strony jest dalej odbierany w tempie zegara zamiast trafiać do urządzenia, którego nikt nie czyta. Wejście CarLife nie przyjmowało wtedy nic, program zapisujący czekał, a film za potokiem stawał. Głośniki nie są odbierane źródłu, które je wzięło, dopóki strona gra bez przerwy; po pauzie następny dźwięk bierze je od nowa.
+- Uwaga do „za niskich" stron: mobilny YouTube układa film na 72 % szerokości okna (1296 × 729 punktów przy oknie wysokim na 548), więc bez pełnego ekranu widać górną część filmu przy każdym powiększeniu. Wersja komputerowa (Ustawienia > Przeglądarka > Wersja mobilna: wył.) mieści film w oknie (768 × 432). Domyślne ustawienia bez zmian.
+- Stanowisko: `tools/sim/video.js` (film: minimalizacja, pełny ekran, długie odtwarzanie, ślad zdarzeń silnika) i `tools/sim/pcm_out.js` (program zapisujący w tempie zegara; urządzenie „null" ALSA przyjmuje wszystko naraz i film pędzi). W aucie NIESPRAWDZONE.
+
 ## 0.2.2
 
 - Właściciel, 2026-11-20: po włączeniu jednostki pierwszy dźwięk gra, ale po zatrzymaniu AirPlay i przejściu do przeglądarki już nie. Auto poza siecią, więc bez logu; przyczyna odczytana z kodu. Strumień dźwięku był jeden: dostawał go odtwarzacz, który poprosił przy swoim starcie, a następny mu go zabierał (0.1.21). Ten, któremu zabrano, pisał dalej do potoku, którego już nie było, i był niemy aż do własnego restartu – silnik przeglądarki żyje do 90 s po zamknięciu widoku (a od 0.2.1 także pod ustawieniami), odbiornik AirPlay tak długo, jak AirPlay jest włączony. Kto zagrał pierwszy, ten grał; drugi już nie, w obie strony.

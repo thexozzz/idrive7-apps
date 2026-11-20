@@ -545,7 +545,7 @@ async function testChain(base, eng) {
             assert.deepStrictEqual([s2.w, s2.h], [1776, 528]);
             const head2 = fs.readFileSync(d2.opts.ring).subarray(0, 16);
             assert.deepStrictEqual([head2.readUInt32LE(8), head2.readUInt32LE(12)], [1332, 396], 'the picture: width % 4, even height, 56% of the pixels');
-            assert.deepStrictEqual([1, 1.25, 1.5, 1.75, 2].map((z) => { const p = d.pageCss(1796, 548, z); return [1, 0.75, 0.5].every((q) => { const r = d.pageCss(1796, 548, z, q); return Number.isInteger(r.pw) && r.pw % 4 === 0 && Number.isInteger(r.ph) && r.ph % 2 === 0 && r.dw <= 1796 && r.dh <= 548 && r.dw > 1700 && r.dh > 500; }) && p.w > 0; }), [true, true, true, true, true]);
+            assert.deepStrictEqual([0.75, 0.875, 1, 1.25, 1.5, 1.75, 2].map((z) => { const p = d.pageCss(1796, 548, z); return [1, 0.75, 0.5].every((q) => { const r = d.pageCss(1796, 548, z, q); return Number.isInteger(r.pw) && r.pw % 4 === 0 && Number.isInteger(r.ph) && r.ph % 2 === 0 && r.dw <= 1796 && r.dh <= 548 && r.dw > 1700 && r.dh > 500; }) && p.w > 0; }), [true, true, true, true, true, true, true]);
             assert.strictEqual(s2.ask, '');
             // a player that goes full screen fills the page area and the picture keeps its size (the car's page area, zoom 1.5)
             c2.send({ op: 'nav', url: site + '/fs' });

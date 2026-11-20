@@ -47,7 +47,9 @@ const zlib = require('zlib');
 const SELF = 'g21-browser';
 const MAX_UID = 60000; // login.defs UID_MAX
 const MAINAPPS = [{ root: '/usr/lib/oap-mainapp', hmi: 'HmiMain3D' }, { root: '/usr/lib/oap-mainapp21', hmi: 'Hmi8' }];
-const ZOOMS = [1, 1.25, 1.5, 1.75, 2];
+// (below 1: more of a page on the screen, smaller. The page area is 1796 x 548: wide and low, and many pages are
+// laid out for a taller window. Owner, 2026-11-20: "strony są za niskie".)
+const ZOOMS = [0.75, 0.875, 1, 1.25, 1.5, 1.75, 2];
 const SEARCH = 'https://www.google.com/search?q=';
 
 function defaults() {
@@ -869,6 +871,12 @@ const LIGHT_VIDEO = '(function(){try{'
     + 'var mc=navigator.mediaCapabilities;if(mc&&mc.decodingInfo){var d=mc.decodingInfo.bind(mc);mc.decodingInfo=function(q){var v=q&&q.video;'
     + 'if(v&&!fits(String(v.contentType||"")+(v.height?"; height="+v.height:"")+(v.framerate?"; framerate="+Math.round(Number(v.framerate)||0):"")))return Promise.resolve({supported:false,smooth:false,powerEfficient:false});return d(q);};}'
     + '}catch(e){}})();';
+
+// (asked of a YouTube page: the reason its player kept since the last asking, "" when none; the first asking puts
+// the listener on the player)
+const PLAYER_WHY = '(function(){try{var p=document.querySelector("#movie_player");if(!p||!p.addEventListener)return "";if(p.__g21Why===undefined){p.__g21Why="";'
+    + 'p.addEventListener("onDetailedError",function(e){try{p.__g21Why=String(e&&e.errorCode||"?")+" ("+String(e&&e.messageKey||"")+") at "+Math.round((document.querySelector("video")||{}).currentTime||0)+" s of the film"}catch(x){}});}'
+    + 'var w=p.__g21Why;p.__g21Why="";return String(w||"")}catch(e){return ""}})()';
 
 // ---------------------------------------------------------------- chrome:// pages
 /*
@@ -2729,6 +2737,11 @@ Daemon.prototype.refresh = async function (e) {
         }
     }
     const cur = hst.entries[hst.currentIndex] || {};
+    // YouTube's player gives up with one sentence on the screen ("Coś poszło nie tak") whatever the reason. Its own
+    // reason is asked for and written to the log (a listener on the player, nothing of the page is changed): stand,
+    // 2026-11-20, a film ended 30 to 75 s after its start with "ump.spsrejectfailure" (YouTube's server refuses the
+    // stream to this browser), with or without full screen, and looked like a fault of the full screen.
+    if (/^https:\/\/([a-z0-9-]+\.)?youtube\.com\//.test(cur.url || '')) this.playerWhy(e);
     this.set({ url: cur.url || this.s.url, title: String(cur.title || '').slice(0, 120), back: hst.currentIndex > 0, fwd: hst.currentIndex < hst.entries.length - 1 });
     // is something of the page in full screen? (a player's own button, or the page's script)
     try {
@@ -2736,6 +2749,13 @@ Daemon.prototype.refresh = async function (e) {
         if (this.engine === e) await this.applyFs(e, !!(r && r.result && r.result.value === true));
     } catch (x) { /* the page is on its way somewhere else */ }
     if (!this.s.loading) this.remember(cur.url || '', cur.title || '');
+};
+Daemon.prototype.playerWhy = function (e) {
+    if (this.engine !== e || !e.session) return;
+    e.cdp.send('Runtime.evaluate', { expression: PLAYER_WHY, returnByValue: true }, e.session).then((r) => {
+        const why = r && r.result && typeof r.result.value === 'string' ? r.result.value : '';
+        if (why) this.log('player gave up: ' + why.slice(0, 200) + (/spsreject/i.test(why) ? ' (YouTube\'s server refused the stream to this browser)' : ''));
+    }, () => {});
 };
 Daemon.prototype.pageNote = function (e, text) {
     // (an app's reads of car signals that the car does not answer are not the page's fault and filled the log's
@@ -2793,6 +2813,8 @@ Daemon.prototype.onEvent = function (e, m) {
         });
         return;
     }
+    // (a player is taken down: on a YouTube page its reason is asked for, see playerWhy)
+    case 'Media.playerEventsAdded': if (/^https:\/\/([a-z0-9-]+\.)?youtube\.com\//.test(this.s.url || '') && JSON.stringify(p.events || '').indexOf('kWebMediaPlayerDestroyed') >= 0) setTimeout(() => this.playerWhy(e), 800); return;
     case 'Media.playerErrorsRaised': (p.errors || []).forEach((er) => this.pageNote(e, 'player error: ' + JSON.stringify(er).slice(0, 500))); return;
     case 'Media.playerMessagesLogged': (p.messages || []).forEach((ms) => { if (ms.level === 'error' || ms.level === 'warning') this.pageNote(e, 'player ' + ms.level + ': ' + ms.message); }); return;
     case 'Inspector.targetCrashed': if (m.sessionId === e.session) { this.log('page crashed'); this.set({ err: 'strona przestała działać: odśwież', loading: false }); } return;

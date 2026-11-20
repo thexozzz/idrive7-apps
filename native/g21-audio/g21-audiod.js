@@ -123,7 +123,18 @@ const st = { cur: null, holder: null, name: '', fifo: '', fd: -1, writer: null, 
 // (how long after the speakers are connected the device is opened: the order every try by hand on the car had,
 // 2026-11-20: connect, a moment, then the device. Tests set 0.)
 const SETTLE_MS = env.G21_AUDIO_SETTLE_MS !== undefined ? Number(env.G21_AUDIO_SETTLE_MS) || 0 : 300;
-[spCar, spMedia].filter(Boolean).forEach(function (x) { x.on('lost', function () { if (x !== sp) return; st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); }); });
+[spCar, spMedia].filter(Boolean).forEach(function (x) { x.on('lost', function () {
+    if (x !== sp) return;
+    st.lost += 1; st.claimed = false;
+    log('speakers lost: another source took them');
+    // Its writer would go on writing into a device nobody reads: the CarLife input then takes nothing, the writer
+    // waits for it, and the player behind the pipe stops (a film's page: "coś poszło nie tak"). So the stream is one
+    // of the waiting ones again, read by this daemon at the pace of the clock. It does not take the speakers back
+    // from whoever has them now (the radio the owner chose) while it goes on sounding: only after it has been
+    // silent once (paused, ended) does its next sound claim them anew.
+    const s = st.cur;
+    if (s && st.writer && !st.moving) { s.yield = true; s.loudAt = Date.now(); park('another source took the speakers'); }
+}); });
 function fallBack(why) {
     if (!onMedia()) return Promise.resolve();
     const old = sp, was = st.claimed;
@@ -267,6 +278,7 @@ function readWaiting(s, now) {
     }
     if (loud) { if (!s.loudSince) s.loudSince = now; s.loudAt = now; }
     else if (s.loudSince && now - s.loudAt > 400) s.loudSince = 0;
+    if (s.yield && now - s.loudAt > 1500) s.yield = false;
 }
 // the writer is told to end and waited for (SIGTERM: it leaves between two writes; SIGKILL if it does not)
 function stopWriter() {
@@ -321,7 +333,7 @@ function tick() {
         const s = streams[i];
         if (s === st.cur && st.writer) continue;      // its writer reads it
         readWaiting(s, now);
-        if (!next && s !== st.cur && s.loudSince && now - s.loudSince >= 40 && now >= s.retryAt) next = s;
+        if (!next && s !== st.cur && !s.yield && s.loudSince && now - s.loudSince >= 40 && now >= s.retryAt) next = s;
     }
     if (st.moving) return;
     if (st.cur && st.writer) {
@@ -580,7 +592,7 @@ function openStream(c, m) {
         // held open for reading and writing: the FIFO lives across the player's own opens and closes
         fd = fs.openSync(fifo, fs.constants.O_RDWR | fs.constants.O_NONBLOCK);
     } catch (e) { try { fs.unlinkSync(fifo); } catch (x) { /* none */ } return { ev: 'open', ok: false, err: e.message }; }
-    streams.push({ holder: c, name: name, fifo: fifo, fd: fd, readAt: Date.now(), odd: 0, loudSince: 0, loudAt: 0, retryAt: 0, replaced: false });
+    streams.push({ holder: c, name: name, fifo: fifo, fd: fd, readAt: Date.now(), odd: 0, loudSince: 0, loudAt: 0, retryAt: 0, replaced: false, yield: false });
     if (!watch) watch = setInterval(tick, 20);
     log('stream "' + name + '" open for uid ' + uid + ': ' + fifo + ' -> ' + device() + (streams.length > 1 ? ' (beside ' + streams.slice(0, -1).map(function (x) { return '"' + x.name + '"'; }).join(', ') + ')' : ''));
     return { ev: 'open', ok: true, fifo: fifo, format: 's16le', rate: 48000, channels: 2 };

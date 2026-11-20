@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.2',
+        version: (this._packageJson && this._packageJson.version) || '0.2.3',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.2') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.3') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -6169,7 +6169,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     }
     if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag' || name === 'aset-video' || name === 'aset-engine' || name === 'aset-frames' || name === 'aset-mobile') {
         var selfSet = this;
-        var ZOOMS = [1, 1.25, 1.5, 1.75, 2];
+        var ZOOMS = menuDraw.WEB_ZOOMS;
         s = this._web ? this._web.state() : null;
         pol = s && s.connected ? s.pol : null;
         if (!pol) {

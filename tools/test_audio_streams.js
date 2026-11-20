@@ -65,7 +65,7 @@ const count = (f, re) => lines(f).filter((l) => re.test(l)).length;
 let dlog = '';
 const daemon = cp.spawn(process.execPath, [path.join(root, 'native', 'g21-audio', 'g21-audiod.js')], { stdio: ['ignore', 'pipe', 'pipe'], env: Object.assign({}, process.env, {
     G21_AUDIO_RUN: run, G21_AUDIO_ROOT: state, G21_AUDIO_SPEAKERS: path.join(root, 'tools', 'fake_speakers.js'), G21_AUDIO_DEVICE: 'null', G21_AUDIO_NOSETUID: '1',
-    G21_AUDIO_OUT: fakeOut, G21_AUDIO_SETTLE_MS: '0', G21_FAKE_SPEAKERS_LOG: spLog, FAKE_OUT_LOG: outLog }) });
+    G21_AUDIO_OUT: fakeOut, G21_AUDIO_SETTLE_MS: '0', G21_FAKE_SPEAKERS_LOG: spLog, G21_FAKE_SPEAKERS_LOSE: path.join(base, 'lose'), FAKE_OUT_LOG: outLog }) });
 daemon.stdout.on('data', (d) => { dlog += d; });
 daemon.stderr.on('data', (d) => { dlog += d; });
 const sock = path.join(run, 'ctl.sock');
@@ -181,6 +181,24 @@ async function until(what, fn, ms) {
     pb2.mode = 'loud';
     await has('chromium');
     console.log('ok streams: a player that opens its stream again replaces its old one');
+
+    // ---- 8b. another source takes the speakers (the owner picks the radio) while a film sounds: the film's sound is
+    // read on at the clock's pace (its page does not stall), nothing is taken back while it sounds, and after a
+    // pause its next sound claims the speakers anew
+    const rel = count(spLog, /^release/), cl = count(spLog, /^claim/);
+    fs.writeFileSync(path.join(base, 'lose'), '');
+    await until('the stream waits again after the speakers were lost', async () => { const s = await status(); return s.stream === null && !s.claimed; });
+    const sentL = pb2.sent;
+    await sleep(2500);
+    assert.ok(pb2.sent - sentL > 350000 && pb2.sent - sentL < 620000, 'the player keeps its pace unheard (' + (pb2.sent - sentL) + ' bytes in 2.5 s)');
+    assert.strictEqual((await status()).stream, null, 'the speakers are not taken back while it goes on sounding');
+    assert.strictEqual(count(spLog, /^release/), rel, 'and nothing is "given back" over the source that has them');
+    assert.strictEqual(count(spLog, /^claim/), cl);
+    pb2.mode = 'zero';
+    await sleep(2000);
+    pb2.mode = 'loud';
+    await has('chromium');
+    console.log('ok streams: speakers lost to another source: the player keeps its pace, nothing is taken back until it has paused');
 
     pa.end(); pb.end(); pb2.end();
     const gone = new Promise((r) => daemon.on('exit', r));

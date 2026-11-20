@@ -30,3 +30,6 @@ node tools/sim/build_time.js [repo]     # czas budowania jednej klatki (bez stan
 
 `SIM_OUT=<katalog>` kopiuje zrzuty PNG. Zrzut zawiera prawdziwy obraz strony z pliku wideo demona.
 Testy samego silnika (karty, rozmiary, historia): `tools/browser-bench/tabs.js`.
+
+Film w przeglądarce (potrzebny internet; domyślnie film z YouTube): `sh tools/sim/run.sh video.js [adres] [desktop] [long|fslong] [nohide] [trace] [anyvideo] [zoom=0.75]`.
+Dźwięk obok stanowiska: prawdziwy `g21-audiod.js` z `G21_AUDIO_OUT` wskazującym `tools/sim/pcm_out.js` (czyta w tempie zegara).

@@ -3872,7 +3872,7 @@ function drawBoxPreview(draw, lay, preview, selectedItem) {
 // g21-browserd's decoder writes (/dev/shm/mgu-video-g21browser), drawn by the renderer (op 19)
 // exactly as large as the page area, so a touch at (x, y) below the toolbar is the page's pixel.
 var WEB_BAR_H = 84;
-var WEB_ZOOMS = [1, 1.25, 1.5, 1.75, 2];
+var WEB_ZOOMS = [0.75, 0.875, 1, 1.25, 1.5, 1.75, 2];
 
 /*
  * Everything sits inside CONTENT: mgu-renderd lets an app claim touch only there (the HMI keeps its side
