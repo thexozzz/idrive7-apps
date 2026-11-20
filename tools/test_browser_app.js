@@ -147,7 +147,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_gpuHint', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -178,6 +178,25 @@ function glueApp() {
     g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 1500 } });
     g.sent.length = 0; g._onAppsChoice('aset-memory');
     assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [2048], 'after 1500 MB comes 2048 MB, the default');
+    // the GPU mode's switch: the first press only warns, the second within eight seconds switches on; off at once
+    g.setState({ gpu: { on: false, now: 'off', why: '', hung: '' } });
+    g.sent.length = 0;
+    g._onAppsChoice('aset-gpu');
+    assert.deepStrictEqual(g.sent, [], 'one press does not switch the GPU mode on');
+    assert.ok(/zrestartować jednostkę/.test(g._gpuHint(g._web.state())), 'it says what may happen: ' + g._gpuHint(g._web.state()));
+    g._onAppsChoice('aset-gpu');
+    assert.deepStrictEqual(g.sent, [{ op: 'gpu', on: true }], 'the second press does');
+    g.setState({ gpu: { on: true, now: 'gpu', why: '', hung: '' } });
+    assert.strictEqual(g._gpuHint(g._web.state()), 'włączony: rysuje układ graficzny');
+    g.setState({ gpu: { on: true, now: 'cpu', why: '', hung: '' } });
+    assert.strictEqual(g._gpuHint(g._web.state()), 'włączony, ale silnik rysuje procesorem', 'the engine gave the chip up by itself: said');
+    g.sent.length = 0;
+    g._onAppsChoice('aset-gpu');
+    assert.deepStrictEqual(g.sent, [{ op: 'gpu', on: false }], 'off with one press');
+    g.setState({ gpu: { on: false, now: 'off', why: 'brak: renderD128', hung: '' } });
+    assert.strictEqual(g._gpuHint(g._web.state()), 'brak: renderD128', 'why it cannot be tried');
+    g.setState({ gpu: { on: false, now: 'off', why: '', hung: '2026-11-20T10:00:00' } });
+    assert.ok(/przerwana restartem/.test(g._gpuHint(g._web.state())), 'a try that ended with the unit going down is said');
     // cluster and HUD for the page
     // (the panel "Ekrany": its tiles are the two switches)
     g._onAppsChoice('web-pick-cluster');

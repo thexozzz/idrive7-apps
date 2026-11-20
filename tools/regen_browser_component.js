@@ -7,8 +7,8 @@ var path = require('path');
 
 var root = path.join(__dirname, '..', 'native', 'g21-browser');
 var file = path.join(root, 'component.json');
-var skip = { 'component.json': true, 'g21-browser.service': true, 'g21-webframe.c': true, 'g21-wlframe.c': true, 'build-webframe.sh': true, 'build-engine.js': true, 'build-sandbox.sh': true };
-var exec = { 'g21-webframe': true, 'g21-wlframe': true, 'check.sh': true, 'g21-chrome-sandbox': true, 'gputest/ffmpeg-va': true };
+var skip = { 'component.json': true, 'g21-browser.service': true, 'g21-webframe.c': true, 'g21-wlframe.c': true, 'build-webframe.sh': true, 'build-engine.js': true, 'build-sandbox.sh': true, 'build-gpu.sh': true, 'gpu/egl_shim.c': true, 'gpu/fake_egl.c': true, 'gpu/egl_pbuffer_test.c': true, 'gpu/README.md': true };
+var exec = { 'g21-webframe': true, 'g21-wlframe': true, 'g21-wlframe-gpu': true, 'check.sh': true, 'g21-chrome-sandbox': true, 'gputest/ffmpeg-va': true };
 var old = {};
 try { old = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) { old = {}; }
 

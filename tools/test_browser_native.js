@@ -90,16 +90,16 @@ function ext(port, word, origin, onAsk) {
     // a window the page opens: over the page, as the page's own; gone: the page again
     e.say({ ev: 'new', tab: 8, opener: 7, url: 'https://example.org/sign-in' });
     e.say({ ev: 'tab', tab: 8, status: 'complete', url: 'https://example.org/sign-in', title: 'Sign in' });
-    await sleep(40);
+    await sleep(150);
     assert.deepStrictEqual([(await cdp.send('Target.getTargets', {})).targetInfos.map((x) => x.targetId + ' ' + x.url).join(), cdp.top(7), cdp.root(8)], ['tab:7 https://example.org/sign-in', 8, 7], 'one page for the daemon, the window on top of it');
     e.say({ ev: 'gone', tab: 8 });
     // (a tab nobody's page opened and the daemon did not ask for, one the engine brings back by itself: closed, not told)
     e.say({ ev: 'new', tab: 9, opener: 0, url: 'https://example.org/other' });
-    await sleep(40);
+    await sleep(150);
     assert.ok(e.asked.some((m) => m.op === 'close' && m.tab === 9), 'closed');
     e.say({ ev: 'gone', tab: 9 });
     e.say({ ev: 'fs', tab: 7, on: true, top: true });
-    await sleep(80);
+    await sleep(250);
     assert.deepStrictEqual(events.map((m) => m.method + (m.sessionId ? ' ' + m.sessionId : '')), ['Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameNavigated tab:7',
         'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Page.navigatedWithinDocument tab:7',
         'Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7',
@@ -176,6 +176,43 @@ function ext(port, word, origin, onAsk) {
     const old = d.Daemon.prototype.engineArgs.call(self, { profile: '/p', kind: 'chrome', major: '153' }, 'https://example.org/', true);
     assert.ok(old.indexOf('--remote-debugging-pipe') >= 0 && old.indexOf('--disable-extensions') >= 0 && !old.some((a) => /^--load-extension/.test(a)), 'rule "control": "devtools": as before');
     assert.strictEqual(d.POLICY_DEFAULT.control, 'native');
+    // the GPU mode: by hand, never kept, nothing tried when something is missing, its marker
+    {
+        const os = require('os');
+        const base = fs.mkdtempSync(path.join(os.tmpdir(), 'g21gpu-'));
+        const unit = path.join(base, 'unit'), state = path.join(base, 'state'), run = path.join(base, 'run');
+        [unit, path.join(unit, 'dri'), state, run].forEach((x) => fs.mkdirSync(x));
+        const need = ['libEGL.so.1', 'libGLESv2.so.2', 'libgbm.so.1', 'libglapi.so.0', 'libwayland-client.so.0', 'libwayland-server.so.0', 'libffi.so.6', 'dri/i965_dri.so'];
+        const node = path.join(base, 'renderD128'), shim = path.join(base, 'shim.so'), wl = path.join(base, 'wl-gpu');
+        const g = Object.create(d.Daemon.prototype);
+        const said = [];
+        Object.assign(g, { opts: { unitLib: unit, renderNode: node, gpuShim: shim, wlframeGpu: wl, stateDir: state, runDir: run, noSetuid: true }, policy: () => d.POLICY_DEFAULT, log: (x) => said.push(x), push: () => {}, s: { url: '' }, want: null });
+        assert.ok(g.gpuNeeds().length >= 10, 'on a machine without the car\'s graphics everything is missing');
+        await g.gpuSet(true);
+        assert.ok(!g.gpuWant && /^brak: /.test(g.gpuWhy) && said.some((x) => /gpu: not tried, missing/.test(x)), 'nothing is tried, and it is said why: ' + g.gpuWhy);
+        need.forEach((n) => fs.writeFileSync(path.join(unit, n), ''));
+        [node, shim, wl].forEach((x) => fs.writeFileSync(x, ''));
+        assert.deepStrictEqual(g.gpuNeeds(), [], 'with the unit\'s libraries, the render node and our two files it can be tried');
+        await g.gpuSet(true);
+        assert.ok(g.gpuWant === true && !g.gpuWhy, 'switched on (no engine runs: nothing is started)');
+        if (process.platform !== 'win32') {
+            const libs = g.gpuLibs();
+            assert.strictEqual(fs.readlinkSync(path.join(libs, 'libEGL.so.1')), shim, 'our shim is the engine\'s libEGL.so.1');
+            assert.strictEqual(fs.readlinkSync(path.join(libs, 'libgbm.so.1')), path.join(unit, 'libgbm.so.1'), 'the unit\'s own libgbm, not ours');
+            assert.ok(!fs.existsSync(path.join(libs, 'libc.so.6')) && fs.readdirSync(libs).length === 7, 'and nothing else of the unit\'s: ' + fs.readdirSync(libs).join(' '));
+        }
+        g.gpuMark(true);
+        assert.ok(fs.existsSync(path.join(state, 'gpu-trial')), 'the marker is written before the chip is touched');
+        g.gpuMark(false);
+        assert.ok(!fs.existsSync(path.join(state, 'gpu-trial')), 'and removed when the try ended in order');
+        const ga = d.Daemon.prototype.engineArgs.call(Object.assign({}, self, { native: true, gpu: true }), { profile: '/p', kind: 'chrome', major: '153' }, 'https://example.org/', true);
+        assert.ok(ga.indexOf('--disable-gpu') < 0 && ga.indexOf('--use-angle=gles-egl') > 0 && ga.indexOf('--use-gl=angle') > 0 && ga.indexOf('--disable-gpu-sandbox') > 0 && ga.indexOf('--no-sandbox') < 0, 'the engine on the unit\'s EGL; only the graphics process without its sandbox: ' + ga.filter((x) => /gpu|angle|sandbox|use-gl/.test(x)).join(' '));
+        assert.ok(args.indexOf('--disable-gpu') >= 0 && !args.some((x) => /use-angle/.test(x)), 'without the mode: on the processor, as always');
+        await g.gpuSet(false);
+        assert.strictEqual(g.gpuWant, false);
+        fs.rmSync(base, { recursive: true, force: true });
+    }
+    console.log('ok native: the GPU mode is tried only when all it needs is there, by hand; its library folder, marker and arguments');
     console.log('ok native: the extension as shipped; the engine\'s arguments with and without DevTools');
 
     cdp.close();

@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.9',
+        version: (this._packageJson && this._packageJson.version) || '0.2.10',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.9') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.10') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5491,6 +5491,50 @@ AirPlayApp.prototype._onWebTube = function (id) {
 
 // Where a page's full screen is drawn on the centre screen: the window of Ustawienia > Pozycja, as everything
 // else THEiPlay shows there; the whole screen when that window is not usable.
+// "Układ graficzny (próba)": what the browser tool says about its GPU mode. It is a trial that can take the head
+// unit down (it restarts by itself, on the processor again), so the first press only says so; a second one within
+// eight seconds switches it on. Off is at once.
+AirPlayApp.prototype._gpuHint = function (s) {
+    var g = s && s.connected ? s.gpu : null;
+    if (!g) {
+        return '—';
+    }
+    if (this._gpuAsk && Date.now() - this._gpuAsk < 8000 && !g.on) {
+        return 'może zrestartować jednostkę: naciśnij ponownie';
+    }
+    if (g.on) {
+        return g.now === 'gpu' ? 'włączony: rysuje układ graficzny' : (g.now === 'cpu' ? 'włączony, ale silnik rysuje procesorem' : 'włączony (do restartu narzędzia)');
+    }
+    if (g.why) {
+        return g.why;
+    }
+    return g.hung ? 'wyłączony: ostatnia próba przerwana restartem' : 'wyłączony';
+};
+
+AirPlayApp.prototype._gpuPress = function () {
+    var self = this;
+    var s = this._web ? this._web.state() : null;
+    var g = s && s.connected ? s.gpu : null;
+    if (!g) {
+        return;
+    }
+    if (g.on) {
+        this._gpuAsk = 0;
+        this._web.send({ op: 'gpu', on: false });
+        return;
+    }
+    if (!this._gpuAsk || Date.now() - this._gpuAsk >= 8000) {
+        this._gpuAsk = Date.now();
+        noteStart('gpu: asked once');
+        this._paintApps();
+        setTimeout(function () { self._paintApps(); }, 8100);
+        return;
+    }
+    this._gpuAsk = 0;
+    noteStart('gpu: switched on by the owner');
+    this._web.send({ op: 'gpu', on: true });
+};
+
 AirPlayApp.prototype._webFsBox = function () {
     var scr = this._menu && this._menu.webScreen ? this._menu.webScreen() : { w: 1920, h: 720 };
     var box = this._settings && this._settings.picture ? this._settings.picture('central') : null;
@@ -5653,6 +5697,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-diag', pol ? (pol.carDiag === 'off' ? 'wyłączona' : 'odczyt ze sterowników') : '—');
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
+    m.setItemHint('aset-gpu', this._gpuHint(s));
     if (typeof m.repaint === 'function') {
         m.repaint();
     }
@@ -6211,6 +6256,10 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
                 }
             });
         }
+        return true;
+    }
+    if (name === 'aset-gpu') {
+        this._gpuPress();
         return true;
     }
     if (name === 'aset-picture' || name === 'aset-sandbox' || name === 'aset-memory') {

@@ -61,6 +61,14 @@ To rozwiązuje oba powody, dla których nasz silnik rysuje procesorem (docs/ai/B
    - siatka bezpieczeństwa jak wyżej, obowiązkowo.
 3. **Nie przenosimy:** własnych sterowników GPU, wyłączania izolacji witryn, startu bez piaskownicy.
 
+## Stan wdrożenia (g21-browser 0.1.57)
+
+Punkt 2 jest wdrożony jako tryb eksperymentalny, włączany ręcznie w Ustawienia > Zaawansowane > „Układ graficzny (próba)":
+`gpu/egl_shim.c` (bez zmian), `g21-wlframe-gpu` (wl_drm, odczyt przez EGL jednostki), siatka bezpieczeństwa w `g21-browserd.js`
+(„The GPU mode"). Nasz silnik ma tryb `gles-egl`, a `gbm_bo_get_fd_for_plane` jest dla niego symbolem słabym (sprawdzone na
+binarce). **Nie był uruchomiony na żadnym układzie graficznym.** Po pierwszej próbie w aucie czytać w logu przeglądarki
+wiersze `gpu:`, `egl-shim:` i `wlframe: frames:`.
+
 ## Ryzyko i czego nie wiadomo
 
 - Tryb GPU wymaga prób w aucie; na stanowisku nie ma tego układu ani jądra. Błąd w tej warstwie może zawiesić HMI do

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.10
+
+- Tryb GPU przeglądarki, EKSPERYMENTALNY (`g21-browser` 0.1.57; właściciel: „Tak, wdrażaj"). Ustawienia > Zaawansowane > „Układ graficzny (próba)". NIGDZIE NIESPRAWDZONY: na stanowisku nie ma układu graficznego auta, więc pierwszą próbą jest auto właściciela.
+- Jak: droga z projektu Vizualyse (`vizualyse-chromium`), jedyna znana z działania w aucie (docs/11). Silnik rysuje przez ANGLE w trybie GLES na WŁASNYCH bibliotekach jednostki (Mesa 19, sterownik `i965` – te, których używa BMW); żaden sterownik nie jest dowożony (ich własny zawiesił jądro jednostki i gasił ekran przy każdym starcie). `gpu/libEGL.so.1` to ich `egl_shim.c` bez zmian (GPL-3.0, Yousaf Khan): wyświetlacz na węźle `renderD128` przez GBM i powierzchnie, których Mesa 19 nie ma. Klatki silnika są wtedy buforami układu; nowy `g21-wlframe-gpu` przyjmuje je (wl_drm) i odczytuje przez EGL jednostki do pliku wideo, tylko zmienioną część obrazu.
+- Siatka bezpieczeństwa: włączany ręcznie (pierwsze naciśnięcie ostrzega, drugie w ciągu 8 s włącza), NIGDY nie zapamiętywany – każdy start narzędzia jest na procesorze, więc jednostka, która się zawiesi i zrestartuje, wraca bez trybu GPU. Znacznik `state/gpu-trial` jest zapisywany przed dotknięciem układu i usuwany po 45 s pracy albo po zwykłym zatrzymaniu; znaleziony przy starcie oznacza próbę przerwaną restartem (log i pozycja w ustawieniach to mówią). Gdy czegoś brakuje (węzeł, biblioteka jednostki, grupa `video`, nasze dwa pliki), próby nie ma i pozycja mówi, czego brak. Gdy silnik sam skończy pracę w tym trybie, tryb się wyłącza.
+- Co ustawienie pokazuje: „włączony: rysuje układ graficzny" (klatki przychodzą z układu), „włączony, ale silnik rysuje procesorem" (proces graficzny silnika sam zrezygnował z układu – powód jest w logu, wiersze `gpu:` i `egl-shim:`).
+- Zabezpieczenia w tym trybie: proces graficzny silnika działa bez swojej piaskownicy (musi ładować biblioteki jednostki z miejsc, których piaskownica nie pozwala otworzyć); procesy stron zachowują swoją. Silnik i jego okno działają w grupie `video`.
+- Bez zmian, gdy tryb jest wyłączony (stanowisko: te same testy co dotąd; stuknięcie → obraz 3 ms). Nowe testy: lista potrzeb, folder bibliotek, znacznik, argumenty silnika, dwa naciśnięcia w aplikacji; test powierzchni biblioteki pośredniczącej przy każdym budowaniu (`build-gpu.sh`).
+
 ## 0.2.9
 
 - Błąd znaleziony przy sprawdzaniu „Obrazu stron" w nowym sposobie sterowania (`g21-browser` 0.1.56): przy każdym ponownym starcie silnika (zmiana powiększenia, „Obraz stron", start po bezczynności) Chrome sam przywracał kartę z poprzedniego uruchomienia i stawiał ją na wierzchu. Ekran pokazywał starą stronę w starej skali, a dotyk i polecenia szły do innej karty. Teraz przy starcie zostaje jedna karta – ta z adresem, z którym silnik wystartował – a karty przywracane przez silnik są zamykane. Po tej poprawce „Obraz stron" 75 % i 50 % działa także bez DevTools (stanowisko: strona widzi swój pełny układ, stuknięcie trafia).

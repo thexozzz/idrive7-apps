@@ -70,7 +70,9 @@ function defaults() {
         libDir: env.G21_BROWSER_LIB || path.join(here, 'lib'),
         fontsDir: path.join(here, 'fonts'),
         webframe: path.join(here, 'g21-webframe'),
-        wlframe: path.join(here, 'g21-wlframe'),      // the engine's window drawn straight into the video file (rule "frames")
+        wlframe: path.join(here, 'g21-wlframe'),
+        // the GPU mode: the window that reads the chip's buffers, the EGL shim, the unit's own libraries and render node
+        wlframeGpu: path.join(here, 'g21-wlframe-gpu'), gpuShim: path.join(here, 'gpu', 'libEGL.so.1'), unitLib: env.G21_BROWSER_UNIT_LIB || '/usr/lib', renderNode: env.G21_BROWSER_RENDER_NODE || '/dev/dri/renderD128',      // the engine's window drawn straight into the video file (rule "frames")
         // THEiPlay Player: the decoder, the stream fetcher, and what it borrows from two other tools
         filmDecoder: env.G21_BROWSER_FILM_DECODER || path.join(here, 'gputest', 'ffmpeg-va'),
         filmHelper: path.join(here, 'g21-film.py'),
@@ -1067,6 +1069,7 @@ Daemon.prototype.push = function (force) {
     const own = start && /^chrome:\/\/[a-z0-9-]+$/.test(String(s.title || '')) ? s.title : '';
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '', note: this.note || '',
+        gpu: { on: !!this.gpuWant, now: this.engine && this.gpu ? (this.gpuFrames === 'gpu' ? 'gpu' : (this.gpuFrames === 'memory' ? 'cpu' : 'starting')) : 'off', why: this.gpuWhy || '', hung: this.gpuHung || '' },
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
             homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile, frames: this.policy().frames, framesNow: this.engine ? (this.direct ? 'direct' : 'cast') : '' }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
@@ -1336,6 +1339,7 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: Object.assign(sysInfo(), { gputest: this.gpuText || '' }) }); return; }
     if (m.op === 'gputest') { this.gpuTest(); return; }
     if (m.op === 'restart-services') { this.restartServices(); return; }
+    if (m.op === 'gpu') { await this.gpuSet(m.on); return; }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -2128,8 +2132,8 @@ Daemon.prototype.startFrame = function () {
     if (['601', '709', 'full'].indexOf(colour) < 0) colour = '601';
     try { fs.unlinkSync(this.opts.ring); } catch (e) { /* none */ }
     try { fs.unlinkSync(this.opts.ring + '.ring'); } catch (e) { /* none */ }
-    const how = Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'ignore'] });
-    const child = direct && css ? cp.spawn(this.opts.wlframe, [this.opts.ring, colour, this.wlSock, String(css.pw), String(css.ph), String(this.frameFps())].concat(this.native ? ['input'] : []), how) : cp.spawn(this.opts.webframe, [this.opts.ring, colour], how);
+    const how = Object.assign(this.gpu ? this.gpuIds() : this.ids(), { cwd: '/', env: this.gpu ? { LIBGL_DRIVERS_PATH: path.join(this.opts.unitLib, 'dri'), MESA_GLSL_CACHE_DISABLE: '1' } : {}, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = direct && css ? cp.spawn(this.gpu ? this.opts.wlframeGpu : this.opts.wlframe, [this.opts.ring, colour, this.wlSock, String(css.pw), String(css.ph), String(this.frameFps())].concat(this.native ? ['input'] : [], this.gpu ? ['gpu', this.opts.renderNode, this.opts.unitLib] : []), how) : cp.spawn(this.opts.webframe, [this.opts.ring, colour], how);
     child.g21wl = !!(direct && css);
     this.frameSeen = false;
     this.frame = child;
@@ -2150,7 +2154,12 @@ Daemon.prototype.startFrame = function () {
             else if (l[0] === 'f') { this.frameSeen = true; if (!child.g21wl) this.perfCast(Number(l[2])); if (!this.s.live) this.set({ live: true }); this.frameDone(); }
             else if (l[0] === 's') this.perfFrames({ n: Number(l[1]) || 0, ms: Number(l[2]) || 0, med: Number(l[3]) || 0, p95: Number(l[4]) || 0, max: Number(l[5]) || 0, us: Number(l[6]) || 0, pct: Number(l[7]) || 0 });
             else if (l[0] === 'm') this.perf.tapMs = Math.round(Number(l[1]) / 1000);
-            else if (l[0] === 'c') this.log('wlframe: ' + l.slice(1).join(' '));
+            else if (l[0] === 'c') {
+                this.log('wlframe: ' + l.slice(1).join(' '));
+                // (the engine's frames come from the chip, or from memory: in the GPU mode the second means its graphics
+                // process gave the chip up by itself)
+                if (l[1] === 'frames:') { this.gpuFrames = l[2] || ''; this.push(true); }
+            }
             else if (l[0] === 'e') {
                 const what = l.slice(1).join(' ');
                 // The engine sent a picture of another size and the decoder could not put a new video file in place of the
@@ -2335,6 +2344,8 @@ function pageCss(w, h, z, q) {
 }
 Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
     let a = Daemon.prototype.engineArgs2.call(this, dirs, url, sandbox);
+    // the GPU mode: ANGLE on the unit's EGL (the shim), the pages rastered on the chip; no sandbox for the graphics process
+    if (this.gpu) a = a.filter((x) => x !== '--disable-gpu' && x !== '--disable-software-rasterizer').concat(['--use-gl=angle', '--use-angle=gles-egl', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-gpu-sandbox']);
     // without DevTools: no debugging pipe, and the one extension that stands in for it
     if (this.native && this.extDir) a = a.filter((x) => x !== '--remote-debugging-pipe' && x !== '--disable-extensions' && x !== '--disable-component-extensions-with-background-pages').concat(['--load-extension=' + this.extDir, '--disable-extensions-except=' + this.extDir]);
     this.lastArgs = a.slice(); this.lastSandbox = !!sandbox; return a; };
@@ -2497,6 +2508,12 @@ Daemon.prototype.startEngine2 = async function (url) {
      * once and kept; the proxy lets the engine reach it. If the extension does not come, this start goes on with
      * DevTools, and so does every later one until the tool starts again (nativeFailed).
      */
+    this.gpu = !!this.gpuWant && !!this.direct && dirs.kind === 'chrome' && this.gpuNeeds().length === 0;
+    this.gpuFrames = '';
+    if (this.gpu) {
+        try { this.gpuDir = this.gpuLibs(); this.gpuMark(true); this.log('gpu: this start is in the GPU mode (the unit\'s Mesa on ' + this.opts.renderNode + '); state/gpu-trial is written'); }
+        catch (x) { this.log('gpu: ' + x.message + ': on the processor'); this.gpu = false; }
+    }
     // (a start without DevTools that failed is tried again five minutes later, not never)
     if (this.nativeFailed && Date.now() - (this.nativeFailedAt || 0) > 300000) this.nativeFailed = false;
     const wantNative = !!this.direct && (this.opts.control || this.policy().control) !== 'devtools';
@@ -2563,13 +2580,88 @@ Daemon.prototype.startEngine2 = async function (url) {
             }
         }
     }
-    this.log('engine up: ' + e.product + (sandbox ? (this.helper ? ', sandbox (setuid helper beside the engine)' : ', sandbox') : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
+    if (this.gpu) {
+        // it ran with the chip for a while: the try did not take the unit down
+        clearTimeout(this.gpuTimer);
+        this.gpuTimer = setTimeout(() => { if (this.engine === e && this.gpu) { this.gpuMark(false); this.log('gpu: 45 s in the GPU mode, frames from ' + (this.gpuFrames || '?') + '; state/gpu-trial removed'); } }, 45000);
+    }
+    this.log('engine up: ' + e.product + (this.gpu ? ', GPU mode' : '') + (sandbox ? (this.helper ? ', sandbox (setuid helper beside the engine)' : ', sandbox') : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
     this.set({ engine: 'ready' });
     clearInterval(this.memTimer);
     this.memTimer = setInterval(() => this.guard(() => this.checkMemory()), 5000);
     clearInterval(this.pollTimer);
     this.pollTimer = setInterval(() => { if (this.client && this.engine === e) this.guard(() => this.refresh(e)); }, o.pollMs);
     if (!this.client) this.away();
+};
+/*
+ * The GPU mode (0.1.57, EXPERIMENTAL; owner, 2026-11-20: "cała przeglądarka na GPU"). The engine draws on the
+ * car's graphics chip instead of the processor. The way is Vizualyse's vizualyse-chromium, the one known to work
+ * on a car (docs/11-przegladarka-gpu-rozpoznanie.md):
+ *   - ANGLE's GLES backend (--use-angle=gles-egl) on the head unit's OWN Mesa 19 EGL and i965 driver, the ones BMW's
+ *     programs use. gpu/libEGL.so.1 (their egl_shim.c) stands first in the engine's library path: it puts the
+ *     display on the render node through GBM (never card0, the display's) and makes the offscreen surfaces Mesa
+ *     19 lacks. The unit's libGLESv2, libgbm, libglapi, Wayland and libffi are linked beside it (gpu-libs).
+ *     NO DRIVER OF OURS: theirs hung the unit's kernel with the display's lock held, the screen went black and
+ *     the unit restarted at every start until a file was renamed over SSH.
+ *   - the engine's frames then are buffers of the chip; g21-wlframe-gpu reads them back through the unit's EGL.
+ * The safety net, theirs too:
+ *   - on by hand only (the app's switch) and NEVER KEPT: every start of this tool is on the processor, so a unit
+ *     that hangs comes back without it;
+ *   - state/gpu-trial is written before the chip is touched and removed once the engine has run with it for a
+ *     while or was stopped in order. Found at a start, the last try ended with the unit going down: said in the
+ *     log and to the app;
+ *   - anything missing (the render node, a library of the unit, the group video, our two files): no try at all;
+ *   - the engine ending by itself in this mode: the mode is off, the next start is on the processor.
+ * The engine's graphics process runs without its sandbox in this mode (it has to load the unit's libraries from
+ * places the sandbox does not let it open); the pages' processes keep theirs. The engine and its window run in the
+ * group video, which is what may open the render node.
+ * NOT CHECKED ANYWHERE: the stand has no such chip. What it does on the car is in the log: "gpu:" lines, the
+ * shim's "egl-shim:" lines, the window's "frames: gpu" or "frames: memory".
+ */
+const NOTE_GPU_OFF = 'tryb GPU wyłączony: silnik zakończył w nim pracę';
+function groupGid(name) {
+    try { const l = fs.readFileSync('/etc/group', 'utf8').split('\n').filter((x) => x.indexOf(name + ':') === 0)[0]; const n = l ? Number(l.split(':')[2]) : NaN; return n > 0 && n < 65535 ? n : 0; } catch (e) { return 0; }
+}
+const GPU_UNIT_LIBS = ['libGLESv2.so.2', 'libgbm.so.1', 'libglapi.so.0', 'libwayland-client.so.0', 'libwayland-server.so.0', 'libffi.so.6'];
+// what the GPU mode needs and this unit does not have ([] = it can be tried)
+Daemon.prototype.gpuNeeds = function () {
+    const o = this.opts, miss = [];
+    [o.renderNode, o.gpuShim, o.wlframeGpu, path.join(o.unitLib, 'libEGL.so.1'), path.join(o.unitLib, 'dri', 'i965_dri.so')].concat(GPU_UNIT_LIBS.map((n) => path.join(o.unitLib, n)))
+        .forEach((f) => { if (!fs.existsSync(f)) miss.push(f); });
+    if (!o.noSetuid && !groupGid('video')) miss.push('the group video');
+    if (this.policy().frames === 'cast') miss.push('the rule "frames": "direct"');
+    return miss;
+};
+// the folder that stands first in the engine's library path in the GPU mode: the shim as libEGL.so.1 and links to
+// the unit's own libraries Mesa 19 must get; made anew each time
+Daemon.prototype.gpuLibs = function () {
+    const o = this.opts, dir = path.join(o.runDir, 'gpu-libs');
+    mkdirp(dir, 0o755);
+    [['libEGL.so.1', o.gpuShim]].concat(GPU_UNIT_LIBS.map((n) => [n, path.join(o.unitLib, n)])).forEach((w) => {
+        const link = path.join(dir, w[0]);
+        try { fs.unlinkSync(link); } catch (e) { /* new */ }
+        fs.symlinkSync(w[1], link);
+    });
+    return dir;
+};
+Daemon.prototype.gpuIds = function () { const i = this.ids(); if (i.uid !== undefined) i.gid = groupGid('video') || i.gid; return i; };
+Daemon.prototype.gpuMark = function (on) {
+    const f = path.join(this.opts.stateDir, 'gpu-trial');
+    try { if (on) fs.writeFileSync(f, new Date().toISOString() + '\n', { mode: 0o600 }); else fs.unlinkSync(f); } catch (e) { /* none to remove, or no state folder: logged on use */ }
+};
+// the app's switch
+Daemon.prototype.gpuSet = async function (on) {
+    on = !!on;
+    if (on) {
+        const miss = this.gpuNeeds();
+        if (miss.length) { this.gpuWhy = 'brak: ' + miss.map((m) => path.basename(m)).slice(0, 3).join(', '); this.log('gpu: not tried, missing: ' + miss.join(', ')); this.gpuWant = false; this.push(true); return; }
+    }
+    if (on === !!this.gpuWant) { this.push(true); return; }
+    this.gpuWant = on;
+    this.gpuWhy = '';
+    this.log('gpu: the GPU mode is switched ' + (on ? 'on (for this run of the tool; never kept)' : 'off'));
+    if (this.want) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('GPU mode ' + (on ? 'on' : 'off')); await this.startEngine(url); }
+    else this.push(true);
 };
 // the engine's extension, in the engine's own temporary directory, with the port and the word of this daemon's line
 Daemon.prototype.writeExt = function (dirs) {
@@ -2607,10 +2699,22 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     if (this.direct) { env.XDG_RUNTIME_DIR = dirs.tmp; env.WAYLAND_DISPLAY = 'g21wl'; for (let i = 0; i < 40 && !fs.existsSync(this.wlSock); i++) await sleep(50); }
     if (sandbox && this.helper) env.CHROME_DEVEL_SANDBOX = this.helper;
     if (this.audio) env.ALSA_CONFIG_PATH = this.audio.conf;
-    const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
+    if (this.gpu) {
+        env.LD_LIBRARY_PATH = this.gpuDir + ':' + env.LD_LIBRARY_PATH;
+        env.CHROMIUM_EGL_REAL = path.join(o.unitLib, 'libEGL.so.1');
+        env.CHROMIUM_EGL_NODE = o.renderNode;
+        env.LIBGL_DRIVERS_PATH = path.join(o.unitLib, 'dri');
+        env.MESA_GLSL_CACHE_DIR = path.join(dirs.profile, 'mesa-cache');
+        env.MESA_GLSL_CACHE_MAX_SIZE = '64M';
+    }
+    const child = cp.spawn(path.join(dirs.engine, dirs.binary || 'chrome-headless-shell'), this.engineArgs(dirs, url, sandbox), Object.assign(this.gpu ? this.gpuIds() : this.ids(), { cwd: '/', env: env, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] }));
     const e = { child: child, cdp: null, session: '', target: '', mainFrame: '', down: null, err: '', product: '' };
     this.engine = e;
-    child.stderr.on('data', (d) => { if (e.err.length < 6000) e.err += d; else e.err = e.err.slice(0, 3000) + (e.err.slice(3000) + d).slice(-3000); });
+    child.stderr.on('data', (d) => {
+        if (e.err.length < 6000) e.err += d; else e.err = e.err.slice(0, 3000) + (e.err.slice(3000) + d).slice(-3000);
+        // (the GPU mode: what the shim and the engine's graphics process say goes to the log, 40 lines a start)
+        if (this.gpu) String(d).split('\n').filter((l) => /egl-shim:|GPU process|gpu_init|EGL|ANGLE|Exiting GPU|gl_surface|gbm/i.test(l) && !/dbus/i.test(l)).forEach((l) => { e.gpuLines = (e.gpuLines || 0) + 1; if (e.gpuLines <= 40) this.log('gpu: engine: ' + l.trim().slice(0, 300)); });
+    });
     child.on('error', (x) => { e.err += ' spawn: ' + x.message; });
     child.on('exit', (code, sig) => this.guard(() => this.onEngineExit(e, code, sig)));
     try { fs.writeFileSync('/proc/' + child.pid + '/oom_score_adj', '900'); } catch (x) { /* not Linux or gone */ }
@@ -2973,6 +3077,8 @@ Daemon.prototype.onEngineExit = function (e, code, sig) {
     clearInterval(this.pollTimer);
     const tail = e.err.split('\n').filter((l) => /FATAL|ERROR|error while loading|No usable sandbox|cannot|spawn/.test(l) && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 500);
     this.log('engine exited ' + (sig || code) + (tail ? ': ' + tail : ''));
+    // (in the GPU mode: the mode is off; the next start is on the processor, and the app says why)
+    if (this.gpu) { this.gpu = false; this.gpuWant = false; this.gpuWhy = NOTE_GPU_OFF; clearTimeout(this.gpuTimer); this.gpuMark(false); this.log('gpu: the engine ended in the GPU mode: the mode is off'); }
     if (!this.starting) this.set({ engine: 'failed', err: 'silnik się zatrzymał: odśwież', loading: false, live: false });
 };
 Daemon.prototype.killEngine = function () {
@@ -3132,6 +3238,7 @@ Daemon.prototype.stopEngine = async function (why) {
         // cookies written. Ended by a signal it lost the cookies and the sites' data of its last half minute, a sign-in
         // made just before among them: stand, 2026-11-20.)
         try { await Promise.race([e.cdp.send('Browser.close', {}), sleep(1500)]); } catch (x) { /* killed below */ }
+        if (this.gpu) { clearTimeout(this.gpuTimer); this.gpuMark(false); }
         await Promise.race([gone, sleep(4000)]);
         try { e.child.kill('SIGKILL'); } catch (x) { /* gone */ }
         this.killStrays();
@@ -3150,6 +3257,8 @@ Daemon.prototype.start = async function () {
     [o.cacheDir, o.logDir].forEach((d) => { try { mkdirp(d); } catch (e) { /* logged on use */ } });
     try { mkdirp(o.stateDir, 0o700); } catch (e) { /* logged on use */ }
     this.killStrays(); // an engine a killed daemon left behind
+    // the GPU mode's marker left over: the last try ended with this tool (most likely the unit) going down
+    try { const gm = path.join(o.stateDir, 'gpu-trial'); if (fs.existsSync(gm)) { this.gpuHung = String(fs.readFileSync(gm, 'utf8')).trim().slice(0, 30); fs.unlinkSync(gm); this.log('gpu: state/gpu-trial was left from ' + this.gpuHung + ': the last try in the GPU mode did not end in order (the unit went down?). The mode is off, as at every start.'); } } catch (e) { /* no state folder yet */ }
     /*
      * The memory limit's default is 2048 MB since 0.1.55 (owner, 2026-11-20; it was 1500). The app writes the whole
      * set of rules whenever one is changed, so the old default stands written out in the owner's policy.json and a

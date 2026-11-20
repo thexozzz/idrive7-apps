@@ -39,7 +39,8 @@
  *                         with "input" (see "input" below): "pm <x> <y>" "pb <button> <0|1>" "pa <dy>" the pointer,
  *                         "td <id> <x> <y>" "tm <id> <x> <y>" "tu <id>" a finger, "k <key> <0|1> [mods]" a key
  *
- * Usage: g21-wlframe <video file> <601|709|full> <socket path> <w> <h> [fps] [input]
+ * Usage: g21-wlframe <video file> <601|709|full> <socket path> <w> <h> [fps] [input] [gpu <render node> <unit lib>]
+ *        (gpu: only in the build with -DG21_GPU, g21-wlframe-gpu; see "the GPU mode")
  * No root actions. Ends when stdin closes or on SIGTERM.
  */
 #define _GNU_SOURCE
@@ -73,17 +74,19 @@
 #define OUTBUF 16384
 
 enum { T_NONE, T_DISPLAY, T_REGISTRY, T_COMPOSITOR, T_SHM, T_POOL, T_BUFFER, T_SURFACE, T_REGION, T_SUBCOMP, T_SUBSURF,
-    T_OUTPUT, T_SEAT, T_WMBASE, T_POSITIONER, T_XDGSURF, T_TOPLEVEL, T_POPUP, T_POINTER, T_KEYBOARD, T_TOUCH, T_OTHER };
+    T_OUTPUT, T_SEAT, T_WMBASE, T_POSITIONER, T_XDGSURF, T_TOPLEVEL, T_POPUP, T_POINTER, T_KEYBOARD, T_TOUCH, T_DRM, T_OTHER };
 
 /* the globals, by registry name (1-based) */
 static const struct { const char *name; uint32_t ver; int type; } GLOBALS[] = {
     { "wl_compositor", 4, T_COMPOSITOR }, { "wl_shm", 1, T_SHM }, { "wl_subcompositor", 1, T_SUBCOMP },
-    { "wl_output", 2, T_OUTPUT }, { "wl_seat", 5, T_SEAT }, { "xdg_wm_base", 2, T_WMBASE }
+    { "wl_output", 2, T_OUTPUT }, { "wl_seat", 5, T_SEAT }, { "xdg_wm_base", 2, T_WMBASE },
+    { "wl_drm", 2, T_DRM }       /* only in the GPU mode: see "the GPU mode" */
 };
 #define NGLOBAL ((int)(sizeof GLOBALS / sizeof GLOBALS[0]))
 
 typedef struct { int fd; uint8_t *map; size_t size; int refs; int dead; } pool_t;
-typedef struct { pool_t *pool; int32_t off, w, h, stride; uint32_t fmt; uint32_t id; } buf_t;
+/* (pool NULL: a buffer of the graphics chip, in the GPU mode: fd is its PRIME file descriptor, fourcc its format) */
+typedef struct { pool_t *pool; int32_t off, w, h, stride; uint32_t fmt; uint32_t id; int fd, bad; uint32_t fourcc; unsigned tex, fb; void *img; } buf_t;
 typedef struct {
     int used;
     uint32_t id, xdg, top;
@@ -116,6 +119,7 @@ static uint32_t held_id = 0;
 static long long retry_us = 0;       /* the kept buffer is tried again then (the video file could not be made) */
 static int retry_left = 0;
 static volatile sig_atomic_t stop_now = 0;
+static int gpu_on = 0;               /* the GPU mode: wl_drm is offered, the chip's buffers are read back */
 static int input_on = 0;             /* "input": the engine gets a pointer, a touch screen and a keyboard from here */
 
 static long long now_us(void)
@@ -178,18 +182,20 @@ static int open_ring(int w, int h)
 }
 
 /* BGRA rows (x0..x1, y0..y1, all even) into the I420 frame at dst */
-static void convert(const uint8_t *src, int stride, uint8_t *dst, int w, int h, int x0, int y0, int x1, int y1)
+/* (sx, sy: the place in the picture of src's first pixel; rgba: src is R, G, B, A bytes, as read back from the chip) */
+static void convert(const uint8_t *src, int stride, uint8_t *dst, int w, int h, int x0, int y0, int x1, int y1, int sx, int sy, int rgba)
 {
+    const int ri = rgba ? 0 : 2, bi = rgba ? 2 : 0;
     uint8_t *Y = dst, *U = Y + (size_t)w * h, *V = U + (size_t)(w / 2) * (h / 2);
     const int yr = k_yr, yg = k_yg, yb = k_yb, ya = k_ya * 256 + 128, ur = k_ur, ug = k_ug, ub = k_ub, vr = k_vr, vg = k_vg, vb = k_vb;
     int x, y;
     for (y = y0; y < y1; y += 2) {
-        const uint8_t *s0 = src + (size_t)y * stride + (size_t)x0 * 4, *s1 = s0 + stride;
+        const uint8_t *s0 = src + (size_t)(y - sy) * stride + (size_t)(x0 - sx) * 4, *s1 = s0 + stride;
         uint8_t *d0 = Y + (size_t)y * w + x0, *d1 = d0 + w;
         uint8_t *du = U + (size_t)(y / 2) * (w / 2) + x0 / 2, *dv = V + (size_t)(y / 2) * (w / 2) + x0 / 2;
         for (x = x0; x < x1; x += 2, s0 += 8, s1 += 8, d0 += 2, d1 += 2) {
-            int b0 = s0[0], g0 = s0[1], r0 = s0[2], b1 = s0[4], g1 = s0[5], r1 = s0[6];
-            int b2 = s1[0], g2 = s1[1], r2 = s1[2], b3 = s1[4], g3 = s1[5], r3 = s1[6];
+            int b0 = s0[bi], g0 = s0[1], r0 = s0[ri], b1 = s0[4 + bi], g1 = s0[5], r1 = s0[4 + ri];
+            int b2 = s1[bi], g2 = s1[1], r2 = s1[ri], b3 = s1[4 + bi], g3 = s1[5], r3 = s1[4 + ri];
             int r = r0 + r1 + r2 + r3, g = g0 + g1 + g2 + g3, b = b0 + b1 + b2 + b3;
             d0[0] = (uint8_t)((yr * r0 + yg * g0 + yb * b0 + ya) >> 8);
             d0[1] = (uint8_t)((yr * r1 + yg * g1 + yb * b1 + ya) >> 8);
@@ -220,6 +226,164 @@ static void stats(long long now)
     st_t0 = 0; st_n = 0; st_niv = 0; st_us = 0; st_px = 0; st_last = 0;
 }
 
+/* ------------------------------------------------------------------ the GPU mode: the engine's GPU buffers
+ *
+ * With "gpu <render node> <the unit's library folder>" (and built with -DG21_GPU: g21-wlframe-gpu) the engine may
+ * draw on the car's graphics chip. Its frames then come as buffers of the chip (wl_drm, PRIME file descriptors)
+ * instead of shared memory, and are read back here through the unit's own EGL and GLES (Mesa 19, i965: the
+ * libraries BMW's own programs and mgu-render use), then go into the video file as before.
+ *
+ * The way of doing it is Vizualyse's vizualyse-chromium (sink/wl.c, Copyright (C) 2026 Yousaf Khan,
+ * GPL-3.0-or-later), seen working on a car: wl_drm version 2 with PRIME only, the unit's libglapi, libgbm and libEGL
+ * loaded by path, a GBM display on the render node (never card0, which is the display's and Winston's), each buffer
+ * an EGLImage on a texture in a framebuffer, glReadPixels. No driver of ours is loaded, here or in the engine: one
+ * that did not come from the unit hung the unit's kernel there.
+ *
+ * Here a buffer keeps its texture and framebuffer for as long as it lives (the engine goes round a few buffers),
+ * and only the part of the picture the engine says has changed is read.
+ */
+#ifdef G21_GPU
+#include <dlfcn.h>
+typedef void *EGLDisplay_t, *EGLContext_t, *EGLImage_t;
+#define G_EGL_NONE 0x3038
+#define G_EGL_OPENGL_ES_API 0x30A0
+#define G_EGL_CONTEXT_CLIENT_VERSION 0x3098
+#define G_EGL_PLATFORM_GBM_MESA 0x31D7
+#define G_EGL_WIDTH 0x3057
+#define G_EGL_HEIGHT 0x3056
+#define G_EGL_EXTENSIONS 0x3055
+#define G_EGL_LINUX_DMA_BUF_EXT 0x3270
+#define G_EGL_LINUX_DRM_FOURCC_EXT 0x3271
+#define G_EGL_DMA_BUF_PLANE0_FD_EXT 0x3272
+#define G_EGL_DMA_BUF_PLANE0_OFFSET_EXT 0x3273
+#define G_EGL_DMA_BUF_PLANE0_PITCH_EXT 0x3274
+#define G_GL_TEXTURE_2D 0x0DE1
+#define G_GL_FRAMEBUFFER 0x8D40
+#define G_GL_COLOR_ATTACHMENT0 0x8CE0
+#define G_GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#define G_GL_RGBA 0x1908
+#define G_GL_UNSIGNED_BYTE 0x1401
+#define FMT_ARGB8888 0x34325241u
+#define FMT_XRGB8888 0x34325258u
+
+static struct {
+    int ok;
+    char device[64];
+    EGLDisplay_t dpy;
+    EGLContext_t ctx;
+    void *(*getProcAddress)(const char *);
+    EGLImage_t (*createImage)(EGLDisplay_t, EGLContext_t, unsigned, void *, const int32_t *);
+    unsigned (*destroyImage)(EGLDisplay_t, EGLImage_t);
+    void (*imageTargetTexture)(unsigned, void *);
+    void (*genTextures)(int, unsigned *);
+    void (*deleteTextures)(int, const unsigned *);
+    void (*bindTexture)(unsigned, unsigned);
+    void (*genFramebuffers)(int, unsigned *);
+    void (*deleteFramebuffers)(int, const unsigned *);
+    void (*bindFramebuffer)(unsigned, unsigned);
+    void (*framebufferTexture2D)(unsigned, unsigned, unsigned, unsigned, int);
+    unsigned (*checkFramebufferStatus)(unsigned);
+    void (*readPixels)(int, int, int, int, unsigned, unsigned, void *);
+} gl;
+static uint8_t *gl_scratch = NULL;
+static size_t gl_scratch_size = 0;
+
+/* 0: the unit's EGL is up on the render node and can take the chip's buffers; -1: not (said on stdout) */
+static int gl_init(const char *device, const char *unit_lib)
+{
+    static const char *libs[] = { "libglapi.so.0", "libgbm.so.1", "libEGL.so.1" };
+    void *h[3];
+    char p[256];
+    EGLDisplay_t (*getPlatformDisplay)(unsigned, void *, const int32_t *);
+    unsigned (*initialize)(EGLDisplay_t, int32_t *, int32_t *);
+    unsigned (*bindAPI)(unsigned);
+    EGLContext_t (*createContext)(EGLDisplay_t, void *, EGLContext_t, const int32_t *);
+    unsigned (*makeCurrent)(EGLDisplay_t, void *, void *, EGLContext_t);
+    const char *(*queryString)(EGLDisplay_t, int32_t);
+    void *(*gbm_create_device)(int);
+    const int32_t attr[] = { G_EGL_CONTEXT_CLIENT_VERSION, 2, G_EGL_NONE };
+    const char *ext;
+    void *gdev;
+    int i, fd;
+    for (i = 0; i < 3; i++) {
+        snprintf(p, sizeof p, "%s/%s", unit_lib, libs[i]);
+        h[i] = dlopen(p, RTLD_NOW | RTLD_GLOBAL);
+        if (!h[i]) { printf("e gpu: %s\n", dlerror()); return -1; }
+    }
+    gl.getProcAddress = (void *(*)(const char *))dlsym(h[2], "eglGetProcAddress");
+    gbm_create_device = (void *(*)(int))dlsym(h[1], "gbm_create_device");
+    if (!gl.getProcAddress || !gbm_create_device) { printf("e gpu: the unit's EGL or GBM lacks a function\n"); return -1; }
+    getPlatformDisplay = (EGLDisplay_t (*)(unsigned, void *, const int32_t *))gl.getProcAddress("eglGetPlatformDisplayEXT");
+    initialize = (unsigned (*)(EGLDisplay_t, int32_t *, int32_t *))gl.getProcAddress("eglInitialize");
+    bindAPI = (unsigned (*)(unsigned))gl.getProcAddress("eglBindAPI");
+    createContext = (EGLContext_t (*)(EGLDisplay_t, void *, EGLContext_t, const int32_t *))gl.getProcAddress("eglCreateContext");
+    makeCurrent = (unsigned (*)(EGLDisplay_t, void *, void *, EGLContext_t))gl.getProcAddress("eglMakeCurrent");
+    queryString = (const char *(*)(EGLDisplay_t, int32_t))gl.getProcAddress("eglQueryString");
+    if (!getPlatformDisplay || !initialize || !bindAPI || !createContext || !makeCurrent || !queryString) { printf("e gpu: the unit's EGL lacks a function\n"); return -1; }
+    fd = open(device, O_RDWR | O_CLOEXEC);
+    if (fd < 0) { printf("e gpu: %s: %s\n", device, strerror(errno)); return -1; }
+    gdev = gbm_create_device(fd);
+    gl.dpy = gdev ? getPlatformDisplay(G_EGL_PLATFORM_GBM_MESA, gdev, NULL) : NULL;
+    if (!gl.dpy || !initialize(gl.dpy, NULL, NULL)) { printf("e gpu: no EGL display on %s\n", device); return -1; }
+    ext = queryString(gl.dpy, G_EGL_EXTENSIONS);
+    if (!ext || !strstr(ext, "EGL_EXT_image_dma_buf_import") || !strstr(ext, "EGL_KHR_surfaceless_context")) { printf("e gpu: the unit's EGL cannot take the chip's buffers\n"); return -1; }
+    bindAPI(G_EGL_OPENGL_ES_API);
+    gl.ctx = createContext(gl.dpy, NULL, NULL, attr);
+    if (!gl.ctx || !makeCurrent(gl.dpy, NULL, NULL, gl.ctx)) { printf("e gpu: no GLES context\n"); return -1; }
+#define GP(f, n) do { *(void **)&gl.f = gl.getProcAddress(n); if (!gl.f) { printf("e gpu: no %s\n", n); return -1; } } while (0)
+    GP(createImage, "eglCreateImageKHR"); GP(destroyImage, "eglDestroyImageKHR");
+    GP(imageTargetTexture, "glEGLImageTargetTexture2DOES");
+    GP(genTextures, "glGenTextures"); GP(deleteTextures, "glDeleteTextures"); GP(bindTexture, "glBindTexture");
+    GP(genFramebuffers, "glGenFramebuffers"); GP(deleteFramebuffers, "glDeleteFramebuffers");
+    GP(bindFramebuffer, "glBindFramebuffer"); GP(framebufferTexture2D, "glFramebufferTexture2D");
+    GP(checkFramebufferStatus, "glCheckFramebufferStatus"); GP(readPixels, "glReadPixels");
+#undef GP
+    snprintf(gl.device, sizeof gl.device, "%s", device);
+    gl.ok = 1;
+    printf("c gpu: the unit's EGL on %s\n", device);
+    return 0;
+}
+
+/* what a buffer of the chip holds here beside its file descriptor */
+static void gl_forget(buf_t *b)
+{
+    if (b->fb) { gl.deleteFramebuffers(1, &b->fb); b->fb = 0; }
+    if (b->tex) { gl.deleteTextures(1, &b->tex); b->tex = 0; }
+    if (b->img) { gl.destroyImage(gl.dpy, b->img); b->img = NULL; }
+    if (b->fd >= 0) { close(b->fd); b->fd = -1; }
+}
+
+/* The part x0..x1, y0..y1 of a buffer of the chip as RGBA bytes, row y0 first, x1 - x0 pixels a row. NULL: it could
+ * not be read (said on stdout once a buffer). */
+static const uint8_t *gl_read(buf_t *b, int x0, int y0, int x1, int y1)
+{
+    const size_t need = (size_t)(x1 - x0) * (size_t)(y1 - y0) * 4;
+    if (!gl.ok || b->bad) return NULL;
+    if (!b->fb) {
+        const int32_t attr[] = { G_EGL_WIDTH, b->w, G_EGL_HEIGHT, b->h, G_EGL_LINUX_DRM_FOURCC_EXT, (int32_t)b->fourcc,
+            G_EGL_DMA_BUF_PLANE0_FD_EXT, b->fd, G_EGL_DMA_BUF_PLANE0_OFFSET_EXT, b->off, G_EGL_DMA_BUF_PLANE0_PITCH_EXT, b->stride, G_EGL_NONE };
+        b->img = gl.createImage(gl.dpy, NULL, G_EGL_LINUX_DMA_BUF_EXT, NULL, attr);
+        if (!b->img) { b->bad = 1; printf("e gpu: a buffer %dx%d could not be taken (EGLImage)\n", b->w, b->h); return NULL; }
+        gl.genTextures(1, &b->tex);
+        gl.bindTexture(G_GL_TEXTURE_2D, b->tex);
+        gl.imageTargetTexture(G_GL_TEXTURE_2D, b->img);
+        gl.genFramebuffers(1, &b->fb);
+        gl.bindFramebuffer(G_GL_FRAMEBUFFER, b->fb);
+        gl.framebufferTexture2D(G_GL_FRAMEBUFFER, G_GL_COLOR_ATTACHMENT0, G_GL_TEXTURE_2D, b->tex, 0);
+        if (gl.checkFramebufferStatus(G_GL_FRAMEBUFFER) != G_GL_FRAMEBUFFER_COMPLETE) { b->bad = 1; gl.bindFramebuffer(G_GL_FRAMEBUFFER, 0); printf("e gpu: a buffer %dx%d cannot be read (framebuffer)\n", b->w, b->h); return NULL; }
+    } else gl.bindFramebuffer(G_GL_FRAMEBUFFER, b->fb);
+    if (need > gl_scratch_size) {
+        uint8_t *n = realloc(gl_scratch, need);
+        if (!n) { gl.bindFramebuffer(G_GL_FRAMEBUFFER, 0); return NULL; }
+        gl_scratch = n; gl_scratch_size = need;
+    }
+    /* (a buffer's row 0 is the picture's top) */
+    gl.readPixels(x0, y0, x1 - x0, y1 - y0, G_GL_RGBA, G_GL_UNSIGNED_BYTE, gl_scratch);
+    gl.bindFramebuffer(G_GL_FRAMEBUFFER, 0);
+    return gl_scratch;
+}
+#endif
+
 /* The main window's buffer into the video file. 0: done; -1: the video file could not be made (tried again); 1: a
  * buffer that cannot be shown. */
 static int show(const buf_t *b, int x0, int y0, int x1, int y1, int damaged)
@@ -229,9 +393,12 @@ static int show(const buf_t *b, int x0, int y0, int x1, int y1, int damaged)
     long long t0 = now_us();
     uint32_t next;
     int full = !damaged || !have_frame;
+    static int kind = -1;
     if (w < 16 || h < 16 || w > MAX_W || h > MAX_H || b->stride < b->w * 4) { printf("e buffer %dx%d stride %d\n", b->w, b->h, b->stride); return 1; }
-    if (b->off < 0 || (size_t)b->off + (size_t)b->stride * (size_t)b->h > b->pool->size) { printf("e buffer outside its pool\n"); return 1; }
-    if (b->fmt > 1) { printf("e buffer format %u\n", b->fmt); return 1; }
+    if (b->pool && (b->off < 0 || (size_t)b->off + (size_t)b->stride * (size_t)b->h > b->pool->size)) { printf("e buffer outside its pool\n"); return 1; }
+    if (b->pool && b->fmt > 1) { printf("e buffer format %u\n", b->fmt); return 1; }
+    /* (said when it changes: the engine draws on the chip, or in memory) */
+    if (kind != (b->pool ? 0 : 1)) { kind = b->pool ? 0 : 1; printf("c frames: %s\n", kind ? "gpu" : "memory"); }
     if (w != ring_w || h != ring_h || ring_fd < 0) {
         if (open_ring(w, h) != 0) { printf("e video file: %s\n", strerror(errno)); return -1; }
         full = 1;
@@ -247,7 +414,16 @@ static int show(const buf_t *b, int x0, int y0, int x1, int y1, int damaged)
     if (full) { x0 = 0; y0 = 0; x1 = w; y1 = h; }
     next = (slot + 1) % NSLOT;
     if (!full) memcpy(ring + 64 + (size_t)next * frame, ring + 64 + (size_t)slot * frame, frame);
-    convert(b->pool->map + b->off, b->stride, ring + 64 + (size_t)next * frame, w, h, x0, y0, x1, y1);
+    if (b->pool) convert(b->pool->map + b->off, b->stride, ring + 64 + (size_t)next * frame, w, h, x0, y0, x1, y1, 0, 0, 0);
+    else {
+#ifdef G21_GPU
+        const uint8_t *px = x1 > x0 && y1 > y0 ? gl_read((buf_t *)b, x0, y0, x1, y1) : NULL;
+        if (px) convert(px, (x1 - x0) * 4, ring + 64 + (size_t)next * frame, w, h, x0, y0, x1, y1, x0, y0, 1);
+        else if (x1 > x0 && y1 > y0) return 1;
+#else
+        return 1;
+#endif
+    }
     slot = next;
     put32(ring + 20, slot);
     seq++;
@@ -345,6 +521,15 @@ static void pool_unref(pool_t *p)
     if (p->map) munmap(p->map, p->size);
     if (p->fd >= 0) close(p->fd);
     free(p);
+}
+
+static void buf_free(buf_t *b)
+{
+    if (b->pool) pool_unref(b->pool);
+#ifdef G21_GPU
+    else gl_forget(b);
+#endif
+    free(b);
 }
 
 static void configure(client_t *c, surf_t *s)
@@ -574,6 +759,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
             set(c, a[0], T_REGISTRY, NULL);
             for (i = 0; i < NGLOBAL; i++) {
                 uint32_t w[16]; int k;
+                if (GLOBALS[i].type == T_DRM && !gpu_on) continue;
                 w[0] = (uint32_t)i + 1;
                 k = 1 + put_str(w + 1, GLOBALS[i].name);
                 w[k++] = GLOBALS[i].ver;
@@ -597,7 +783,16 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
                 w[0] = 3; w[1] = (uint32_t)(win_w > 1920 ? win_w : 1920); w[2] = (uint32_t)(win_h > 720 ? win_h : 720); w[3] = 60000;
                 ev(c, nid, 1, w, 4);                                                          /* mode: current, preferred */
                 if (ver >= 2) { ev1(c, nid, 3, 1); ev0(c, nid, 2); }                          /* scale 1, done */
-            } else if (GLOBALS[name - 1].type == T_SEAT) {
+            }
+#ifdef G21_GPU
+            else if (GLOBALS[name - 1].type == T_DRM && gpu_on) {
+                uint32_t w[24]; int k = put_str(w, gl.device);
+                ev(c, nid, 0, w, k);                                                          /* device: the render node */
+                ev1(c, nid, 1, FMT_ARGB8888); ev1(c, nid, 1, FMT_XRGB8888);                   /* formats */
+                if (ver >= 2) ev1(c, nid, 3, 1);                                              /* capabilities: PRIME */
+            }
+#endif
+            else if (GLOBALS[name - 1].type == T_SEAT) {
                 ev1(c, nid, 0, input_on ? 7u : 0u);                                          /* pointer, keyboard, touch; or none */
                 if (ver >= 2) { uint32_t w[8]; int k = put_str(w, "g21"); ev(c, nid, 1, w, k); }
             }
@@ -630,7 +825,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
         if (op == 0) {              /* create_buffer(new id, offset, width, height, stride, format) */
             buf_t *b = calloc(1, sizeof *b);
             if (!b) { set(c, a[0], T_OTHER, NULL); break; }
-            b->pool = p; p->refs++; b->id = a[0];
+            b->pool = p; p->refs++; b->id = a[0]; b->fd = -1;
             b->off = (int32_t)a[1]; b->w = (int32_t)a[2]; b->h = (int32_t)a[3]; b->stride = (int32_t)a[4]; b->fmt = a[5];
             set(c, a[0], T_BUFFER, b);
         } else if (op == 1) { gone(c, id); pool_unref(p); }
@@ -647,8 +842,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
             for (i = 0; i < MAXSURF; i++) if (c->surf[i].used && c->surf[i].pend == b) c->surf[i].pend = NULL;
             if (held_client == c && held_id == id) { held_client = NULL; held_id = 0; }
             gone(c, id);
-            pool_unref(b->pool);
-            free(b);
+            buf_free(b);
         }
         break;
     case T_SURFACE: {
@@ -663,7 +857,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
             gone(c, id);
             break;
         }
-        case 1: { obj_t *b = get(c, a[0]); s->pend = b && b->type == T_BUFFER ? (buf_t *)b->p : NULL; if (b && b->type == T_BUFFER && !((buf_t *)b->p)->pool->map) s->pend = NULL; s->pend_set = 1; break; }
+        case 1: { obj_t *b = get(c, a[0]); s->pend = b && b->type == T_BUFFER ? (buf_t *)b->p : NULL; if (b && b->type == T_BUFFER && ((buf_t *)b->p)->pool && !((buf_t *)b->p)->pool->map) s->pend = NULL; s->pend_set = 1; break; }
         case 2: case 9: damage(s, (int32_t)a[0], (int32_t)a[1], (int32_t)a[2], (int32_t)a[3]); break;
         case 3: if (s->ncb < MAXCB) { s->cb[s->ncb++] = a[0]; set(c, a[0], T_OTHER, NULL); } else { set(c, a[0], T_OTHER, NULL); ev1(c, a[0], 0, 0); gone(c, a[0]); } break;
         case 6: commit(c, s); break;
@@ -688,6 +882,18 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
             if (op == 1) { send_keymap(c, a[0]); c->kbd_in = 0; }
         }
         break;
+#ifdef G21_GPU
+    case T_DRM:
+        if (op == 0) ev0(c, id, 2);              /* authenticate: a render node needs none */
+        else if (op == 3) {                      /* create_prime_buffer(new id, fd, width, height, format, offset0, stride0, ...) */
+            buf_t *b = calloc(1, sizeof *b);
+            int fd = take_fd(c);
+            if (!b || fd < 0 || (a[3] != FMT_ARGB8888 && a[3] != FMT_XRGB8888) || (int32_t)a[1] <= 0 || (int32_t)a[2] <= 0) { if (fd >= 0) close(fd); free(b); set(c, a[0], T_OTHER, NULL); printf("e gpu: a buffer of format %08x refused\n", a[3]); break; }
+            b->pool = NULL; b->fd = fd; b->id = a[0]; b->w = (int32_t)a[1]; b->h = (int32_t)a[2]; b->fourcc = a[3]; b->off = (int32_t)a[4]; b->stride = (int32_t)a[5];
+            set(c, a[0], T_BUFFER, b);
+        } else if (op == 1 || op == 2) set(c, a[0], T_OTHER, NULL);   /* named buffers: not taken (PRIME only) */
+        break;
+#endif
     case T_POINTER: if (op == 1) { dev_gone(c->ptr, id); gone(c, id); } break;      /* (0: set_cursor: there is no cursor here) */
     case T_KEYBOARD: if (op == 0) { dev_gone(c->kbd, id); gone(c, id); } break;
     case T_TOUCH: if (op == 0) { dev_gone(c->tch, id); gone(c, id); } break;
@@ -729,7 +935,7 @@ static void drop_client(client_t *c)
     for (i = 0; i < MAXCLIENT; i++) if (clients[i] == c) clients[i] = NULL;
     if (held_client == c) { held_client = NULL; held_id = 0; }
     for (i = 0; i < c->nobj; i++) {
-        if (c->obj[i].type == T_BUFFER) { buf_t *b = c->obj[i].p; pool_unref(b->pool); free(b); }
+        if (c->obj[i].type == T_BUFFER) buf_free(c->obj[i].p);
     }
     for (i = 0; i < c->nobj; i++) if (c->obj[i].type == T_POOL) pool_unref(c->obj[i].p);
     for (i = 0; i < (uint32_t)c->nfds; i++) close(c->fds[i]);
@@ -794,7 +1000,13 @@ int main(int argc, char **argv)
     make_coef();
     win_w = atoi(argv[4]); win_h = atoi(argv[5]);
     if (argc > 6) fps = atoi(argv[6]);
-    if (argc > 7 && strcmp(argv[7], "input") == 0) input_on = 1;
+    for (i = 7; i < argc; i++) {
+        if (strcmp(argv[i], "input") == 0) input_on = 1;
+#ifdef G21_GPU
+        /* gpu <render node> <the unit's library folder>: only when the unit's EGL comes up; otherwise as without */
+        else if (strcmp(argv[i], "gpu") == 0 && i + 2 < argc) { gpu_on = gl_init(argv[i + 1], argv[i + 2]) == 0; i += 2; }
+#endif
+    }
     if (win_w < 16 || win_h < 16 || win_w > MAX_W || win_h > MAX_H) { fprintf(stderr, "size out of range\n"); return 2; }
     if (fps < 20 || fps > 120) fps = 60;
     memset(&act, 0, sizeof act);
