@@ -1992,7 +1992,7 @@ Daemon.prototype.openAudio = function (take) {
     return new Promise((resolve) => {
         let done = false, buf = '';
         const c = net.connect(this.opts.audioSock);
-        const end = (why) => { if (done) return; done = true; clearTimeout(t); if (why) { this.log('sound: no G21 Audio (' + why + '): pages are silent'); try { c.destroy(); } catch (e) { /* gone */ } } resolve(); };
+        const end = (why) => { if (done) return; done = true; clearTimeout(t); this.audioWhy = why || ''; if (why) { this.log('sound: no G21 Audio (' + why + '): pages are silent'); try { c.destroy(); } catch (e) { /* gone */ } } resolve(); };
         const t = setTimeout(() => end('no answer'), 3000);
         c.setEncoding('utf8');
         // (take: asked on purpose, when the engine or a film starts; not when asking again after the stream was lost)
@@ -2437,6 +2437,10 @@ Daemon.prototype.startEngine2 = async function (url) {
     await this.startProxy();
     this.startFrame();
     await this.openAudio(true);
+    // "busy": another player (AirPlay) has the one stream and is heard right now. THEiPlay ends AirPlay for the
+    // browser, which may take a moment longer than this start: asked again a few times, because an engine started
+    // without its sound device is mute until it stops (owner, 2026-11-20: AirPlay sounded, the browser did not).
+    for (let i = 0; i < 4 && !this.audio && this.audioWhy === 'busy' && this.want; i++) { await sleep(700); await this.openAudio(true); }
     const mode = this.policy().sandbox;
     const refuse = (why) => {
         if (mode === 'required') { this.log(why + ': policy "sandbox": "required", the engine is not started'); return new UserError('reguły wymagają piaskownicy, a silnik nie może jej użyć'); }

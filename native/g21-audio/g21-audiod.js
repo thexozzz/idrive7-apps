@@ -106,7 +106,7 @@ function onMedia() { return sp === spMedia; }
 const device = function () { return DEVICE || ('plug:' + sp.device); };
 
 // the one stream
-const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, claimed: false, stats: '', since: 0, lost: 0 };
+const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, sound: false, claimed: false, stats: '', since: 0, lost: 0 };
 [spCar, spMedia].filter(Boolean).forEach(function (x) { x.on('lost', function () { if (x !== sp) return; st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); }); });
 function fallBack(why) {
     if (!onMedia()) return Promise.resolve();
@@ -377,8 +377,9 @@ function startWriter() {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).replace(/^\[G21-AUDIO\] out: /, '');
             buf = buf.slice(i + 1);
+            if (l === 'sound' || l === 'quiet') { st.sound = l === 'sound'; continue; }
             if (l === 'active') {
-                st.active = true; st.since = Date.now(); claim();
+                st.active = true; st.sound = true; st.since = Date.now(); claim();
                 // the writer opens the device now; an open that does not come back would hold the player for ever
                 openWatch = setTimeout(function () { log('writer: the device did not open in 4 s, stopping it'); try { child.kill('SIGKILL'); } catch (e) { /* gone */ } }, 4000);
             }
@@ -457,8 +458,9 @@ function closeStream(why) {
  */
 function openAsk(c, m, send) {
     const other = st.holder && st.holder !== c ? st.holder : null;
-    if (!other || !m.take || st.active) { send(openStream(c, m)); return; }
-    log('stream "' + st.name + '" is silent: given to "' + String(m.name || '').slice(0, 24) + '"');
+    // (silent: its writer does not run, or runs and only holds the channel: nothing heard for 1.5 s)
+    if (!other || !m.take || (st.active && st.sound !== false)) { send(openStream(c, m)); return; }
+    log('stream "' + st.name + '" is silent' + (st.active ? ' (it only holds the channel)' : '') + ': given to "' + String(m.name || '').slice(0, 24) + '"');
     closeStream('taken by another player').then(function () {
         try { other.destroy(); } catch (e) { /* gone */ }
         send(openStream(c, m));
@@ -553,7 +555,7 @@ function caps() {
     };
 }
 function status() {
-    return { ev: 'status', version: VERSION, backend: backend(), device: device(), stream: st.name || null, active: st.active, claimed: st.claimed,
+    return { ev: 'status', version: VERSION, backend: backend(), device: device(), stream: st.name || null, active: st.active, sound: st.active && st.sound !== false, claimed: st.claimed,
         activeMs: st.active ? Date.now() - st.since : 0, stats: st.stats, lost: st.lost };
 }
 

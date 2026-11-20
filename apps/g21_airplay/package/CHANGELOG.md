@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.213
+
+- Właściciel, 2026-11-20 (`g21-audio` 0.1.20): dźwięk z AirPlay działa, w przeglądarce nie. Auto poza siecią, więc bez logu; przyczyna odczytana z kodu: strumień dźwięku jest jeden i przeglądarka dostaje go tylko od odtwarzacza, który milczy. Od 0.1.20 kanał jest trzymany przez przerwy, więc AirPlay uchodził za grający jeszcze 20 s po ostatnim dźwięku, a przy włączonym lustrze telefonu cały czas (telefon wysyła dźwięk bez przerwy, także ciszę). Przeglądarka dostawała odmowę i jej silnik startował bez urządzenia dźwiękowego – niemy aż do zatrzymania.
+- `g21-audio` 0.1.21: program zapisujący sprawdza próbki i zgłasza „quiet”, gdy przez 1,5 s nic nie było głośniejsze niż ok. −66 dBFS (albo nic nie przyszło), i „sound”, gdy znów coś słychać. Strumień odtwarzacza, który tylko trzyma kanał, jest oddawany temu, kto o niego prosi.
+- `g21-browser` 0.1.48: gdy przy starcie silnika strumień jest zajęty (AirPlay właśnie gra i dopiero się kończy), przeglądarka pyta jeszcze cztery razy co 0,7 s, zamiast od razu wystartować niema.
+- Sprawdzone na atrapie urządzenia i testami; w aucie niesprawdzone. Jeśli przyczyna jest inna, pokaże to log z auta.
+
 ## 0.1.212
 
 - Pomysł właściciela (2026-11-20): kanał dźwięku auta ma być przejęty raz i trzymany jak żywy strumień, a nie oddawany radiu przy każdej przerwie. `g21-audio` 0.1.20: dopóki aplikacja coś odtwarza z przerwami krótszymi niż 20 s, głośniki i urządzenie zostają nasze – jedno otwarcie i jedno połączenie na cały czas grania – a w przerwach (następny film, następny utwór, pauza) podawana jest cisza. Radio wraca dopiero po 20 s ciszy albo po zamknięciu aplikacji. Dotąd były to 3 s, więc każda zmiana treści oddawała i przejmowała kanał od nowa – i właśnie przy ponownym przejęciu psuło się tempo (stare wejście) albo dźwięk nie wracał wcale (nowe wejście, 0.1.18).

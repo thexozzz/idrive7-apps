@@ -153,6 +153,28 @@ static snd_pcm_t *dev_open(const char *dev)
     return pcm;
 }
 
+/*
+ * Sound or silence. One stream has the speakers at a time, and another player gets it only from one that is
+ * silent. Since the channel is held through pauses (and a phone that mirrors its screen sends sound all the time,
+ * silence included) "the writer runs" no longer says that something is heard: the browser, opened after AirPlay,
+ * was refused the stream and stayed mute for as long as its engine lived (owner, 2026-11-20: "AirPlay works, the
+ * browser does not"). So the samples are looked at: "quiet" is said when none was louder than about -66 dBFS for
+ * 1.5 s (or none came), "sound" when one is again. g21-audiod gives the stream of a quiet holder away.
+ */
+static double loud_at;
+static int said_quiet;
+static void heard(const int16_t *b, unsigned long samples, double now)
+{
+    unsigned long i;
+    int loud = 0;
+    for (i = 0; i < samples; i += 3) { if (b[i] > 16 || b[i] < -16) { loud = 1; break; } }
+    if (!loud_at) loud_at = now;
+    if (loud) {
+        loud_at = now;
+        if (said_quiet) { said_quiet = 0; fprintf(stderr, "[G21-AUDIO] out: sound\n"); }
+    } else if (!said_quiet && now - loud_at > 1500.0) { said_quiet = 1; fprintf(stderr, "[G21-AUDIO] out: quiet\n"); }
+}
+
 /* one chunk from stdin; 1 = got it, 0 = nothing for IDLE_MS (or the end), -1 = stopping */
 static int read_chunk(int16_t *buf, int wait_ms)
 {
@@ -250,6 +272,7 @@ static int play(const char *dev)
             need = write_chunk(pcm, buf, &frames, &dropped, &full, &xruns);
         }
         now = mono_ms();
+        heard(buf, CHUNK * CH, now);
         if (now >= report) {
             report = now + 5000;
             if (A.delay(pcm, &d) < 0) d = 0;
@@ -273,6 +296,7 @@ static int play(const char *dev)
                 if (stopping) { r = -1; break; }
                 if (pr > 0 && (pw.revents & POLLIN)) { r = read_chunk(buf, 200); if (r != 0) break; }
                 if (mono_ms() - before > idle) { r = 0; break; }
+                heard(zero, 0, mono_ms());
                 if (pr <= 0 || !(pw.revents & POLLIN)) { write_chunk(pcm, zero, &quiet, &q1, &q2, &q3); if (pr > 0) usleep(10000); }
             }
         }
@@ -363,12 +387,14 @@ static int engine(const char *dev, int greedy)
                 memcpy(&ring[((head + fill) % RING) * CH], in + i * fb, fb);
                 fill++;
             }
+            if (whole) heard((const int16_t *)(const void *)in, (unsigned long)whole * CH, now);
             taken += whole;
             budget -= (double)whole;
             part = bytes - whole * fb;
             if (part) memmove(in, in + whole * fb, part);
         }
         if (got) last_in = now;
+        else if (pcm) heard(zero, 0, now);
         if (!pcm) {
             if (!fill) { budget = 0.0; continue; }
             fprintf(stderr, "[G21-AUDIO] out: active\n");
