@@ -50,6 +50,7 @@ static struct {
     int (*recover)(snd_pcm_t *, int, int);
     int (*delay)(snd_pcm_t *, long *);
     long (*avail)(snd_pcm_t *);   /* optional */
+    int (*get_params)(snd_pcm_t *, unsigned long *, unsigned long *);   /* optional */
     const char *(*strerror)(int);
 } A;
 enum { PLAYBACK = 0, NONBLOCK = 1, S16_LE = 2, RW_INTERLEAVED = 3 };
@@ -80,7 +81,7 @@ static int alsa_load(void)
     if (!h) { fprintf(stderr, "[G21-AUDIO] out: libasound.so.2: %s\n", dlerror()); return 0; }
 #define SYM(f, n) ((A.f = dlsym(h, n)) != NULL)
     if (SYM(open, "snd_pcm_open") && SYM(set_params, "snd_pcm_set_params") && SYM(writei, "snd_pcm_writei") &&
-        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) { A.avail = dlsym(h, "snd_pcm_avail_update"); return 1; }
+        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) { A.avail = dlsym(h, "snd_pcm_avail_update"); A.get_params = dlsym(h, "snd_pcm_get_params"); return 1; }
 #undef SYM
     fprintf(stderr, "[G21-AUDIO] out: libasound.so.2 lacks a function\n");
     return 0;
@@ -139,6 +140,50 @@ static void drop_root(void)
     }
 }
 
+/*
+ * The stream's lock. SmartX keeps one file a stream, /run/smartx/smartx_<stream>_p.lock, made by whoever opens the
+ * stream first, as that user. Made by root it may be one the stream's real owner (BMW's media engine, CarPlay)
+ * cannot take, and that owner is then silent until the head unit restarts: Vizualyse/idrive-apps, knowledge/sound.md,
+ * car 2026-11-05 (their player ran as root: CarPlay silent until a restart; mended in their tool/pcm_play 1.0.1).
+ * Our writer for the media input starts as root too. umask 0007 and the folder's set-group-ID bit should already
+ * give root:mgu_alsa 0660; this makes sure of it instead of counting on the folder: a lock that is root's is given
+ * to the folder's own owner and group (the system's ent_alsaroutingadapters:mgu_alsa), 0660, as the system makes
+ * its own. Only as root, only for a SmartX device, only a plain file in that folder, and nothing when the folder
+ * itself is root's (then it is not the system's folder). G21_AUDIO_LOCKDIR: another folder (the test).
+ */
+static void lock_fix(const char *dev)
+{
+    const char *dir = getenv("G21_AUDIO_LOCKDIR");
+    const char *s = strstr(dev, "smartx:");
+    char path[512];
+    struct stat d, l;
+    int fd;
+    if (!s || geteuid() != 0) return;
+    s += 7;
+    if (!*s || strchr(s, '/') || strchr(s, ':')) return;
+    if (!dir || !*dir) dir = "/run/smartx";
+    if (stat(dir, &d) != 0 || !S_ISDIR(d.st_mode) || d.st_uid == 0) return;
+    if (snprintf(path, sizeof path, "%s/smartx_%s_p.lock", dir, s) >= (int)sizeof path) return;
+    fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return;
+    if (fstat(fd, &l) == 0 && S_ISREG(l.st_mode) && l.st_uid == 0) {
+        if (fchown(fd, d.st_uid, d.st_gid) == 0 && fchmod(fd, 0660) == 0)
+            fprintf(stderr, "[G21-AUDIO] out: lock %s was root's (%o): given to %lu:%lu, 660\n", path, (unsigned)(l.st_mode & 0777), (unsigned long)d.st_uid, (unsigned long)d.st_gid);
+        else fprintf(stderr, "[G21-AUDIO] out: lock %s is root's and stays so: %s\n", path, strerror(errno));
+    }
+    close(fd);
+}
+
+/* What the device really gave: its buffer and period in frames (what was asked for is in the line before). The
+ * car's input takes 48 000 or 36 000 frames a second, by chance, at each opening; 36 000 is what a reader gets that
+ * takes a whole 3 x 1024 buffer once in four periods, so the two numbers belong beside the pace in the log. */
+static void granted(snd_pcm_t *pcm)
+{
+    unsigned long buffer = 0, period = 0;
+    if (!A.get_params || A.get_params(pcm, &buffer, &period) < 0) return;
+    fprintf(stderr, "[G21-AUDIO] out: device buffer %lu frames, period %lu frames\n", buffer, period);
+}
+
 static snd_pcm_t *dev_open(const char *dev)
 {
     snd_pcm_t *pcm = NULL;
@@ -148,7 +193,9 @@ static snd_pcm_t *dev_open(const char *dev)
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: open %s: %s\n", dev, A.strerror(rc)); return NULL; }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: set_params %s: %s\n", dev, A.strerror(rc)); return NULL; }
+    lock_fix(dev);
     drop_root();
+    granted(pcm);
     fprintf(stderr, "[G21-AUDIO] out: open %s, S16LE %d Hz %d ch, buffer %u us\n", dev, RATE, CH, buffer_us());
     return pcm;
 }
@@ -497,7 +544,9 @@ static int probe(const char *dev, const char *mode)
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: open %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: set_params %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
+    lock_fix(name);
     drop_root();
+    granted(pcm);
     t0 = mono_ms();
     while ((t = mono_ms()) - t0 < 6000 && !stopping) {
         long w;
@@ -556,6 +605,7 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
+    if (argc >= 3 && !strcmp(argv[1], "lock")) { lock_fix(argv[2]); return 0; }
     if (argc >= 4 && !strcmp(argv[1], "probe")) return alsa_load() ? probe(argv[2], argv[3]) : 1;
     if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "live")) return alsa_load() ? engine(argv[2], 1) : 1;
     if (argc >= 4 && !strcmp(argv[1], "play") && !strcmp(argv[3], "plain")) return alsa_load() ? play(argv[2]) : 1;   /* the writer before 0.1.9 */

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.11
+
+- Dźwięk: porównanie z innymi projektami iDrive 7 (prośba właściciela; docs/12). Vizualyse, Moonride, idrive-enginesound, mgu-browser i id7 używają tej samej drogi co `g21-audio` (źródło CarLife 287 → głośniki, to samo urządzenie; nasz moduł głośników pochodzi z Vizualyse). Gotowej naprawy, której nie mamy, nie ma w żadnym; żaden nie opisuje też tempa 36 000 zamiast 48 000 próbek.
+- `g21-audio` 0.1.25, dwie różnice przeniesione: (1) blokada strumienia dźwięku auta – u Vizualyse blokada założona przez proces roota uciszyła CarPlay do restartu jednostki (auto, 2026-11-05); nasz program zapisujący dla wejścia odtwarzacza BMW też startuje jako root, więc blokadę, która jest roota, oddaje teraz właścicielowi i grupie folderu blokad (0660), tak jak zakłada je system. Tylko zwykły plik w tym folderze, bez podążania za dowiązaniami. (2) Log zapisuje, jaki bufor i okres urządzenie naprawdę przyznało (`out: device buffer … frames, period … frames`) – brakująca liczba do sprawy 36 000 / 48 000.
+- Bez zmian w tym, którędy i jak dźwięk gra. Sprawdzone na stanowisku (test strumieni z prawdziwą binarką, blokada jako root w folderze testowym); w aucie NIESPRAWDZONE – auto było poza siecią. Nadal niepotwierdzone w aucie: `g21-audio` 0.1.24 (usunięte zawieszenie demona po przejęciu głośników).
+
 ## 0.2.10
 
 - Tryb GPU przeglądarki, EKSPERYMENTALNY (`g21-browser` 0.1.57; właściciel: „Tak, wdrażaj"). Ustawienia > Zaawansowane > „Układ graficzny (próba)". NIGDZIE NIESPRAWDZONY: na stanowisku nie ma układu graficznego auta, więc pierwszą próbą jest auto właściciela.

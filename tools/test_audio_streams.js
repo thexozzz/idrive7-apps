@@ -215,6 +215,31 @@ async function until(what, fn, ms) {
     const tryIt = loader ? cp.spawnSync(loader, [bin, 'tone', 'null', '1', '100'], { encoding: 'utf8', timeout: 8000 }) : { status: 1, stderr: 'no loader' };
     if (tryIt.status !== 0) console.log('SKIP streams with the real writer: g21-audio-out does not run here (' + String(tryIt.stderr || (tryIt.error && tryIt.error.message) || '').trim().split('\n').pop().slice(0, 100) + ')');
     else {
+        // what the device really gave is said beside what was asked for (the car's 36 000 / 48 000 question)
+        assert.ok(/out: device buffer \d+ frames, period \d+ frames/.test(tryIt.stderr), 'the granted buffer and period are logged: ' + tryIt.stderr);
+        // the stream's lock: one that root made is given to the lock folder's owner, 660 (as root only)
+        if (process.getuid() === 0) {
+            const ld = path.join(base, 'smartx'), lk = path.join(ld, 'smartx_Some_CF_48_STEREO_p.lock'), other = path.join(ld, 'smartx_Other_CF_48_STEREO_p.lock');
+            const lockRun = (dev, dir) => cp.spawnSync(loader, [bin, 'lock', dev], { encoding: 'utf8', timeout: 8000, env: Object.assign({}, process.env, { G21_AUDIO_LOCKDIR: dir }) });
+            fs.mkdirSync(ld); fs.chownSync(ld, 4032, 4033);
+            fs.writeFileSync(lk, ''); fs.chownSync(lk, 0, 0); fs.chmodSync(lk, 0o640);
+            fs.writeFileSync(other, ''); fs.chownSync(other, 1234, 4033); fs.chmodSync(other, 0o640);
+            let r = lockRun('plug:smartx:Some_CF_48_STEREO', ld), s = fs.statSync(lk);
+            assert.ok(s.uid === 4032 && s.gid === 4033 && (s.mode & 0o777) === 0o660 && /was root's \(640\): given to 4032:4033, 660/.test(r.stderr), 'root\'s lock is given to the folder\'s owner: ' + r.stderr);
+            r = lockRun('smartx:Other_CF_48_STEREO', ld); s = fs.statSync(other);
+            assert.ok(s.uid === 1234 && (s.mode & 0o777) === 0o640 && !r.stderr, 'a lock that is not root\'s is left as it is');
+            r = lockRun('smartx:Missing_CF_48_STEREO', ld);
+            assert.ok(!fs.existsSync(path.join(ld, 'smartx_Missing_CF_48_STEREO_p.lock')) && !r.stderr, 'no lock is made');
+            const rootDir = path.join(base, 'smartx-root'), rl = path.join(rootDir, 'smartx_Some_CF_48_STEREO_p.lock');
+            fs.mkdirSync(rootDir); fs.writeFileSync(rl, ''); fs.chmodSync(rl, 0o640);
+            lockRun('smartx:Some_CF_48_STEREO', rootDir);
+            assert.strictEqual(fs.statSync(rl).mode & 0o777, 0o640, 'a folder that is root\'s is not the system\'s: nothing is touched');
+            fs.symlinkSync(rl, path.join(ld, 'smartx_Link_CF_48_STEREO_p.lock'));
+            lockRun('smartx:Link_CF_48_STEREO', ld);
+            assert.ok(fs.statSync(rl).uid === 0 && (fs.statSync(rl).mode & 0o777) === 0o640, 'a link is not followed');
+            lockRun('null', ld); lockRun('smartx:../x', ld);
+            console.log('ok the stream\'s lock: root\'s is given to the folder\'s owner (660); others, links and a folder of root\'s are left alone');
+        } else console.log('SKIP the stream\'s lock: not root');
         const run2 = path.join(base, 'run2'), wrap = path.join(base, 'real-out');
         fs.mkdirSync(run2);
         fs.writeFileSync(wrap, '#!/bin/sh\nexec "' + loader + '" "' + bin + '" "$@"\n'); fs.chmodSync(wrap, 0o755);
