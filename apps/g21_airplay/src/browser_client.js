@@ -26,7 +26,7 @@ var MAX_LINE = 65536;
 function blank() {
     return {
         connected: false, engine: 'off', err: '', url: '', title: '', loading: false, back: false, fwd: false,
-        live: false, w: 0, h: 0, ino: 0, zoom: 1, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false, film: null, note: '', gpu: null
+        live: false, w: 0, h: 0, ino: 0, zoom: 1, editable: false, pct: 0, ring: '', ask: '', pol: null, fs: false, film: null, note: '', gpu: null, logs: null
     };
 }
 
@@ -96,6 +96,7 @@ function createBrowserClient(opts) {
                     homepage: String(m.pol.homepage || ''), autoplay: String(m.pol.autoplay || ''), fullscreen: String(m.pol.fullscreen || ''), carData: String(m.pol.carData || ''), carDiag: String(m.pol.carDiag || ''), video: String(m.pol.video || ''), engine: String(m.pol.engine || ''), mobile: String(m.pol.mobile || ''), frames: String(m.pol.frames || ''), framesNow: String(m.pol.framesNow || ''), audio: String(m.pol.audio || ''), sound: String(m.pol.sound || '') } : null,
                 // a player of the page is in full screen and the picture is the whole centre screen
                 fs: !!m.fs,
+                logs: m.logs && typeof m.logs === 'object' ? { on: !!m.logs.on, now: String(m.logs.now || 'off') } : null,
                 gpu: m.gpu && typeof m.gpu === 'object' ? { on: !!m.gpu.on, now: String(m.gpu.now || 'off'), why: String(m.gpu.why || ''), hung: String(m.gpu.hung || '') } : null,
                 // THEiPlay Player has the screen: what its buttons show
                 film: m.film && typeof m.film === 'object' ? { loading: !!m.film.loading, paused: !!m.film.paused, pos: Number(m.film.pos) || 0, dur: Number(m.film.dur) || 0,

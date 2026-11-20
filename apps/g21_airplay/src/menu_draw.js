@@ -908,6 +908,8 @@ var SET_ADVANCED_ITEMS = [
     { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
     { name: 'aset-sandbox', title: 'Piaskownica', hint: 'wymagana', icon: 'tag' },
     { name: 'aset-memory', title: 'Limit pamięci', hint: '2048 MB', icon: 'gear' },
+    // the logs of THEiPlay's tools, sent to the owner's log server whenever the car has a way out
+    { name: 'aset-logs', title: 'Wysyłanie logów', hint: 'włączone', icon: 'gear' },
     // the browser's own pages: version, rules, switches, history (chrome://about)
     { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
     { name: 'sgx-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }

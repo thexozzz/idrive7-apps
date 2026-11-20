@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.11',
+        version: (this._packageJson && this._packageJson.version) || '0.2.12',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.11') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.12') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5511,6 +5511,23 @@ AirPlayApp.prototype._gpuHint = function (s) {
     return g.hung ? 'wyłączony: ostatnia próba przerwana restartem' : 'wyłączony';
 };
 
+// "Wysyłanie logów": what the browser tool says about sending the tools' logs to the owner's log server
+AirPlayApp.prototype._logsHint = function (s) {
+    var l = s && s.connected ? s.logs : null;
+    var m;
+    if (!l) {
+        return '—';
+    }
+    if (!l.on) {
+        return 'wyłączone';
+    }
+    m = /^ok \d{4}-\d\d-\d\dT(\d\d:\d\d)/.exec(l.now);
+    if (m) {
+        return 'włączone, serwer odebrał ' + m[1] + ' UTC';
+    }
+    return /^error/.test(l.now) ? 'włączone, serwer nieosiągalny' : 'włączone, jeszcze nic nie wysłano';
+};
+
 AirPlayApp.prototype._gpuPress = function () {
     var self = this;
     var s = this._web ? this._web.state() : null;
@@ -5698,6 +5715,7 @@ AirPlayApp.prototype._paintApps = function () {
     m.setItemHint('aset-sandbox', pol ? ({ ask: 'pytaj, gdy się nie da', required: 'wymagana', off: 'wyłączona (plik reguł)' }[pol.sandbox] || pol.sandbox) : '—');
     m.setItemHint('aset-memory', pol && pol.memoryLimitMb ? pol.memoryLimitMb + ' MB' : '—');
     m.setItemHint('aset-gpu', this._gpuHint(s));
+    m.setItemHint('aset-logs', this._logsHint(s));
     if (typeof m.repaint === 'function') {
         m.repaint();
     }
@@ -6260,6 +6278,12 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     }
     if (name === 'aset-gpu') {
         this._gpuPress();
+        return true;
+    }
+    if (name === 'aset-logs') {
+        if (this._web && this._web.state().connected && this._web.state().logs) {
+            this._web.send({ op: 'logs', on: !this._web.state().logs.on });
+        }
         return true;
     }
     if (name === 'aset-picture' || name === 'aset-sandbox' || name === 'aset-memory') {

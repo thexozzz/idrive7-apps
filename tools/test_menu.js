@@ -30,7 +30,7 @@ assert.deepStrictEqual(menu.SET_GENERAL_ITEMS.map(function (i) { return i.name; 
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-import', 'store-demo', 'store-back']);
 assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-home', 'aset-zoom', 'aset-fs', 'aset-autoplay', 'aset-mobile', 'aset-back']);
 // the technical rules (the menu's rendering, the engine, its picture path, the sandbox, memory) are one group
-assert.deepStrictEqual(menu.SET_ADVANCED_ITEMS.map(function (i) { return i.name; }), ['set-render', 'aset-engine', 'aset-frames', 'aset-picture', 'aset-gpu', 'aset-video', 'aset-sandbox', 'aset-memory', 'aset-pages', 'sgx-back']);
+assert.deepStrictEqual(menu.SET_ADVANCED_ITEMS.map(function (i) { return i.name; }), ['set-render', 'aset-engine', 'aset-frames', 'aset-picture', 'aset-gpu', 'aset-video', 'aset-sandbox', 'aset-memory', 'aset-logs', 'aset-pages', 'sgx-back']);
 assert.ok(menu.SCREENS['set-advanced'] === menu.SET_ADVANCED_ITEMS);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
 // tiles: a gallery of small tiles, row by row, in up to three rows; a page with sliders stays a list

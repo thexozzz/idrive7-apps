@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.12
+
+- Właściciel, 2026-11-21: po restarcie MGU film w przeglądarce grał dobrze; po zamknięciu przeglądarki i włączeniu AirPlay dźwięk się zacinał, po powrocie do filmu w przeglądarce też. Auto poza siecią, więc bez logu – przyczyna NIE jest ustalona. Pasuje do znanego objawu (pierwsze otwarcie urządzenia dźwięku trafia w pełne tempo, następne w trzy czwarte), ale to trzeba zobaczyć w logu.
+- Wysyłanie logów (pomysł właściciela: „serwerek co pobiera logi, a aplikacja wysyła je na niego"). `g21-browser` 0.1.58: demon co 30 s wysyła nowe wiersze logów narzędzi THEiPlay (dźwięk, przeglądarka, sterowanie, aplikacja) na serwer właściciela `100.89.166.19:12346`, przez wyjście Tailscale auta (SOCKS5, to samo co RDP/VNC). Serwer nieosiągalny niczego nie gubi: wysyłka rusza od miejsca, w którym stanęła, także po restarcie; log przemianowany na `.1` jest dosyłany do końca. Przy pierwszym razie idzie ostatnie 512 KB każdego pliku.
+- Ustawienia > Zaawansowane > „Wysyłanie logów": włączone domyślnie, pokazuje, kiedy serwer ostatnio coś odebrał albo że jest nieosiągalny. Wysyłane są tylko logi naszych narzędzi, nic z systemu BMW; log przeglądarki zawiera adresy otwieranych stron. Inny serwer: `"logServer"` w `settings.json` narzędzia.
+- Serwer: `tools/logserver/server.js` (jeden plik, bez zależności; opis w `tools/logserver/README.md`). Bez hasła, domyślnie słucha tylko na adresie Tailscale maszyny.
+- Sprawdzone na stanowisku (wysyłka do prawdziwego serwera, także przez atrapę SOCKS5; przerwa serwera; restart; zmiana pliku logu). W aucie NIESPRAWDZONE: nie wiadomo, czy wyjście Tailscale auta przepuszcza ruch demona do tego adresu – pokaże to wiersz w ustawieniu.
+
 ## 0.2.11
 
 - Dźwięk: porównanie z innymi projektami iDrive 7 (prośba właściciela; docs/12). Vizualyse, Moonride, idrive-enginesound, mgu-browser i id7 używają tej samej drogi co `g21-audio` (źródło CarLife 287 → głośniki, to samo urządzenie; nasz moduł głośników pochodzi z Vizualyse). Gotowej naprawy, której nie mamy, nie ma w żadnym; żaden nie opisuje też tempa 36 000 zamiast 48 000 próbek.

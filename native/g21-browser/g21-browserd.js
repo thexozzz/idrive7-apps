@@ -42,6 +42,7 @@ const path = require('path');
 const net = require('net');
 const cp = require('child_process');
 const native = require('./g21-native.js');
+const logship = require('./g21-logship.js');
 // What the owner is told (the line over the address, for as long as it holds): the engine had to be started with
 // DevTools after all, or its extension does not answer at the moment.
 const NOTE_FALLBACK = 'tryb awaryjny: część stron może odmawiać (logowanie, serwisy wideo)';
@@ -80,6 +81,8 @@ function defaults() {
         ytdlp: env.G21_BROWSER_YTDLP || '/var/opt/jap-ridetube-d/current/ytdlp.pyz',
         cacheDir: path.join(root, 'cache'),
         stateDir: path.join(root, 'state'),
+        // the logs of THEiPlay's tools go to the owner's log server (g21-logship.js); not from a test's folder
+        logShip: !env.G21_BROWSER_ROOT && env.G21_BROWSER_LOGSHIP !== '0',
         logDir: path.join(root, 'log'),
         runDir: run,
         sock: path.join(run, 'ctl.sock'),
@@ -1070,6 +1073,7 @@ Daemon.prototype.push = function (force) {
     const o = { ev: 'state', engine: s.engine, err: s.err, url: start ? own : s.url, title: start ? (own || 'Strona startowa') : s.title, loading: s.loading, back: s.back, fwd: s.fwd,
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '', note: this.note || '',
         gpu: { on: !!this.gpuWant, now: this.engine && this.gpu ? (this.gpuFrames === 'gpu' ? 'gpu' : (this.gpuFrames === 'memory' ? 'cpu' : 'starting')) : 'off', why: this.gpuWhy || '', hung: this.gpuHung || '' },
+        logs: { on: !!this.logsOn, now: this.logs ? this.logs.status() : 'off' },
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
             homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile, frames: this.policy().frames, framesNow: this.engine ? (this.direct ? 'direct' : 'cast') : '' }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
@@ -1150,6 +1154,26 @@ Daemon.prototype.go = async function (e, url) {
         this.log('chrome://' + c.name + ': ' + r.errorText);
         await e.cdp.send('Page.navigate', { url: this.chromePage(c.name, true) }, e.session);
     }
+};
+/*
+ * The logs, sent to the owner's log server (owner, 2026-11-21: "serwerek co pobiera logi - a aplikacja wysyła je na
+ * niego", with this address). On unless the owner switches it off in the app (settings.json "logs": "off");
+ * another server: "logServer": "host:port" in settings.json. See g21-logship.js for what is sent and how.
+ */
+const LOG_SERVER = '100.89.166.19:12346';
+Daemon.prototype.logsStart = function () {
+    if (!this.opts.logShip && !this.opts.logShipTest) return;
+    const st = this.settings();
+    if (!this.logs) this.logs = new logship.LogShip(Object.assign({ stateFile: path.join(this.opts.stateDir, 'logship.json'), log: (t) => this.log(t) }, this.opts.logShipTest || {}));
+    const server = logship.parseServer(st.logServer) ? st.logServer : LOG_SERVER;
+    this.logsOn = st.logs !== 'off';
+    this.logs.set(this.logsOn ? server : '');
+};
+Daemon.prototype.logsSet = function (on) {
+    this.saveSettings({ logs: on ? 'on' : 'off' });
+    this.log('logs: sending switched ' + (on ? 'on' : 'off') + ' from the app');
+    this.logsStart();
+    this.push(true);
 };
 Daemon.prototype.settings = function () { return readJson(path.join(this.opts.stateDir, 'settings.json')) || {}; };
 Daemon.prototype.saveSettings = function (patch) {
@@ -1340,6 +1364,7 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'gputest') { this.gpuTest(); return; }
     if (m.op === 'restart-services') { this.restartServices(); return; }
     if (m.op === 'gpu') { await this.gpuSet(m.on); return; }
+    if (m.op === 'logs') { this.logsSet(!!m.on); return; }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -3279,6 +3304,7 @@ Daemon.prototype.start = async function () {
         }
     } catch (e) { this.log('policy: memory limit: ' + e.message); }
     this.servicesAfterRestart();
+    this.logsStart();
     try { fs.unlinkSync(o.ring); } catch (e) { /* none */ }
     this.listen();
     // the uplink learns our uid at start (its 5 s rescan), before the first page

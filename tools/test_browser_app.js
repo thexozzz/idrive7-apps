@@ -147,7 +147,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_gpuHint', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_gpuHint', '_logsHint', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -178,6 +178,21 @@ function glueApp() {
     g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 1500 } });
     g.sent.length = 0; g._onAppsChoice('aset-memory');
     assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [2048], 'after 1500 MB comes 2048 MB, the default');
+    // sending the logs: what the tool says, and the switch
+    g.setState({ logs: { on: true, now: 'ok 2026-11-21T10:42:07.000Z' } });
+    assert.strictEqual(g._logsHint(g._web.state()), 'włączone, serwer odebrał 10:42 UTC');
+    g.sent.length = 0;
+    g._onAppsChoice('aset-logs');
+    assert.deepStrictEqual(g.sent, [{ op: 'logs', on: false }]);
+    g.setState({ logs: { on: false, now: 'off' } });
+    assert.strictEqual(g._logsHint(g._web.state()), 'wyłączone');
+    g.sent.length = 0;
+    g._onAppsChoice('aset-logs');
+    assert.deepStrictEqual(g.sent, [{ op: 'logs', on: true }]);
+    g.setState({ logs: { on: true, now: 'error: connect timeout' } });
+    assert.strictEqual(g._logsHint(g._web.state()), 'włączone, serwer nieosiągalny');
+    g.setState({ logs: { on: true, now: 'waiting' } });
+    assert.strictEqual(g._logsHint(g._web.state()), 'włączone, jeszcze nic nie wysłano');
     // the GPU mode's switch: the first press only warns, the second within eight seconds switches on; off at once
     g.setState({ gpu: { on: false, now: 'off', why: '', hung: '' } });
     g.sent.length = 0;
