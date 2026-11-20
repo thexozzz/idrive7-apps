@@ -190,7 +190,8 @@ const PAGE = (name) => '<!doctype html><meta charset=utf-8><meta name=viewport c
     check('still without DevTools', !!dm().engine.native, dm().lastArgs.filter((a) => /debug/.test(a)));
     check('the engine kept its cookies and the site\'s data over its start', T().ck === '1' && Number(T().ls) > 1, T());
     await tap(120 * 1.5, 80 * 1.5);
-    await until('a tap lands where it should at 150 %', () => T().n === 'druga' && Number(T().tap) >= 1 || /druga$/.test(st().url));
+    await until('a tap lands where it should at 150 % (the page counts it)', () => T().n === 'druga' && Number(T().tap) >= 1);
+    check('one tab after a new start of the engine (what it brings back from its last run is closed)', Object.keys(dm().engine.cdp.tabs).length === 1, Object.keys(dm().engine.cdp.tabs));
     await shot('zoom-150');
     app._web.send({ op: 'zoom', z: 1 });
     await stand.sleep(1500);

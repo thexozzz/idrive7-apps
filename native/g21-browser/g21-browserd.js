@@ -2356,7 +2356,9 @@ Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
         // a film keeps playing whatever the engine thinks of its window (it has none): no pausing of "hidden" media, no
         // slowed timers
         '--disable-background-media-suspend', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', '--no-first-run', '--no-pings', '--disable-breakpad', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
-        '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder',
+        // (SpareRendererForSitePerProcess: no page process kept ready for a page nobody asked for yet; it costs memory
+        // and a start's processor time on four slow cores: Vizualyse's vizualyse-chromium, checked there in the source)
+        '--disable-features=Translate,MediaRouter,OptimizationHints,VaapiVideoDecoder,VaapiVideoEncoder,SpareRendererForSitePerProcess',
         '--autoplay-policy=' + (this.policy && this.policy().autoplay === 'gesture' ? 'user-gesture-required' : 'no-user-gesture-required'), '--lang=pl', '--accept-lang=pl-PL,pl,en-US,en',
         '--user-agent=' + userAgent(dirs.major, this.policy && this.policy().mobile !== 'off'),
         '--proxy-server=socks5://127.0.0.1:' + this.proxyPort, '--proxy-bypass-list=<-loopback>', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-quic',
@@ -2614,7 +2616,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     try { fs.writeFileSync('/proc/' + child.pid + '/oom_score_adj', '900'); } catch (x) { /* not Linux or gone */ }
     if (this.native) {
         e.native = true;
-        e.cdp = new native.NativeCdp({ link: this.link, input: (l) => this.frameTell(l), product: 'Chrome/' + (dirs.major || '') + ' (without DevTools)', log: (t) => this.log('native: ' + t),
+        e.cdp = new native.NativeCdp({ link: this.link, input: (l) => this.frameTell(l), product: 'Chrome/' + (dirs.major || '') + ' (without DevTools)', url: String(url || ''), log: (t) => this.log('native: ' + t),
             exprs: { edit: EDIT_PROBE, quiet: QUIET_PAGE, why: PLAYER_WHY } });
         // (a page went into or out of full screen: looked at now, not at the next poll)
         e.cdp.onFullScreen = () => { if (this.engine === e) this.guard(() => this.refresh(e)); };

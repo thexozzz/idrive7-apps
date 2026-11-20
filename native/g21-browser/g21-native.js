@@ -141,6 +141,8 @@ function NativeCdp(opts) {
     this.log = opts.log || function () {};
     this.exprs = opts.exprs || {};
     this.base = Number(opts.base) || 1;      // the scale the engine was started with (its zoom is on top of it)
+    this.url = String(opts.url || '');       // the address the engine was started with
+    this.creating = 0;                       // tabs being made at the daemon's order
     this.onEvent = null;
     this.onFault = null;
     this.onFullScreen = null;       // the page went into or out of full screen (the daemon looks again)
@@ -192,6 +194,20 @@ NativeCdp.prototype.got = function (m) {
         // (the extension came again while the engine ran: the windows over pages that are still there stay so)
         Object.keys(this.owner).forEach((k) => { if (!this.tabs[k] || !this.tabs[this.owner[k]]) { const r = this.owner[k]; delete this.owner[k]; if (this.over[r]) this.over[r] = this.over[r].filter((x) => String(x) !== String(k)); } });
         const again = !this.up && Object.keys(before).length > 0;
+        /*
+         * The engine's start: one page, the one of the address it was started with. The engine also brings back the
+         * tabs of its last run by itself and puts one of them in front (stand, 2026-11-20: after a change of the zoom
+         * the screen showed the old page at the old scale, and taps went to another tab than the one shown).
+         */
+        if (!again) {
+            const ids = Object.keys(this.tabs).map(Number);
+            if (ids.length > 1) {
+                const mine = ids.filter((k) => this.url && String(this.tabs[k].url || '').indexOf(this.url) === 0)[0] || ids[0];
+                ids.filter((k) => k !== mine).forEach((k) => { delete this.tabs[k]; this.link.ask('close', { tab: k }, 4000).catch(function () {}); });
+                this.link.ask('show', { tab: mine }, 4000).catch(function () {});
+                this.log('the engine brought ' + (ids.length - 1) + ' tab(s) of its last run back: closed');
+            }
+        }
         this.up = true;
         if (this.onLink) this.onLink(true, again);
         const w = this.upWait;
@@ -202,6 +218,8 @@ NativeCdp.prototype.got = function (m) {
     if (!tab) return;
     if (m.ev === 'new') {
         const known = !!this.tabs[tab];
+        // (a tab nobody's page opened and the daemon did not ask for: one the engine brings back late)
+        if (!known && !m.opener && !this.creating) { this.link.ask('close', { tab: tab }, 4000).catch(function () {}); this.log('a tab the engine opened by itself: closed'); return; }
         const t = this.tabs[tab] || (this.tabs[tab] = { url: '', title: '', status: 'loading' });
         if (m.opener) t.opener = Number(m.opener);
         if (m.url) t.url = m.url;
@@ -277,7 +295,7 @@ NativeCdp.prototype.send = async function (method, params, session, timeoutMs) {
     case 'Browser.getVersion': await this.ready(timeoutMs || 20000); return { product: this.product };
     case 'Target.getTargets': return { targetInfos: Object.keys(this.tabs).filter((k) => !this.owner[k]).map((k) => this.info(Number(k))) };
     case 'Target.attachToTarget': return { sessionId: String(p.targetId) };
-    case 'Target.createTarget': { const id = await link.ask('new', { url: p.url || 'about:blank' }, timeoutMs); if (!this.tabs[id]) this.tabs[id] = { url: p.url || 'about:blank', title: '', status: 'loading' }; return { targetId: 'tab:' + id }; }
+    case 'Target.createTarget': { let id; this.creating += 1; try { id = await link.ask('new', { url: p.url || 'about:blank' }, timeoutMs); } finally { setTimeout(() => { this.creating -= 1; }, 500); } if (!this.tabs[id]) this.tabs[id] = { url: p.url || 'about:blank', title: '', status: 'loading' }; return { targetId: 'tab:' + id }; }
     case 'Target.activateTarget': await link.ask('show', { tab: tabOf(p.targetId) }, timeoutMs); return {};
     case 'Target.closeTarget': await link.ask('close', { tab: tabOf(p.targetId) }, timeoutMs); return { success: true };
     case 'Page.getFrameTree': return { frameTree: { frame: { id: 'main:' + page, url: (this.tabs[tab] || {}).url || '' } } };

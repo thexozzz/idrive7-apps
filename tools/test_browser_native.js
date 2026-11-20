@@ -93,18 +93,19 @@ function ext(port, word, origin, onAsk) {
     await sleep(40);
     assert.deepStrictEqual([(await cdp.send('Target.getTargets', {})).targetInfos.map((x) => x.targetId + ' ' + x.url).join(), cdp.top(7), cdp.root(8)], ['tab:7 https://example.org/sign-in', 8, 7], 'one page for the daemon, the window on top of it');
     e.say({ ev: 'gone', tab: 8 });
-    // (a tab nobody's page opened is told as a new one)
+    // (a tab nobody's page opened and the daemon did not ask for, one the engine brings back by itself: closed, not told)
     e.say({ ev: 'new', tab: 9, opener: 0, url: 'https://example.org/other' });
+    await sleep(40);
+    assert.ok(e.asked.some((m) => m.op === 'close' && m.tab === 9), 'closed');
     e.say({ ev: 'gone', tab: 9 });
     e.say({ ev: 'fs', tab: 7, on: true, top: true });
     await sleep(80);
     assert.deepStrictEqual(events.map((m) => m.method + (m.sessionId ? ' ' + m.sessionId : '')), ['Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameNavigated tab:7',
         'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Page.navigatedWithinDocument tab:7',
         'Page.frameStartedLoading tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7',
-        'Page.frameNavigated tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Target.targetCreated', 'Target.targetDestroyed'], 'the events g21-browserd waits for');
+        'Page.frameNavigated tab:7', 'Target.targetInfoChanged', 'Page.frameStoppedLoading tab:7', 'Target.targetDestroyed'], 'the events g21-browserd waits for');
     assert.deepStrictEqual(events[2].params, { frame: { id: 'main:7', url: 'https://example.org/b' } });
     assert.deepStrictEqual(events[9].params, { frame: { id: 'main:7', url: 'https://example.org/b#x' } }, 'the window is gone: the page under it, where it was');
-    assert.deepStrictEqual([events[12].params.targetInfo.targetId, events[12].params.targetInfo.url], ['tab:9', 'https://example.org/other']);
     assert.deepStrictEqual(fsSeen, ['tab:7', true], 'full screen is told at once');
     console.log('ok native: hello, the targets, and a page\'s loading, arriving, new window and full screen as DevTools events');
 

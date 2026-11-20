@@ -82,6 +82,7 @@ async function run(c) {
     case 'zoom': zooms[tab] = Number(c.z) || 1; await keepZoom(tab); return null;
     // the engine ends as a browser whose windows are closed: in order, with its cookies and the sites' data written
     case 'quit': { const ws = await chrome.windows.getAll(); for (const w of ws) { try { await chrome.windows.remove(w.id); } catch (e) { /* gone */ } } return null; }
+    case 'wins': return (await chrome.windows.getAll({ populate: true })).map((w) => ({ id: w.id, state: w.state, type: w.type, w: w.width, h: w.height, tabs: w.tabs.map((x) => x.id + ' ' + (x.active ? 'active ' : '') + String(x.url).slice(0, 60)) }));
     case 'info': { const t = await chrome.tabs.get(tab); return { url: t.url || t.pendingUrl || '', title: t.title || '', status: t.status }; }
     // answered by the page's own part
     case 'state': case 'edit': case 'exitfs': case 'quiet': case 'stop': case 'selectall': case 'why':

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.9
+
+- Błąd znaleziony przy sprawdzaniu „Obrazu stron" w nowym sposobie sterowania (`g21-browser` 0.1.56): przy każdym ponownym starcie silnika (zmiana powiększenia, „Obraz stron", start po bezczynności) Chrome sam przywracał kartę z poprzedniego uruchomienia i stawiał ją na wierzchu. Ekran pokazywał starą stronę w starej skali, a dotyk i polecenia szły do innej karty. Teraz przy starcie zostaje jedna karta – ta z adresem, z którym silnik wystartował – a karty przywracane przez silnik są zamykane. Po tej poprawce „Obraz stron" 75 % i 50 % działa także bez DevTools (stanowisko: strona widzi swój pełny układ, stuknięcie trafia).
+- Silnik nie trzyma już zapasowego procesu strony (`SpareRendererForSitePerProcess`): mniej pamięci i mniej pracy procesora przy starcie.
+- Rozpoznanie gotowych rozwiązań Chromium na iDrive 7 i plan trybu GPU: `docs/11-przegladarka-gpu-rozpoznanie.md`. Tryb GPU NIE jest wdrożony.
+- W aucie NIESPRAWDZONE.
+
 ## 0.2.8
 
 - Limit pamięci silnika przeglądarki: domyślnie 2048 MB (właściciel, 2026-11-20; było 1500). `g21-browser` 0.1.55. Aplikacja zapisuje cały zestaw reguł przy każdej zmianie, więc stare 1500 stoi wpisane w `policy.json` właściciela: przy pierwszym starcie tej wersji jest raz podnoszone do 2048 (limit ustawiony później, także 1500, zostaje). „Limit pamięci" w ustawieniach ma teraz stopnie 600, 900, 1200, 1500 i 2048 MB. W aucie NIESPRAWDZONE – nie wiem, ile pamięci jednostka ma wtedy wolnej dla reszty.
