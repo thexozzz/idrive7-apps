@@ -10,10 +10,11 @@
  *        --> g21-audio-out (nobody, group mgu_alsa) --> ALSA plug:smartx:CarLifeMedia_CF_48_STEREO
  *        --> SmartXbar --> the AudioManager's route 287 -> 1024 (MediaSink_Front) --> amplifier, iDrive volume
  *
- * The speakers are taken only while sound flows: the writer says "active" at the first sound, this daemon then
- * claims them (speakers.js: CarLifeMedia marked available, connected to the front speakers; about 1.4 s on
- * the car), and when the writer has had 3 s of nothing it leaves and the speakers go back to the source that
- * had them (CarPlay, the radio). One stream at a time: there is one CarLifeMedia.
+ * The speakers are taken only while sound flows. Every player has a stream (a pipe) of its own; this daemon reads
+ * the ones nobody hears, and the one that has sound gets the speakers (speakers.js: the source connected to the
+ * front speakers), then its writer and the device. When it has been silent for as long as the channel is held
+ * the speakers go back to the source that had them (CarPlay, the radio). One stream is heard at a time: there is
+ * one input. See "The streams" below.
  *
  * VERIFIED on the car 2026-11-15 (G21, 4.14.198-apl): claim -> CS_CONNECTED in 1.4 s, a 440 Hz tone written by
  * g21-audio-out as nobody:mgu_alsa is heard from the speakers, the device takes the samples in real time,
@@ -105,8 +106,23 @@ let sp = spMedia || spCar;
 function onMedia() { return sp === spMedia; }
 const device = function () { return DEVICE || ('plug:' + sp.device); };
 
-// the one stream
-const st = { holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, sound: false, claimed: false, stats: '', since: 0, lost: 0 };
+/*
+ * The streams (0.1.22). Every player has a stream of its own for as long as it is connected: its pipe is there
+ * whether or not it is heard. One of them at a time has the speakers (st.cur: its fields are copied into st), and
+ * it gets them by sounding, not by asking: this daemon reads every pipe that has no writer, drops what it reads
+ * (a player never waits for the speakers) and looks at the samples; a stream that has sound gets the speakers when
+ * no other stream has them or the one that has them is silent.
+ * Until 0.1.21 there was one stream, given to the player that asked at its start and taken from it by the next one
+ * that asked. A player whose stream was taken was mute until it started again, and a player that started while
+ * another sounded was mute as well (owner, 2026-11-20: after a start of the head unit the first sound is right; stop
+ * AirPlay, go to the browser: nothing. AirPlay's stream had been given to the browser's engine or the other way
+ * round, and the one that lost it wrote into a pipe that was gone).
+ */
+const streams = [];
+const st = { cur: null, holder: null, name: '', fifo: '', fd: -1, writer: null, active: false, sound: false, claimed: false, claiming: null, stats: '', since: 0, lost: 0, quietAt: 0, spawnAt: 0, moving: false };
+// (how long after the speakers are connected the device is opened: the order every try by hand on the car had,
+// 2026-11-20: connect, a moment, then the device. Tests set 0.)
+const SETTLE_MS = env.G21_AUDIO_SETTLE_MS !== undefined ? Number(env.G21_AUDIO_SETTLE_MS) || 0 : 300;
 [spCar, spMedia].filter(Boolean).forEach(function (x) { x.on('lost', function () { if (x !== sp) return; st.lost += 1; st.claimed = false; log('speakers lost: another source took them'); }); });
 function fallBack(why) {
     if (!onMedia()) return Promise.resolve();
@@ -178,16 +194,20 @@ function keeperStop() {
     clearInterval(k.watch);
     return k.stop().then(function () {}, function () {});
 }
+// resolves true once the speakers are ours, false when they could not be had
 function claim() {
-    if (st.claimed) return;
+    if (st.claimed) return st.claiming || Promise.resolve(true);
     st.claimed = true;
     const t0 = Date.now();
-    keeperStart().then(function () { return sp.claim(); }).then(function () { log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); quietPlayer(); },
+    st.claiming = keeperStart().then(function () { return sp.claim(); }).then(function () { st.claiming = null; log('speakers claimed for "' + st.name + '" in ' + (Date.now() - t0) + ' ms'); quietPlayer(); return true; },
         function (e) {
+            st.claiming = null;
             st.claimed = false;
             log('speakers not claimed: ' + (e && e.message || e));
-            if (onMedia()) fallBack('the speakers were not connected').then(function () { if (st.active) claim(); });
+            if (onMedia()) return fallBack('the speakers were not connected').then(function () { return st.cur ? claim() : false; });
+            return false;
         });
+    return st.claiming;
 }
 /*
  * The media input: the speakers now belong to BMW's media source, and its player may take that as its turn and play
@@ -222,26 +242,102 @@ function release(why) {
  * player's audio thread stops in its write: a film then stalls and its page says "coś poszło nie tak". So
  * without a working writer this daemon reads the stream itself, at the pace of real time, and drops it.
  */
-let drain = null, drainAt = 0;
-const drainBuf = Buffer.alloc(65536);
-function stopDrain() { if (drain) { clearInterval(drain); drain = null; } }
-function startDrain(why) {
-    if (drain || st.fd < 0) return;
-    log('no writer (' + why + '): the stream is read and dropped, its player keeps its pace');
-    drainAt = Date.now();
-    drain = setInterval(function () {
-        const now = Date.now();
-        if (st.fd < 0 || st.writer) { stopDrain(); return; }
-        // 48 kHz stereo S16: 192 bytes a millisecond
-        let want = Math.min(drainBuf.length, Math.floor((now - drainAt) * 192)) & ~3;
-        drainAt = now;
-        while (want > 0) {
-            let n = 0;
-            try { n = fs.readSync(st.fd, drainBuf, 0, want, null); } catch (e) { break; }   // EAGAIN: nothing waits
-            if (!n) break;
-            want -= n;
-        }
-    }, 20);
+let watch = null;
+const watchBuf = Buffer.alloc(65536);
+// (a sample louder than about -66 dBFS, as the writer's "sound": every third sample is looked at)
+function loudIn(buf, n, odd) {
+    for (let i = odd ? 1 : 0; i + 1 < n; i += 6) { const v = buf.readInt16LE(i); if (v > 16 || v < -16) return true; }
+    return false;
+}
+// a stream without a writer: read and dropped. AirPlay's all at once (a phone sends by its own clock and its
+// pipeline loses sound when it is held); the others at the pace of the clock, 192 bytes a millisecond (48 kHz stereo
+// S16): the browser's engine has no clock of its own for its sound and, unheld, races its film.
+function readWaiting(s, now) {
+    const all = s.name === 'airplay';
+    let want = all ? watchBuf.length : (Math.min(watchBuf.length, Math.floor((now - s.readAt) * 192)) & ~3);
+    let loud = false, turns = 0;
+    s.readAt = now;
+    while (want > 0 && turns++ < 8) {
+        let n = 0;
+        try { n = fs.readSync(s.fd, watchBuf, 0, want, null); } catch (e) { break; }   // EAGAIN: nothing waits
+        if (!n) break;
+        if (!loud && loudIn(watchBuf, n, s.odd)) loud = true;
+        s.odd = (s.odd + n) & 1;
+        if (all) { if (n < want) break; } else want -= n;
+    }
+    if (loud) { if (!s.loudSince) s.loudSince = now; s.loudAt = now; }
+    else if (s.loudSince && now - s.loudAt > 400) s.loudSince = 0;
+}
+// the writer is told to end and waited for (SIGTERM: it leaves between two writes; SIGKILL if it does not)
+function stopWriter() {
+    const w = st.writer;
+    st.writer = null;
+    st.active = false;
+    if (!w) return Promise.resolve();
+    if (typeof w.once !== 'function') { try { w.kill(); } catch (e) { /* gone */ } return Promise.resolve(); }   // the media player's way
+    return new Promise(function (resolve) {
+        let done = false;
+        const end = function () { if (done) return; done = true; clearTimeout(t1); clearTimeout(t2); resolve(); };
+        const t1 = setTimeout(function () { try { w.kill('SIGKILL'); } catch (e) { /* gone */ } }, 600);
+        const t2 = setTimeout(end, 1500);
+        w.once('exit', end);
+        try { w.kill('SIGTERM'); } catch (e) { end(); }
+    });
+}
+// the stream that had the speakers is one of the waiting ones again
+function uncur() {
+    const s = st.cur;
+    st.cur = null; st.holder = null; st.name = ''; st.fifo = ''; st.fd = -1; st.active = false; st.quietAt = 0;
+    if (s) { s.loudSince = 0; s.readAt = Date.now(); }
+    return s;
+}
+function park(why, retryMs) {
+    const s = st.cur;
+    if (!s || st.moving) return Promise.resolve();
+    st.moving = true;
+    log('stream "' + s.name + '" waits again (' + why + ')');
+    const end = function () { st.moving = false; };
+    return stopWriter().then(function () { if (st.cur === s) uncur(); if (retryMs) s.retryAt = Date.now() + retryMs; return release(why); }).then(end, end);
+}
+// a waiting stream has sound: the speakers first, then (a moment after they are connected) its writer and the device
+function take(s) {
+    if (streams.indexOf(s) < 0) { st.moving = false; release('its player went away'); return; }
+    st.moving = true;
+    st.cur = s; st.holder = s.holder; st.name = s.name; st.fifo = s.fifo; st.fd = s.fd; st.stats = ''; st.sound = true; st.quietAt = 0;
+    log('stream "' + s.name + '" has sound: it gets the speakers');
+    const go = function () { st.moving = false; if (st.cur === s && !st.writer) startWriter(); };
+    if (backend() !== 'smartx') { go(); return; }      // (the media player's way connects by itself)
+    const had = st.claimed && !st.claiming;
+    claim().then(function (ok) {
+        if (st.cur !== s) { st.moving = false; return; }
+        if (!ok) { st.moving = false; uncur(); s.retryAt = Date.now() + 10000; return; }
+        setTimeout(go, had ? 0 : SETTLE_MS);
+    }, function () { st.moving = false; });
+}
+function tick() {
+    const now = Date.now();
+    let next = null;
+    for (let i = 0; i < streams.length; i++) {
+        const s = streams[i];
+        if (s === st.cur && st.writer) continue;      // its writer reads it
+        readWaiting(s, now);
+        if (!next && s !== st.cur && s.loudSince && now - s.loudSince >= 40 && now >= s.retryAt) next = s;
+    }
+    if (st.moving) return;
+    if (st.cur && st.writer) {
+        // nothing but silence for as long as the channel is held (a phone that mirrors its screen sends silence all
+        // the time), or a writer that never got its first sound: the speakers go back
+        if (st.active && st.sound === false && st.quietAt && now - st.quietAt > holdMs()) { park('only silence for ' + Math.round(holdMs() / 1000) + ' s'); return; }
+        if (!st.active && now - st.spawnAt > 5000) { park('its sound ended before the device was open'); return; }
+    }
+    if (!next) return;
+    if (!st.cur) { take(next); return; }
+    if (st.writer && (!st.active || st.sound === false)) {
+        const old = st.cur;
+        st.moving = true;
+        log('stream "' + old.name + '" is silent: the speakers go to "' + next.name + '"');
+        stopWriter().then(function () { if (st.cur === old) uncur(); take(next); });
+    }
 }
 /*
  * The other way out, as RideTube's: BMW's media player plays the stream (mediaout.js). Chosen in
@@ -273,7 +369,7 @@ function stopMedia(why, again) {
 }
 function startMedia(kind) {
     if (!st.holder || st.writer || media) return;
-    stopDrain();
+    st.spawnAt = Date.now();
     const greedy = st.name === 'airplay';
     const MediaOut = require(path.join(__dirname, 'mediaout.js')).MediaOut;
     const m = { out: null, ready: false, lastData: 0, last: Date.now(), budget: 0, pend: [], pendBytes: 0, part: null, timer: null, said: 0, handle: null };
@@ -352,9 +448,13 @@ function setBackend(m) {
 function startWriter() {
     if (!st.holder || st.writer) return;
     { const kind = backend(); if (kind !== 'smartx') { startMedia(kind); return; } }
-    stopDrain();
+    st.spawnAt = Date.now();
     let openWatch = null;
-    const opts = { stdio: [st.fd, 'ignore', 'pipe'] };
+    // (the writer gets an opening of the pipe of its own: what it does to its end, blocking or not, must not reach
+    // the one this daemon reads the waiting streams with)
+    let wfd = -1;
+    try { wfd = fs.openSync(st.fifo, fs.constants.O_RDWR | fs.constants.O_NONBLOCK); } catch (e) { log('writer: ' + st.fifo + ': ' + e.message); const s0 = uncur(); if (s0) s0.retryAt = Date.now() + 2000; release('no pipe'); return; }
+    const opts = { stdio: [wfd, 'ignore', 'pipe'] };
     // (the writer leaves by itself when its opening of the device got three quarters of the pace: see below. After
     // eight such tries in a minute it is told to stay whatever the pace)
     { const now = Date.now(); heals = heals.filter(function (t) { return now - t < 60000; }); if (heals.length >= 8) { opts.env = Object.assign({}, process.env, { G21_AUDIO_NOHEAL: '1' }); log('out: eight openings in a minute at three quarters of the pace: this one stays'); heals = []; } }
@@ -367,6 +467,7 @@ function startWriter() {
     // faster than time passes and the page's film raced: car, 2026-11-15, frames 1005856 dropped 48570080. The
     // engine has no clock of its own for its sound; being held by this writer IS its clock.)
     const child = cp.spawn(OUT, ['play', device()].concat(st.name === 'airplay' ? ['live'] : ['plain']), opts);
+    try { fs.closeSync(wfd); } catch (e) { /* closed */ }
     child.g21media = onMedia();
     st.writer = child;
     let buf = '';
@@ -377,7 +478,7 @@ function startWriter() {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).replace(/^\[G21-AUDIO\] out: /, '');
             buf = buf.slice(i + 1);
-            if (l === 'sound' || l === 'quiet') { st.sound = l === 'sound'; continue; }
+            if (l === 'sound' || l === 'quiet') { st.sound = l === 'sound'; st.quietAt = st.sound ? 0 : Date.now(); continue; }
             if (l === 'active') {
                 st.active = true; st.sound = true; st.since = Date.now(); claim();
                 // the writer opens the device now; an open that does not come back would hold the player for ever
@@ -400,7 +501,7 @@ function startWriter() {
         // The media input: its device did not open (1) or is not read (4, and the speakers are ours): the CarLife input
         // from here on, the stream held meanwhile.
         if (child.g21media && onMedia() && !sig && (code === 1 || (code === 4 && st.claimed))) {
-            fallBack(code === 4 ? 'the device is open and the speakers are ours, but it takes nothing' : 'the device did not open').then(function () { if (st.holder) setTimeout(startWriter, 200); });
+            fallBack(code === 4 ? 'the device is open and the speakers are ours, but it takes nothing' : 'the device did not open').then(function () { return st.cur ? claim() : false; }).then(function () { if (st.holder) setTimeout(startWriter, SETTLE_MS || 200); });
             return;
         }
         const pace = code === 3 && !sig;
@@ -429,52 +530,46 @@ function startWriter() {
             }, giveBack);
             return;
         }
-        if (code || sig) { log('writer exit ' + code + (sig ? ' ' + sig : '')); if (st.holder) startDrain('writer failed'); }
-        release(pace ? 'slow device' : 'no sound').then(function () { if (st.holder) setTimeout(startWriter, (code || sig) && !pace ? 2000 : 100); });
+        // It left by itself (the channel was held and nothing came), or it failed: its stream is one of the waiting
+        // ones again, read by this daemon, and gets the speakers anew when it has sound (a failed one not at once).
+        if (code || sig) log('writer exit ' + code + (sig ? ' ' + sig : ''));
+        const s = uncur();
+        if (s && (code || sig)) s.retryAt = Date.now() + 2000;
+        release('no sound');
     });
 }
-function closeStream(why) {
-    if (!st.holder) return Promise.resolve();
-    log('stream "' + st.name + '" closed (' + why + ')');
-    st.holder = null;
-    const w = st.writer;
-    st.writer = null;
-    st.active = false;
-    if (w) { try { w.kill('SIGKILL'); } catch (e) { /* gone */ } }
-    stopDrain();
-    if (st.fd >= 0) { try { fs.closeSync(st.fd); } catch (e) { /* closed */ } st.fd = -1; }
-    try { fs.unlinkSync(st.fifo); } catch (e) { /* none */ }
-    st.fifo = '';
-    st.name = '';
-    return release(why);
+function closeStream(c, why) {
+    const s = streams.filter(function (x) { return x.holder === c; })[0];
+    if (!s) return Promise.resolve();
+    streams.splice(streams.indexOf(s), 1);
+    log('stream "' + s.name + '" closed (' + why + ')');
+    const shut = function () {
+        try { fs.closeSync(s.fd); } catch (e) { /* closed */ }
+        if (!s.replaced) { try { fs.unlinkSync(s.fifo); } catch (e) { /* none */ } }
+        if (!streams.length && watch) { clearInterval(watch); watch = null; }
+    };
+    if (s !== st.cur) { shut(); return Promise.resolve(); }
+    // (the writer first, the speakers after it: the device is never left open on a connection that is gone)
+    return stopWriter().then(function () { if (st.cur === s) uncur(); shut(); return release(why); });
 }
 /*
- * One stream at a time. A player that asks for it on purpose ("take": true: AirPlay being switched on, the browser
- * starting, a film starting) gets it from another player that is silent at that moment; the other one is told by
- * its connection closing. The browser keeps its stream as long as its engine lives, also when nothing plays:
- * AirPlay switched on meanwhile was answered "busy" and had no sound at all (car, 2026-11-15). A player that
- * only asks again after losing the stream does not say "take", so two silent players do not pass it back and
- * forth.
+ * A player's stream: a pipe of its own, there for as long as the player's connection is. Nobody is refused and
+ * nothing is taken from anybody ("take" in the request, which players until 0.1.21 needed, is not looked at): which
+ * stream has the speakers is settled by which one sounds, see tick(). The same name opened again (a player that
+ * started anew before its old connection was gone) replaces the old one.
  */
-function openAsk(c, m, send) {
-    const other = st.holder && st.holder !== c ? st.holder : null;
-    // (silent: its writer does not run, or runs and only holds the channel: nothing heard for 1.5 s)
-    if (!other || !m.take || (st.active && st.sound !== false)) { send(openStream(c, m)); return; }
-    log('stream "' + st.name + '" is silent' + (st.active ? ' (it only holds the channel)' : '') + ': given to "' + String(m.name || '').slice(0, 24) + '"');
-    closeStream('taken by another player').then(function () {
-        try { other.destroy(); } catch (e) { /* gone */ }
-        send(openStream(c, m));
-    }, function () { send(openStream(c, m)); });
-}
 function openStream(c, m) {
     const name = String(m.name || '');
     const uid = Number(m.uid);
     if (!/^[a-z][a-z0-9-]{1,23}$/.test(name)) return { ev: 'open', ok: false, err: 'bad name' };
     if (!(uid >= 0 && uid < 65535) || Math.floor(uid) !== uid) return { ev: 'open', ok: false, err: 'bad uid' };
     if (!NOSETUID && !ALSA_GID) return { ev: 'open', ok: false, err: 'no group mgu_alsa on this system' };
-    if (st.holder && st.holder !== c) return { ev: 'open', ok: false, err: 'busy', holder: st.name };
-    if (st.holder === c) return { ev: 'open', ok: true, fifo: st.fifo, format: 's16le', rate: 48000, channels: 2 };
+    const mine = streams.filter(function (x) { return x.holder === c; })[0];
+    if (mine) return { ev: 'open', ok: true, fifo: mine.fifo, format: 's16le', rate: 48000, channels: 2 };
+    const old = streams.filter(function (x) { return x.name === name; })[0];
+    if (old) { const oc = old.holder; old.replaced = true; closeStream(oc, 'opened again by its player'); try { oc.destroy(); } catch (e) { /* gone */ } }
     const fifo = path.join(RUN, name + '.pcm');
+    let fd = -1;
     try { fs.unlinkSync(fifo); } catch (e) { /* none */ }
     const mk = cp.spawnSync('mkfifo', ['-m', '0620', fifo]);
     if (mk.status !== 0) return { ev: 'open', ok: false, err: 'mkfifo: ' + String(mk.stderr || (mk.error && mk.error.message) || mk.status).trim() };
@@ -483,14 +578,11 @@ function openStream(c, m) {
         if (!NOSETUID) fs.chownSync(fifo, uid, ALSA_GID);
         fs.chmodSync(fifo, NOSETUID ? 0o666 : 0o620);
         // held open for reading and writing: the FIFO lives across the player's own opens and closes
-        st.fd = fs.openSync(fifo, fs.constants.O_RDWR | fs.constants.O_NONBLOCK);
+        fd = fs.openSync(fifo, fs.constants.O_RDWR | fs.constants.O_NONBLOCK);
     } catch (e) { try { fs.unlinkSync(fifo); } catch (x) { /* none */ } return { ev: 'open', ok: false, err: e.message }; }
-    st.holder = c;
-    st.name = name;
-    st.fifo = fifo;
-    st.stats = '';
-    log('stream "' + name + '" open for uid ' + uid + ': ' + fifo + ' -> ' + device());
-    startWriter();
+    streams.push({ holder: c, name: name, fifo: fifo, fd: fd, readAt: Date.now(), odd: 0, loudSince: 0, loudAt: 0, retryAt: 0, replaced: false });
+    if (!watch) watch = setInterval(tick, 20);
+    log('stream "' + name + '" open for uid ' + uid + ': ' + fifo + ' -> ' + device() + (streams.length > 1 ? ' (beside ' + streams.slice(0, -1).map(function (x) { return '"' + x.name + '"'; }).join(', ') + ')' : ''));
     return { ev: 'open', ok: true, fifo: fifo, format: 's16le', rate: 48000, channels: 2 };
 }
 function tone(m) {
@@ -549,13 +641,13 @@ function caps() {
     return {
         ev: 'caps', version: VERSION,
         stream: { backend: 'smartx', device: device(), formats: ['s16le'], rates: [48000], channels: [2], latencyMs: 64 + 85,
-            ops: ['open', 'close', 'tone', 'status'], focus: 'taken at the first sound, given back after 3 s of none',
+            ops: ['open', 'close', 'tone', 'status'], focus: 'every player has its own stream; the one that sounds gets the speakers, given back after the hold of silence',
             not: ['setVolume (the iDrive volume applies)', 'getPosition', 'pause/resume (the player stops writing)', 'float32, 44.1 kHz, mono (the player converts)'] },
         file: { backend: 'bmw-mediaplayer', via: 'jap-ridetube-d (source 1046, MediaPlayer.playFile)', here: false }
     };
 }
 function status() {
-    return { ev: 'status', version: VERSION, backend: backend(), device: device(), stream: st.name || null, active: st.active, sound: st.active && st.sound !== false, claimed: st.claimed,
+    return { ev: 'status', version: VERSION, backend: backend(), device: device(), stream: st.name || null, streams: streams.map(function (s) { return s.name; }), active: st.active, sound: st.active && st.sound !== false, claimed: st.claimed,
         activeMs: st.active ? Date.now() - st.since : 0, stats: st.stats, lost: st.lost };
 }
 
@@ -578,15 +670,15 @@ function serve() {
                 if (!m || typeof m.op !== 'string') continue;
                 if (m.op === 'caps') send(caps());
                 else if (m.op === 'status') send(status());
-                else if (m.op === 'open') openAsk(c, m, send);
-                else if (m.op === 'close') { if (st.holder === c) closeStream('closed by its player').then(function () { send({ ev: 'closed' }); }); else send({ ev: 'closed' }); }
+                else if (m.op === 'open') send(openStream(c, m));
+                else if (m.op === 'close') closeStream(c, 'closed by its player').then(function () { send({ ev: 'closed' }); });
                 else if (m.op === 'tone') tone(m).then(send);
                 else if (m.op === 'probe') probe().then(send);
                 else if (m.op === 'backend') send(setBackend(m));
             }
         });
         c.on('error', function () { /* close follows */ });
-        c.on('close', function () { if (st.holder === c) closeStream('its player went away'); });
+        c.on('close', function () { closeStream(c, 'its player went away'); });
     });
     const mask = process.umask(0o177);
     server.listen(SOCK, function () {
@@ -595,7 +687,7 @@ function serve() {
     });
     const stop = function () {
         log('stopping');
-        closeStream('daemon stops').then(function () { return sp.release(); }).then(function () { process.exit(0); }, function () { process.exit(0); });
+        Promise.all(streams.slice().map(function (s) { return closeStream(s.holder, 'daemon stops'); })).then(function () { return sp.release(); }).then(function () { process.exit(0); }, function () { process.exit(0); });
         setTimeout(function () { process.exit(0); }, 4000);
     };
     process.on('SIGTERM', stop);

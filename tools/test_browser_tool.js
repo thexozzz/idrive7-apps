@@ -413,6 +413,9 @@ async function testChain(base, eng) {
         assert.strictEqual(s.back, true);
         // rules set from THEiPlay's menu: three of them, never "sandbox": "off"; written to the rules file
         const polFile = path.join(base, 'state', 'policy.json');
+        // (which frame path is in use depends on the machine: only that it is said)
+        assert.ok(s.pol.frames === 'direct' && (s.pol.framesNow === 'direct' || s.pol.framesNow === 'cast'), 'the frame path is said: ' + JSON.stringify(s.pol));
+        delete s.pol.frames; delete s.pol.framesNow;
         assert.deepStrictEqual(s.pol, { sandbox: 'ask', picture: 0.75, memoryLimitMb: 900, audio: 'on', sound: 'none', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on' }, 'the state carries the rules (no G21 Audio here: no sound)');
         c.send({ op: 'policy', key: 'memoryLimitMb', value: 1200 });
         await c.until('memory limit set', (x) => x.pol && x.pol.memoryLimitMb === 1200);
