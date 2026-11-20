@@ -26,6 +26,8 @@ var tools = [
     path.join(__dirname, 'test_socks5.js'),
     path.join(__dirname, 'test_session.js'),
     path.join(__dirname, 'test_menu.js'),
+    path.join(__dirname, 'test_interaction.js'),
+    path.join(__dirname, 'test_services.js'),
     path.join(__dirname, 'test_windows_offers.js'),
     path.join(__dirname, 'test_knob_keyboard.js'),
     path.join(__dirname, 'test_config_panel.js'),

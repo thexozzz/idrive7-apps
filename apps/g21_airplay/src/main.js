@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.0',
+        version: (this._packageJson && this._packageJson.version) || '0.2.1',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.0') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.1') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -2949,6 +2949,13 @@ AirPlayApp.prototype._toggleClusterLabel = function () {
 };
 
 AirPlayApp.prototype._onMenuChoice = function (name) {
+    this._onMenuChoice2(name);
+    if (this._webHeld && typeof this._heldCheck === 'function') {
+        this._heldCheck();
+    }
+};
+
+AirPlayApp.prototype._onMenuChoice2 = function (name) {
     var screen = this._menuScreen();
     if (name === 'app-exit') {
         this._exitApp();
@@ -3024,7 +3031,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     if (name === 'label-back') {
         this._labelMove = false;
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('set-general');
+            this._menu.setScreen('set-display');
             this._paintSystem();
         }
         this._sync();
@@ -5302,6 +5309,9 @@ AirPlayApp.prototype._webClient = function () {
             },
             onApp: function (ev) {
                 self._onStoreProgress(ev);
+            },
+            onServices: function (ev) {
+                self._onServices(ev);
             }
         });
     }
@@ -5342,11 +5352,46 @@ AirPlayApp.prototype._openBrowser = function () {
     }, 3100);
 };
 
+// the settings' layer comes off the page (or the app): the same view, nothing loaded again
+AirPlayApp.prototype._resumeWeb = function () {
+    var m = this._menu;
+    if (!this._webHeld) {
+        return;
+    }
+    this._webHeld = false;
+    noteStart('web-held off: back in the ' + (this._webApp ? 'app' : 'page'));
+    if (m && typeof m.setScreen === 'function' && this._webHeldScreen) {
+        // (the menu page that is under the view, for when the view is closed)
+        m.setScreen(this._webHeldScreen);
+    }
+    this._webHeldScreen = '';
+    this._paintWeb();
+    this._syncMouse('back in the page');
+};
+
+// The settings' layer is over a page and the owner went somewhere else than back (the home screen, another module):
+// that is the page's view ended, as its own "Menu" button ends it.
+AirPlayApp.prototype._heldCheck = function () {
+    var screen;
+    if (!this._webHeld || !this._webOn) {
+        return;
+    }
+    screen = this._menuScreen();
+    if (/^(set-|pos-|quality|label$|settings$|sys-info$)/.test(String(screen))) {
+        return;
+    }
+    noteStart('web-held ends: the menu went to ' + screen);
+    this._screensReturn = '';
+    this._closeBrowser();
+};
+
 AirPlayApp.prototype._closeBrowser = function () {
     if (!this._webOn) {
         return;
     }
     this._webOn = false;
+    this._webHeld = false;
+    this._webHeldScreen = '';
     this._webApp = '';
     noteStart('web-close');
     this._dropWebFaces();
@@ -5398,7 +5443,7 @@ AirPlayApp.prototype._paintWeb = function () {
         fsFull: !!this._webFsFull,
         app: this._webApp || '',
         appName: this._webApp ? this._storeAppName(this._webApp) : '',
-        where: !!this._webWhere
+        held: !!this._webHeld
     });
 };
 
@@ -5466,7 +5511,7 @@ AirPlayApp.prototype._onWebState = function (state) {
         this._mouseY = Math.floor(state.h / 2);
         this._mouseHome();
     }
-    if (this._menuScreen() === 'apps-settings' || this._menuScreen() === 'set-apps') {
+    if (this._menuScreen() === 'apps-settings' || this._menuScreen() === 'set-apps' || this._menuScreen() === 'set-advanced') {
         this._paintApps();
     }
     if (!this._webOn) {
@@ -5491,7 +5536,7 @@ AirPlayApp.prototype._onWebState = function (state) {
 AirPlayApp.prototype._onWebEdit = function (ev) {
     var self = this;
     var secret = ev.kind === 'password';
-    if (!this._webOn || !this._menu || this._menu.editing()) {
+    if (!this._webOn || this._webHeld || !this._menu || this._menu.editing()) {
         return;
     }
     this._menu.startEdit({
@@ -5609,6 +5654,55 @@ AirPlayApp.prototype._paintApps = function () {
     }
 };
 
+// "Zresetuj usługi": what its tile says (for ms, then its usual words again; 0: until the next word)
+AirPlayApp.prototype._svcSay = function (text, ms) {
+    var self = this;
+    var m = this._menu;
+    this._svcHint = text;
+    clearTimeout(this._svcHintTimer);
+    if (m && typeof m.setItemHint === 'function') {
+        m.setItemHint('svc-restart', text);
+    }
+    if (ms > 0) {
+        this._svcHintTimer = setTimeout(function () {
+            self._svcHint = '';
+            if (self._menu && typeof self._menu.setItemHint === 'function') {
+                self._menu.setItemHint('svc-restart', 'dźwięk, AirPlay, YouTube, przeglądarka');
+            }
+        }, ms);
+    }
+};
+
+// the browser tool's daemon about the restart: which service is on its way, and at the end which are up. "done"
+// comes from the daemon that was started again, so every service has been seen active by then.
+AirPlayApp.prototype._onServices = function (ev) {
+    var names = { 'g21-audio.service': 'dźwięk', 'g21-input.service': 'sterowanie', 'g21-airplay-open.service': 'AirPlay', 'jap-ridetube-d.service': 'YouTube', 'g21-browser.service': 'przeglądarka' };
+    var bad;
+    if (!ev) {
+        return;
+    }
+    if (ev.phase === 'unit') {
+        this._svcSay('uruchamiam: ' + (names[ev.unit] || ev.unit), 0);
+        return;
+    }
+    if (ev.phase === 'self') {
+        this._svcSay('uruchamiam: przeglądarka', 0);
+        return;
+    }
+    if (ev.phase === 'busy') {
+        this._svcSay('trwa ponowne uruchamianie…', 0);
+        return;
+    }
+    if (ev.phase !== 'done') {
+        return;
+    }
+    clearTimeout(this._svcTimer);
+    this._svcBusy = false;
+    bad = (ev.results || []).filter(function (r) { return r.state !== 'active' && r.state !== 'absent'; }).map(function (r) { return names[r.unit] || r.unit; });
+    noteStart('services: ' + (ev.ok && !bad.length ? 'all up' : 'not up: ' + bad.join(', ')) + ' (' + (ev.results || []).map(function (r) { return r.unit.replace('.service', '') + ' ' + r.state; }).join(', ') + ')');
+    this._svcSay(ev.ok && !bad.length ? 'usługi działają' : 'nie wystartowały: ' + (bad.join(', ') || '?'), 15000);
+};
+
 // ---- Sklep: apps imported from git -----------------------------------------------------------
 AirPlayApp.prototype._storeMouse = function (id) {
     var hit = (this._storeApps || []).filter(function (a) { return a.id === id; })[0];
@@ -5715,6 +5809,9 @@ AirPlayApp.prototype._paintSystem = function () {
     if (this._desk && this._desk.mouseSpeed) {
         m.setItemHint('set-mouse-speed', this._desk.mouseSpeed() + ' z 5');
     }
+    if (this._svcHint) {
+        m.setItemHint('svc-restart', this._svcHint);
+    }
     if (typeof m.repaint === 'function') {
         m.repaint();
     }
@@ -5732,26 +5829,50 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return true;
     }
     if (name === 'svc-restart') {
-        // "Zresetuj usługi": asked twice within 4 s (it stops the sound and AirPlay for a moment); done by the browser
-        // tool's daemon, which is root
+        // "Zresetuj usługi": asked twice within 4 s (the sound, AirPlay and YouTube stop for a moment); done by the
+        // browser tool's daemon, which is root. While it runs, a third choice does nothing.
         var self2 = this;
-        var hintSvc = function (t) { if (m && typeof m.setItemHint === 'function') { m.setItemHint('svc-restart', t); } };
+        if (this._svcBusy) {
+            return true;
+        }
         if (!(this._svcAskAt && Date.now() - this._svcAskAt < 4000)) {
             this._svcAskAt = Date.now();
-            hintSvc('wybierz jeszcze raz, aby potwierdzić');
-            setTimeout(function () { if (self2._svcAskAt && Date.now() - self2._svcAskAt >= 3900) { self2._svcAskAt = 0; hintSvc('dźwięk, AirPlay, YouTube, przeglądarka'); } }, 4000);
+            // (the link to the browser tool's daemon is opened now, so that it is there for the second choice)
+            this._webClient().look();
+            this._svcSay('wybierz jeszcze raz, aby potwierdzić', 4000);
             return true;
         }
         this._svcAskAt = 0;
         this._webClient().look();
-        if (this._web && this._web.state().connected) {
-            this._web.send({ op: 'restart-services' });
-            hintSvc('uruchamiam ponownie…');
-            noteStart('services: restart asked');
-        } else {
-            hintSvc('brak narzędzia Przeglądarka');
-        }
-        setTimeout(function () { hintSvc('dźwięk, AirPlay, YouTube, przeglądarka'); }, 9000);
+        this._svcBusy = true;
+        this._svcSay('trwa ponowne uruchamianie…', 0);
+        var svcTries = 0;
+        var svcGo = function () {
+            if (self2._web && self2._web.state().connected) {
+                self2._web.send({ op: 'restart-services' });
+                noteStart('services: restart asked');
+                // no word in a minute and a half: said, and the option can be used again
+                clearTimeout(self2._svcTimer);
+                self2._svcTimer = setTimeout(function () {
+                    if (self2._svcBusy) {
+                        self2._svcBusy = false;
+                        noteStart('services: no answer in 90 s');
+                        self2._svcSay('brak potwierdzenia: sprawdź O systemie', 15000);
+                    }
+                }, 90000);
+                return;
+            }
+            svcTries += 1;
+            if (svcTries > 20) {
+                // the daemon does not answer in 4 s: the tool is not installed, or it is the one that hangs
+                self2._svcBusy = false;
+                noteStart('services: no browser tool to ask');
+                self2._svcSay('brak narzędzia Przeglądarka', 9000);
+                return;
+            }
+            setTimeout(svcGo, 200);
+        };
+        svcGo();
         return true;
     }
     if (name === 'aset-screens') {
@@ -5763,10 +5884,22 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
     if (name === 'where-options') {
         // "Opcje" of the panel: straight to the screens' settings; their way back leads to where it was opened
         this._screensReturn = m && typeof m.screen === 'function' ? m.screen() : '';
-        if (this._webOn) {
-            this._webWhere = false;
-            this._closeBrowser();
-            this._screensReturn = 'root';
+        if (this._webOn && !this._webHeld) {
+            /*
+             * Over a page or an app the settings are a LAYER (owner, 2026-11-20): until 0.2.0 this closed the page's
+             * view, and the engine stopped 90 s later with the page, its way back and its place lost. Now the
+             * module stays as it is: the link to the browser tool stays open (so its engine is not stopped), the
+             * page keeps running and sounding, only the menu is drawn over it and the knob, a finger and the cursor
+             * go to the menu. "Wstecz" of the settings takes the layer off: the same page, at once. Leaving the
+             * settings to somewhere else (the home screen, another module) is the real end of the page's view, with
+             * the engine's usual 90 s (_heldCheck).
+             */
+            this._webHeld = true;
+            this._webHeldScreen = this._screensReturn;
+            this._screensReturn = '@web';
+            noteStart('web-held: the settings are over the ' + (this._webApp ? 'app' : 'page'));
+            this._paintWeb();
+            this._syncMouse('settings over the page');
         }
         if (m && typeof m.setScreen === 'function') {
             m.setScreen('set-display');
@@ -5982,19 +6115,27 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintSystem();
         return true;
     }
-    if (name === 'sg-browser' || name === 'sg-apps') {
+    if (name === 'sg-browser' || name === 'sg-apps' || name === 'sg-advanced') {
         // their values are the browser tool's: its daemon is asked
-        go(name === 'sg-browser' ? 'apps-settings' : 'set-apps');
+        go(name === 'sg-browser' ? 'apps-settings' : (name === 'sg-apps' ? 'set-apps' : 'set-advanced'));
         this._webClient().look();
         this._paintApps();
+        if (name === 'sg-advanced' && typeof this._paintRender === 'function') {
+            this._paintRender();
+        }
         return true;
     }
-    if (name === 'sgd-back' && this._screensReturn && this._screensReturn !== 'set-display') {
+    if (name === 'sgd-back' && this._screensReturn === '@web' && this._webHeld) {
+        this._screensReturn = '';
+        this._resumeWeb();
+        return true;
+    }
+    if (name === 'sgd-back' && this._screensReturn && this._screensReturn !== 'set-display' && this._screensReturn !== '@web') {
         // opened with "Opcje" of the panel "Ekrany": back to the module it was opened from
         at = this._screensReturn;
         this._screensReturn = '';
         go(at);
-        if (at === 'apps-settings' || at === 'set-apps') {
+        if (at === 'apps-settings' || at === 'set-apps' || at === 'set-advanced') {
             this._paintApps();
         }
         return true;
@@ -6004,7 +6145,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         go('system');
         return true;
     }
-    if (name === 'aset-back' || name === 'sga-back') {
+    if (name === 'aset-back' || name === 'sga-back' || name === 'sgx-back') {
         if (this._web && !this._webOn) {
             this._web.leave();
         }
@@ -6124,8 +6265,7 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         return true;
     }
     if (name === 'web-where' || name === 'web-where-close') {
-        this._webWhere = name === 'web-where' ? !this._webWhere : false;
-        this._paintWeb();
+        // (the panel "Ekrany" is the menu surface's own, over a page as over a menu page)
         return true;
     }
     if (name === 'web-pick-cluster' || name === 'web-pick-hud' || name === 'web-pick-central') {
@@ -6134,7 +6274,6 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         return true;
     }
     if (name === 'web-exit') {
-        this._webWhere = false;
         this._closeBrowser();
         return true;
     }
@@ -6424,7 +6563,8 @@ AirPlayApp.prototype._mouseScroll = function (dx, dy) {
 
 AirPlayApp.prototype._syncWebMouse = function (why) {
     var s = this._web ? this._web.state() : null;
-    var app = this._webOn ? (this._webApp || 'chromium') : '';
+    // (the settings' layer is over the page: the pad's cursor is the menu's)
+    var app = this._webOn && !this._webHeld ? (this._webApp || 'chromium') : '';
     // an app from Sklep says in its theiplay.json whether it takes the mouse; without it: no
     var conf = !app ? null : (this._webApp ? { mouse: this._storeMouse(this._webApp) } : AirPlayApp.APPS[app]);
     var ready = !!(s && s.connected && s.engine === 'ready' && s.live);

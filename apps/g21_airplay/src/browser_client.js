@@ -117,6 +117,10 @@ function createBrowserClient(opts) {
             }));
         } else if (m.ev === 'app' && typeof options.onApp === 'function') {
             options.onApp({ phase: String(m.phase || ''), pct: m.pct | 0, err: String(m.err || ''), id: String(m.id || ''), name: String(m.name || '') });
+        } else if (m.ev === 'services' && typeof options.onServices === 'function') {
+            // "Zresetuj usługi": restarting / unit{unit} / self / done{ok, results:[{unit,state}]} / busy
+            options.onServices({ phase: String(m.phase || ''), unit: String(m.unit || ''), ok: !!m.ok,
+                results: (Array.isArray(m.results) ? m.results : []).slice(0, 12).map(function (r) { return { unit: String((r && r.unit) || '').slice(0, 60), state: String((r && r.state) || '').slice(0, 20) }; }) });
         } else if (m.ev === 'edit' && typeof options.onEdit === 'function') {
             options.onEdit({ kind: String(m.kind || 'text'), value: String(m.value || ''), submit: !!m.submit, multi: !!m.multi });
         }

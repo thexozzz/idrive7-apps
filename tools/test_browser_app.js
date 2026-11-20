@@ -391,7 +391,23 @@ renderer.listen(RSOCK, async function () {
         knob(100, 0, 0); await sleep(30); knob(101, 0, 0); await sleep(30); knob(99, 0, 0); await sleep(30);
         assert.ok(scrolls.length === 2 && scrolls[0][1] > 0 && scrolls[1][1] < 0, 'turning scrolls both ways: ' + JSON.stringify(scrolls));
         knob(99, 1, 0); await sleep(30); knob(99, 0, 0); await sleep(60);
-        assert.deepStrictEqual(chosen, ['web-url'], 'a press opens the address field');
+        // (0.2.1: a press puts the knob on the bar, on the address; the second press types it; a turn goes along the bar)
+        assert.deepStrictEqual([chosen, surf.focus().name], [[], 'web-url'], 'a press puts the knob on the address field');
+        knob(100, 0, 0); await sleep(30);
+        assert.strictEqual(surf.focus().name, 'web-where', 'a turn goes along the bar: "Ekrany" is next to the address');
+        assert.strictEqual(scrolls.length, 2, 'and does not scroll the page meanwhile');
+        knob(100, 1, 0); await sleep(30); knob(100, 0, 0); await sleep(60);
+        assert.deepStrictEqual([chosen, surf.focus().where, surf.focus().cursor], [[], 'web', 0], 'a press on it opens the panel, the knob on its first tile');
+        knob(101, 0, 0); await sleep(30); knob(101, 1, 0); await sleep(30); knob(101, 0, 0); await sleep(60);
+        assert.deepStrictEqual(chosen, ['web-pick-hud'], 'the knob chooses a screen in the panel');
+        chosen.length = 0;
+        knob(101, 0, 7); await sleep(30); knob(101, 0, 0); await sleep(30); knob(101, 1, 0); await sleep(30); knob(101, 0, 0); await sleep(60);
+        assert.deepStrictEqual([chosen, surf.focus().where, surf.focus().name], [[], '', 'web-where'], 'the way out closes it; the knob is where it was, on "Ekrany"');
+        knob(100, 0, 0); await sleep(30);
+        assert.strictEqual(surf.focus().name, 'web-url');
+        knob(100, 1, 0); await sleep(30); knob(100, 0, 0); await sleep(60);
+        assert.deepStrictEqual([chosen, surf.focus().name], [['web-url'], ''], 'the second press opens the address field; the knob is on the page again');
+        knob(99, 0, 0); await sleep(30);
         // the keyboard over the browser: the page's video is not under it; back after "anuluj"
         var done = [];
         surf.startEdit({ mode: 'url', field: 'web-url', title: 'Adres', value: 'wp.pl', onDone: function (v) { done.push(v); } });

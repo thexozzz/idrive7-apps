@@ -21,14 +21,17 @@ assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.title; }), ['
 }());
 assert.deepStrictEqual(menu.MEDIA_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'media-back']);
 assert.deepStrictEqual(menu.APPS_ITEMS.map(function (i) { return i.name; }), ['apps-store', 'apps-back']);
-assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['sg-display', 'sg-input', 'sg-browser', 'sg-apps', 'sg-general', 'system-back']);
+assert.deepStrictEqual(menu.SYSTEM_ITEMS.map(function (i) { return i.name; }), ['sg-display', 'sg-input', 'sg-browser', 'sg-apps', 'sg-advanced', 'sg-general', 'system-back']);
 // the picture's settings are in one place
-assert.deepStrictEqual(menu.SET_DISPLAY_ITEMS.map(function (i) { return i.name; }), ['position', 'air-quality', 'cluster-place', 'air-delay', 'settings', 'sgd-back']);
+assert.deepStrictEqual(menu.SET_DISPLAY_ITEMS.map(function (i) { return i.name; }), ['position', 'air-quality', 'cluster-place', 'air-delay', 'label-toggle', 'sgd-back']);
 assert.deepStrictEqual(menu.SET_INPUT_ITEMS.map(function (i) { return i.name; }), ['set-mouse', 'set-mouse-speed', 'set-menu-mouse', 'set-kill', 'sgi-back']);
 assert.deepStrictEqual(menu.SET_APPS_ITEMS.map(function (i) { return i.name; }), ['aset-screens', 'aset-car', 'aset-diag', 'sga-back']);
-assert.deepStrictEqual(menu.SET_GENERAL_ITEMS.map(function (i) { return i.name; }), ['label-toggle', 'lang-toggle', 'sys-info', 'svc-restart', 'sgg-back']);
+assert.deepStrictEqual(menu.SET_GENERAL_ITEMS.map(function (i) { return i.name; }), ['lang-toggle', 'sys-info', 'svc-restart', 'sgg-back']);
 assert.deepStrictEqual(menu.STORE_ITEMS.map(function (i) { return i.name; }), ['store-import', 'store-demo', 'store-back']);
-assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-home', 'aset-zoom', 'aset-picture', 'aset-fs', 'aset-autoplay', 'aset-video', 'aset-engine', 'aset-frames', 'aset-mobile', 'aset-sandbox', 'aset-memory', 'aset-pages', 'aset-back']);
+assert.deepStrictEqual(menu.APPS_SET_ITEMS.map(function (i) { return i.name; }), ['aset-home', 'aset-zoom', 'aset-fs', 'aset-autoplay', 'aset-mobile', 'aset-back']);
+// the technical rules (the menu's rendering, the engine, its picture path, the sandbox, memory) are one group
+assert.deepStrictEqual(menu.SET_ADVANCED_ITEMS.map(function (i) { return i.name; }), ['set-render', 'aset-engine', 'aset-frames', 'aset-picture', 'aset-video', 'aset-sandbox', 'aset-memory', 'aset-pages', 'sgx-back']);
+assert.ok(menu.SCREENS['set-advanced'] === menu.SET_ADVANCED_ITEMS);
 assert.ok(menu.SCREENS.multimedia === menu.MEDIA_ITEMS && menu.SCREENS.system === menu.SYSTEM_ITEMS && menu.SCREENS.apps === menu.APPS_ITEMS && menu.SCREENS['apps-store'] === menu.STORE_ITEMS && menu.SCREENS['apps-settings'] === menu.APPS_SET_ITEMS);
 // tiles: a gallery of small tiles, row by row, in up to three rows; a page with sliders stays a list
 [menu.MEDIA_ITEMS, menu.APPS_ITEMS].forEach(function (list) {
@@ -241,14 +244,22 @@ var badged = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1
     status: 'brak odbiornika',
     mirrored: false
 });
-// the corner: one button, "Ekrany"; on THEiPlay's own pages it leads to the screens' settings, on a module's page
-// it opens that module's panel
-assert.deepStrictEqual(badged.layout.airHits.map(function (hit) { return hit.name; }), ['where-options'], 'one button in the corner');
+// the corner: one button, "Ekrany", the same on every page. It always opens the one panel: for the module whose page
+// it is; on THEiPlay's own pages for the module that plays (AirPlay switched on), and with none for no module (the
+// panel's screens cannot be chosen then, "Opcje" can)
+assert.deepStrictEqual(badged.layout.airHits.map(function (hit) { return hit.name; }), ['air-where'], 'one button in the corner; AirPlay is on: its screens');
+assert.deepStrictEqual(menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', { on: false, screens: [] }).layout.airHits.map(function (hit) { return hit.name; }), ['base-where'], 'no module plays');
+(function () {
+    var off = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', { on: false, screens: [], whereOpen: true, whereMode: 'base', whereCursor: 4 }).layout;
+    var names = off.airHits.map(function (hit) { return hit.name; });
+    assert.ok(off.sheetOpen && names.indexOf('where-options') >= 0 && names.indexOf('air-where-close') >= 0, 'the same panel, with "Opcje" and the way out');
+    assert.ok(names.every(function (n) { return !/-pick-/.test(n); }), 'and no screen to choose without a picture to send: ' + names.join(','));
+}());
 assert.ok(badged.layout.airHits[0].w > 150 && badged.layout.airHits[0].h < 56 && badged.layout.airHits[0].x + badged.layout.airHits[0].w <= 104 + 1796);
 menu.useTheme('airplay');
 assert.deepStrictEqual(menu.buildFrame(menu.SCREENS.airplay, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'AirPlay', { on: true, online: false, status: 'czeka', screens: [], mirrored: false }).layout.airHits.map(function (hit) { return hit.name; }), ['air-where']);
-menu.useTheme('browser');
-assert.deepStrictEqual(menu.buildFrame(menu.SCREENS['apps-settings'], 0, 1920, 720, '', 'Przeglądarka', '0.1.100', null, null, null, 'Przeglądarka', { on: false, screens: [] }).layout.airHits.map(function (hit) { return hit.name; }), ['web-where']);
+menu.useTheme('store');
+assert.deepStrictEqual(menu.buildFrame(menu.SCREENS.apps, 0, 1920, 720, '', 'Aplikacje', '0.1.100', null, null, null, 'Aplikacje', { on: false, screens: [] }).layout.airHits.map(function (hit) { return hit.name; }), ['web-where']);
 menu.useTheme('base');
 assert.ok(!badged.layout.airHits.some(function (hit) { return hit.name === 'air-pick-central'; }));
 var picked = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, '', 'THEiPlay', '0.1.100', null, null, null, 'THEiPlay', {

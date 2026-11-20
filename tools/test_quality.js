@@ -128,7 +128,7 @@ var central = menu.qualityOptions('central', desk.QUALITY_CENTRAL, '600x400', de
 assert.strictEqual(central[0].name, 'qc-600x400');
 assert.ok(central[0].on);
 assert.ok(menu.SCREENS.quality && menu.SCREENS['quality-kombi'] && menu.SCREENS['quality-central']);
-assert.strictEqual(menu.crumbFor('quality-kombi', 'Jakość obrazu'), 'Jakość obrazu > Zegary i HUD');
+assert.strictEqual(menu.crumbFor('quality-kombi', 'Jakość obrazu'), 'Rozdzielczość > Zegary i HUD');
 
 // Bottom-right button on a menu page is "Wyłącz aplikację" (exit flag).
 var built = menu.buildFrame(menu.SCREENS.quality, 0, 1920, 720, '', 'Jakość obrazu', 'v', null, null, null, 'AirPlay > Jakość obrazu', null, null);

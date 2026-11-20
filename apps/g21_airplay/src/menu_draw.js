@@ -328,6 +328,23 @@ var EN = {
     'Uruchamiam przeglądarkę': 'Starting the browser',
     'Uruchamiam aplikację': 'Starting the app',
     'Opcje': 'Options',
+    'Opóźnienie AirPlay': 'AirPlay delay',
+    'Ekrany i obraz': 'Screens and picture',
+    'Zaawansowane': 'Advanced',
+    'pozycja, rozdzielczość, napis': 'position, resolution, caption',
+    'strona startowa, powiększenie': 'start page, zoom',
+    'ekrany, dane auta': 'screens, car data',
+    'silnik, renderowanie, pamięć': 'engine, rendering, memory',
+    'język, system, usługi': 'language, system, services',
+    'Obraz stron': 'Page picture',
+    'Podgląd': 'Preview',
+    'tak wygląda napis na ekranach': 'the caption as the screens show it',
+    'Silnik przeglądarki': 'Browser engine',
+    'niedostępne': 'not available',
+    'żaden moduł teraz nie gra': 'no module is playing now',
+    'usługi działają': 'the services are running',
+    'nie wszystkie usługi wystartowały': 'not every service started',
+    'trwa ponowne uruchamianie…': 'starting again…',
     'Zresetuj usługi': 'Restart services',
     'dźwięk, AirPlay, YouTube, przeglądarka': 'sound, AirPlay, YouTube, browser',
     'wybierz jeszcze raz, aby potwierdzić': 'choose again to confirm',
@@ -400,6 +417,7 @@ function hoverOn(x, y, w, h) {
 // a button of the head and of the panels: normal, under the cursor, open/pressed
 function drawBtn(draw, b, state) {
     var hov = hoverOn(b.x, b.y, b.w, b.h);
+    b.own = true;
     draw.round(b.x, b.y, b.w, b.h, TOK.r.pill, state === 'primary' ? ACCENT : (hov ? TOK.hoverA : TOK.btn));
     if (state !== 'primary') {
         draw.stroke(b.x, b.y, b.w, b.h, TOK.r.pill, state === 'open' ? 2 : 1.5, state === 'open' ? ACCENT : (hov ? TOK.hoverLine : TOK.btnLine));
@@ -431,29 +449,34 @@ function mixColour(a, b, k) {
     }
     return out * 256 + 255;
 }
-function themeOf(label, accent, icon) {
-    return { label: label, accent: accent, dim: mixColour(accent, 0x0D0E11FF, 0.5), glow: mixColour(accent, 0x15171BFF, 0.82), headA: 0x1B1E23FF, headB: 0x16181CFF,
-        hiA: mixColour(0x20232AFF, accent, 0.16), hiB: mixColour(0x1B1E24FF, accent, 0.1), icon: icon };
+/*
+ * One colour of interaction for the whole app (owner, 2026-11-20: "jednolita grafitowa stylistyka, spójny główny
+ * kolor interakcji, subtelne akcenty modułów"): the amber is the focus, the chosen option, the primary button,
+ * everywhere. A module is told by its MARK only: a small dot beside its name in the head, the short line at the
+ * head's edge, its sign on the home screen. Nothing else changes colour with the module.
+ */
+var UI_ACCENT = 0xE0A458FF;
+function themeOf(label, mark) {
+    var accent = UI_ACCENT;
+    return { label: label, accent: accent, mark: mark, dim: mixColour(accent, 0x0D0E11FF, 0.5), glow: mixColour(accent, 0x15171BFF, 0.82), headA: 0x1B1E23FF, headB: 0x16181CFF,
+        hiA: mixColour(0x20232AFF, accent, 0.16), hiB: mixColour(0x1B1E24FF, accent, 0.1), icon: 0xF0C48AFF };
 }
 var THEMES = {
-    base: themeOf('', 0xE0A458FF, 0xF0C48AFF),
-    airplay: themeOf('AirPlay', 0x5AA9E6FF, 0x9CCBF2FF),
-    youtube: themeOf('YouTube', 0xE5605CFF, 0xF2A19EFF),
-    browser: themeOf('Przeglądarka', 0x5CC9A0FF, 0x9FE2C7FF),
-    store: themeOf('Aplikacje', 0xA98BE6FF, 0xCDBBF3FF)
+    base: themeOf('', UI_ACCENT),
+    airplay: themeOf('AirPlay', 0x6FAEDDFF),
+    youtube: themeOf('YouTube', 0xD9706CFF),
+    browser: themeOf('Przeglądarka', 0x6BBF9FFF),
+    store: themeOf('Aplikacje', 0xA594D6FF)
 };
 var THEME = THEMES.base;
 function themeFor(screen) {
-    if (screen === 'airplay' || screen === 'air-out' || screen === 'air-box' || screen === 'stream' || screen === 'quality' || screen === 'quality-central' || screen === 'quality-kombi') {
+    if (screen === 'airplay' || screen === 'air-out' || screen === 'air-box' || screen === 'stream') {
         return 'airplay';
     }
     if (screen === 'youtube' || screen === 'yt-login' || screen === 'yt-browse') {
         return 'youtube';
     }
-    if (screen === 'apps-settings') {
-        return 'browser';
-    }
-    if (screen === 'apps-store' || screen === 'apps' || screen === 'set-apps') {
+    if (screen === 'apps-store' || screen === 'apps') {
         return 'store';
     }
     return 'base';
@@ -830,21 +853,34 @@ MEDIA_ITEMS.tiles = true;
  * screens an app uses stays with that app.
  */
 var SYSTEM_ITEMS = [
-    { name: 'sg-display', title: 'Obraz i ekrany', hint: 'pozycja, rozdzielczość', icon: 'desktop' },
+    { name: 'sg-display', title: 'Ekrany i obraz', hint: 'pozycja, rozdzielczość, napis', icon: 'desktop' },
     { name: 'sg-input', title: 'Sterowanie', hint: 'mysz, kursor, wyłącznik', icon: 'gear' },
-    { name: 'sg-browser', title: 'Przeglądarka', hint: 'strona, wideo, pamięć', icon: 'globe' },
-    { name: 'sg-apps', title: 'Aplikacje', hint: 'zegary, HUD, dane auta', icon: 'grid' },
-    { name: 'sg-general', title: 'Ogólne', hint: 'napis, język, system', icon: 'tag' },
+    { name: 'sg-browser', title: 'Przeglądarka', hint: 'strona startowa, powiększenie', icon: 'globe' },
+    { name: 'sg-apps', title: 'Aplikacje', hint: 'ekrany, dane auta', icon: 'grid' },
+    { name: 'sg-advanced', title: 'Zaawansowane', hint: 'silnik, renderowanie, pamięć', icon: 'gear' },
+    { name: 'sg-general', title: 'Ogólne', hint: 'język, system, usługi', icon: 'tag' },
     { name: 'system-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
-// Obraz i ekrany: for AirPlay, YouTube, Przeglądarka and the apps alike
+/*
+ * The groups (0.2.1; every option was looked at again, owner 2026-11-20):
+ *   Ekrany i obraz   what is seen and where: the window, the pixels, the gauges' area, AirPlay's picture delay, the
+ *                    caption written on the screens ("Napis" was in Ogólne; it is a thing of the picture)
+ *   Sterowanie       the pad's mouse, its speed, the cursor in the menu, the emergency button
+ *   Przeglądarka     what a person changes while browsing: start page, zoom, full screen, autoplay, phone or desktop pages
+ *   Aplikacje        the apps from Sklep: their screens, what they may read from the car
+ *   Zaawansowane     the technical rules, rarely touched: how the menu and the pages are drawn, the engine, its picture
+ *                    path, the page picture's pixels, light video, the sandbox, the memory limit, the engine's own pages
+ *                    ("Renderowanie" was a page with one switch in Obraz i ekrany; the engine's rules were mixed into Przeglądarka)
+ *   Ogólne           language, what the head unit is, starting THEiPlay's services again
+ * Every option keeps its name, its handler, its values and where it is saved; only the page it is listed on changed.
+ */
 var SET_DISPLAY_ITEMS = [
     { name: 'position', title: 'Pozycja', hint: 'wspólne okno', icon: 'grid' },
     { name: 'air-quality', title: 'Rozdzielczość', hint: '600x400, 400x240', icon: 'desktop' },
     { name: 'cluster-place', title: 'Obszar zegarów', hint: 'mapa: kieszeń, wskazówki zostają', icon: 'grid' },
     // AirPlay's picture waits this long, so that it meets its sound
-    { name: 'air-delay', title: 'Opóźnienie obrazu AirPlay', hint: '300 ms', icon: 'play' },
-    { name: 'settings', title: 'Renderowanie', hint: 'GPU', icon: 'gear' },
+    { name: 'air-delay', title: 'Opóźnienie AirPlay', hint: '300 ms', icon: 'play' },
+    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'sgd-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 // Sterowanie: the controller's touchpad as a mouse, the cursor on THEiPlay's own pages, the button that ends the app
@@ -854,6 +890,23 @@ var SET_INPUT_ITEMS = [
     { name: 'set-menu-mouse', title: 'Kursor w menu', hint: 'wyłączony', icon: 'gear' },
     { name: 'set-kill', title: 'Wyłącznik', hint: 'wyłączony', icon: 'stop' },
     { name: 'sgi-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
+];
+// Zaawansowane
+var SET_ADVANCED_ITEMS = [
+    { name: 'set-render', title: 'Renderowanie', hint: 'GPU', icon: 'desktop' },
+    // the full Chrome (sites that refuse a browser made for programs; protected films) or the light headless shell
+    { name: 'aset-engine', title: 'Silnik przeglądarki', hint: 'pełny Chrome', icon: 'gear' },
+    // how the page's picture reaches the screen: the engine's window straight into the video file (60 or 30 frames a
+    // second at most) or DevTools photographs (JPEG, 20 at most; the only way of the light engine)
+    { name: 'aset-frames', title: 'Tor obrazu', hint: 'bezpośredni 60 kl./s', icon: 'desktop' },
+    { name: 'aset-picture', title: 'Obraz stron', hint: '100%', icon: 'desktop' },
+    // films in the format this head unit decodes without stutter
+    { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
+    { name: 'aset-sandbox', title: 'Piaskownica', hint: 'wymagana', icon: 'tag' },
+    { name: 'aset-memory', title: 'Limit pamięci', hint: '1500 MB', icon: 'gear' },
+    // the browser's own pages: version, rules, switches, history (chrome://about)
+    { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
+    { name: 'sgx-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 // Aplikacje: where an app (and Przeglądarka) shows besides the centre, and whether apps read the car
 var SET_APPS_ITEMS = [
@@ -866,7 +919,6 @@ var SET_APPS_ITEMS = [
 ];
 // Ogólne
 var SET_GENERAL_ITEMS = [
-    { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'sys-info', title: 'O systemie', hint: 'miejsce, procesor, pamięć', icon: 'tag' },
     // the tools THEiPlay plays through (sound, AirPlay, YouTube, browser, controller) started again, when one hangs
@@ -913,22 +965,10 @@ var SYSINFO_ITEMS = [
 var APPS_SET_ITEMS = [
     { name: 'aset-home', title: 'Strona startowa', hint: 'wbudowana', icon: 'globe' },
     { name: 'aset-zoom', title: 'Powiększenie', hint: '100%', icon: 'desktop' },
-    { name: 'aset-picture', title: 'Rozdzielczość', hint: '100%', icon: 'desktop' },
     { name: 'aset-fs', title: 'Pełny ekran', hint: 'cały ekran', icon: 'desktop' },
     { name: 'aset-autoplay', title: 'Autoodtwarzanie', hint: 'dozwolone', icon: 'play' },
-    // films in the format this head unit decodes without stutter
-    { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },
-    // the full Chrome (sites that refuse a browser made for programs; protected films) or the light headless shell
-    { name: 'aset-engine', title: 'Silnik', hint: 'pełny Chrome', icon: 'gear' },
-    // how the page's picture reaches the screen: the engine's window straight into the video file (60 or 30 frames a
-    // second at most) or DevTools photographs (JPEG, 20 at most; the only way of the light engine)
-    { name: 'aset-frames', title: 'Tor obrazu', hint: 'bezpośredni 60 kl./s', icon: 'desktop' },
     // pages in their phone form (a touch screen) or in their desktop form
     { name: 'aset-mobile', title: 'Tryb mobilny', hint: 'włączony', icon: 'desktop' },
-    { name: 'aset-sandbox', title: 'Piaskownica', hint: 'wymagana', icon: 'tag' },
-    { name: 'aset-memory', title: 'Limit pamięci', hint: '1500 MB', icon: 'gear' },
-    // the browser's own pages: version, rules, switches, history (chrome://about)
-    { name: 'aset-pages', title: 'Strony chrome', hint: 'chrome://about', icon: 'globe' },
     { name: 'aset-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 
@@ -1088,6 +1128,7 @@ var SCREENS = {
     'set-input': SET_INPUT_ITEMS,
     'set-apps': SET_APPS_ITEMS,
     'set-general': SET_GENERAL_ITEMS,
+    'set-advanced': SET_ADVANCED_ITEMS,
     youtube: YOUTUBE_ITEMS,
     'yt-login': YT_LOGIN_ITEMS,
     'yt-browse': YT_BROWSE_ITEMS,
@@ -1419,11 +1460,90 @@ FrameBuilder.prototype.atlases = function () {
 /** the FRAME message of a drawing; its .atlases names the glyph atlases to upload first */
 // The touchpad's cursor over a page of THEiPlay itself (paint() sets it for the frame it builds).
 var POINTER = null;
+/*
+ * The states of everything that can be touched, in ONE place (owner, 2026-11-20). Every frame builder hands its
+ * layout to packFrame(), and drawStates() goes through all the boxes that answer a touch (list rows, the head's and
+ * the foot's buttons, the keyboard's keys, a toolbar, the buttons over a picture, a panel's tiles):
+ *   pressed   a finger (or the pad's tap) is down on it: a lighter surface and the accent as its line;
+ *   hover     the cursor is over it: a lighter surface and line (components that draw their own hover say "own");
+ *   focus     the knob is on it outside a list (the head, the foot, a toolbar): the accent as a ring around it.
+ * Only the box on top at that point takes a state (what a panel covers does not), and a panel's backdrop none.
+ * Nothing is done by a state: a hover never chooses.
+ */
+var PRESS = null;      // { x, y } while a finger is down
+var FOCUS = '';        // the name of the box the knob is on outside the list, or ''
+var NOSEL = false;     // the knob is outside the list: no row of it is drawn as the knob's place
+function drawStates(draw, lay) {
+    var all = [];
+    var i;
+    var b;
+    var top;
+    var add = function (list, own, r) {
+        var k;
+        for (k = 0; list && k < list.length; k += 1) {
+            if (list[k] && list[k].w > 0) {
+                all.push({ b: list[k], own: !!(own || list[k].own), r: list[k].r != null ? list[k].r : r });
+            }
+        }
+    };
+    var at = function (p) {
+        var k;
+        if (!p) {
+            return null;
+        }
+        for (k = all.length - 1; k >= 0; k -= 1) {
+            b = all[k].b;
+            if (p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h) {
+                return b.bg ? null : all[k];
+            }
+        }
+        return null;
+    };
+    if (!lay) {
+        return;
+    }
+    if (!lay.sheetOpen) {
+        add(lay.bubbles, true, TOK.r.row);
+        add(lay.backHit ? [lay.backHit] : null, true, TOK.r.pill);
+        if (lay.nav) {
+            add([lay.nav.left, lay.nav.right, lay.nav.ok, lay.nav.mouse], true, TOK.r.pill);
+        }
+        add(lay.hits, false, 22);
+    }
+    add(lay.airHits, false, TOK.r.pill);
+    add(lay.keys, false, 12);
+    add(lay.popup, false, 12);
+    add(lay.rideHits, false, TOK.r.pill);
+    add(lay.webHits, false, TOK.r.pill);
+    top = at(PRESS);
+    if (top) {
+        b = top.b;
+        draw.round(b.x, b.y, b.w, b.h, top.r, 0xFFFFFF24);
+        draw.stroke(b.x, b.y, b.w, b.h, top.r, 2.5, ACCENT);
+    } else {
+        top = at(POINTER);
+        if (top && !top.own) {
+            b = top.b;
+            draw.round(b.x, b.y, b.w, b.h, top.r, 0xFFFFFF14);
+            draw.stroke(b.x, b.y, b.w, b.h, top.r, 1.5, TOK.hoverLine);
+        }
+    }
+    if (FOCUS) {
+        for (i = all.length - 1; i >= 0; i -= 1) {
+            b = all[i].b;
+            if (b.name === FOCUS) {
+                draw.stroke(b.x - 5, b.y - 5, b.w + 10, b.h + 10, all[i].r + 5, 3, ACCENT);
+                break;
+            }
+        }
+    }
+}
 // The owner's emergency button (Ustawienia > "Przycisk wyłączenia"): on every frame THEiPlay draws, over
 // everything, in the bottom right corner of the part of the screen the app gets touches from. A tap ends the app.
 var KILL = { on: false };
 var KILL_BOX = { name: 'app-kill', x: 104 + 1796 - 12 - 76, y: 88 + 632 - 12 - 76, w: 76, h: 76 };
-function packFrame(draw) {
+function packFrame(draw, lay) {
+    drawStates(draw, lay);
     if (KILL.on) {
         var kx = KILL_BOX.x + KILL_BOX.w / 2;
         var ky = KILL_BOX.y + KILL_BOX.h / 2;
@@ -1752,21 +1872,39 @@ function crumbFor(name, head, where) {
     } else if (name === 'air-box') {
         base = 'AirPlay > Ekrany > ' + (head && head !== 'THEiPlay' ? head : 'Opcje');
     } else if (name === 'label') {
-        base = 'Napis';
-    } else if (name === 'settings') {
+        base = 'Ekrany i obraz > Napis';
+    } else if (name === 'settings' || name === 'system') {
         base = 'Ustawienia';
+    } else if (name === 'set-display') {
+        base = 'Ustawienia > Ekrany i obraz';
+    } else if (name === 'set-input') {
+        base = 'Ustawienia > Sterowanie';
+    } else if (name === 'apps-settings') {
+        base = 'Ustawienia > Przeglądarka';
+    } else if (name === 'set-apps') {
+        base = 'Ustawienia > Aplikacje';
+    } else if (name === 'set-advanced') {
+        base = 'Ustawienia > Zaawansowane';
+    } else if (name === 'set-general') {
+        base = 'Ustawienia > Ogólne';
+    } else if (name === 'sys-info') {
+        base = 'Ogólne > O systemie';
+    } else if (name === 'apps') {
+        base = 'Aplikacje';
+    } else if (name === 'apps-store') {
+        base = 'Aplikacje > Sklep';
     } else if (name === 'youtube' || name === 'yt-login' || name === 'yt-browse') {
         base = name === 'yt-login' ? 'YouTube > Zaloguj' : (name === 'yt-browse' ? 'YouTube > Przeglądaj' : 'YouTube');
     } else if (name === 'pos-out' || name === 'pos-each') {
-        base = 'Pozycja';
+        base = 'Ekrany i obraz > Pozycja';
     } else if (name === 'pos-box') {
         base = 'Pozycja > ' + (head && head !== 'THEiPlay' ? head : 'Środek');
     } else if (name === 'quality') {
-        base = 'AirPlay > Jakość obrazu';
+        base = 'Ekrany i obraz > Rozdzielczość';
     } else if (name === 'quality-central') {
-        base = 'Jakość obrazu > Ekran centralny';
+        base = 'Rozdzielczość > Ekran centralny';
     } else if (name === 'quality-kombi') {
-        base = 'Jakość obrazu > Zegary i HUD';
+        base = 'Rozdzielczość > Zegary i HUD';
     } else if (name === 'stream') {
         base = 'AirPlay > Lustro';
     } else if (head && head !== 'THEiPlay' && head !== 'Stream') {
@@ -1826,16 +1964,22 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         drawBtn(draw, { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 }, '');
         chevron(draw, 'w', lay.ox + 46, lay.oy + 34, 8, 3, ACCENT);
         draw.text(tr('wstecz'), lay.ox + 64, lay.oy + 24, 3, INK);
-        lay.backHit = { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 };
+        lay.backHit = { name: '@back', own: true, x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 };
         textX = lay.ox + 198;
     }
+    var crumbParts = lay.crumb.split(' > ');
     if (THEME.label) {
-        // whose menu this is, in that app's colour
-        var whose = tr('Menu') + ': ' + tr(THEME.label);
-        var whoseW = draw.textWidth(whose, 3, 'bold') + 36;
-        draw.round(textX, lay.oy + 14, whoseW, 40, TOK.r.pill, ACCENT_GLOW);
-        draw.text(whose, textX + 18, lay.oy + 24, 3, ACCENT, 'bold');
-        textX += whoseW + 18;
+        // whose page this is: the module's mark (a dot in its colour). Its name is the first word of the place
+        // ("AirPlay > Nazwa"); where the place does not begin with it, the name is written, quiet, before it.
+        var whose = tr(THEME.label);
+        draw.circle(textX + 8, lay.oy + 34, 6, THEME.mark);
+        textX += 26;
+        if (crumbParts[0] !== whose) {
+            var whoseW = draw.textWidth(whose, 3, 'bold');
+            draw.text(whose, textX, lay.oy + 24, 3, SOFT, 'bold');
+            draw.rect(textX + whoseW + 16, lay.oy + 22, 1, 24, TOK.btnLine);
+            textX += whoseW + 34;
+        }
     }
     maxW = lay.ox + lay.boxW - textX - 780;
     if (!showBack) {
@@ -1936,16 +2080,16 @@ function drawNav(draw, lay, onTop, exit, hot) {
         draw.text(label, okX + Math.floor((okW - tw) / 2), y + 18, 3, PAGE);
     }
     lay.nav = {
-        left: { x: leftX, y: y, w: arrow, h: h },
-        right: { x: rightX, y: y, w: arrow, h: h },
-        ok: { x: okX, y: y, w: okW, h: h, exit: !!exit }
+        left: { name: '@left', x: leftX, y: y, w: arrow, h: h },
+        right: { name: '@right', x: rightX, y: y, w: arrow, h: h },
+        ok: { name: '@exit', x: okX, y: y, w: okW, h: h, exit: !!exit }
     };
     if (exit) {
         // the mouse switch: lit when apps may have the cursor, dim and struck through when not
         var mouseX = leftX - gap - arrow;
         drawBtn(draw, { x: mouseX, y: y, w: arrow, h: h }, MOUSE_UI.on ? 'open' : '');
         mouseSign(draw, mouseX + arrow / 2, cy, MOUSE_UI.on ? ACCENT : LINE, !MOUSE_UI.on);
-        lay.nav.mouse = { x: mouseX, y: y, w: arrow, h: h };
+        lay.nav.mouse = { name: '@mouse', x: mouseX, y: y, w: arrow, h: h };
     }
     if (onTop) {
         lay.framesTop = y + h + 22;
@@ -1982,10 +2126,10 @@ function roundBox(draw, x, y, w, h, r, color) {
     draw.round(x, y, w, h, r, color);
 }
 
-var KB_KEY = 0x2A2622FF;       // letter keys
-var KB_FN = 0x1E1B18FF;        // Aa, usuń, anuluj, spacja
-var KB_PANEL = 0x110F0DFF;     // the keyboard's tray
-var KB_FIELD = 0x1C1814FF;     // the text field
+var KB_KEY = 0x2A2E36FF;       // letter keys
+var KB_FN = 0x1E2127FF;        // Aa, usuń, anuluj, spacja
+var KB_PANEL = 0x111317FF;     // the keyboard's tray
+var KB_FIELD = 0x1A1D22FF;     // the text field
 
 // The text field and the keyboard (knob: turn = next key, tilt up / down / left / right =
 // the key there, press = type; touch: tap = type, hold = Polish letters).
@@ -2040,8 +2184,10 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     drawMenuHeader(draw, head, crumb || edit.title || 'Wpisz', true);
 
     // the field: its name, the text with a caret, how many characters are left
-    roundBox(draw, fieldX - 2, fieldY - 2, fieldW + 4, fieldH + 4, 18, ACCENT_DIM);
-    roundBox(draw, fieldX, fieldY, fieldW, fieldH, 16, KB_FIELD);
+    roundBox(draw, fieldX, fieldY, fieldW, fieldH, TOK.r.tile, KB_FIELD);
+    draw.stroke(fieldX, fieldY, fieldW, fieldH, TOK.r.tile, 1.5, TOK.btnLine);
+    // (the field that is typed into: the accent under it)
+    draw.rect(fieldX + 22, fieldY + fieldH - 3, fieldW - 44, 3, ACCENT);
     // (the field's name is the header's title)
     count = value.length + (uiLang === 'en' ? ' of ' : ' z ') + (edit.max || 0);
     draw.text(count, fieldX + fieldW - 28 - draw.textWidth(count, 3), fieldY + Math.floor((fieldH - 21) / 2), 3, MUTED);
@@ -2058,7 +2204,7 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     draw.rect(fieldX + 28 + draw.textWidth(shown.slice(0, caretAt - from), 5) + (caretAt - from > 0 ? 2 : 0), fieldY + 22, 4, 40, ACCENT);
 
     // the tray and the keys, every row centred; widths from knob_keyboard (the knob's up / down uses them)
-    roundBox(draw, trayX, trayY, trayW, trayH, 22, KB_PANEL);
+    roundBox(draw, trayX, trayY, trayW, trayH, TOK.r.panel, KB_PANEL);
     for (r = 0; r < spans.length; r += 1) {
         if (spans[r].length) {
             widest = Math.max(widest, spans[r][spans[r].length - 1].x1 - spans[r][0].x0);
@@ -2079,19 +2225,25 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
             fill = fn ? KB_FN : KB_KEY;
             ink = fn ? HINT : INK;
             if (key === 'OK') {
-                fill = ACCENT_DIM;
-                ink = INK;
+                fill = ACCENT;
+                ink = PAGE;
             }
             if (key === 'SH' && edit.shift) {
                 fill = ACCENT_GLOW;
                 ink = ACCENT;
             }
             if (focus || held) {
-                roundBox(draw, x - 4, y - 4, w + 8, keyH + 8, 16, ACCENT_GLOW);
-                fill = ACCENT;
-                ink = PAGE;
+                // the knob's key: lighter, the accent as a ring around it (the OK key keeps its fill, the ring is light)
+                roundBox(draw, x - 4, y - 4, w + 8, keyH + 8, 15, key === 'OK' ? INK : ACCENT);
+                if (key !== 'OK') {
+                    fill = 0x3A3F49FF;
+                    ink = INK;
+                }
             }
             roundBox(draw, x, y, w, keyH, 12, fill);
+            if (!(focus || held) && key !== 'OK') {
+                draw.stroke(x, y, w, keyH, 12, 1, fn ? 0x2A2E36FF : 0x383D47FF);
+            }
             label = keyLabel(key);
             scale = label.length === 1 ? 4 : 3;
             lw = draw.textWidth(label, scale);
@@ -2113,10 +2265,11 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
         altX = held2
             ? held2.x + Math.floor(held2.w / 2) - Math.floor((alts.length * altW + (alts.length - 1) * 10) / 2)
             : page.ox + 80;
-        roundBox(draw, altX - 12, altY - 12, alts.length * altW + (alts.length - 1) * 10 + 24, keyH + 24, 20, ACCENT_DIM);
+        roundBox(draw, altX - 12, altY - 12, alts.length * altW + (alts.length - 1) * 10 + 24, keyH + 24, 20, 0x15171BFF);
+        draw.stroke(altX - 12, altY - 12, alts.length * altW + (alts.length - 1) * 10 + 24, keyH + 24, 20, 1.5, ACCENT);
         for (c = 0; c < alts.length; c += 1) {
             focus = c === edit.popup.pick;
-            roundBox(draw, altX, altY, altW, keyH, 12, focus ? ACCENT : KB_KEY);
+            roundBox(draw, altX, altY, altW, keyH, 12, focus ? ACCENT : 0x3A3F49FF);
             lw = draw.textWidth(alts[c], 4);
             draw.text(alts[c], altX + Math.floor((altW - lw) / 2), altY + Math.floor((keyH - 28) / 2), 4, focus ? PAGE : INK);
             popupHits.push({ x: altX - 8, y: altY - 8, w: altW + 16, h: keyH + 16, pick: c });
@@ -2128,24 +2281,24 @@ function buildKeyboardFrame(edit, width, height, crumb, air, versionText) {
     label = tr('pokrętło: obrót lub wychylenie wybiera  ·  naciśnij: wpisz  ·  przytrzymaj literę: polskie znaki');
     draw.text(label, page.ox + Math.floor((page.boxW - draw.textWidth(label, 3)) / 2), trayY + trayH + 12, 3, MUTED);
 
-    var board = { ox: page.ox, oy: page.oy, boxW: page.boxW, boxH: page.boxH };
-    var airBadge = drawAirBadge(draw, board, air, versionText);
+    // (the keyboard has the whole page: no "Ekrany" here; it is there again when the keyboard closes)
+    var kbLay = {
+        ox: page.ox,
+        oy: page.oy,
+        boxW: page.boxW,
+        boxH: page.boxH,
+        bubbles: [],
+        keys: hits,
+        popup: popupHits,
+        crumb: head.crumb,
+        backHit: head.backHit,
+        nav: null,
+        airBadge: null
+    };
     return {
-        frame: packFrame(draw),
+        frame: packFrame(draw, kbLay),
         rects: draw.rects,
-        layout: {
-            ox: page.ox,
-            oy: page.oy,
-            boxW: page.boxW,
-            boxH: page.boxH,
-            bubbles: [],
-            keys: hits,
-            popup: popupHits,
-            crumb: head.crumb,
-            backHit: head.backHit,
-            nav: null,
-            airBadge: airBadge
-        }
+        layout: kbLay
     };
 }
 
@@ -2234,7 +2387,8 @@ function streamWindow(win, page) {
 function drawChip(draw, box, on, label) {
     var text = String(label || '');
     var tw = draw.textWidth(text, 3);
-    var r = Math.min(box.h / 2, 22);
+    var r = Math.min(box.h / 2, TOK.r.pill);
+    box.r = r;
     if (on) {
         draw.round(box.x, box.y, box.w, box.h, r, ACCENT);
     } else {
@@ -2387,7 +2541,7 @@ function drawStage(draw, x, y, maxW, maxH, shown) {
 }
 
 function pushHit(hits, box) {
-    hits.push({ name: box.name, x: box.x, y: box.y, w: box.w, h: box.h });
+    hits.push({ name: box.name, x: box.x, y: box.y, w: box.w, h: box.h, r: box.r });
 }
 
 // Which module's screens the button "Ekrany" is for, on the page that is drawn: by its theme.
@@ -2401,8 +2555,13 @@ function screensContext(air) {
     if (THEME === THEMES.browser || THEME === THEMES.store) {
         return { kind: 'web', name: 'web-where', screens: webOutScreens(), open: !!(air && air.whereOpen && air.whereMode === 'web') };
     }
-    // THEiPlay's own pages (home, Ustawienia): no module is chosen; the button leads to the screens' settings
-    return { kind: 'base', name: 'where-options', screens: null, open: false };
+    // THEiPlay's own pages (home, Ustawienia): the module that plays now, when one does (AirPlay switched on, a
+    // YouTube film); with none the same panel opens with its screens not to choose (there is no picture to send)
+    // and "Opcje" to use
+    if (air && air.on) {
+        return { kind: 'air', name: 'air-where', screens: air.screens || [], open: !!(air.whereOpen && air.whereMode === 'air'), quiet: true };
+    }
+    return { kind: 'base', name: 'base-where', screens: null, open: !!(air && air.whereOpen && air.whereMode === 'base') };
 }
 
 /*
@@ -2460,7 +2619,7 @@ function drawAirBadge(draw, lay, air, versionText) {
     lay.airHits = [btn];
     lay.airStrip = { x: x, y: y, w: w, h: h };
     // AirPlay's state, on AirPlay's pages: a lamp and its word
-    if (ctx.kind === 'air') {
+    if (ctx.kind === 'air' && !ctx.quiet) {
         label = tr(String(air.status || (air.online ? 'połączono' : 'wyłączony'))).slice(0, 22);
         tw = draw.textWidth(label, 3);
         px = x - 22 - tw;
@@ -2657,9 +2816,22 @@ function drawWhereSheet(draw, lay, air) {
     if (!lay.airHits) {
         lay.airHits = [];
     }
-    lay.airHits.push({ name: cancel, x: lay.ox, y: lay.oy, w: lay.boxW, h: lay.boxH });
+    lay.airHits.push({ name: cancel, bg: true, x: lay.ox, y: lay.oy, w: lay.boxW, h: lay.boxH });
+    // (taps on the panel itself, beside its tiles, do nothing)
+    lay.airHits.push({ name: '@panel', bg: true, x: x, y: y, w: panelW, h: panelH });
+    lay.sheetOpen = true;
     for (i = 0; i < tiles.length; i += 1) {
         tile = tiles[i];
+        if (air.disabled) {
+            // no module plays: the screens are shown, dim, and cannot be chosen
+            draw.card(tx, ty, tileW, tileH, TOK.r.tile, 0x1A1C21FF, 0x17191DFF);
+            draw.stroke(tx, ty, tileW, tileH, TOK.r.tile, 1, 0x262A31FF);
+            drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), ty + 2, 0x30343CFF, 0x2A2E35FF);
+            draw.text(tr(tile.title), tx + 20, ty + 138, 4, 0x5A616CFF, 'bold');
+            draw.text(tr('niedostępne'), tx + 20, ty + 180, 3, 0x4A505AFF);
+            tx += tileW + gap;
+            continue;
+        }
         on = !!chosen[tile.key];
         here = cursor === i;
         hov = hoverOn(tx, ty, tileW, tileH);
@@ -2673,7 +2845,7 @@ function drawWhereSheet(draw, lay, air) {
             draw.stroke(tx, ty, tileW, tileH, TOK.r.tile, hov ? 1.5 : 1, hov ? TOK.hoverLine : LINE);
         }
         if (here) {
-            draw.stroke(tx - 5, ty - 5, tileW + 10, tileH + 10, TOK.r.tile + 4, 2.5, INK);
+            draw.stroke(tx - 5, ty - 5, tileW + 10, tileH + 10, TOK.r.tile + 5, 3, ACCENT);
         }
         drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), ty + 2, on ? ACCENT : MUTED, on ? ACCENT_DIM : TOK.btnLine);
         draw.text(tr(tile.title), tx + 20, ty + 138, 4, (on || hov) ? INK : SOFT, 'bold');
@@ -2681,7 +2853,7 @@ function drawWhereSheet(draw, lay, air) {
         if (hints[tile.key] && !(tile.key === 'central' && air.fixedCentral)) {
             draw.text(draw.fit(hints[tile.key], 2, tileW - 40), tx + 20, ty + 208, 2, MUTED);
         }
-        lay.airHits.push({ name: tile.name, x: tx, y: ty, w: tileW, h: tileH });
+        lay.airHits.push({ name: tile.name, own: true, r: TOK.r.tile, x: tx, y: ty, w: tileW, h: tileH });
         tx += tileW + gap;
     }
     // "Opcje": the screens' settings
@@ -2691,7 +2863,7 @@ function drawWhereSheet(draw, lay, air) {
     draw.icon('gear', opts.x + 18, opts.y + Math.floor((48 - draw.iconSize(2)) / 2), 2, hov ? INK : HINT);
     draw.text(optLabel, opts.x + 18 + draw.iconSize(2) + 12, opts.y + 14, 3, INK);
     if (cursor === 4) {
-        draw.stroke(opts.x - 5, opts.y - 5, opts.w + 10, opts.h + 10, TOK.r.pill + 4, 2.5, INK);
+        draw.stroke(opts.x - 5, opts.y - 5, opts.w + 10, opts.h + 10, TOK.r.pill + 5, 3, ACCENT);
     }
     lay.airHits.push(opts);
     var closeLabel = tr((air && air.closeLabel) || 'Gotowe');
@@ -2699,7 +2871,7 @@ function drawWhereSheet(draw, lay, air) {
     close = { name: shut, x: x + panelW - closeW - 28, y: y + panelH - 70, w: closeW, h: 48 };
     drawBtn(draw, close, 'primary');
     if (cursor === 3) {
-        draw.stroke(close.x - 5, close.y - 5, close.w + 10, close.h + 10, TOK.r.pill + 4, 2.5, INK);
+        draw.stroke(close.x - 5, close.y - 5, close.w + 10, close.h + 10, TOK.r.pill + 5, 3, INK);
     }
     draw.text(closeLabel, close.x + Math.floor((close.w - draw.textWidth(closeLabel, 3, 'bold')) / 2), close.y + 14, 3, PAGE, 'bold');
     lay.airHits.push(close);
@@ -2771,6 +2943,8 @@ function applyAirOverlay(draw, lay, air, versionText) {
     }
     if (air && air.whereOpen && air.whereMode === 'web') {
         drawWhereSheet(draw, lay, { screens: webOutScreens(), whereCursor: air.whereCursor, pickPrefix: 'web-pick-', pickClose: 'air-where-close', fixedCentral: true, sheetLabel: 'Przeglądarka i aplikacje' });
+    } else if (air && air.whereOpen && air.whereMode === 'base') {
+        drawWhereSheet(draw, lay, { screens: [], whereCursor: air.whereCursor, pickClose: 'air-where-close', disabled: true, sheetLabel: 'żaden moduł teraz nie gra' });
     } else if (air && air.whereOpen) {
         drawWhereSheet(draw, lay, air);
     }
@@ -2894,10 +3068,13 @@ function drawStreamExit(draw, lay, page) {
     var h = 48;
     var x = page.ox + page.boxW - w - 190;
     var y = page.oy + 8;
-    draw.round(x, y, w, h, 24, CARD_HI);
+    y = page.oy + 12;
+    h = 44;
+    x = page.ox + page.boxW - w - 196 - 20 - 14;
+    drawBtn(draw, { x: x, y: y, w: w, h: h }, '');
     powerSign(draw, x + 30, y + h / 2 + 1, 11, 3, HINT);
-    draw.text(label, x + 54, y + 14, 3, INK);
-    lay.nav = { left: null, right: null, ok: { x: x, y: y, w: w, h: h, exit: true } };
+    draw.text(label, x + 54, y + 12, 3, INK);
+    lay.nav = { left: null, right: null, ok: { name: '@exit', x: x, y: y, w: w, h: h, exit: true } };
 }
 
 function buildStreamFrame(items, selected, width, height, detail, heading, version, streamInfo, caption, crumb, air) {
@@ -2982,8 +3159,8 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
         // no picture yet: one card with what to do (the code, or what is awaited)
         panelY = page.oy + 84;
         panelH = page.boxH - 84 - 130;
-        draw.card(panelX, panelY, panelW, panelH, 28, HEAD_A, HEAD_B);
-        draw.stroke(panelX, panelY, panelW, panelH, 28, 2, ACCENT_DIM);
+        draw.card(panelX, panelY, panelW, panelH, TOK.r.panel, HEAD_A, HEAD_B);
+        draw.stroke(panelX, panelY, panelW, panelH, TOK.r.panel, 1.5, TOK.btnLine);
         label = tr(String((info && info.headline) || heading || 'THEiPlay'));
         labelW = draw.textWidth(label, 4);
         draw.text(label, panelX + Math.floor((panelW - labelW) / 2), panelY + 28, 4, INK);
@@ -3030,9 +3207,9 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
     }
 
     // "Zakończ": the one button of this screen
-    draw.round(bubble.x - 4, bubble.y - 4, bubble.w + 8, bubble.h + 8, 36, ACCENT_GLOW);
-    draw.card(bubble.x, bubble.y, bubble.w, bubble.h, 32, ROW_HI_A, ROW_HI_B);
-    draw.stroke(bubble.x, bubble.y, bubble.w, bubble.h, 32, 2.5, ACCENT);
+    draw.card(bubble.x, bubble.y, bubble.w, bubble.h, TOK.r.tile, ROW_HI_A, ROW_HI_B);
+    draw.stroke(bubble.x, bubble.y, bubble.w, bubble.h, TOK.r.tile, 2.5, ACCENT);
+    bubble.r = TOK.r.tile;
     titleW = draw.textWidth(title, 4);
     draw.round(bubble.x + Math.floor((bubble.w - titleW - 38) / 2), bubble.y + Math.floor(bubble.h / 2) - 11, 22, 22, 5, ACCENT);
     draw.text(title, bubble.x + Math.floor((bubble.w - titleW - 38) / 2) + 38, bubble.y + 18, 4, INK);
@@ -3043,7 +3220,7 @@ function buildStreamFrame(items, selected, width, height, detail, heading, versi
         draw.pixelText(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     return {
-        frame: packFrame(draw),
+        frame: packFrame(draw, lay),
         rects: draw.rects,
         layout: lay
     };
@@ -3056,7 +3233,7 @@ var RT_CARD = CARD_HI;
 var RT_PH = CARD;
 var RT_TEXT = INK;
 var RT_DIM = HINT;
-var RT_PINK = THEMES.youtube.accent;     // YouTube's own colour (the theme "youtube")
+var RT_PINK = THEMES.youtube.mark;     // YouTube's own colour (the theme "youtube")
 var RT_HEAD = PAGE_TOP;
 
 function drawQrBlock(draw, text, x, y, mod) {
@@ -3254,7 +3431,7 @@ function drawPage(draw, lay) {
     draw.grad(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE_A, PAGE_B);
     draw.grad(lay.ox, lay.oy, lay.boxW, lay.headerH, HEAD_A, HEAD_B);
     draw.rect(lay.ox, lay.oy + lay.headerH - 1, lay.boxW, 1, LINE);
-    draw.rect(lay.ox, lay.oy, 4, lay.headerH - 1, ACCENT);
+    draw.rect(lay.ox, lay.oy, 3, lay.headerH - 1, THEME.mark);
 }
 
 // One option row: icon in its well, title, hint, the tick of a chosen one.
@@ -3294,7 +3471,7 @@ function drawRow(draw, bubble, item, title, hint, focus) {
     }
     if (bubble.module) {
         // a module on the home screen: its sign in its own colour, its name, one quiet line of state
-        tone = (THEMES[item.theme] || THEMES[MODULE_THEME[item.name]] || THEMES.base).accent;
+        tone = (THEMES[item.theme] || THEMES[MODULE_THEME[item.name]] || THEMES.base).mark;
         well = 96;
         wx = x + 28;
         wy = y + 30;
@@ -3499,7 +3676,7 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
             title = tr(title);
             hint = tr(hint);
         }
-        drawRow(draw, bubble, item, title, hint, itemIndex === selected);
+        drawRow(draw, bubble, item, title, hint, itemIndex === selected && !NOSEL);
     }
     drawScroll(draw, lay);
     if (!previewSpace) {
@@ -3518,12 +3695,36 @@ function buildFrame(items, selected, width, height, detail, heading, version, st
     } else if (boxPreview && (heading === 'Okno' || heading === 'Pozycja' || heading === 'Środek' || heading === 'Zegary' || heading === 'HUD')) {
         drawBoxPreview(draw, lay, boxPreview, items[selected]);
     }
+    if (heading === 'Napis' && lay.bubbles.length && !lay.bubbles[0].home) {
+        var capX = lay.bubbles[0].x + lay.bubbles[0].w + 56;
+        var capW = lay.ox + lay.boxW - capX - 40;
+        var capY = lay.bubbles[0].y;
+        var capH = 300;
+        if (capW >= 360) {
+            var capText = caption && caption.text ? String(caption.text).slice(0, 24) : '';
+            var capScale = (caption && caption.scale) || 4;
+            draw.card(capX, capY, capW, capH, TOK.r.panel, HEAD_A, HEAD_B);
+            draw.stroke(capX, capY, capW, capH, TOK.r.panel, 1.5, TOK.btnLine);
+            draw.text(tr('Podgląd'), capX + 28, capY + 20, 3, SOFT, 'bold');
+            draw.round(capX + 28, capY + 64, capW - 56, capH - 124, TOK.r.well, 0x0B0C0FFF);
+            if (capText && caption.on) {
+                while (capScale > 2 && capText.length * 6 * capScale > capW - 96) {
+                    capScale -= 1;
+                }
+                draw.pixelText(capText, capX + Math.floor((capW - capText.length * 6 * capScale) / 2), capY + 64 + Math.floor((capH - 124 - 7 * capScale) / 2), capScale, caption.color || ACCENT);
+            } else {
+                draw.text(tr('ukryty'), capX + Math.floor((capW - draw.textWidth(tr('ukryty'), 3)) / 2), capY + 64 + Math.floor((capH - 124 - 21) / 2), 3, MUTED);
+            }
+            draw.text(tr('tak wygląda napis na ekranach'), capX + 28, capY + capH - 44, 2, MUTED);
+        }
+    }
+    // (the caption itself, where it is on this screen: moving it is seen at once)
     if (caption && caption.on && caption.text) {
         draw.pixelText(String(caption.text).slice(0, 24), caption.x | 0, caption.y | 0, caption.scale || 4, caption.color || ACCENT);
     }
     applyAirOverlay(draw, lay, air, version);
     return {
-        frame: packFrame(draw),
+        frame: packFrame(draw, lay),
         rects: draw.rects,
         layout: lay
     };
@@ -3751,7 +3952,7 @@ function webSheet(draw, lay, info, hits) {
         return;
     }
     board = { ox: lay.ox, oy: lay.oy, boxW: lay.w, boxH: lay.h, airHits: [] };
-    drawWhereSheet(draw, board, { screens: webOutScreens(), whereCursor: -1, pickPrefix: 'web-pick-', pickClose: 'web-where-close', fixedCentral: true, sheetLabel: info.app ? (info.appName || 'Aplikacja') : 'Przeglądarka' });
+    drawWhereSheet(draw, board, { screens: webOutScreens(), whereCursor: info.whereCursor == null ? -1 : info.whereCursor, pickPrefix: 'web-pick-', pickClose: 'web-where-close', fixedCentral: true, sheetLabel: info.app ? (info.appName || 'Aplikacja') : 'Przeglądarka' });
     // (only the panel answers while it is open; the last one pushed is looked at first, as in the menu)
     hits.length = 0;
     for (i = 0; i < board.airHits.length; i += 1) {
@@ -3761,6 +3962,7 @@ function webSheet(draw, lay, info, hits) {
 
 function webButton(draw, hits, box, on, fill) {
     var hov = on && !fill && hoverOn(box.x, box.y, box.w, box.h);
+    box.own = !fill;
     draw.round(box.x, box.y, box.w, box.h, TOK.r.pill, fill || (hov ? TOK.hoverA : TOK.btn));
     if (!fill) {
         draw.stroke(box.x, box.y, box.w, box.h, TOK.r.pill, 1.5, hov ? TOK.hoverLine : TOK.btnLine);
@@ -3824,9 +4026,13 @@ function buildWebFrame(width, height, web) {
         var hmx = appHome.x + Math.floor(appHome.w / 2);
         var nvy = navY + Math.floor(APP_NAV_H / 2);
         draw.video(appBox.x, appBox.y, info.w > 0 && info.w <= appBox.w ? info.w : appBox.w, info.h > 0 && info.h <= appBox.h ? info.h : appBox.h, 1);
-        draw.rect(CONTENT.x, navY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
-        draw.quad([[bkx - 9, nvy], [bkx + 7, nvy - 11], [bkx + 7, nvy + 11]], HINT);
-        draw.stroke(hmx - 11, nvy - 11, 22, 22, 11, 2.5, HINT);
+        draw.grad(CONTENT.x, navY, CONTENT.w, APP_NAV_H, HEAD_A, HEAD_B);
+        draw.rect(CONTENT.x, navY, CONTENT.w, 1, LINE);
+        appBack.y += 5; appBack.h -= 10; appHome.y += 5; appHome.h -= 10;
+        drawBtn(draw, appBack, '');
+        drawBtn(draw, appHome, '');
+        chevron(draw, 'w', bkx, nvy, 9, 3.5, INK);
+        draw.stroke(hmx - 10, nvy - 10, 20, 20, 10, 2.5, INK);
         // whose bar this is: the app's name, in the colour of apps
         draw.text(draw.fit((info.appName || tr('Aplikacja')), 3, navMid - 190 - CONTENT.x - 48), CONTENT.x + 24, navY + 14, 3, ACCENT, 'bold');
         var appHits = [appBack, appHome];
@@ -3839,7 +4045,7 @@ function buildWebFrame(width, height, web) {
             draw.quad([[ax, ay], [ax, ay + 22], [ax + 16, ay + 16]], 0xFFFFFFFF);
         }
         return {
-            frame: packFrame(draw),
+            frame: packFrame(draw, { webHits: appHits }),
             rects: draw.rects,
             layout: { webHits: appHits, webPage: appBox, web: lay, video: true, app: true }
         };
@@ -3874,12 +4080,16 @@ function buildWebFrame(width, height, web) {
             draw.text(tr('Uruchom bez piaskownicy'), waitAsk.x + 36, waitAsk.y + 22, 3, INK);
             waitHits.push(waitAsk);
         }
-        draw.rect(CONTENT.x, waitNavY, CONTENT.w, APP_NAV_H, 0x0B0908FF);
-        draw.quad([[waitMid - 105 - 9, waitNavY + 26], [waitMid - 105 + 7, waitNavY + 15], [waitMid - 105 + 7, waitNavY + 37]], HINT);
-        draw.stroke(waitMid + 105 - 11, waitNavY + 15, 22, 22, 11, 2.5, HINT);
+        draw.grad(CONTENT.x, waitNavY, CONTENT.w, APP_NAV_H, HEAD_A, HEAD_B);
+        draw.rect(CONTENT.x, waitNavY, CONTENT.w, 1, LINE);
+        waitBack.y += 5; waitBack.h -= 10; waitHome.y += 5; waitHome.h -= 10;
+        drawBtn(draw, waitBack, '');
+        drawBtn(draw, waitHome, '');
+        chevron(draw, 'w', waitMid - 105, waitNavY + 26, 9, 3.5, INK);
+        draw.stroke(waitMid + 105 - 10, waitNavY + 16, 20, 20, 10, 2.5, INK);
         draw.text(draw.fit((waitName || tr('Aplikacja')), 3, waitMid - 190 - CONTENT.x - 48), CONTENT.x + 24, waitNavY + 14, 3, ACCENT, 'bold');
         return {
-            frame: packFrame(draw),
+            frame: packFrame(draw, { webHits: waitHits }),
             rects: draw.rects,
             layout: { webHits: waitHits, webPage: null, web: lay, video: false, app: true }
         };
@@ -3907,7 +4117,7 @@ function buildWebFrame(width, height, web) {
             draw.quad([[fx, fy], [fx, fy + 22], [fx + 16, fy + 16]], 0xFFFFFFFF);
         }
         return {
-            frame: packFrame(draw),
+            frame: packFrame(draw, { webHits: fsHits }),
             rects: draw.rects,
             layout: { webHits: fsHits, webPage: fsBox, web: lay, video: true, fs: true, film: !!info.film }
         };
@@ -3977,6 +4187,7 @@ function buildWebFrame(width, height, web) {
     // the address: its text, or what to type
     draw.round(lay.url.x, lay.url.y, lay.url.w, lay.url.h, TOK.r.pill, hoverOn(lay.url.x, lay.url.y, lay.url.w, lay.url.h) && ready ? 0x323741FF : WELL);
     if (ready) {
+        lay.url.own = true;
         hits.push(lay.url);
     }
     drawWebWhere(draw, hits, lay.where, info);
@@ -4044,7 +4255,7 @@ function buildWebFrame(width, height, web) {
     }
     webSheet(draw, lay, info, hits);
     return {
-        frame: packFrame(draw),
+        frame: packFrame(draw, { webHits: hits }),
         rects: draw.rects,
         layout: { webHits: hits, webPage: lay.page, web: lay, video: showVideo }
     };
@@ -4152,6 +4363,114 @@ function createMenuSurface(opts) {
     var backBox = null;
     var backAction = '';
     var navBoxes = null;
+    // a finger that is down (the pressed look)
+    var pressAt = null;
+    var pressTimer = null;
+    var pointerTimer = null;
+    /*
+     * Where the knob is (owner, 2026-11-20: everything on the screen can be reached with it):
+     *   'list'  the page's rows and tiles (a turn goes through them; in a grid a tilt goes to the row above or below)
+     *   'head'  the page's head: the way back and "Ekrany" (a tilt up from the first row; a turn or a tilt sideways
+     *           goes between them, a press uses the one, a tilt down returns to the list)
+     *   'foot'  the page's foot: the mouse switch and "Wyłącz aplikację" (a tilt down from the last row)
+     * In Przeglądarka and in an app a press puts the knob on the bar (webFocus: the name of its button), a turn goes
+     * along it, a press uses the button, a tilt up or down returns to the page.
+     */
+    var zone = 'list';
+    var zoneAt = 0;
+    var webFocus = '';
+    var gridCols = 0;
+    // the pages on the way here, with the row that was chosen on each: the way back puts the knob on it again
+    var trail = [];
+    var restoreSel = '';
+    var HEAD_NAMES = { 'air-where': 1, 'yt-where': 1, 'web-where': 1, 'base-where': 1, 'where-options': 1, 'yt-play': 1 };
+
+    function webActive() {
+        return !!(webView && webView.on && !webView.held);
+    }
+
+    function webFocusables() {
+        var out = [];
+        var i;
+        for (i = 0; i < webHits.length; i += 1) {
+            if (webHits[i].name && !webHits[i].bg) {
+                out.push(webHits[i]);
+            }
+        }
+        return out;
+    }
+
+    function zoneBoxes(z) {
+        var out = [];
+        var i;
+        if (edit || whereOpen || ytOpen || webActive()) {
+            return out;
+        }
+        if (z === 'head') {
+            if (backBox && backAction) {
+                out.push({ name: '@back' });
+            }
+            for (i = 0; i < airHits.length; i += 1) {
+                if (HEAD_NAMES[airHits[i].name]) {
+                    out.push(airHits[i]);
+                }
+            }
+        } else if (z === 'foot' && navBoxes) {
+            if (navBoxes.mouse) {
+                out.push({ name: '@mouse' });
+            }
+            if (navBoxes.ok && navBoxes.ok.exit) {
+                out.push({ name: '@exit' });
+            }
+        }
+        return out;
+    }
+
+    function focusName() {
+        var list;
+        var i;
+        if (edit) {
+            return '';
+        }
+        if (webActive()) {
+            if (!webFocus || whereOpen) {
+                return '';
+            }
+            list = webFocusables();
+            for (i = 0; i < list.length; i += 1) {
+                if (list[i].name === webFocus) {
+                    return webFocus;
+                }
+            }
+            return list.length ? list[0].name : '';
+        }
+        if (zone === 'list' || whereOpen || ytOpen) {
+            // (a panel is open: the knob is in it; where it was in the head is kept for when the panel closes)
+            return '';
+        }
+        list = zoneBoxes(zone);
+        if (!list.length) {
+            zone = 'list';
+            return '';
+        }
+        if (zoneAt >= list.length) {
+            zoneAt = list.length - 1;
+        }
+        return list[zoneAt].name;
+    }
+
+    function enterZone(z) {
+        var list = zoneBoxes(z);
+        if (!list.length) {
+            return false;
+        }
+        zone = z;
+        // the head: "Ekrany" first (the way back is also the list's last row); the foot: its first button
+        zoneAt = z === 'head' ? list.length - 1 : 0;
+        armed = '';
+        paint();
+        return true;
+    }
 
     function isSocket(file) {
         // Windows named pipes (emu.js) are not fs sockets; still connectable via net.
@@ -4336,12 +4655,19 @@ function createMenuSurface(opts) {
     }
 
     function paint() {
-        // one cursor over everything the app draws: menus, Przeglądarka's bar and its page
+        // one cursor over everything the app draws: menus, Przeglądarka's bar and its page; with it what is pressed
+        // and where the knob is outside the list (drawStates)
         POINTER = pointer;
+        PRESS = pressAt;
+        FOCUS = focusName();
+        NOSEL = !!FOCUS && !webActive();
         try {
             paintFrame();
         } finally {
             POINTER = null;
+            PRESS = null;
+            FOCUS = '';
+            NOSEL = false;
         }
     }
 
@@ -4357,12 +4683,12 @@ function createMenuSurface(opts) {
             sendClaim();
             surfaced = true;
         }
-        if (webView && webView.on && !edit) {
+        if (webActive() && !edit) {
             // Przeglądarka: its own frame; the video is the browser's file, not the mirror's
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!webView.where, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!(whereOpen && whereMode === 'web'), whereCursor: whereCursor, video: native
             };
             var webBuilt;
             useTheme(webView.app ? 'store' : 'browser');
@@ -4441,6 +4767,14 @@ function createMenuSurface(opts) {
         airHits = (built.layout && built.layout.airHits) || [];
         airStrip = built.layout && built.layout.airStrip ? built.layout.airStrip : null;
         airWindow = built.layout && built.layout.airWindow ? built.layout.airWindow : null;
+        // how many tiles a row of this page's grid has (the knob's tilt goes a row up or down)
+        gridCols = 0;
+        if (!edit && built.layout && built.layout.bubbles && built.layout.bubbles.length && built.layout.bubbles[0].grid) {
+            var gi;
+            for (gi = 0; gi < built.layout.bubbles.length && built.layout.bubbles[gi].y === built.layout.bubbles[0].y; gi += 1) {
+                gridCols += 1;
+            }
+        }
         if (!edit && (whereOpen || ytOpen)) {
             // "Gdzie pokazać" covers the page: the back pill, the arrows and "Wyłącz aplikację"
             // under it must not answer a tap (they did until 0.1.134: a tap beside the sheet at
@@ -4756,9 +5090,34 @@ function createMenuSurface(opts) {
         if (!SCREENS[next]) {
             next = 'root';
         }
+        var leaving = screenName;
+        var leftAt = items[selected] ? items[selected].name : '';
+        var findSel = '';
+        var si;
+        if (trail.length && trail[trail.length - 1].screen === next) {
+            findSel = trail.pop().sel;
+        } else if (next === 'root') {
+            trail = [];
+        } else if (next !== leaving) {
+            trail.push({ screen: leaving, sel: leftAt });
+            if (trail.length > 12) {
+                trail.shift();
+            }
+        }
         screenName = next;
         items = cloneScreen(next);
         selected = 0;
+        restoreSel = findSel;
+        for (si = 0; findSel && si < items.length; si += 1) {
+            if (items[si].name === findSel) {
+                selected = si;
+                restoreSel = '';
+                break;
+            }
+        }
+        zone = 'list';
+        zoneAt = 0;
+        whereOpen = false;
         armed = '';
         clearHold();
         edit = null;
@@ -4923,6 +5282,111 @@ function createMenuSurface(opts) {
         }
     }
 
+    function useAir(name) {
+        if (name === 'yt-where') {
+            ytOpen = !ytOpen;
+            ytCursor = 0;
+            paint();
+        } else if (name === 'yt-where-close') {
+            ytOpen = false;
+            if (ytGo) {
+                ytGo = false;
+                choose('yt-where-go');
+            }
+            paint();
+        } else if (name === 'yt-where-cancel') {
+            ytOpen = false;
+            ytGo = false;
+            choose('yt-where-cancel');
+            paint();
+        } else if (name === 'air-where' || name === 'web-where' || name === 'base-where') {
+            // "Ekrany": the one panel; whose screens it chooses (with no module that plays: none, only "Opcje")
+            whereMode = name === 'web-where' ? 'web' : (name === 'base-where' ? 'base' : 'air');
+            whereOpen = !whereOpen;
+            whereCursor = whereMode === 'base' ? 4 : 0;
+            paint();
+        } else if (name === 'where-options') {
+            // "Opcje": the panel closes, main.js opens the screens' settings
+            whereOpen = false;
+            ytOpen = false;
+            ytGo = false;
+            choose('where-options');
+            paint();
+        } else if (name === 'air-where-close' || name === 'web-where-close') {
+            whereOpen = false;
+            paint();
+        } else if (name === 'air-pos') {
+            movePos = !movePos;
+            paint();
+        } else if (name === 'air-full') {
+            movePos = false;
+            choose('air-full');
+        } else if (name && name !== '@panel') {
+            choose(name);
+        }
+    }
+
+    function useZone(name) {
+        if (name === '@back') {
+            if (backAction) {
+                choose(backAction);
+            }
+        } else if (name === '@mouse') {
+            choose('mouse-toggle');
+        } else if (name === '@exit') {
+            note('menu-exit');
+            choose('app-exit');
+        } else {
+            useAir(name);
+        }
+    }
+
+    // the knob in the panel "Ekrany" (over a menu page, a page of Przeglądarka or an app): 0 gauges, 1 HUD, 2 centre,
+    // 3 the way out, 4 "Opcje"; with no module that plays only 3 and 4
+    function whereKnob(step, tilt, tilted, push) {
+        var min = whereMode === 'base' ? 3 : 0;
+        if (tilted) {
+            step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
+            if (tilt === 's') {
+                whereCursor = 3;
+            } else if (tilt === 'n' && whereCursor >= 3 && min === 0) {
+                whereCursor = 1;
+            }
+        }
+        if (step) {
+            whereCursor += step > 0 ? 1 : -1;
+            if (whereCursor < min) {
+                whereCursor = 4;
+            }
+            if (whereCursor > 4) {
+                whereCursor = min;
+            }
+        }
+        if (push === 1 && lastPush !== 1) {
+            if (whereCursor === 4) {
+                whereOpen = false;
+                choose('where-options');
+            } else if (whereCursor >= 3) {
+                whereOpen = false;
+            } else {
+                choose((whereMode === 'web' ? 'web-pick-' : 'air-pick-') + (whereCursor === 0 ? 'cluster' : (whereCursor === 1 ? 'hud' : 'central')));
+            }
+        }
+        lastPush = push;
+        if (step || push === 1 || tilted) {
+            paint();
+        }
+    }
+
+    // a button of Przeglądarka's bar that the surface itself answers (the panel "Ekrany"); false: main.js's
+    function useWebLocal(name) {
+        if (name === 'web-where' || name === 'web-where-close' || name === 'where-options') {
+            useAir(name);
+            return true;
+        }
+        return name === '@panel';
+    }
+
     function tiltName(df) {
         if (df === 1) {
             return 'n';
@@ -4985,7 +5449,11 @@ function createMenuSurface(opts) {
         var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
         lastTilt = tilt;
-        if (webView && webView.on && !edit) {
+        if (webActive() && !edit) {
+            if (whereOpen) {
+                whereKnob(step, tilt, tilted, push);
+                return;
+            }
             if (webView.film) {
                 // THEiPlay Player: a turn is 10 s back or on, a press is play / pause, left leaves
                 FILM_UI.until = Date.now() + 5000;
@@ -5001,7 +5469,42 @@ function createMenuSurface(opts) {
                 lastPush = push;
                 return;
             }
-            // Przeglądarka: the knob scrolls the page, left / right is back / forward, a press opens the address
+            var bar = webView.fs ? [] : webFocusables();
+            var barAt = -1;
+            var bi;
+            for (bi = 0; webFocus && bi < bar.length; bi += 1) {
+                if (bar[bi].name === webFocus) {
+                    barAt = bi;
+                }
+            }
+            if (webFocus && bar.length) {
+                // the knob is on the bar: a turn (or a tilt sideways) goes along it, a press uses the button, a tilt
+                // up or down returns to the page
+                if (barAt < 0) {
+                    barAt = 0;
+                }
+                if (tilted && (tilt === 'n' || tilt === 's')) {
+                    webFocus = '';
+                } else if (step || tilted) {
+                    barAt = (barAt + ((step ? step > 0 : tilt === 'e') ? 1 : -1) + bar.length) % bar.length;
+                    webFocus = bar[barAt].name;
+                } else if (push === 1 && lastPush !== 1) {
+                    webFocus = bar[barAt].name;
+                    if (!useWebLocal(webFocus)) {
+                        if (webFocus === 'web-url' || webFocus === 'web-keys') {
+                            webFocus = '';      // (typing leads back to the page)
+                            choose(bar[barAt].name);
+                        } else {
+                            choose(webFocus);
+                        }
+                    }
+                }
+                lastPush = push;
+                paint();
+                return;
+            }
+            webFocus = '';
+            // Przeglądarka: the knob scrolls the page, left / right is back / forward, a press goes to the bar
             if (step && typeof opts.onWebScroll === 'function') {
                 opts.onWebScroll(0, step * 96);
             } else if (tilted && (tilt === 'n' || tilt === 's') && typeof opts.onWebScroll === 'function') {
@@ -5012,14 +5515,24 @@ function createMenuSurface(opts) {
                 choose('web-fwd');
             }
             if (webView.mouse && typeof opts.onWebMouseButton === 'function') {
-                // G21 Input: the press is the left mouse button where the cursor is, and nothing else
+                // G21 Input: the press is the left mouse button where the cursor is, and nothing else (the cursor
+                // itself reaches the bar)
                 if ((push === 1) !== (lastPush === 1)) {
                     opts.onWebMouseButton(push === 1);
                 }
             } else if (push === 1 && lastPush !== 1) {
-                // (an app has no address to type)
-                if (webView.fs || !webView.app) {
-                    choose(webView.fs ? 'web-fs-exit' : 'web-url');
+                if (webView.fs) {
+                    choose('web-fs-exit');
+                } else if (bar.length) {
+                    // onto the bar: the address first (a second press types it, as one press did before), an app's
+                    // bar from its first button
+                    webFocus = bar[0].name;
+                    for (bi = 0; bi < bar.length; bi += 1) {
+                        if (bar[bi].name === 'web-url') {
+                            webFocus = 'web-url';
+                        }
+                    }
+                    paint();
                 }
             }
             lastPush = push;
@@ -5092,38 +5605,34 @@ function createMenuSurface(opts) {
             return;
         }
         if (whereOpen && !edit) {
-            if (tilted) {
-                step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
-                if (tilt === 's') {
-                    whereCursor = 3;
-                } else if (tilt === 'n' && whereCursor >= 3) {
-                    whereCursor = 1;
-                }
-            }
-            if (step) {
-                whereCursor += step > 0 ? 1 : -1;
-                if (whereCursor < 0) {
-                    whereCursor = 4;
-                }
-                if (whereCursor > 4) {
-                    whereCursor = 0;
-                }
-            }
-            if (push === 1 && lastPush !== 1) {
-                if (whereCursor === 4) {
-                    whereOpen = false;
-                    choose('where-options');
-                } else if (whereCursor >= 3) {
-                    whereOpen = false;
-                } else {
-                    choose((whereMode === 'web' ? 'web-pick-' : 'air-pick-') + (whereCursor === 0 ? 'cluster' : (whereCursor === 1 ? 'hud' : 'central')));
-                }
-            }
-            lastPush = push;
-            if (step || push === 1 || tilted) {
-                paint();
-            }
+            whereKnob(step, tilt, tilted, push);
             return;
+        }
+        if (!edit && zone !== 'list') {
+            var zl = zoneBoxes(zone);
+            if (!zl.length) {
+                zone = 'list';
+            } else {
+                if (zoneAt >= zl.length) {
+                    zoneAt = zl.length - 1;
+                }
+                if (tilted && ((zone === 'head' && tilt === 's') || (zone === 'foot' && tilt === 'n'))) {
+                    zone = 'list';
+                    paint();
+                } else if (step || (tilted && (tilt === 'e' || tilt === 'w'))) {
+                    if (zl.length > 1) {
+                        zoneAt = (zoneAt + ((step ? step > 0 : tilt === 'e') ? 1 : -1) + zl.length) % zl.length;
+                    } else if (step) {
+                        zone = 'list';      // (one button there: a turn is the list's again)
+                    }
+                    paint();
+                } else if (push === 1 && lastPush !== 1) {
+                    useZone(zl[zoneAt].name);
+                    paintSoon();
+                }
+                lastPush = push;
+                return;
+            }
         }
         if (tilted && edit) {
             // keyboard: tilt up / down = the key above / below, left / right = the key beside
@@ -5134,9 +5643,44 @@ function createMenuSurface(opts) {
             if (armed && (tilt === 'n' || tilt === 's')) {
                 armed = '';
             }
+            var wasArmed = !!armed;
             adjusted = typeof opts.onTilt === 'function' && !!opts.onTilt(tilt);
-            if (!adjusted && (tilt === 'n' || tilt === 's') && !(streamInfo && streamInfo.tune && streamInfo.tune.tool)) {
-                move(tilt === 's' ? 1 : -1);
+            if (!adjusted && !(streamInfo && streamInfo.tune && streamInfo.tune.tool)) {
+                var tiles = tiledList(items);
+                var rowsN = gridCols > 1 ? Math.floor((items.length - 1) / gridCols) : 0;
+                if (tilt === 'e' || tilt === 'w') {
+                    // sideways: the tile beside (a row of tiles, a grid)
+                    if ((tiles || gridCols > 1) && !wasArmed) {
+                        move(tilt === 'e' ? 1 : -1);
+                    }
+                } else if (gridCols > 1 && items.length > gridCols) {
+                    // a grid: the row above or below; past its edge, the head or the foot
+                    if (tilt === 'n') {
+                        if (selected - gridCols >= 0) {
+                            selected -= gridCols;
+                            armed = '';
+                            paint();
+                        } else if (!enterZone('head')) {
+                            paint();
+                        }
+                    } else if (selected + gridCols < items.length) {
+                        selected += gridCols;
+                        armed = '';
+                        paint();
+                    } else if (Math.floor(selected / gridCols) < rowsN) {
+                        selected = items.length - 1;
+                        armed = '';
+                        paint();
+                    } else if (!enterZone('foot')) {
+                        paint();
+                    }
+                } else if (tilt === 'n' && (tiles || selected === 0) && enterZone('head')) {
+                    adjusted = true;
+                } else if (tilt === 's' && (tiles || selected === items.length - 1) && enterZone('foot')) {
+                    adjusted = true;
+                } else {
+                    move(tilt === 's' ? 1 : -1);
+                }
             }
         }
         if (step && !edit && streamInfo && streamInfo.tune && streamInfo.tune.tool) {
@@ -5453,7 +5997,9 @@ function createMenuSurface(opts) {
             webTouch = null;
             for (i = webHits.length - 1; i >= 0; i -= 1) {
                 if (webHits[i].name === hit && pointIn(webHits[i], tx, ty)) {
-                    choose(hit);
+                    if (!useWebLocal(hit)) {
+                        choose(hit);
+                    }
                     return;
                 }
             }
@@ -5543,6 +6089,12 @@ function createMenuSurface(opts) {
                 var hit;
                 if (phase === 1) {
                     answerInput();
+                    zone = 'list';
+                    webFocus = '';
+                }
+                pressAt = phase === 3 ? null : { x: tx, y: ty };
+                if (phase !== 2) {
+                    paintSoon();
                 }
                 // the emergency button comes before everything else on the screen
                 if (KILL.on && pointIn(KILL_BOX, tx, ty)) {
@@ -5558,7 +6110,7 @@ function createMenuSurface(opts) {
                 if (phase === 3) {
                     killDown = false;
                 }
-                if (webView && webView.on && !edit) {
+                if (webActive() && !edit) {
                     onWebTouch(phase, tx, ty);
                     return;
                 }
@@ -5627,48 +6179,7 @@ function createMenuSurface(opts) {
                     if (phase === 1 && hitAir(tx, ty)) {
                         touchDown = { stream: hitAir(tx, ty), x: tx, y: ty, hit: -1, origin: selected, t: Date.now(), dragged: false };
                     } else if (phase === 3 && touchDown && touchDown.stream && hitAir(tx, ty) === touchDown.stream) {
-                        if (touchDown.stream === 'yt-where') {
-                            ytOpen = !ytOpen;
-                            ytCursor = 0;
-                            paint();
-                        } else if (touchDown.stream === 'yt-where-close') {
-                            ytOpen = false;
-                            if (ytGo) {
-                                ytGo = false;
-                                choose('yt-where-go');
-                            }
-                            paint();
-                        } else if (touchDown.stream === 'yt-where-cancel') {
-                            ytOpen = false;
-                            ytGo = false;
-                            choose('yt-where-cancel');
-                            paint();
-                        } else if (touchDown.stream === 'yt-play') {
-                            choose('yt-play');
-                        } else if (touchDown.stream === 'air-where' || touchDown.stream === 'web-where') {
-                            whereMode = touchDown.stream === 'web-where' ? 'web' : 'air';
-                            whereOpen = !whereOpen;
-                            whereCursor = 0;
-                            paint();
-                        } else if (touchDown.stream === 'where-options') {
-                            // "Opcje": the panel closes, main.js opens the screens' settings
-                            whereOpen = false;
-                            ytOpen = false;
-                            ytGo = false;
-                            choose('where-options');
-                            paint();
-                        } else if (touchDown.stream === 'air-where-close') {
-                            whereOpen = false;
-                            paint();
-                        } else if (touchDown.stream === 'air-pos') {
-                            movePos = !movePos;
-                            paint();
-                        } else if (touchDown.stream === 'air-full') {
-                            movePos = false;
-                            choose('air-full');
-                        } else {
-                            choose(touchDown.stream);
-                        }
+                        useAir(touchDown.stream);
                         touchDown = null;
                     } else if (phase === 3) {
                         touchDown = null;
@@ -5888,8 +6399,27 @@ function createMenuSurface(opts) {
         },
         /** the touchpad's cursor over THEiPlay's pages: { x, y } in screen pixels, or null for none */
         setPointer: function (p) {
+            var was = pointer;
             pointer = p ? { x: Number(p.x) || 0, y: Number(p.y) || 0 } : null;
-            paintSoon();
+            if (!pointer || !was) {
+                paintSoon();
+                return;
+            }
+            if (was.x === pointer.x && was.y === pointer.y) {
+                return;     // (it did not move: nothing to draw)
+            }
+            // The pad reports 60 times a second and every report was a whole frame built and sent (stand,
+            // 2026-11-20: 61 frames a second while the cursor moved). 40 a second, as over a page of Przeglądarka.
+            if (pointerTimer) {
+                return;
+            }
+            pointerTimer = setTimeout(function () {
+                pointerTimer = null;
+                paintSoon();
+            }, 25);
+            if (pointerTimer.unref) {
+                pointerTimer.unref();
+            }
         },
         /** a tap of the touchpad where the cursor is: the same as a finger put down and lifted there */
         tapAt: function (x, y) {
@@ -5900,6 +6430,20 @@ function createMenuSurface(opts) {
                 b.writeFloatLE(y, 8);
                 take(message(TOUCH, b));
             });
+            // (down and up at once: what was tapped looks pressed for a moment)
+            pressAt = { x: x, y: y };
+            paintSoon();
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+            }
+            pressTimer = setTimeout(function () {
+                pressTimer = null;
+                pressAt = null;
+                paintSoon();
+            }, 140);
+            if (pressTimer.unref) {
+                pressTimer.unref();
+            }
         },
         setScreen: setScreen,
         setItems: function (nextItems, nextHeading) {
@@ -5920,6 +6464,17 @@ function createMenuSurface(opts) {
             if (selected >= items.length) {
                 selected = 0;
             }
+            // (a list that main.js fills after the page was opened: the row the way back was looking for)
+            if (restoreSel) {
+                var ri;
+                for (ri = 0; ri < items.length; ri += 1) {
+                    if (items[ri].name === restoreSel) {
+                        selected = ri;
+                        restoreSel = '';
+                        break;
+                    }
+                }
+            }
             noted = false;
             paint();
         },
@@ -5931,7 +6486,7 @@ function createMenuSurface(opts) {
         editing: function () { return !!edit; },
         /** what the menu shows now, for the panel on :1235: the page, its items with their hints and switches */
         snapshot: function () {
-            var webOn = !!(webView && webView.on);
+            var webOn = webActive();
             return {
                 screen: screenName,
                 crumb: crumbFor(screenName, heading, ''),
@@ -5948,21 +6503,22 @@ function createMenuSurface(opts) {
         },
         /** the touchpad's two fingers in the menu: the selection a step on or back */
         step: function (delta) {
-            if (shown && !edit && !(webView && webView.on)) {
+            if (shown && !edit && !webActive()) {
+                zone = 'list';
                 move(delta > 0 ? 1 : -1);
             }
         },
         /** two fingers to the right: into the item that is selected */
         enter: function () {
             var it = items[selected];
-            if (shown && !edit && !(webView && webView.on) && it) {
+            if (shown && !edit && !webActive() && it) {
                 choose(it.name);
             }
         },
         /** two fingers to the left: the page's way back, when it has one */
         back: function () {
             var i;
-            if (!shown || edit || (webView && webView.on)) {
+            if (!shown || edit || webActive()) {
                 return false;
             }
             for (i = items.length - 1; i >= 0; i -= 1) {
@@ -5992,7 +6548,11 @@ function createMenuSurface(opts) {
                 on: true,
                 text: String(info.text || ''),
                 x: info.x | 0,
-                y: info.y | 0
+                y: info.y | 0,
+                // (its size and colour as set in Napis: until 0.2.0 they were dropped here and the centre screen
+                // showed every caption at size 4 in the accent)
+                scale: info.scale > 0 ? (info.scale | 0) : 0,
+                color: typeof info.color === 'number' ? info.color : 0
             } : null;
             if (!edit) {
                 paint();
@@ -6002,9 +6562,16 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.where ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.held ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
+            }
+            if (!next || !webView || !!next.held !== !!webView.held) {
+                // the page comes, goes, or a layer goes over it: the knob is on the page, no panel is open
+                webFocus = '';
+                if (whereMode === 'web') {
+                    whereOpen = false;
+                }
             }
             webView = next;
             webKey = key;
@@ -6145,10 +6712,14 @@ function createMenuSurface(opts) {
         /** THEiPlay's YouTube tile: the sheet "where to show YouTube"; its button chooses 'yt-where-go', a tap beside it 'yt-where-cancel'. */
         // the panel "Ekrany" opened from outside (a list's own "Ekrany" row): 'air' or 'web'
         openWhere: function (mode) {
-            whereMode = mode === 'web' ? 'web' : 'air';
+            whereMode = mode === 'web' ? 'web' : (mode === 'base' ? 'base' : 'air');
             whereOpen = true;
-            whereCursor = 0;
+            whereCursor = whereMode === 'base' ? 4 : 0;
             paint();
+        },
+        /** for the tests and the panel: where the knob is ('list', 'head', 'foot'), the bar's button in a page */
+        focus: function () {
+            return { zone: zone, name: focusName(), web: webFocus, where: whereOpen ? whereMode : '', cursor: whereCursor };
         },
         // which screens a page and an app show on (the panel "Ekrany" of Przeglądarka and the apps)
         setWebOut: function (o) {
@@ -6261,6 +6832,7 @@ module.exports = {
     SET_INPUT_ITEMS: SET_INPUT_ITEMS,
     SET_APPS_ITEMS: SET_APPS_ITEMS,
     SET_GENERAL_ITEMS: SET_GENERAL_ITEMS,
+    SET_ADVANCED_ITEMS: SET_ADVANCED_ITEMS,
     WEB_FILE: WEB_FILE,
     MOUSE_UI: MOUSE_UI,
     AIRPLAY_ITEMS: AIRPLAY_ITEMS,

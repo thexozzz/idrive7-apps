@@ -1189,6 +1189,8 @@ Daemon.prototype.onClient = function (c) {
     this.client = c;
     clearTimeout(this.idleTimer);
     c.setEncoding('utf8');
+    // (after "Zresetuj usługi": the app that connects again is told what came up)
+    if (this.servicesDone && Date.now() < this.servicesDone.until) setTimeout(() => { if (this.client === c && this.servicesDone) this.emit({ ev: 'services', phase: 'done', ok: this.servicesDone.ok, results: this.servicesDone.results }); }, 50);
     let buf = '';
     c.on('data', (d) => {
         buf += d;
@@ -1217,7 +1219,7 @@ Daemon.prototype.away = async function () {
     if (e) { try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* gone */ } }
     this.frameRun(false);
     clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.guard(() => { this.sandboxOff = false; return this.stopEngine('idle'); }), this.opts.idleMs);
+    this.idleTimer = setTimeout(() => this.guard(async () => { this.sandboxOff = false; await this.stopEngine('idle'); this.browserUrl = ''; }), this.opts.idleMs);
 };
 
 Daemon.prototype.onCommand = async function (m) {
@@ -1227,7 +1229,13 @@ Daemon.prototype.onCommand = async function (m) {
         const w = Math.max(320, Math.min(1920, Number(m.w) | 0)) & ~3, h = Math.max(200, Math.min(1080, Number(m.h) | 0)) & ~1;
         const z = ZOOMS.indexOf(Number(m.zoom)) >= 0 ? Number(m.zoom) : (ZOOMS.indexOf(Number(this.settings().zoom)) >= 0 ? Number(this.settings().zoom) : 1);
         clearTimeout(this.idleTimer);
-        if (this.engine && this.want && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
+        // A new page area with the same module: the engine is started again at that size, as always. An app from
+        // Sklep has another page area than Przeglądarka (no address bar): going from the one to the other is not a
+        // new size of the same page but another tab, which gets its own size (fitPage) in the engine that runs.
+        // Until 0.1.49 this restarted the engine at every such change (stand, 2026-11-20: "engine stopped (new
+        // size)"), so neither kept its page.
+        const otherTab = !!this.engine && (m.app ? String(m.app) : '') !== (this.engine.mode || '') && this.zoom === z;
+        if (this.engine && this.want && !otherTab && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
         // fw x fh: the whole centre screen, for a player that goes full screen
         const fw = Math.max(0, Math.min(3840, Number(m.fw) | 0)) & ~3, fh = Math.max(0, Math.min(2160, Number(m.fh) | 0)) & ~1;
         // (the app's window for full screen: the whole screen or the owner's "Pozycja" window, which may be smaller
@@ -1244,25 +1252,32 @@ Daemon.prototype.onCommand = async function (m) {
         const firstUrl = appUrl || (typeof m.url === 'string' && m.url ? this.resolve(m.url) : null);
         // (the proxy that runs was started before the apps' server: it does not let the engine reach it)
         if (this.engine && appUrl && String(this.proxyKey || '').indexOf('127.0.0.1:' + this.appsPort) < 0) await this.stopEngine('an app is opened');
-        // An app from Sklep and Przeglądarka are two things (owner, 2026-11-20: "wstecz" in an app showed the page
-        // the browser had before it). Whenever the one follows the other in the engine that runs, the way back is
-        // emptied once the new page is there, and Przeglądarka after an app starts on its start page, not on the
-        // app's.
+        // An app from Sklep and Przeglądarka each have a tab of their own (switchTab). "keep": the app's view comes
+        // back from a layer that was over it (THEiPlay's settings): nothing is loaded again.
         const mode = m.app ? String(m.app) : '';
-        const changed = !!this.engine && mode !== (this.appMode || '');
         this.appMode = mode;
         if (this.engine) {
+            const en = this.engine;
+            const made = await this.switchTab(en, mode);
+            if (this.engine !== en) return;
+            if (made) { try { await this.fitPage(en); } catch (x) { this.log('tabs: size: ' + x.message); } }
             await this.cast(true);
-            if (changed) this.engine.forget = true;
-            if (firstUrl) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.go(this.engine, firstUrl); }
-            else if (changed) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.engine.cdp.send('Page.navigate', { url: this.home() }, this.engine.session); }
+            if (m.keep && !made) { this.push(true); return; }
+            if (firstUrl) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.go(en, firstUrl); }
+            else if (made === 'new') {
+                // the browser's first tab in this engine: the page it had before the engine was started again, or home
+                const u = /^https?:/.test(this.browserUrl || '') ? this.browserUrl : this.home();
+                this.browserUrl = '';
+                this.set({ err: '', loading: true, back: false, fwd: false });
+                await en.cdp.send('Page.navigate', { url: u }, en.session);
+            } else if (made) await this.refresh(en);
             this.push(true);
             return;
         }
         await this.startEngine(firstUrl);
         return;
     }
-    case 'close': this.want = null; this.sandboxOff = false; await this.stopEngine('closed by the app'); return;
+    case 'close': this.want = null; this.sandboxOff = false; await this.stopEngine('closed by the app'); this.browserUrl = ''; return;
     case 'zoom': {
         const z = Number(m.z);
         if (ZOOMS.indexOf(z) < 0 || z === this.zoom) return;
@@ -2067,6 +2082,16 @@ Daemon.prototype.applyFs = async function (e, on) {
     } finally { this.fsBusy = false; }
     this.push(true);
 };
+// the page that is on the screen at the size of the page area the app asked for (each tab has its own)
+Daemon.prototype.fitPage = async function (e) {
+    const w = this.want;
+    if (!w || !e || !e.session) return;
+    const css = pageCss(w.w, w.h, this.zoom, this.picture());
+    this.fs = null;
+    this.frameSize(css.pw, css.ph);
+    await e.cdp.send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h }, e.session);
+    this.set({ w: css.dw, h: css.dh });
+};
 Daemon.prototype.frameFps = function () { return this.policy().frames === 'direct30' ? 30 : 60; };
 // a line to g21-wlframe (nothing when the photographs are in use)
 Daemon.prototype.frameTell = function (line) { const f = this.frame; if (f && f.g21wl) { try { f.stdin.write(line + '\n'); } catch (x) { /* its exit follows */ } } };
@@ -2095,7 +2120,12 @@ Daemon.prototype.startFrame = function () {
         while ((i = buf.indexOf('\n')) >= 0) {
             const l = buf.slice(0, i).split(' ');
             buf = buf.slice(i + 1);
-            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.fs ? { dw: this.fs.w, dh: this.fs.h } : (this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null); this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false }); }
+            if (l[0] === 'ring') { this.adoptRing(Number(l[3])); const on = this.fs ? { dw: this.fs.w, dh: this.fs.h } : (this.want ? pageCss(this.want.w, this.want.h, this.zoom, this.picture()) : null); this.set({ w: on ? on.dw : Number(l[1]), h: on ? on.dh : Number(l[2]), ino: Number(l[3]), live: false });
+                // The frame tool names a new video file right before it puts the first picture into it, but says "f"
+                // at most every quarter of a second: a page that stands still after a change of size (another tab,
+                // out of full screen) never got its "f", and the screen showed "Uruchamiam" in place of the page
+                // until something on it moved (stand, 2026-11-20).
+                { const ino = Number(l[3]); setTimeout(() => { if (this.frame === child && child.g21wl && !this.s.live && this.s.ino === ino && this.engine) { this.frameSeen = true; this.set({ live: true }); } }, 350); } }
             else if (l[0] === 'f') { this.frameSeen = true; if (!child.g21wl) this.perfCast(Number(l[2])); if (!this.s.live) this.set({ live: true }); this.frameDone(); }
             else if (l[0] === 's') this.perfFrames({ n: Number(l[1]) || 0, ms: Number(l[2]) || 0, med: Number(l[3]) || 0, p95: Number(l[4]) || 0, max: Number(l[5]) || 0, us: Number(l[6]) || 0, pct: Number(l[7]) || 0 });
             else if (l[0] === 'm') this.perf.tapMs = Math.round(Number(l[1]) / 1000);
@@ -2504,6 +2534,37 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     e.session = (await e.cdp.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })).sessionId;
     await e.cdp.send('Target.setDiscoverTargets', { discover: true });
     const send = (method, params) => e.cdp.send(method, params, e.session);
+    e.major = dirs.major;
+    e.mode = this.appMode || '';
+    e.tabs = {};
+    await this.setupPage(e, e.session);
+    e.fresh = e.session;
+    const tree = await send('Page.getFrameTree', {});
+    e.mainFrame = tree.frameTree.frame.id;
+    this.s.url = tree.frameTree.frame.url || '';
+    // the logins of the last engine; the first page began to load without them: once more, with them
+    try { if (await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
+    await this.cast(true);
+    if (this.direct) {
+        const t0 = Date.now();
+        setTimeout(() => { if (this.engine === e && this.direct && !this.frameSeen && this.client && this.frameRunning && !(this.framePaused > t0)) this.directFail('no picture from the engine window in ' + o.directWaitMs + ' ms'); }, o.directWaitMs);
+    }
+    this.guard(() => this.perfGraphics(e));
+    // the first page began to load before Page.enable: its "stopped loading" may be past already
+    try {
+        const rs = await send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
+        if (rs.result && rs.result.value === 'complete') this.s.loading = false;
+    } catch (x) { /* the events decide */ }
+    this.guard(() => this.refresh(e));
+    return e;
+};
+/*
+ * What every page of the engine is given before it is used: the events, the light-video rule, touch, the page's
+ * size, the phone or desktop form, the time zone. Przeglądarka and an app from Sklep each have a page (a tab) of
+ * their own, so this runs once for each.
+ */
+Daemon.prototype.setupPage = async function (e, session) {
+    const send = (method, params) => e.cdp.send(method, params, session);
     await send('Page.enable', {});
     // what the page and its players complain about goes to the log ("coś poszło nie tak" of a player says no more
     // on the screen): errors only, 60 lines an engine run at most
@@ -2527,7 +2588,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
         const css = pageCss(this.want.w, this.want.h, this.zoom, this.picture());
         await send('Emulation.setDeviceMetricsOverride', { width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h });
     } catch (x) { this.log('screen size: ' + x.message); }
-    const major = dirs.major;
+    const major = e.major;
     try {
         const phone = this.policy().mobile !== 'off';
         await send('Emulation.setUserAgentOverride', { userAgent: userAgent(major, phone), acceptLanguage: 'pl-PL,pl,en-US,en', platform: phone ? 'Linux armv81' : 'Linux x86_64',
@@ -2536,24 +2597,57 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     // The page's clock: the head unit's own is UTC with no zone, so pages showed an hour less than it is in Poland
     // in winter (owner, 2026-11-15). The rule "timezone" names the zone (default Europe/Warsaw).
     try { await send('Emulation.setTimezoneOverride', { timezoneId: this.policy().timezone || 'Europe/Warsaw' }); } catch (x) { this.log('time zone: ' + x.message); }
-    const tree = await send('Page.getFrameTree', {});
-    e.mainFrame = tree.frameTree.frame.id;
-    this.s.url = tree.frameTree.frame.url || '';
-    // the logins of the last engine; the first page began to load without them: once more, with them
-    try { if (await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
-    await this.cast(true);
-    if (this.direct) {
-        const t0 = Date.now();
-        setTimeout(() => { if (this.engine === e && this.direct && !this.frameSeen && this.client && this.frameRunning && !(this.framePaused > t0)) this.directFail('no picture from the engine window in ' + o.directWaitMs + ' ms'); }, o.directWaitMs);
+};
+/*
+ * An app from Sklep and Przeglądarka are two things (owner, 2026-11-20: "rozdziel aplikacje i przeglądarkę,
+ * bezwzględnie"). Each has its own tab in the engine: its own page, its own way back, its own scroll place. The
+ * browser's tab stays as it was while an app is on the screen (its films paused, the tab frozen) and is there again
+ * when Przeglądarka is opened; an app's tab is closed when the app is left, so an app starts on its first page as
+ * before. At most two tabs: the browser's and the app that is open. Returns '' (the tab that is on the screen
+ * already), 'old' (a tab that was kept) or 'new' (a tab made now, still empty).
+ */
+const QUIET_PAGE = '(function(){try{document.querySelectorAll("video,audio").forEach(function(m){try{m.pause();}catch(e){}});if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen();}catch(e){}})()';
+Daemon.prototype.isTab = function (e, id) { return id === e.target || Object.keys(e.tabs || {}).some((k) => e.tabs[k].target === id); };
+Daemon.prototype.switchTab = async function (e, mode) {
+    const from = e.mode || '';
+    if (from === mode) return '';
+    if (this.film) this.filmStop('another tab', '');
+    if (this.fs) { try { await this.applyFs(e, false); } catch (x) { this.log('tabs: ' + x.message); } }
+    try { await e.cdp.send('Runtime.evaluate', { expression: QUIET_PAGE }, e.session); } catch (x) { /* the page is busy: frozen below */ }
+    if (!this.direct) { try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* was off */ } }
+    const old = { target: e.target, session: e.session, mainFrame: e.mainFrame, url: this.s.url };
+    e.tabs[from] = old;
+    let tab = e.tabs[mode];
+    let made = 'old';
+    if (!tab) {
+        made = 'new';
+        let t;
+        e.making = true;
+        try { t = await e.cdp.send('Target.createTarget', { url: 'about:blank' }); } finally { e.making = false; }
+        const session = (await e.cdp.send('Target.attachToTarget', { targetId: t.targetId, flatten: true })).sessionId;
+        tab = { target: t.targetId, session: session, mainFrame: '', url: '' };
+        e.tabs[mode] = tab;
+        await this.setupPage(e, session);
+        tab.mainFrame = (await e.cdp.send('Page.getFrameTree', {}, session)).frameTree.frame.id;
+        e.fresh = session;
     }
-    this.guard(() => this.perfGraphics(e));
-    // the first page began to load before Page.enable: its "stopped loading" may be past already
-    try {
-        const rs = await send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
-        if (rs.result && rs.result.value === 'complete') this.s.loading = false;
-    } catch (x) { /* the events decide */ }
-    this.guard(() => this.refresh(e));
-    return e;
+    if (this.engine !== e) return '';
+    e.target = tab.target; e.session = tab.session; e.mainFrame = tab.mainFrame; e.mode = mode;
+    e.notes = 0; e.lastNote = '';
+    try { await e.cdp.send('Target.activateTarget', { targetId: tab.target }); } catch (x) { this.log('tabs: ' + x.message); }
+    if (made === 'old') { try { await e.cdp.send('Page.setWebLifecycleState', { state: 'active' }, tab.session); } catch (x) { /* not in this engine */ } }
+    try { await e.cdp.send('Page.bringToFront', {}, tab.session); } catch (x) { /* not in this engine */ }
+    if (from !== '') {
+        // the app that was left: its tab is closed (the next opening starts on its first page)
+        delete e.tabs[from];
+        e.cdp.send('Target.closeTarget', { targetId: old.target }).catch(() => {});
+    } else {
+        // the browser's page waits: nothing of it runs while an app is on the screen
+        e.cdp.send('Page.setWebLifecycleState', { state: 'frozen' }, old.session).catch(() => {});
+    }
+    this.log('tabs: ' + (from || 'browser') + ' -> ' + (mode || 'browser') + (made === 'new' ? ' (a new tab)' : ' (its tab was kept)'));
+    this.set({ url: made === 'old' ? (tab.url || '') : '', title: '', err: '', loading: made === 'new', back: false, fwd: false, editable: false });
+    return made;
 };
 Daemon.prototype.cast = async function (on) {
     const e = this.engine;
@@ -2617,6 +2711,23 @@ Daemon.prototype.refresh = async function (e) {
     let hst;
     try { hst = await e.cdp.send('Page.getNavigationHistory', {}, e.session); } catch (x) { return; }
     if (this.engine !== e) return;
+    /*
+     * The first page of a tab has nothing behind it. A tab starts empty (about:blank) and the engine's first tab may
+     * hold its own first entry: with the first real page loaded those are taken out of the way back, once, and only
+     * when everything behind the page is such an entry (never a page somebody opened). Without this "wstecz" in an
+     * app led to an empty page.
+     */
+    if (e.fresh === e.session && !this.s.loading) {
+        const now = hst.entries[hst.currentIndex] || {};
+        const empty = (u) => !u || u.indexOf('about:blank') === 0 || u.indexOf('chrome://newtab') === 0 || u.indexOf('chrome://new-tab') === 0 || u === now.url;
+        if (now.url && !/^about:blank/.test(now.url)) {
+            e.fresh = '';
+            if (hst.currentIndex > 0 && hst.entries.slice(0, hst.currentIndex).every((en) => empty(en.url))) {
+                try { await e.cdp.send('Page.resetNavigationHistory', {}, e.session); hst = await e.cdp.send('Page.getNavigationHistory', {}, e.session); } catch (x) { this.log('history: ' + x.message); }
+                if (this.engine !== e) return;
+            }
+        }
+    }
     const cur = hst.entries[hst.currentIndex] || {};
     this.set({ url: cur.url || this.s.url, title: String(cur.title || '').slice(0, 120), back: hst.currentIndex > 0, fwd: hst.currentIndex < hst.entries.length - 1 });
     // is something of the page in full screen? (a player's own button, or the page's script)
@@ -2638,10 +2749,15 @@ Daemon.prototype.pageNote = function (e, text) {
 Daemon.prototype.onEvent = function (e, m) {
     if (this.engine !== e) return;
     const p = m.params || {};
+    // (a tab that waits in the background says nothing to the screen; one that crashed there is dropped)
+    if (m.sessionId && m.sessionId !== e.session) {
+        if (m.method === 'Inspector.targetCrashed') Object.keys(e.tabs || {}).forEach((k) => { if (e.tabs[k].session === m.sessionId) { const t = e.tabs[k]; delete e.tabs[k]; this.log('tabs: the tab of ' + (k || 'the browser') + ' crashed in the background'); e.cdp.send('Target.closeTarget', { targetId: t.target }).catch(() => {}); } });
+        return;
+    }
     switch (m.method) {
     case 'Page.screencastFrame': this.onFrame(e, p); return;
     case 'Page.frameStartedLoading': if (p.frameId === e.mainFrame) { this.loadT0 = Date.now(); this.set({ loading: true, err: '', editable: false }); } return;
-    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { if (e.forget) { e.forget = false; e.cdp.send('Page.resetNavigationHistory', {}, e.session).then(() => this.refresh(e), (x) => this.log('history: ' + x.message)); } this.perfLoaded(); this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
+    case 'Page.frameStoppedLoading': if (p.frameId === e.mainFrame) { this.perfLoaded(); this.set({ loading: false }); this.guard(() => this.refresh(e)); } return;
     case 'Page.frameNavigated': if (p.frame && !p.frame.parentId) { e.notes = 0; e.lastNote = '';
         // a link of a page made here ("about:blank#chrome://name": a link with only a fragment on a data: page is
         // refused by the engine as a navigation to a data: address, car 2026-11-15)
@@ -2689,7 +2805,7 @@ Daemon.prototype.onEvent = function (e, m) {
     case 'Target.targetCreated': {
         // one page only: a new window (target=_blank, window.open) opens in the page instead
         const t = p.targetInfo || {};
-        if (t.type !== 'page' || t.targetId === e.target) return;
+        if (t.type !== 'page' || e.making || this.isTab(e, t.targetId)) return;
         this.popups[t.targetId] = setTimeout(() => this.closePopup(e, t.targetId), 4000);
         // the player's button inside a frame of another site
         { const fm = /^about:blank#theiplay-player:(.+)$/.exec(String(t.url || '')); if (fm) { this.closePopup(e, t.targetId); let txt = ''; try { txt = decodeURIComponent(fm[1]); } catch (x) { txt = ''; } if (txt) this.filmAsk(e, txt); return; } }
@@ -2769,36 +2885,95 @@ Daemon.prototype.checkMemory = function () {
 };
 /*
  * "Zresetuj usługi" (THEiPlay, Ustawienia > Ogólne; owner, 2026-11-20): the tools THEiPlay plays through are started
- * again, in one go, when one of them hangs: the sound (g21-audio), AirPlay (g21-airplay-open), the controller
- * (g21-input), YouTube's daemon (jap-ridetube-d) and, last, this tool itself. Only these units, by name; nothing
- * of BMW's. The app cannot do it itself (it is not root); this daemon is, and the app already talks to it.
+ * again when one of them hangs. Only these five units, by their full names; nothing of BMW's, no killall or pkill, no
+ * reboot. The app cannot do it itself (it is not root); this daemon is, and the app already talks to it.
+ *
+ * The order follows who needs whom:
+ *   1. this tool's own engine is stopped the orderly way (stopEngine: the engine's processes, the frame tool, the
+ *      proxy, the apps' server, its sound stream, its video file in /dev/shm), so nothing of it holds G21 Audio's
+ *      stream while that one is started again;
+ *   2. g21-audio (the sound: AirPlay, YouTube and the browser all open its stream), then g21-input (the controller's
+ *      pad), then g21-airplay-open and jap-ridetube-d, which connect to the two before them;
+ *   3. g21-browser, this process, last: systemd stops it and starts a new one.
+ * Each unit is restarted by systemd alone ("systemctl restart": its stop signal, its TimeoutStopSec, every process of
+ * its control group ended, its runtime directory with the sockets made anew), one at a time, with 30 s for each; then
+ * it is asked "is-active" after a moment, because a service that dies right after its start is not up. A unit that is
+ * not installed is passed over and said so. Nothing is deleted: settings, logins, the imported apps and the pages'
+ * data are files these services read again.
+ * A second request while one runs is refused ("busy"). The result is written to state/services.json before this
+ * process is restarted; the new process reads it and tells the app "done" when the app is connected again: only then
+ * is every service known to be up, this one included.
  */
-const SERVICE_UNITS = ['g21-audio.service', 'g21-airplay-open.service', 'g21-input.service', 'jap-ridetube-d.service'];
-Daemon.prototype.restartServices = function () {
-    if (this.restarting) return;
-    this.restarting = true;
-    const env = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin' };
-    this.log('services: restart asked by the app: ' + SERVICE_UNITS.join(', ') + ', then g21-browser.service');
-    this.emit({ ev: 'services', phase: 'restarting' });
-    let left = SERVICE_UNITS.length;
-    const done = () => {
-        left -= 1;
-        if (left > 0) return;
-        this.emit({ ev: 'services', phase: 'done' });
-        // this tool last, by systemd (the unit stops this process and starts a new one; the app connects again)
-        setTimeout(() => {
-            try { cp.spawn('systemctl', ['--no-block', 'restart', 'g21-browser.service'], { env: env, stdio: 'ignore', detached: true }).unref(); } catch (e) { this.log('services: g21-browser.service: ' + e.message); this.restarting = false; }
-        }, 300);
-    };
-    SERVICE_UNITS.forEach((u) => {
-        let child;
-        try { child = cp.spawn('systemctl', ['restart', u], { env: env, stdio: ['ignore', 'ignore', 'pipe'] }); } catch (e) { this.log('services: ' + u + ': ' + e.message); done(); return; }
-        let err = '';
-        const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch (e) { /* gone */ } }, 20000);
-        child.stderr.on('data', (d) => { if (err.length < 300) err += d; });
-        child.on('error', (e) => { clearTimeout(t); this.log('services: ' + u + ': ' + e.message); done(); });
-        child.on('exit', (code) => { clearTimeout(t); this.log('services: ' + u + (code === 0 ? ' started again' : ' not started again (' + code + ') ' + err.trim().slice(0, 160))); done(); });
+const SERVICE_UNITS = ['g21-audio.service', 'g21-input.service', 'g21-airplay-open.service', 'jap-ridetube-d.service'];
+const SELF_UNIT = 'g21-browser.service';
+Daemon.prototype.systemctl = function (args, ms) {
+    const cmd = this.opts.systemctl || ['systemctl'];
+    return new Promise((resolve) => {
+        let child, out = '', err = '', done = false, timedOut = false;
+        const end = (code) => { if (done) return; done = true; clearTimeout(t); resolve({ code: code, out: out.trim(), err: err.trim().slice(0, 200), timedOut: timedOut }); };
+        const t = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch (e) { /* gone */ } end(-1); }, ms || 10000);
+        try { child = cp.spawn(cmd[0], cmd.slice(1).concat(args), { env: Object.assign({}, this.opts.systemctlEnv || {}, { PATH: '/usr/sbin:/usr/bin:/sbin:/bin' }), stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { err = e.message; end(-1); return; }
+        child.stdout.on('data', (d) => { if (out.length < 2000) out += d; });
+        child.stderr.on('data', (d) => { if (err.length < 2000) err += d; });
+        child.on('error', (e) => { err = e.message; end(-1); });
+        child.on('exit', (code) => end(code === null ? -1 : code));
     });
+};
+Daemon.prototype.restartServices = async function () {
+    if (this.restarting) { this.log('services: a restart is running already; the second request is refused'); this.emit({ ev: 'services', phase: 'busy' }); return; }
+    this.restarting = true;
+    const results = [];
+    const file = path.join(this.opts.stateDir, 'services.json');
+    const settleMs = this.opts.serviceSettleMs == null ? 1500 : this.opts.serviceSettleMs;
+    try {
+        this.log('services: restart asked by the app: ' + SERVICE_UNITS.join(', ') + ', then ' + SELF_UNIT);
+        this.emit({ ev: 'services', phase: 'restarting', units: SERVICE_UNITS.concat([SELF_UNIT]) });
+        await this.stopEngine('the services are started again');
+        for (const u of SERVICE_UNITS) {
+            const load = await this.systemctl(['show', '-p', 'LoadState', u], 8000);
+            if (/not-found/.test(load.out) || (load.code !== 0 && !/loaded/.test(load.out))) {
+                results.push({ unit: u, state: 'absent' });
+                this.log('services: ' + u + ' is not installed: passed over');
+                continue;
+            }
+            this.emit({ ev: 'services', phase: 'unit', unit: u });
+            const r = await this.systemctl(['restart', u], this.opts.serviceRestartMs || 30000);
+            await sleep(settleMs);
+            const a = await this.systemctl(['is-active', u], 8000);
+            const ok = !r.timedOut && a.out === 'active';
+            results.push({ unit: u, state: ok ? 'active' : (r.timedOut ? 'timeout' : (a.out || 'failed')) });
+            this.log('services: ' + u + (ok ? ' started again, active' : ' NOT up: ' + (r.timedOut ? 'no answer in 30 s' : 'state "' + (a.out || '?') + '"' + (r.err ? ', ' + r.err : ''))));
+        }
+        mkdirp(this.opts.stateDir, 0o700);
+        fs.writeFileSync(file, JSON.stringify({ at: Date.now(), results: results }) + '\n', { mode: 0o600 });
+        this.emit({ ev: 'services', phase: 'self', results: results });
+        // this tool last, by systemd (it stops this process and starts a new one; the app connects again)
+        const self = await this.systemctl(['--no-block', 'restart', SELF_UNIT], 10000);
+        if (self.code !== 0) throw new Error(SELF_UNIT + ': ' + (self.err || 'systemctl said ' + self.code));
+        // still here after 20 s: systemd did not restart this tool
+        this.selfTimer = setTimeout(() => {
+            this.restarting = false;
+            try { fs.unlinkSync(file); } catch (e) { /* none */ }
+            this.log('services: ' + SELF_UNIT + ' was not started again in 20 s');
+            this.emit({ ev: 'services', phase: 'done', ok: false, results: results.concat([{ unit: SELF_UNIT, state: 'timeout' }]) });
+        }, this.opts.selfRestartMs || 20000);
+        if (this.selfTimer.unref) this.selfTimer.unref();
+    } catch (e) {
+        this.restarting = false;
+        try { fs.unlinkSync(file); } catch (x) { /* none */ }
+        this.log('services: ' + e.message);
+        this.emit({ ev: 'services', phase: 'done', ok: false, results: results.concat([{ unit: SELF_UNIT, state: 'failed' }]) });
+    }
+};
+// the process that systemd started after "Zresetuj usługi": what the one before it found, for the app
+Daemon.prototype.servicesAfterRestart = function () {
+    const file = path.join(this.opts.stateDir, 'services.json');
+    const j = readJson(file);
+    try { fs.unlinkSync(file); } catch (e) { /* none */ }
+    if (!j || !Array.isArray(j.results) || !(Date.now() - Number(j.at) < 120000) || !(Date.now() - Number(j.at) >= 0)) return;
+    const results = j.results.filter((r) => r && typeof r.unit === 'string').map((r) => ({ unit: String(r.unit).slice(0, 60), state: String(r.state || '').slice(0, 20) })).concat([{ unit: SELF_UNIT, state: 'active' }]);
+    this.servicesDone = { until: Date.now() + 60000, results: results, ok: results.every((r) => r.state === 'active' || r.state === 'absent') };
+    this.log('services: started again; ' + results.map((r) => r.unit.replace('.service', '') + ' ' + r.state).join(', '));
 };
 Daemon.prototype.stopEngine = async function (why) {
     this.filmStop('engine stops', '');
@@ -2809,6 +2984,7 @@ Daemon.prototype.stopEngine = async function (why) {
     this.fs = null;
     this.closeAudio();
     if (e) {
+        { const bg = e.mode && e.tabs && e.tabs[''] ? String(e.tabs[''].url || '') : ''; this.browserUrl = /^https?:/.test(bg) ? bg : ''; }
         this.engine = null;
         clearInterval(this.memTimer);
         clearInterval(this.pollTimer);
@@ -2834,6 +3010,7 @@ Daemon.prototype.start = async function () {
     [o.cacheDir, o.logDir].forEach((d) => { try { mkdirp(d); } catch (e) { /* logged on use */ } });
     try { mkdirp(o.stateDir, 0o700); } catch (e) { /* logged on use */ }
     this.killStrays(); // an engine a killed daemon left behind
+    this.servicesAfterRestart();
     try { fs.unlinkSync(o.ring); } catch (e) { /* none */ }
     this.listen();
     // the uplink learns our uid at start (its 5 s rescan), before the first page
