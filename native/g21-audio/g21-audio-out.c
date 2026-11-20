@@ -57,7 +57,16 @@ enum { PLAYBACK = 0, NONBLOCK = 1, S16_LE = 2, RW_INTERLEAVED = 3 };
 #define CH 2
 #define CHUNK 480      /* frames: 10 ms */
 #define PREFILL 8      /* the most chunks gathered before the first one is played, and again after an underrun */
-#define IDLE_MS 3000   /* this long without sound: the speakers go back */
+#define IDLE_MS 3000   /* this long without sound: the speakers go back (G21_AUDIO_IDLE_MS says otherwise) */
+/*
+ * Holding the channel (owner, 2026-11-20). With 3 s every pause, every next film, every next song let the speakers
+ * go to the radio and took them again, and it is at the taking that things went wrong (the pace of the CarLife
+ * input; the media input silent after the first stream). With G21_AUDIO_IDLE_MS above 3000 the writer stays through
+ * a pause that long and plays silence into the device meanwhile, so the device never runs empty and the speakers
+ * stay with this stream: one opening, one connection, for as long as something is played with pauses shorter than
+ * that. Only a longer silence, or the end of the stream, gives them back.
+ */
+static int idle_ms(void) { const char *e = getenv("G21_AUDIO_IDLE_MS"); long v = e ? atol(e) : 0; return v >= 1000 && v <= 600000 ? (int)v : IDLE_MS; }
 
 static volatile sig_atomic_t stopping;
 static void on_stop(int s) { (void)s; stopping = 1; }
@@ -200,7 +209,8 @@ static int play(const char *dev)
     double report;
     long d = 0;
     int r;
-    const int heal = heal_on();
+    const int heal = heal_on(), idle = idle_ms();
+    unsigned long quiet = 0;
     double win0 = 0, in_wait = 0, before;
     unsigned long win_frames = 0;
     int slow = 0;
@@ -252,11 +262,24 @@ static int play(const char *dev)
             win0 = now; win_frames = frames + 1; in_wait = 0;
         }
         before = mono_ms();
-        r = read_chunk(buf, IDLE_MS);
+        if (idle <= IDLE_MS) r = read_chunk(buf, idle);
+        else {
+            /* waiting for the next sound: silence into the device, a chunk at a time, as fast as it takes it */
+            static int16_t zero[CHUNK * CH];
+            unsigned long q1 = 0, q2 = 0, q3 = 0;
+            for (;;) {
+                struct pollfd pw = { 0, POLLIN, 0 };
+                int pr = poll(&pw, 1, 0);       /* (the device paces the loop: a chunk of silence takes 10 ms to be taken) */
+                if (stopping) { r = -1; break; }
+                if (pr > 0 && (pw.revents & POLLIN)) { r = read_chunk(buf, 200); if (r != 0) break; }
+                if (mono_ms() - before > idle) { r = 0; break; }
+                if (pr <= 0 || !(pw.revents & POLLIN)) { write_chunk(pcm, zero, &quiet, &q1, &q2, &q3); if (pr > 0) usleep(10000); }
+            }
+        }
         if (win_frames) in_wait += mono_ms() - before;
         if (r <= 0) break;
     }
-    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full %lu) xruns %lu\n", r < 0 ? "stopped" : "idle", frames, dropped, full, xruns);
+    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full %lu) xruns %lu silence %lu\n", r < 0 ? "stopped" : "idle", frames, dropped, full, xruns, quiet);
     leave(0);
     return 0;
 }
@@ -303,7 +326,9 @@ static int engine(const char *dev, int greedy)
     int playing = 0;
     double last_in = mono_ms(), last = mono_ms(), report = 0, now;
     long d = 0;
-    const int heal = heal_on();
+    const int heal = heal_on(), idle = idle_ms();
+    static int16_t zero[CHUNK * CH];
+    unsigned long quiet = 0;
     double win0 = 0;
     unsigned long win_frames = 0, win_gaps = 0;
     int slow = 0, win_on = 0;
@@ -407,9 +432,15 @@ static int engine(const char *dev, int greedy)
             { const int pw = pace_window(now - win0, frames - win_frames, playing && gaps == win_gaps && fill >= LIVE_TARGET, &slow); if (pw == 2) leave(4); if (pw == 1 && heal) leave(3); }
             win0 = now; win_frames = frames; win_gaps = gaps;
         }
-        if (now - last_in > IDLE_MS && fill < 2) break;
+        /* nothing to play: silence keeps the device running while the channel is held */
+        if (pcm && idle > IDLE_MS && !playing && sent == made) {
+            long dl = 0;
+            if (A.delay(pcm, &dl) < 0) dl = 0;
+            if (dl < 2 * CHUNK) { long w0 = A.writei(pcm, zero, CHUNK); if (w0 > 0) quiet += (unsigned long)w0; else if (w0 < 0 && w0 != -EAGAIN) A.recover(pcm, (int)w0, 1); }
+        }
+        if (now - last_in > idle && fill < 2) break;
     }
-    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full 0) xruns %lu gaps %lu taken %lu\n", stopping ? "stopped" : "idle", frames, skipped, xruns, gaps, taken);
+    fprintf(stderr, "[G21-AUDIO] out: %s, frames %lu dropped %lu (full 0) xruns %lu gaps %lu taken %lu silence %lu\n", stopping ? "stopped" : "idle", frames, skipped, xruns, gaps, taken, quiet);
     leave(0);
     return 0;
 }

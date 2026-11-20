@@ -83,7 +83,10 @@ const ALSA_GID = env.G21_AUDIO_GID ? Number(env.G21_AUDIO_GID) : groupId('mgu_al
 const MEDIA_INPUT = (function () { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')).input !== 'carlife'; } catch (e) { return true; } })() && !DEVICE;
 const MEDIA_DEVICE = 'smartx:MediaSink_AudioOut_Front_CF_48_COMBINED_STEREO_MULTICHANNEL';
 // how the writer is started: as nobody in the group mgu_alsa, or (the media input) as root that gives root up
+// how long the channel is held through a silence (ms): "holdMs" in config.json, 20 s when it says nothing
+function holdMs() { const h = Number(conf().holdMs); return h >= 3000 && h <= 600000 ? Math.round(h) : 20000; }
 function asWriter(opts) {
+    opts.env = Object.assign({}, opts.env || process.env, { G21_AUDIO_IDLE_MS: String(holdMs()) });
     if (NOSETUID) return opts;
     if (onMedia()) { opts.env = Object.assign({}, opts.env || process.env, { G21_AUDIO_DROP: WRITER_UID + ':' + ALSA_GID, G21_AUDIO_DEAD: '1' }); return opts; }
     opts.uid = WRITER_UID; opts.gid = ALSA_GID;

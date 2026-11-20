@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.212
+
+- Pomysł właściciela (2026-11-20): kanał dźwięku auta ma być przejęty raz i trzymany jak żywy strumień, a nie oddawany radiu przy każdej przerwie. `g21-audio` 0.1.20: dopóki aplikacja coś odtwarza z przerwami krótszymi niż 20 s, głośniki i urządzenie zostają nasze – jedno otwarcie i jedno połączenie na cały czas grania – a w przerwach (następny film, następny utwór, pauza) podawana jest cisza. Radio wraca dopiero po 20 s ciszy albo po zamknięciu aplikacji. Dotąd były to 3 s, więc każda zmiana treści oddawała i przejmowała kanał od nowa – i właśnie przy ponownym przejęciu psuło się tempo (stare wejście) albo dźwięk nie wracał wcale (nowe wejście, 0.1.18).
+- Czas trzymania: `"holdMs"` w `/var/opt/g21-audio/config.json` (3000–600000 ms). Dotyczy AirPlay i przeglądarki, obu wejść. Sprawdzone na atrapie urządzenia; w aucie niesprawdzone. Nie usuwa przyczyny ciszy przy ponownym przejęciu kanału po długiej przerwie – ta nadal czeka na log z auta (na ten przypadek jest powrót do wejścia CarLife z 0.1.19).
+
 ## 0.1.211
 
 - Auto, 2026-11-20 (`g21-audio` 0.1.18, właściciel): pierwszy dźwięk gra od razu, ale po zmianie treści nie gra wcale, „jakby coś trzymało”, w przeglądarce i w AirPlay. Auto było poza siecią, więc przyczyna NIE jest znana – logu z tej próby nie ma.
