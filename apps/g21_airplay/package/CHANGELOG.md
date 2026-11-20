@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.4
+
+- Właściciel, 2026-11-20: w aucie film nie urywa się, gdy przez 2 minuty niczego się nie dotyka – tylko po zminimalizowaniu aplikacji albo po zmianie na pełny ekran. Odmowa strumienia przez YouTube po 30–75 s, którą pokazało stanowisko (0.2.3), nie jest więc przyczyną w aucie. Na stanowisku minimalizacja i pełny ekran filmu nie psują (te same próby co w 0.2.3, ponownie); auto jest poza siecią, więc przyczyna NIE jest znana.
+- `g21-browser` 0.1.52, żeby następny błąd w aucie sam ją wskazał: powód podany przez odtwarzacz YouTube pojawia się na ekranie w linii nad stroną („odtwarzacz strony: …") – można go odczytać bez logu – a log zapisuje go razem z tym, co było zrobione wcześniej i ile sekund przed błędem („… s after "full screen on"", „the app was hidden", „the app is in front again", „the app opens the view"), czy pełny ekran był włączony i czy strona miała dźwięk.
+- THEiPlay mówi narzędziu przeglądarki, kiedy jest chowany za strony auta i kiedy wraca (tylko do logu; zachowanie bez zmian).
+
 ## 0.2.3
 
 - Właściciel, 2026-11-20: film w przeglądarce często kończy się komunikatem YouTube „Coś poszło nie tak" po zminimalizowaniu aplikacji albo po przejściu na pełny ekran; strony wydają się za niskie. Auto poza siecią, więc próby na stanowisku (prawdziwa aplikacja, prawdziwy demon przeglądarki, prawdziwy Chrome, film z YouTube): `tools/sim/video.js`.

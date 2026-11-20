@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.3',
+        version: (this._packageJson && this._packageJson.version) || '0.2.4',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.3') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.4') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5252,6 +5252,10 @@ AirPlayApp.prototype._setVisible = function (visible) {
     }
     this._visible = visible;
     noteStart(visible ? 'visible' : 'hidden');
+    // (the browser tool writes it to its log: what was done before a page's player gave up)
+    if (this._web && this._webOn && typeof this._web.send === 'function') {
+        this._web.send({ op: 'seen', on: !!visible });
+    }
     if (!visible) {
         this._setAirFull(false);
     }

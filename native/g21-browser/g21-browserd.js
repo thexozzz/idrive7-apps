@@ -1225,6 +1225,7 @@ Daemon.prototype.onClient = function (c) {
 Daemon.prototype.away = async function () {
     const e = this.engine;
     if (e) { try { await e.cdp.send('Page.stopScreencast', {}, e.session); } catch (x) { /* gone */ } }
+    if (e) { this.changed('the app went away'); this.log('the app went away' + (this.fs ? ' (full screen on)' : '')); }
     this.frameRun(false);
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => this.guard(async () => { this.sandboxOff = false; await this.stopEngine('idle'); this.browserUrl = ''; }), this.opts.idleMs);
@@ -1234,6 +1235,7 @@ Daemon.prototype.onCommand = async function (m) {
     const e = this.engine;
     switch (m.op) {
     case 'open': {
+        if (this.engine) { this.changed('the app opened the view' + (m.keep ? ' again' : '')); this.log('the app opens the view' + (m.keep ? ' again' : '') + ': ' + (Number(m.w) | 0) + 'x' + (Number(m.h) | 0) + (this.fs ? ', full screen on' : '')); }
         const w = Math.max(320, Math.min(1920, Number(m.w) | 0)) & ~3, h = Math.max(200, Math.min(1080, Number(m.h) | 0)) & ~1;
         const z = ZOOMS.indexOf(Number(m.zoom)) >= 0 ? Number(m.zoom) : (ZOOMS.indexOf(Number(this.settings().zoom)) >= 0 ? Number(this.settings().zoom) : 1);
         clearTimeout(this.idleTimer);
@@ -1321,6 +1323,8 @@ Daemon.prototype.onCommand = async function (m) {
         if (e && this.want && (this.picture() !== pictureWas || this.policy().audio !== audioWas || this.policy().autoplay !== autoplayWas || this.policy().video !== videoWas || this.policy().engine !== engineWas || this.policy().mobile !== mobileWas || this.policy().frames !== framesWas)) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('picture'); await this.startEngine(url); }
         return;
     }
+    // (the app is hidden behind the car's own pages, or in front again: for the log, see playerWhy)
+    if (m.op === 'seen') { const w = m.on ? 'the app is in front again' : 'the app was hidden'; if (this.engine) { this.changed(w); this.log(w + (this.fs ? ' (full screen on)' : '')); } return; }
     if (m.op === 'apps') { this.tellApps(); return; }
     if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: Object.assign(sysInfo(), { gputest: this.gpuText || '' }) }); return; }
     if (m.op === 'gputest') { this.gpuTest(); return; }
@@ -2077,6 +2081,7 @@ Daemon.prototype.applyFs = async function (e, on) {
         this.frameSize(cw, ch);
         await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: this.policy().mobile !== 'off', screenWidth: cw, screenHeight: ch });
         this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
+        this.changed('full screen on');
         this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');
         this.set({ w: w.fw, h: w.fh });
     } else {
@@ -2084,6 +2089,7 @@ Daemon.prototype.applyFs = async function (e, on) {
         this.fs = null;
         this.frameSize(css.pw, css.ph);
         await send({ width: css.w, height: css.h, deviceScaleFactor: css.scale, mobile: this.policy().mobile !== 'off', screenWidth: css.w, screenHeight: css.h });
+        this.changed('full screen off');
         this.log('full screen left: the page area again');
         this.set({ w: css.dw, h: css.dh });
     }
@@ -2750,11 +2756,21 @@ Daemon.prototype.refresh = async function (e) {
     } catch (x) { /* the page is on its way somewhere else */ }
     if (!this.s.loading) this.remember(cur.url || '', cur.title || '');
 };
+// what was done last to the view, and when (playerWhy says how long before a player's error it was)
+Daemon.prototype.changed = function (what) { this.lastChange = { what: what, at: Date.now() }; };
 Daemon.prototype.playerWhy = function (e) {
     if (this.engine !== e || !e.session) return;
     e.cdp.send('Runtime.evaluate', { expression: PLAYER_WHY, returnByValue: true }, e.session).then((r) => {
         const why = r && r.result && typeof r.result.value === 'string' ? r.result.value : '';
-        if (why) this.log('player gave up: ' + why.slice(0, 200) + (/spsreject/i.test(why) ? ' (YouTube\'s server refused the stream to this browser)' : ''));
+        if (!why || this.engine !== e) return;
+        // The owner sees these errors after the app was away or after a change to full screen (2026-11-20), not
+        // while nothing is touched: the log says whether one of those came before, and how long before.
+        const c = this.lastChange;
+        this.log('player gave up: ' + why.slice(0, 200) + (/spsreject/i.test(why) ? ' (YouTube\'s server refused the stream to this browser)' : '')
+            + '; ' + (c ? Math.round((Date.now() - c.at) / 1000) + ' s after "' + c.what + '"' : 'nothing was changed before') + ', full screen ' + (this.fs ? 'on' : 'off')
+            + ', the app ' + (this.client ? 'here' : 'away') + ', sound ' + (this.audio ? 'G21 Audio' : 'none'));
+        // and the line over the page says it too, so that it can be read without the log
+        this.set({ err: 'odtwarzacz strony: ' + why.split(' at ')[0].slice(0, 70) });
     }, () => {});
 };
 Daemon.prototype.pageNote = function (e, text) {
