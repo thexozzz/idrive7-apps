@@ -32,12 +32,12 @@ function ops(frame) {
     return seen;
 }
 
-// ---- the menu: three tiles; Przeglądarka is the first tile of Aplikacje
-assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['multimedia', 'apps', 'system']);
-assert.strictEqual(menu.ROOT_ITEMS[1].title, 'Aplikacje');
-assert.strictEqual(menu.APPS_ITEMS[0].title, 'Przeglądarka');
+// ---- the menu (0.1.214): the modules on the home screen; Przeglądarka is one of them, Aplikacje holds the apps
+assert.deepStrictEqual(menu.ROOT_ITEMS.map(function (i) { return i.name; }), ['youtube', 'airplay', 'browser', 'apps', 'system']);
+assert.strictEqual(menu.ROOT_ITEMS[3].title, 'Aplikacje');
+assert.strictEqual(menu.ROOT_ITEMS[2].title, 'Przeglądarka');
 var rootFrame = menu.buildFrame(menu.ROOT_ITEMS, 1, 1920, 720, '', 'THEiPlay', '0.1.136', null, null, null, 'THEiPlay', null, null);
-assert.ok(rootFrame.layout.count === 3 && rootFrame.rects > 20);
+assert.ok(rootFrame.layout.count === 5 && rootFrame.rects > 20);
 
 // ---- the browser screen's frame
 var page = menu.webLayout(1920, 720).page;
@@ -51,7 +51,7 @@ assert.deepStrictEqual(Array.prototype.slice.call(seen.video), [104, 172, 1796, 
 assert.ok(!seen[6] && !seen[7] && !seen[10], 'only ops proven on the car (no CARD, RAMPRECT, TRIS)');
 assert.ok(f.frame.length < 8000, 'a small frame: ' + f.frame.length);
 var names = f.layout.webHits.map(function (h) { return h.name; });
-assert.deepStrictEqual(names, ['web-exit', 'web-back', 'web-reload', 'web-home', 'web-url', 'web-keys', 'web-enter', 'web-zoom-out', 'web-zoom-in', 'app-exit'], 'forward is off without a page ahead');
+assert.deepStrictEqual(names, ['web-exit', 'web-back', 'web-reload', 'web-home', 'web-url', 'web-where', 'web-keys', 'web-enter', 'web-zoom-out', 'web-zoom-in', 'app-exit'], 'forward is off without a page ahead; "Ekrany" is on the bar');
 f.layout.webHits.forEach(function (h) { assert.ok(h.h >= 56 && h.w >= 64 && h.x >= 104 && h.x + h.w <= 1900 && h.y >= 88 && h.y + h.h <= 172, h.name + ' is a finger wide, inside the toolbar and inside the touch claim'); });
 assert.ok(names.indexOf('app-exit') !== -1, '"Wyłącz aplikację" is on this screen too');
 // zoom at its ends
@@ -81,7 +81,7 @@ assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).la
 // ---- Aplikacje: the browser's place in the menu, its screens, the client that only looks
 (function () {
     var mainSrc = fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8');
-    assert.ok(menu.ROOT_ITEMS.every(function (i) { return i.name !== 'browser'; }) && menu.APPS_ITEMS[0].name === 'browser', 'Przeglądarka is inside Aplikacje');
+    assert.ok(menu.ROOT_ITEMS.some(function (i) { return i.name === 'browser'; }) && menu.APPS_ITEMS.every(function (i) { return i.name !== 'browser'; }), 'Przeglądarka is a module of the home screen');
     assert.ok(/self\._takeWeb\(\);/.test(mainSrc) && /_placeMirrorFaces\(this\._webFrame\.i420, this\._webFrame\.w, this\._webFrame\.h, outs\)/.test(mainSrc), 'the page goes to the cluster and HUD layers AirPlay and YouTube use');
     assert.ok(/createYoutubeFile\(menuDraw\.WEB_FILE\)/.test(mainSrc) && menu.WEB_FILE === '/dev/shm/mgu-video-g21browser');
     assert.ok(/op: 'policy', key: 'picture'/.test(mainSrc) && !/op: 'policy', key: 'sandbox', value: 'off'/.test(mainSrc), 'the menu sets rules through the daemon, never the sandbox off');
@@ -175,8 +175,10 @@ function glueApp() {
     g._onAppsChoice('aset-picture'); g._onAppsChoice('aset-sandbox'); g._onAppsChoice('aset-memory');
     assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [1, 'ask', 600], 'the choices go round; the sandbox is never set to off from here');
     // cluster and HUD for the page
-    g._onAppsChoice('aset-cluster');
-    assert.deepStrictEqual([g._webCluster, !!g._webHud, g.deskWeb, g.saved, g.hints['aset-cluster'], g.hints['aset-hud']], [true, false, { cluster: true, hud: false }, 1, 'włączone', 'wyłączone']);
+    // (the panel "Ekrany": its tiles are the two switches)
+    g._onAppsChoice('web-pick-cluster');
+    assert.deepStrictEqual([g._webCluster, !!g._webHud, g.deskWeb, g.saved, g.hints['aset-screens']], [true, false, { cluster: true, hud: false }, 1, 'środek + zegary']);
+    assert.ok(g._onAppsChoice('web-pick-central') && g._webCluster === true, 'the centre is always on: its tile changes nothing');
     g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 };
     g._takeWeb();
     assert.deepStrictEqual(g.faces, [], 'the browser is not open: nothing goes to the cluster');
@@ -187,7 +189,7 @@ function glueApp() {
     assert.deepStrictEqual(g.faces, [[1332, 396, 'cluster']], 'the page goes to the cluster layer');
     g._webGaugeAt = 0; g._takeWeb();
     assert.strictEqual(g.faces.length, 1, 'the same page is not sent again');
-    g._onAppsChoice('aset-hud');
+    g._onAppsChoice('web-pick-hud');
     g._webGaugeAt = 0; g._takeWeb();
     assert.deepStrictEqual(g.faces[1], [1332, 396, 'cluster,hud'], 'HUD switched on: the page goes there too');
     g._ytGaugeFrame = {}; g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 }; g._webGaugeAt = 0; g._takeWeb();

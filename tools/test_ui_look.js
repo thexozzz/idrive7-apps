@@ -39,7 +39,8 @@ assert.ok(seen[11] > 5, 'text is GLYPHS');
 assert.ok(seen[4] > 5, 'rounded rows and buttons (RRECT)');
 assert.ok(!seen[6] && !seen[7] && !seen[10], 'only ops the YouTube screen draws on the car (no CARD, RAMPRECT, TRIS)');
 assert.strictEqual(seen[19], 1, 'the AirPlay picture in its window (VIDEO)');
-assert.ok((seen[2] || 0) < 10, 'hardly a plain RECT left: ' + (seen[2] || 0));
+// (0.1.214: the hairlines and the modules' accent marks of the home screen are plain rects)
+assert.ok((seen[2] || 0) < 24, 'hardly a plain RECT left: ' + (seen[2] || 0));
 [['airplay', 1], ['quality-kombi', 3], ['pos-out', 2], ['label', 0], ['settings', 0], ['youtube', 0]].forEach(function (s) {
     var b = menu.buildFrame(menu.SCREENS[s[0]], s[1], 1920, 720, 'stan', 'THEiPlay', '0.1.135', null, null, null, menu.crumbFor(s[0], 'THEiPlay', ''), air, null);
     ops(b.frame);       // walks to the end: every op is one the renderer knows
@@ -148,7 +149,11 @@ server.listen(SOCK, async function () {
         var st = { on: false, online: false, status: 'wyłączony', screens: [{ key: 'central', on: true }], mirrored: false, window: null };
         surf.setAirState(st);
         await sleep(350);
-        var lay = menu.buildFrame(menu.ROOT_ITEMS, 0, 1920, 720, 'czeka na iPhone', '', '0.1.135', null, null, null, 'THEiPlay', st, null).layout;
+        // (the corner's one button, "Ekrany": on AirPlay's page it opens AirPlay's panel)
+        surf.setScreen('airplay');
+        await sleep(350);
+        menu.useTheme('airplay');
+        var lay = menu.buildFrame(menu.SCREENS.airplay, 0, 1920, 720, 'czeka na iPhone', '', '0.1.135', null, null, null, 'AirPlay', st, null).layout;
         var whereBtn = lay.airHits.filter(function (h) { return h.name === 'air-where'; })[0];
         assert.ok(whereBtn && whereBtn.h >= 44, 'the Ekrany button is a finger tall');
         await tap(whereBtn);

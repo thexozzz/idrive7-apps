@@ -36,34 +36,39 @@ var CLAIM = 9;
 var TOUCH = 105;
 var CLOSED = 106;
 
-var INK = 0xF7F2EAFF;
-var HINT = 0xC4B5A4FF;
-var MUTED = 0x8C7D6CFF;
-var BAR = 0x2A2118FF;
-var CARD = 0x16120EFF;
-var CARD_HI = 0x2C241CFF;
-var PAGE = 0x090807FF;
-var PAGE_TOP = 0x120E0BFF;
-var PAGE_BAND = 0x1A1410FF;
-var ACCENT = 0xE6A15CFF;
-var RED = 0xE23B3BFF;
-var RED_CARD = 0x4A1616FF;
-var ACCENT_DIM = 0x7A4A22FF;
-var ACCENT_GLOW = 0x3A2414FF;
-var LINE = 0x3A3026FF;
+/*
+ * The look (0.1.214): one set of values for every screen. Graphite and anthracite surfaces, a thin line around a
+ * card, one accent a module (THEMES), text in three weights of grey. A component reads these and TOK; no screen
+ * has colours or corners of its own.
+ */
+var INK = 0xF2F4F7FF;
+var HINT = 0xA9B1BDFF;
+var MUTED = 0x7C8591FF;
+var BAR = 0x1E2126FF;
+var CARD = 0x191C21FF;
+var CARD_HI = 0x262A31FF;
+var PAGE = 0x0B0C0FFF;
+var PAGE_TOP = 0x14161AFF;
+var PAGE_BAND = 0x1A1D22FF;
+var ACCENT = 0xE0A458FF;
+var RED = 0xE5484DFF;
+var RED_CARD = 0x4A1A1CFF;
+var ACCENT_DIM = 0x70522CFF;
+var ACCENT_GLOW = 0x2D261BFF;
+var LINE = 0x2E333BFF;
 // shaded surfaces (top, bottom) and the tints the rows use
-var PAGE_A = 0x100D0AFF;
-var PAGE_B = 0x070605FF;
-var HEAD_A = 0x1C1612FF;
-var HEAD_B = 0x110E0BFF;
-var ROW_A = 0x1C1713FF;
-var ROW_B = 0x14100DFF;
-var ROW_HI_A = 0x3A2D20FF;
-var ROW_HI_B = 0x251D16FF;
-var WELL = 0x2B231BFF;
-var RED_A = 0x5C1D1DFF;
-var RED_B = 0x3C1313FF;
-var SOFT = 0xE9DFD2FF;
+var PAGE_A = 0x15171BFF;
+var PAGE_B = 0x0D0E11FF;
+var HEAD_A = 0x1B1E23FF;
+var HEAD_B = 0x16181CFF;
+var ROW_A = 0x20232AFF;
+var ROW_B = 0x1B1E24FF;
+var ROW_HI_A = 0x2C2A26FF;
+var ROW_HI_B = 0x25231FFF;
+var WELL = 0x2B3038FF;
+var RED_A = 0x5C1F22FF;
+var RED_B = 0x3C1416FF;
+var SOFT = 0xDCE1E8FF;
 var uiLang = 'pl';
 var EN = {
     'lustro iPhone': 'iPhone mirror',
@@ -322,6 +327,18 @@ var EN = {
     'Wpisz adres albo szukaj': 'Type an address or search',
     'Uruchamiam przeglądarkę': 'Starting the browser',
     'Uruchamiam aplikację': 'Starting the app',
+    'Opcje': 'Options',
+    'Zresetuj usługi': 'Restart services',
+    'dźwięk, AirPlay, YouTube, przeglądarka': 'sound, AirPlay, YouTube, browser',
+    'wybierz jeszcze raz, aby potwierdzić': 'choose again to confirm',
+    'uruchamiam ponownie…': 'starting them again…',
+    'brak narzędzia Przeglądarka': 'the browser tool is missing',
+    'Przeglądarka i aplikacje': 'Browser and apps',
+    'zawsze': 'always',
+    'filmy': 'films',
+    'aplikacje internetowe': 'web apps',
+    'obraz, sterowanie': 'picture, controls',
+    'dodaj lub usuń aplikację': 'add or remove an app',
     'Menu': 'Menu',
     'Aplikacja': 'App',
     'Pobieram silnik przeglądarki': 'Downloading the browser engine',
@@ -361,25 +378,69 @@ function tr(text) {
     }
     return s;
 }
-var CHIP = 0x100D0AFF;
-var ICON_FG = 0xE7D7C4FF;
+var CHIP = 0x14161AFF;
+var ICON_FG = 0xDDE2E9FF;
 var ICON_ACCENT = 0xF0C48AFF;
 // Margins left clear inside a full-screen surface. On this car a PLACE of only
 // this box drew nothing. The back column and title strip stay unpainted so iDrive
 // can take them.
 var CONTENT = { x: 104, y: 88, w: 1796, h: 632 };
+// Sizes and the states' colours, for every component: corners (a tile, a row, a button, a panel, an icon's well),
+// the surface and the line under the cursor (hover), the line of a pressed or open control.
+var TOK = {
+    r: { tile: 16, row: 12, pill: 12, panel: 18, well: 12 },
+    hoverA: 0x2A2E36FF, hoverB: 0x23262DFF, hoverLine: 0x4B525DFF,
+    btn: 0x23262CFF, btnLine: 0x383E48FF, scrim: 0x07080AE6
+};
+// is the cursor over this box? (hover: a lighter surface and line; never the chosen or the focused look, and
+// nothing is done by it)
+function hoverOn(x, y, w, h) {
+    return !!POINTER && POINTER.x >= x && POINTER.x < x + w && POINTER.y >= y && POINTER.y < y + h;
+}
+// a button of the head and of the panels: normal, under the cursor, open/pressed
+function drawBtn(draw, b, state) {
+    var hov = hoverOn(b.x, b.y, b.w, b.h);
+    draw.round(b.x, b.y, b.w, b.h, TOK.r.pill, state === 'primary' ? ACCENT : (hov ? TOK.hoverA : TOK.btn));
+    if (state !== 'primary') {
+        draw.stroke(b.x, b.y, b.w, b.h, TOK.r.pill, state === 'open' ? 2 : 1.5, state === 'open' ? ACCENT : (hov ? TOK.hoverLine : TOK.btnLine));
+    } else if (hov) {
+        draw.stroke(b.x, b.y, b.w, b.h, TOK.r.pill, 2, INK);
+    }
+    return hov;
+}
+// which screens a page and an app from Sklep show on besides the centre (main.js tells: setWebOut)
+var WEB_OUT = { cluster: false, hud: false };
+function webOutScreens() {
+    return [{ key: 'central', on: true, hint: 'zawsze' }, { key: 'cluster', on: !!WEB_OUT.cluster }, { key: 'hud', on: !!WEB_OUT.hud }];
+}
 /*
  * Every app has its menu in its own colour, and the menu says whose it is (owner, 2026-11-20): THEiPlay's own pages
  * amber as before, AirPlay blue, YouTube red, Przeglądarka green, an app from Sklep violet. A theme is the accent
  * (marks, the chosen row, the way back), the head band and the name written in the head ("Menu: AirPlay").
  * useTheme() is called before a frame is drawn; the colours below are read while drawing.
  */
+function mixColour(a, b, k) {
+    var out = 0;
+    var sh;
+    var ca;
+    var cb;
+    for (sh = 24; sh >= 8; sh -= 8) {
+        ca = (a >>> sh) & 255;
+        cb = (b >>> sh) & 255;
+        out = (out * 256) + Math.round(ca + (cb - ca) * k);
+    }
+    return out * 256 + 255;
+}
+function themeOf(label, accent, icon) {
+    return { label: label, accent: accent, dim: mixColour(accent, 0x0D0E11FF, 0.5), glow: mixColour(accent, 0x15171BFF, 0.82), headA: 0x1B1E23FF, headB: 0x16181CFF,
+        hiA: mixColour(0x20232AFF, accent, 0.16), hiB: mixColour(0x1B1E24FF, accent, 0.1), icon: icon };
+}
 var THEMES = {
-    base: { label: '', accent: 0xE6A15CFF, dim: 0x7A4A22FF, glow: 0x3A2414FF, headA: 0x1C1612FF, headB: 0x110E0BFF, hiA: 0x3A2D20FF, hiB: 0x251D16FF, icon: 0xF0C48AFF },
-    airplay: { label: 'AirPlay', accent: 0x5CB4F0FF, dim: 0x224E7AFF, glow: 0x14263AFF, headA: 0x121A24FF, headB: 0x0B1017FF, hiA: 0x20303FFF, hiB: 0x161F2AFF, icon: 0x8ACBF5FF },
-    youtube: { label: 'YouTube', accent: 0xF0605CFF, dim: 0x7A2624FF, glow: 0x3A1514FF, headA: 0x241312FF, headB: 0x170C0BFF, hiA: 0x3F2220FF, hiB: 0x2A1716FF, icon: 0xF59A8AFF },
-    browser: { label: 'Przeglądarka', accent: 0x5CD6A4FF, dim: 0x227A56FF, glow: 0x143A2AFF, headA: 0x12221BFF, headB: 0x0B1611FF, hiA: 0x203F31FF, hiB: 0x162A21FF, icon: 0x8AF5C6FF },
-    store: { label: 'Aplikacja', accent: 0xB48CF5FF, dim: 0x52337AFF, glow: 0x26143AFF, headA: 0x1A1424FF, headB: 0x110C17FF, hiA: 0x30223FFF, hiB: 0x20172AFF, icon: 0xCDB0F8FF }
+    base: themeOf('', 0xE0A458FF, 0xF0C48AFF),
+    airplay: themeOf('AirPlay', 0x5AA9E6FF, 0x9CCBF2FF),
+    youtube: themeOf('YouTube', 0xE5605CFF, 0xF2A19EFF),
+    browser: themeOf('Przeglądarka', 0x5CC9A0FF, 0x9FE2C7FF),
+    store: themeOf('Aplikacje', 0xA98BE6FF, 0xCDBBF3FF)
 };
 var THEME = THEMES.base;
 function themeFor(screen) {
@@ -392,7 +453,7 @@ function themeFor(screen) {
     if (screen === 'apps-settings') {
         return 'browser';
     }
-    if (screen === 'apps-store') {
+    if (screen === 'apps-store' || screen === 'apps' || screen === 'set-apps') {
         return 'store';
     }
     return 'base';
@@ -746,10 +807,13 @@ var FONT = {
 // The main menu: large tiles in a row that slides (the knob, the arrows, a finger). Three of them; what was a
 // row of the old list is inside one of the three.
 var ROOT_ITEMS = [
-    { name: 'multimedia', title: 'Multimedia', hint: 'YouTube, AirPlay', icon: 'play' },
-    { name: 'apps', title: 'Aplikacje', hint: 'przeglądarka, sklep', icon: 'globe' },
-    { name: 'system', title: 'Ustawienia', hint: 'napis, język, pozycja', icon: 'gear' }
+    { name: 'youtube', title: 'YouTube', hint: 'filmy', icon: 'play', theme: 'youtube' },
+    { name: 'airplay', title: 'AirPlay', hint: 'lustro iPhone', icon: 'airplay', theme: 'airplay' },
+    { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe', theme: 'browser' },
+    { name: 'apps', title: 'Aplikacje', hint: 'aplikacje internetowe', icon: 'grid', theme: 'store' },
+    { name: 'system', title: 'Ustawienia', hint: 'obraz, sterowanie', icon: 'gear', theme: 'base' }
 ];
+ROOT_ITEMS.home = true;
 ROOT_ITEMS.tiles = true;
 
 var MEDIA_ITEMS = [
@@ -793,8 +857,8 @@ var SET_INPUT_ITEMS = [
 ];
 // Aplikacje: where an app (and Przeglądarka) shows besides the centre, and whether apps read the car
 var SET_APPS_ITEMS = [
-    { name: 'aset-cluster', title: 'Zegary', hint: 'wyłączone', icon: 'grid' },
-    { name: 'aset-hud', title: 'HUD', hint: 'wyłączone', icon: 'desktop' },
+    // where a page and an app show besides the centre: the one panel "Ekrany" (as the button in the corner)
+    { name: 'aset-screens', title: 'Ekrany', hint: 'środek', icon: 'desktop' },
     { name: 'aset-car', title: 'Dane auta', hint: 'dla aplikacji', icon: 'gear' },
     // whether apps may also ask the control units (diagnostic reads only)
     { name: 'aset-diag', title: 'Diagnostyka', hint: 'odczyt ze sterowników', icon: 'gear' },
@@ -805,14 +869,14 @@ var SET_GENERAL_ITEMS = [
     { name: 'label-toggle', title: 'Napis', hint: 'tekst na ekranach', icon: 'tag' },
     { name: 'lang-toggle', title: 'Język', hint: 'polski', icon: 'tag' },
     { name: 'sys-info', title: 'O systemie', hint: 'miejsce, procesor, pamięć', icon: 'tag' },
+    // the tools THEiPlay plays through (sound, AirPlay, YouTube, browser, controller) started again, when one hangs
+    { name: 'svc-restart', title: 'Zresetuj usługi', hint: 'dźwięk, AirPlay, YouTube, przeglądarka', icon: 'gear' },
     { name: 'sgg-back', title: 'Wstecz', hint: 'ustawienia', icon: 'back' }
 ];
 
 // Aplikacje: what runs inside THEiPlay. (A shop with more of them is to come.)
 var APPS_ITEMS = [
-    { name: 'browser', title: 'Przeglądarka', hint: 'strony internetowe', icon: 'globe' },
-    { name: 'apps-store', title: 'Sklep', hint: 'aplikacje z git', icon: 'grid' },
-    { name: 'apps-settings', title: 'Ustawienia', hint: 'ekrany, obraz, piaskownica', icon: 'gear' },
+    { name: 'apps-store', title: 'Sklep', hint: 'dodaj lub usuń aplikację', icon: 'grid' },
     { name: 'apps-back', title: 'Wstecz', hint: 'strona główna', icon: 'back' }
 ];
 APPS_ITEMS.tiles = true;
@@ -1434,8 +1498,15 @@ function tiledList(items) {
     return !!(items && items.length);
 }
 
+// the home screen: the list of the modules (also when it comes as a copy without the mark)
+var MODULE_THEME = { youtube: 'youtube', airplay: 'airplay', browser: 'browser', apps: 'store', system: 'base' };
+function homeList(items) {
+    return !!(items && (items.home || (items.length >= 4 && items[0] && items[0].name === 'youtube' && items[items.length - 1] && items[items.length - 1].name === 'system')));
+}
+
 function menuLayout(items, selected, width, height, detail, heading, previewSpace) {
     var page = pageBox(width, height);
+    var isHome = homeList(items);
     var count = items.length || 1;
     var headerH = 68;
     var footerH = 96;
@@ -1460,6 +1531,12 @@ function menuLayout(items, selected, width, height, detail, heading, previewSpac
         var areaY = page.oy + headerH + 14;
         var areaH = page.boxH - headerH - footerH - 24;
         var gH = Math.floor((areaH - 2 * gGap) / 3);
+        if (isHome) {
+            // the home screen: the modules side by side, one large card each
+            gGap = 18;
+            gW = Math.min(336, Math.floor((areaW - (count - 1) * gGap) / count));
+            gH = Math.min(areaH, 336);
+        }
         var cols = Math.max(1, Math.floor((areaW + gGap) / (gW + gGap)));
         var useCols = Math.min(cols, count);
         var rowsAll = Math.ceil(count / useCols);
@@ -1489,10 +1566,11 @@ function menuLayout(items, selected, width, height, detail, heading, previewSpac
                 hitY: gy0 + Math.floor((i - first) / useCols) * (gH + gGap),
                 hitW: gW,
                 hitH: gH,
-                scale: 4,
-                iconPx: 2,
+                scale: isHome ? 5 : 4,
+                iconPx: isHome ? 4 : 2,
                 home: true,
-                grid: true,
+                grid: !isHome,
+                module: isHome,
                 index: i,
                 selected: i === selected
             });
@@ -1745,9 +1823,9 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
     lay.crumb = tr(crumb || 'THEiPlay');
     lay.backHit = null;
     if (showBack) {
-        draw.round(lay.ox + 20, lay.oy + 12, 156, 44, 22, CARD_HI);
+        drawBtn(draw, { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 }, '');
         chevron(draw, 'w', lay.ox + 46, lay.oy + 34, 8, 3, ACCENT);
-        draw.text(tr('wstecz'), lay.ox + 64, lay.oy + 24, 3, ACCENT);
+        draw.text(tr('wstecz'), lay.ox + 64, lay.oy + 24, 3, INK);
         lay.backHit = { x: lay.ox + 20, y: lay.oy + 12, w: 156, h: 44 };
         textX = lay.ox + 198;
     }
@@ -1755,7 +1833,7 @@ function drawMenuHeader(draw, lay, crumb, showBack) {
         // whose menu this is, in that app's colour
         var whose = tr('Menu') + ': ' + tr(THEME.label);
         var whoseW = draw.textWidth(whose, 3, 'bold') + 36;
-        draw.round(textX, lay.oy + 14, whoseW, 40, 20, ACCENT_GLOW);
+        draw.round(textX, lay.oy + 14, whoseW, 40, TOK.r.pill, ACCENT_GLOW);
         draw.text(whose, textX + 18, lay.oy + 24, 3, ACCENT, 'bold');
         textX += whoseW + 18;
     }
@@ -1830,12 +1908,17 @@ function drawNav(draw, lay, onTop, exit, hot) {
     var leftX = rightX - gap - arrow;
     var across = !!(lay.bubbles && lay.bubbles[0] && lay.bubbles[0].home);
     var cy = y + h / 2;
-    draw.round(leftX, y, arrow, h, 28, hot ? RED_B : CARD_HI);
-    draw.round(rightX, y, arrow, h, 28, hot ? RED_B : CARD_HI);
+    // the same button as everywhere: graphite with a hairline, lighter under the cursor
+    draw.round(leftX, y, arrow, h, TOK.r.pill, hot ? RED_B : (hoverOn(leftX, y, arrow, h) ? TOK.hoverA : TOK.btn));
+    draw.round(rightX, y, arrow, h, TOK.r.pill, hot ? RED_B : (hoverOn(rightX, y, arrow, h) ? TOK.hoverA : TOK.btn));
+    if (!hot) {
+        draw.stroke(leftX, y, arrow, h, TOK.r.pill, 1.5, hoverOn(leftX, y, arrow, h) ? TOK.hoverLine : TOK.btnLine);
+        draw.stroke(rightX, y, arrow, h, TOK.r.pill, 1.5, hoverOn(rightX, y, arrow, h) ? TOK.hoverLine : TOK.btnLine);
+    }
     if (hot) {
         // an armed slider: the two buttons change its value (as the knob does)
-        draw.stroke(leftX, y, arrow, h, 28, 2, RED);
-        draw.stroke(rightX, y, arrow, h, 28, 2, RED);
+        draw.stroke(leftX, y, arrow, h, TOK.r.pill, 2, RED);
+        draw.stroke(rightX, y, arrow, h, TOK.r.pill, 2, RED);
         draw.line(leftX + arrow / 2 - 10, cy, leftX + arrow / 2 + 10, cy, 4, INK);
         draw.line(rightX + arrow / 2 - 10, cy, rightX + arrow / 2 + 10, cy, 4, INK);
         draw.line(rightX + arrow / 2, cy - 10, rightX + arrow / 2, cy + 10, 4, INK);
@@ -1845,11 +1928,11 @@ function drawNav(draw, lay, onTop, exit, hot) {
         chevron(draw, across ? 'e' : 's', rightX + arrow / 2, cy, 9, 3.5, INK);
     }
     if (exit) {
-        draw.round(okX, y, okW, h, 28, CARD_HI);
+        drawBtn(draw, { x: okX, y: y, w: okW, h: h }, '');
         powerSign(draw, okX + 36, cy + 1, 12, 3, HINT);
         draw.text(label, okX + 60 + Math.floor((okW - 60 - tw) / 2) - 6, y + 18, 3, INK);
     } else {
-        draw.round(okX, y, okW, h, 28, ACCENT);
+        draw.round(okX, y, okW, h, TOK.r.pill, ACCENT);
         draw.text(label, okX + Math.floor((okW - tw) / 2), y + 18, 3, PAGE);
     }
     lay.nav = {
@@ -1860,10 +1943,7 @@ function drawNav(draw, lay, onTop, exit, hot) {
     if (exit) {
         // the mouse switch: lit when apps may have the cursor, dim and struck through when not
         var mouseX = leftX - gap - arrow;
-        draw.round(mouseX, y, arrow, h, 28, CARD_HI);
-        if (MOUSE_UI.on) {
-            draw.stroke(mouseX, y, arrow, h, 28, 2, ACCENT);
-        }
+        drawBtn(draw, { x: mouseX, y: y, w: arrow, h: h }, MOUSE_UI.on ? 'open' : '');
         mouseSign(draw, mouseX + arrow / 2, cy, MOUSE_UI.on ? ACCENT : LINE, !MOUSE_UI.on);
         lay.nav.mouse = { x: mouseX, y: y, w: arrow, h: h };
     }
@@ -2310,99 +2390,95 @@ function pushHit(hits, box) {
     hits.push({ name: box.name, x: box.x, y: box.y, w: box.w, h: box.h });
 }
 
+// Which module's screens the button "Ekrany" is for, on the page that is drawn: by its theme.
+function screensContext(air) {
+    if (THEME === THEMES.airplay) {
+        return { kind: 'air', name: 'air-where', screens: (air && air.screens) || [], open: !!(air && air.whereOpen && air.whereMode !== 'web') };
+    }
+    if (THEME === THEMES.youtube && air && air.yt) {
+        return { kind: 'yt', name: 'yt-where', screens: air.yt.screens || [], open: !!air.yt.whereOpen };
+    }
+    if (THEME === THEMES.browser || THEME === THEMES.store) {
+        return { kind: 'web', name: 'web-where', screens: webOutScreens(), open: !!(air && air.whereOpen && air.whereMode === 'web') };
+    }
+    // THEiPlay's own pages (home, Ustawienia): no module is chosen; the button leads to the screens' settings
+    return { kind: 'base', name: 'where-options', screens: null, open: false };
+}
+
+/*
+ * The corner of every page: ONE button, "Ekrany" (owner, 2026-11-20). It opens the panel in which the module in
+ * front chooses its screens (centre, gauges, HUD), with "Opcje" at its foot for the screens' settings. Until
+ * 0.1.213 this corner was AirPlay's: its state, its own "Ekrany" and Start/Stop, on every page. AirPlay's state is
+ * now a quiet word left of the button on AirPlay's pages; Start/Stop is AirPlay's first tile, as it always was too.
+ */
 function drawAirBadge(draw, lay, air, versionText) {
-    var picks;
-    var chosen;
-    var screens;
+    var ctx;
+    var chosen = {};
+    var picks = ['central', 'cluster', 'hud'];
     var i;
     var row;
-    var label;
-    var tone;
-    var tw;
-    var total;
-    var x;
-    var y;
-    var h;
-    var cx;
     var btn;
+    var word;
     var lw;
     var px;
-    var word;
+    var h = 44;
+    var w = 196;
+    var x;
+    var y;
+    var label;
+    var tw;
+    var hov;
     if (!air || !lay) {
         return null;
     }
-    picks = ['central', 'cluster', 'hud'];
-    chosen = {};
-    screens = air.screens || [];
-    for (i = 0; i < screens.length; i += 1) {
-        row = screens[i];
+    ctx = screensContext(air);
+    for (i = 0; ctx.screens && i < ctx.screens.length; i += 1) {
+        row = ctx.screens[i];
         if (row && row.on) {
             chosen[row.key || row.name] = true;
         }
     }
-    label = tr(String(air.status || (air.online ? 'połączono' : 'wyłączony'))).slice(0, 22);
-    tw = draw.textWidth(label, 3);
-    h = 44;
-    total = 34 + tw + 18 + 164 + 10 + 132;
-    x = lay.ox + lay.boxW - total - 20;
+    x = lay.ox + lay.boxW - w - 20;
     y = lay.oy + 12;
-    // the state: a lamp and its word
-    if (air.online) {
-        draw.circle(x + 14, y + h / 2, 11, ACCENT_GLOW);
-        draw.circle(x + 14, y + h / 2, 7, ACCENT);
-    } else if (air.bad) {
-        draw.circle(x + 14, y + h / 2, 7, RED);
-    } else {
-        draw.arc(x + 14, y + h / 2, 5, 8, 0, 360, air.on ? ACCENT : MUTED, false);
-    }
-    tone = air.online ? ACCENT : (air.bad ? 0xFF9A8FFF : HINT);
-    draw.text(label, x + 34, y + 12, 3, tone);
-    cx = x + 34 + tw + 18;
-    lay.airHits = [];
-    // "Ekrany": three pips say which screens are chosen (centre, cluster, HUD)
-    btn = { name: 'air-where', x: cx, y: y, w: 164, h: h };
+    btn = { name: ctx.name, x: x, y: y, w: w, h: h };
+    hov = drawBtn(draw, btn, ctx.open ? 'open' : '');
     word = tr('Ekrany');
-    lw = draw.textWidth(word, 3);
-    if (air.whereOpen) {
-        draw.round(btn.x, btn.y, btn.w, btn.h, 22, ACCENT);
-    } else {
-        draw.round(btn.x, btn.y, btn.w, btn.h, 22, CARD_HI);
-        draw.stroke(btn.x, btn.y, btn.w, btn.h, 22, 1.5, LINE);
-    }
-    px = btn.x + Math.floor((btn.w - (lw + 14 + 46)) / 2);
-    draw.text(word, px, btn.y + 12, 3, air.whereOpen ? PAGE : INK);
-    px += lw + 14 + 5;
-    for (i = 0; i < picks.length; i += 1) {
+    lw = draw.textWidth(word, 3, 'bold');
+    px = btn.x + Math.floor((btn.w - (30 + lw + (ctx.screens ? 62 : 0))) / 2);
+    // a small screen as the sign
+    draw.stroke(px, btn.y + 13, 22, 15, 3, 2, (hov || ctx.open) ? INK : HINT);
+    draw.rect(px + 7, btn.y + 30, 8, 2, (hov || ctx.open) ? INK : HINT);
+    draw.text(word, px + 30, btn.y + 12, 3, INK, 'bold');
+    px += 30 + lw + 16;
+    for (i = 0; ctx.screens && i < picks.length; i += 1) {
         if (chosen[picks[i]]) {
-            draw.circle(px + i * 16, btn.y + h / 2, 5, air.whereOpen ? PAGE : ACCENT);
+            draw.circle(px + i * 16, btn.y + h / 2, 5, ACCENT);
         } else {
-            draw.arc(px + i * 16, btn.y + h / 2, 3.5, 5, 0, 360, air.whereOpen ? ACCENT_DIM : MUTED, false);
+            draw.arc(px + i * 16, btn.y + h / 2, 3.5, 5, 0, 360, MUTED, false);
         }
     }
-    lay.airHits.push(btn);
-    // Start / Stop
-    btn = { name: 'air-badge', x: cx + 164 + 10, y: y, w: 132, h: h };
-    word = tr(air.on ? 'Stop' : 'Start');
-    lw = draw.textWidth(word, 3);
-    if (air.on) {
-        draw.round(btn.x, btn.y, btn.w, btn.h, 22, ACCENT);
-    } else {
-        draw.round(btn.x, btn.y, btn.w, btn.h, 22, CARD_HI);
-        draw.stroke(btn.x, btn.y, btn.w, btn.h, 22, 1.5, ACCENT_DIM);
+    lay.airHits = [btn];
+    lay.airStrip = { x: x, y: y, w: w, h: h };
+    // AirPlay's state, on AirPlay's pages: a lamp and its word
+    if (ctx.kind === 'air') {
+        label = tr(String(air.status || (air.online ? 'połączono' : 'wyłączony'))).slice(0, 22);
+        tw = draw.textWidth(label, 3);
+        px = x - 22 - tw;
+        if (air.online) {
+            draw.circle(px - 18, y + h / 2, 10, ACCENT_GLOW);
+            draw.circle(px - 18, y + h / 2, 6, ACCENT);
+        } else if (air.bad) {
+            draw.circle(px - 18, y + h / 2, 6, RED);
+        } else {
+            draw.arc(px - 18, y + h / 2, 4, 7, 0, 360, air.on ? ACCENT : MUTED, false);
+        }
+        draw.text(label, px, y + 12, 3, air.online ? ACCENT : (air.bad ? 0xFF9A8FFF : HINT));
+        lay.airStrip = { x: px - 30, y: y, w: x + w - (px - 30), h: h };
     }
-    px = btn.x + Math.floor((btn.w - (lw + 26)) / 2);
-    if (air.on) {
-        draw.round(px + 1, btn.y + h / 2 - 7, 14, 14, 3, PAGE);
-    } else {
-        draw.quad([[px + 2, btn.y + h / 2 - 8], [px + 16, btn.y + h / 2], [px + 2, btn.y + h / 2 + 8]], ACCENT);
-    }
-    draw.text(word, px + 26, btn.y + 12, 3, air.on ? PAGE : INK);
-    lay.airHits.push(btn);
-    lay.airStrip = { x: x, y: y, w: total, h: h };
     if (versionText) {
         lay.airStrip.version = String(versionText);
     }
-    return btn;
+    return null;
 }
 
 function drawTunePanel(draw, hits, panel, tune) {
@@ -2503,6 +2579,13 @@ function drawWhereGlyph(draw, kind, x, y, tone, dim) {
     draw.round(x + 60, y + 46, 90, 56, 8, tone);
 }
 
+/*
+ * The panel "Ekrany": where the module in front shows. Three screens (gauges, HUD, centre), each a tile with its
+ * sketch, its name and whether it is on; several may be on at once where the module can do that. At its foot
+ * "Opcje" (the screens' settings: position, resolution, the gauges' area, rendering) and the way out.
+ * The same panel for AirPlay, YouTube, Przeglądarka and the apps: only the names its tiles send differ
+ * (pickPrefix), so each module's own routing is asked, as before.
+ */
 function drawWhereSheet(draw, lay, air) {
     var tiles;
     var chosen;
@@ -2514,13 +2597,17 @@ function drawWhereSheet(draw, lay, air) {
     var x;
     var y;
     var tileW;
+    var tileH = 236;
     var gap;
     var tx;
+    var ty;
     var tile;
     var on;
     var cursor;
     var close;
+    var opts;
     var here;
+    var hov;
     var title;
     if (!air || !lay) {
         return;
@@ -2546,9 +2633,9 @@ function drawWhereSheet(draw, lay, air) {
             hints[row.key || row.name] = String(row.hint);
         }
     }
-    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, 0x060504F4);
+    draw.rect(lay.ox, lay.oy, lay.boxW, lay.boxH, TOK.scrim);
     panelW = 900;
-    panelH = 460;
+    panelH = 430;
     if (panelW > lay.boxW - 40) {
         panelW = lay.boxW - 40;
     }
@@ -2557,14 +2644,15 @@ function drawWhereSheet(draw, lay, air) {
     }
     x = lay.ox + Math.floor((lay.boxW - panelW) / 2);
     y = lay.oy + Math.floor((lay.boxH - panelH) / 2);
-    draw.card(x, y, panelW, panelH, 28, HEAD_A, HEAD_B);
-    draw.stroke(x, y, panelW, panelH, 28, 1.5, LINE);
-    title = tr('Gdzie pokazać');
-    draw.text(title, x + 32, y + 24, 4, INK);
-    draw.text(tr('kliknij kafelek'), x + 32 + draw.textWidth(title, 4) + 22, y + 30, 3, MUTED);
+    draw.card(x, y, panelW, panelH, TOK.r.panel, HEAD_A, HEAD_B);
+    draw.stroke(x, y, panelW, panelH, TOK.r.panel, 1.5, TOK.btnLine);
+    title = tr('Ekrany');
+    draw.text(title, x + 32, y + 22, 4, INK, 'bold');
+    draw.text(tr(air.sheetLabel || THEME.label || 'gdzie pokazać'), x + 32 + draw.textWidth(title, 4, 'bold') + 20, y + 28, 3, ACCENT);
     tileW = Math.floor((panelW - 56 - 32) / 3);
     gap = 16;
     tx = x + 28;
+    ty = y + 74;
     cursor = air.whereCursor | 0;
     if (!lay.airHits) {
         lay.airHits = [];
@@ -2574,35 +2662,46 @@ function drawWhereSheet(draw, lay, air) {
         tile = tiles[i];
         on = !!chosen[tile.key];
         here = cursor === i;
-        // chosen: warm and ringed in the accent, with a tick; the knob's place: a light ring
-        draw.card(tx, y + 78, tileW, 280, 20, on ? ROW_HI_A : ROW_A, on ? ROW_HI_B : ROW_B);
+        hov = hoverOn(tx, ty, tileW, tileH);
+        // on: the accent as the line and a tick; the cursor over it: lighter; the knob's place: a light ring
+        draw.card(tx, ty, tileW, tileH, TOK.r.tile, on ? ROW_HI_A : (hov ? TOK.hoverA : ROW_A), on ? ROW_HI_B : (hov ? TOK.hoverB : ROW_B));
         if (on) {
-            draw.stroke(tx, y + 78, tileW, 280, 20, 3, ACCENT);
-            draw.circle(tx + tileW - 30, y + 108, 15, ACCENT);
-            checkMark(draw, tx + tileW - 41, y + 97, 22, 3.5, PAGE);
+            draw.stroke(tx, ty, tileW, tileH, TOK.r.tile, 2.5, ACCENT);
+            draw.circle(tx + tileW - 30, ty + 30, 14, ACCENT);
+            checkMark(draw, tx + tileW - 40, ty + 20, 20, 3.2, PAGE);
         } else {
-            draw.stroke(tx, y + 78, tileW, 280, 20, 1.5, LINE);
+            draw.stroke(tx, ty, tileW, tileH, TOK.r.tile, hov ? 1.5 : 1, hov ? TOK.hoverLine : LINE);
         }
         if (here) {
-            draw.stroke(tx - 5, y + 73, tileW + 10, 290, 24, 2.5, INK);
+            draw.stroke(tx - 5, ty - 5, tileW + 10, tileH + 10, TOK.r.tile + 4, 2.5, INK);
         }
-        drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), y + 92, on ? ACCENT : MUTED, on ? ACCENT_DIM : LINE);
-        draw.text(tr(tile.title), tx + 20, y + 236, 4, on ? INK : SOFT);
-        draw.text(tr(on ? 'włączone' : 'wyłączone'), tx + 20, y + 280, 3, on ? ACCENT : MUTED);
-        if (hints[tile.key]) {
-            draw.text(draw.fit(hints[tile.key], 2, tileW - 40), tx + 20, y + 318, 2, MUTED);
+        drawWhereGlyph(draw, tile.kind, tx + Math.floor((tileW - 210) / 2), ty + 2, on ? ACCENT : MUTED, on ? ACCENT_DIM : TOK.btnLine);
+        draw.text(tr(tile.title), tx + 20, ty + 138, 4, (on || hov) ? INK : SOFT, 'bold');
+        draw.text(tr(hints[tile.key] && tile.key === 'central' && air.fixedCentral ? hints[tile.key] : (on ? 'włączone' : 'wyłączone')), tx + 20, ty + 180, 3, on ? ACCENT : MUTED);
+        if (hints[tile.key] && !(tile.key === 'central' && air.fixedCentral)) {
+            draw.text(draw.fit(hints[tile.key], 2, tileW - 40), tx + 20, ty + 208, 2, MUTED);
         }
-        lay.airHits.push({ name: tile.name, x: tx, y: y + 78, w: tileW, h: 280 });
+        lay.airHits.push({ name: tile.name, x: tx, y: ty, w: tileW, h: tileH });
         tx += tileW + gap;
     }
-    var closeLabel = tr((air && air.closeLabel) || 'Gotowe');
-    var closeW = Math.max(160, draw.textWidth(closeLabel, 3) + 64);
-    close = { name: shut, x: x + panelW - closeW - 32, y: y + panelH - 72, w: closeW, h: 48 };
-    draw.round(close.x, close.y, close.w, close.h, 24, ACCENT);
-    if (cursor === 3) {
-        draw.stroke(close.x - 5, close.y - 5, close.w + 10, close.h + 10, 29, 2.5, INK);
+    // "Opcje": the screens' settings
+    var optLabel = tr('Opcje');
+    opts = { name: 'where-options', x: x + 28, y: y + panelH - 70, w: Math.max(170, draw.textWidth(optLabel, 3) + 86), h: 48 };
+    hov = drawBtn(draw, opts, '');
+    draw.icon('gear', opts.x + 18, opts.y + Math.floor((48 - draw.iconSize(2)) / 2), 2, hov ? INK : HINT);
+    draw.text(optLabel, opts.x + 18 + draw.iconSize(2) + 12, opts.y + 14, 3, INK);
+    if (cursor === 4) {
+        draw.stroke(opts.x - 5, opts.y - 5, opts.w + 10, opts.h + 10, TOK.r.pill + 4, 2.5, INK);
     }
-    draw.text(closeLabel, close.x + Math.floor((close.w - draw.textWidth(closeLabel, 3)) / 2), close.y + 14, 3, PAGE);
+    lay.airHits.push(opts);
+    var closeLabel = tr((air && air.closeLabel) || 'Gotowe');
+    var closeW = Math.max(170, draw.textWidth(closeLabel, 3) + 64);
+    close = { name: shut, x: x + panelW - closeW - 28, y: y + panelH - 70, w: closeW, h: 48 };
+    drawBtn(draw, close, 'primary');
+    if (cursor === 3) {
+        draw.stroke(close.x - 5, close.y - 5, close.w + 10, close.h + 10, TOK.r.pill + 4, 2.5, INK);
+    }
+    draw.text(closeLabel, close.x + Math.floor((close.w - draw.textWidth(closeLabel, 3, 'bold')) / 2), close.y + 14, 3, PAGE, 'bold');
     lay.airHits.push(close);
 }
 
@@ -2670,7 +2769,9 @@ function applyAirOverlay(draw, lay, air, versionText) {
             closeLabel: air.yt.whereGo ? 'Otwórz YouTube' : ''
         });
     }
-    if (air && air.whereOpen) {
+    if (air && air.whereOpen && air.whereMode === 'web') {
+        drawWhereSheet(draw, lay, { screens: webOutScreens(), whereCursor: air.whereCursor, pickPrefix: 'web-pick-', pickClose: 'air-where-close', fixedCentral: true, sheetLabel: 'Przeglądarka i aplikacje' });
+    } else if (air && air.whereOpen) {
         drawWhereSheet(draw, lay, air);
     }
     if (lay.airWindow && !air.whereOpen) {
@@ -2685,11 +2786,11 @@ function drawYtBar(draw, lay) {
         lay.airHits = [];
     }
     play = { name: 'yt-play', x: lay.ox + lay.boxW - 420, y: lay.oy + 18, w: 112, h: 28 };
-    where = { name: 'yt-where', x: play.x + 120, y: play.y, w: 132, h: 28 };
+    play.x = lay.ox + lay.boxW - 196 - 20 - 12 - play.w;
+    play.y = lay.oy + 20;
+    where = null;
     drawChip(draw, play, true, 'Play');
-    drawChip(draw, where, true, tr('Ekrany'));
     lay.airHits.push(play);
-    lay.airHits.push(where);
 }
 
 var CHIP_W = 200;
@@ -3148,21 +3249,27 @@ function drawRideFrame(items, selected, width, height, ride) {
 }
 
 function drawPage(draw, lay) {
-    // the page: a warm dark sheet, lighter at the top; its header band; the accent down the left edge
+    // the page: graphite, a shade lighter at the top; the head band with a hairline under it; the module's accent
+    // as a short mark at the head's left edge
     draw.grad(lay.ox, lay.oy, lay.boxW, lay.boxH, PAGE_A, PAGE_B);
     draw.grad(lay.ox, lay.oy, lay.boxW, lay.headerH, HEAD_A, HEAD_B);
     draw.rect(lay.ox, lay.oy + lay.headerH - 1, lay.boxW, 1, LINE);
-    draw.grad(lay.ox, lay.oy, 6, lay.boxH, ACCENT, ACCENT_DIM);
+    draw.rect(lay.ox, lay.oy, 4, lay.headerH - 1, ACCENT);
 }
 
 // One option row: icon in its well, title, hint, the tick of a chosen one.
 function drawRow(draw, bubble, item, title, hint, focus) {
+    // States, the same for a tile, a module card and a list row:
+    //   normal: a graphite card with a hairline; hover (the cursor is over it): a lighter card and line;
+    //   focus (the knob's place, or the chosen row): the module's accent as the line, a tinted card;
+    //   armed (a value being changed with the knob): red; on (a chosen option): a tick in the accent.
     var hot = !!item.armed;
     var x = bubble.x;
     var y = bubble.y;
     var w = bubble.w;
     var h = bubble.h;
-    var r = bubble.home ? 26 : 18;
+    var r = bubble.home ? TOK.r.tile : TOK.r.row;
+    var hov = !hot && !focus && hoverOn(x, y, w, h);
     var well;
     var wx;
     var wy;
@@ -3171,26 +3278,45 @@ function drawRow(draw, bubble, item, title, hint, focus) {
     var labelY;
     var room;
     var tw;
+    var tone;
     if (hot) {
         draw.card(x, y, w, h, r, RED_A, RED_B);
-        draw.stroke(x, y, w, h, r, 3, RED);
+        draw.stroke(x, y, w, h, r, 2.5, RED);
     } else if (focus) {
-        draw.round(x - 4, y - 4, w + 8, h + 8, r + 4, ACCENT_GLOW);
         draw.card(x, y, w, h, r, ROW_HI_A, ROW_HI_B);
         draw.stroke(x, y, w, h, r, 2.5, ACCENT);
+    } else if (hov) {
+        draw.card(x, y, w, h, r, TOK.hoverA, TOK.hoverB);
+        draw.stroke(x, y, w, h, r, 1.5, TOK.hoverLine);
     } else {
         draw.card(x, y, w, h, r, ROW_A, ROW_B);
+        draw.stroke(x, y, w, h, r, 1, LINE);
+    }
+    if (bubble.module) {
+        // a module on the home screen: its sign in its own colour, its name, one quiet line of state
+        tone = (THEMES[item.theme] || THEMES[MODULE_THEME[item.name]] || THEMES.base).accent;
+        well = 96;
+        wx = x + 28;
+        wy = y + 30;
+        draw.round(wx, wy, well, well, 24, focus ? tone : (hov ? 0x323741FF : WELL));
+        draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, focus ? PAGE : tone);
+        draw.rect(x + 28, y + h - 104, 40, 3, tone);
+        draw.text(draw.fit(title, bubble.scale, w - 56), x + 28, y + h - 92, bubble.scale, (focus || hov) ? INK : SOFT, 'bold');
+        if (hint) {
+            draw.text(draw.fit(hint, 3, w - 56), x + 28, y + h - 44, 3, focus ? HINT : MUTED);
+        }
+        return;
     }
     if (bubble.grid) {
-        // a gallery tile: a small icon at its top left, the title under it, the hint under the title
+        // a tile: a small sign at its top left, the title under it, the value under the title
         well = 44;
-        wx = x + 14;
-        wy = y + 12;
-        draw.circle(wx + well / 2, wy + well / 2, well / 2, hot ? RED : (focus ? ACCENT : WELL));
+        wx = x + 16;
+        wy = y + 14;
+        draw.round(wx, wy, well, well, TOK.r.well, hot ? RED : (focus ? ACCENT : (hov ? 0x323741FF : WELL)));
         draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
-        draw.text(draw.fit(title, bubble.scale, w - 28), x + 14, y + 64, bubble.scale, (hot || focus) ? INK : SOFT);
+        draw.text(draw.fit(title, bubble.scale, w - 32), x + 16, y + 66, bubble.scale, (hot || focus || hov) ? INK : SOFT);
         if (hint) {
-            draw.text(draw.fit(hint, 3, w - 28), x + 14, y + h - 36, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
+            draw.text(draw.fit(hint, 3, w - 32), x + 16, y + h - 36, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
         }
         if (item.on) {
             draw.circle(x + w - 28, y + 28, 12, ACCENT);
@@ -3199,15 +3325,15 @@ function drawRow(draw, bubble, item, title, hint, focus) {
         return;
     }
     if (bubble.home) {
-        // a large tile (pages of two): the icon in a round well, the words centred under it
-        well = 112;
+        // a large tile (pages of one or two): the sign in a well, the words centred under it
+        well = 104;
         wx = x + Math.floor((w - well) / 2);
-        wy = y + 40;
-        draw.circle(wx + well / 2, wy + well / 2, well / 2, hot ? RED : (focus ? ACCENT : WELL));
+        wy = y + 44;
+        draw.round(wx, wy, well, well, 26, hot ? RED : (focus ? ACCENT : (hov ? 0x323741FF : WELL)));
         draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
         title = draw.fit(title, bubble.scale, w - 48);
         tw = draw.textWidth(title, bubble.scale);
-        draw.text(title, x + Math.floor((w - tw) / 2), y + 178, bubble.scale, (hot || focus) ? INK : SOFT);
+        draw.text(title, x + Math.floor((w - tw) / 2), y + 178, bubble.scale, (hot || focus || hov) ? INK : SOFT);
         if (hint) {
             hint = draw.fit(hint, 3, w - 48);
             tw = draw.textWidth(hint, 3);
@@ -3219,15 +3345,15 @@ function drawRow(draw, bubble, item, title, hint, focus) {
         }
         return;
     }
-    well = 60;
-    wx = x + 16;
+    well = 56;
+    wx = x + 18;
     wy = y + Math.floor((h - well) / 2);
-    draw.round(wx, wy, well, well, 16, hot ? RED : (focus ? ACCENT : WELL));
+    draw.round(wx, wy, well, well, TOK.r.well, hot ? RED : (focus ? ACCENT : (hov ? 0x323741FF : WELL)));
     draw.icon(item.icon || 'play', wx + (well - side) / 2, wy + (well - side) / 2, bubble.iconPx, (hot || focus) ? PAGE : ICON_FG);
     textX = wx + well + 20;
     room = w - (textX - x) - (item.on ? 70 : 24);
     labelY = hint ? y + 15 : y + Math.floor((h - 28) / 2);
-    draw.text(draw.fit(title, bubble.scale, room), textX, labelY, bubble.scale, (hot || focus) ? INK : SOFT);
+    draw.text(draw.fit(title, bubble.scale, room), textX, labelY, bubble.scale, (hot || focus || hov) ? INK : SOFT);
     if (hint) {
         draw.text(draw.fit(hint, 3, room), textX, labelY + 40, 3, hot ? 0xFFB9B0FF : (focus ? ACCENT : MUTED));
     }
@@ -3573,7 +3699,9 @@ function webLayout(width, height) {
         enter: { name: 'web-enter', x: right - 280, y: y, w: 64, h: bh },
         keys: { name: 'web-keys', x: right - 352, y: y, w: 64, h: bh }
     };
-    lay.url = { name: 'web-url', x: ox + 456, y: y, w: lay.keys.x - 12 - (ox + 456), h: bh };
+    // "Ekrany": the one button for where this module shows, as in the corner of every menu page
+    lay.where = { name: 'web-where', x: lay.keys.x - 12 - 148, y: y, w: 148, h: bh };
+    lay.url = { name: 'web-url', x: ox + 456, y: y, w: lay.where.x - 12 - (ox + 456), h: bh };
     lay.page = { x: ox, y: oy + WEB_BAR_H, w: w, h: (h - WEB_BAR_H) & ~1 };
     return lay;
 }
@@ -3603,8 +3731,40 @@ function webStatus(web) {
     return { title: 'Uruchamiam przeglądarkę', hint: '', busy: true };
 }
 
+// "Ekrany" on the browser's bar and on an app's bar
+function drawWebWhere(draw, hits, box, info) {
+    var word = tr('Ekrany');
+    var hov = drawBtn(draw, box, info && info.where ? 'open' : '');
+    var lw = draw.textWidth(word, 3, 'bold');
+    var px = box.x + Math.floor((box.w - (30 + lw)) / 2);
+    var cy = box.y + Math.floor(box.h / 2);
+    draw.stroke(px, cy - 9, 22, 15, 3, 2, hov || (info && info.where) ? INK : HINT);
+    draw.rect(px + 7, cy + 8, 8, 2, hov || (info && info.where) ? INK : HINT);
+    draw.text(word, px + 30, cy - 10, 3, INK, 'bold');
+    hits.push(box);
+}
+// the panel "Ekrany" over a page or an app (main.js keeps whether it is open: info.where)
+function webSheet(draw, lay, info, hits) {
+    var board;
+    var i;
+    if (!info || !info.where) {
+        return;
+    }
+    board = { ox: lay.ox, oy: lay.oy, boxW: lay.w, boxH: lay.h, airHits: [] };
+    drawWhereSheet(draw, board, { screens: webOutScreens(), whereCursor: -1, pickPrefix: 'web-pick-', pickClose: 'web-where-close', fixedCentral: true, sheetLabel: info.app ? (info.appName || 'Aplikacja') : 'Przeglądarka' });
+    // (only the panel answers while it is open; the last one pushed is looked at first, as in the menu)
+    hits.length = 0;
+    for (i = 0; i < board.airHits.length; i += 1) {
+        hits.push(board.airHits[i]);
+    }
+}
+
 function webButton(draw, hits, box, on, fill) {
-    draw.round(box.x, box.y, box.w, box.h, 18, fill || CARD_HI);
+    var hov = on && !fill && hoverOn(box.x, box.y, box.w, box.h);
+    draw.round(box.x, box.y, box.w, box.h, TOK.r.pill, fill || (hov ? TOK.hoverA : TOK.btn));
+    if (!fill) {
+        draw.stroke(box.x, box.y, box.w, box.h, TOK.r.pill, 1.5, hov ? TOK.hoverLine : TOK.btnLine);
+    }
     if (on) {
         hits.push(box);
     }
@@ -3669,6 +3829,9 @@ function buildWebFrame(width, height, web) {
         draw.stroke(hmx - 11, nvy - 11, 22, 22, 11, 2.5, HINT);
         // whose bar this is: the app's name, in the colour of apps
         draw.text(draw.fit((info.appName || tr('Aplikacja')), 3, navMid - 190 - CONTENT.x - 48), CONTENT.x + 24, navY + 14, 3, ACCENT, 'bold');
+        var appHits = [appBack, appHome];
+        drawWebWhere(draw, appHits, { name: 'web-where', x: CONTENT.x + CONTENT.w - 148 - 14, y: navY + 5, w: 148, h: APP_NAV_H - 10 }, info);
+        webSheet(draw, lay, info, appHits);
         if (info.mouse) {
             var ax = appBox.x + Math.max(0, Math.min(appBox.w - 1, Math.round(info.cx || 0)));
             var ay = appBox.y + Math.max(0, Math.min(appBox.h - 1, Math.round(info.cy || 0)));
@@ -3678,7 +3841,7 @@ function buildWebFrame(width, height, web) {
         return {
             frame: packFrame(draw),
             rects: draw.rects,
-            layout: { webHits: [appBack, appHome], webPage: appBox, web: lay, video: true, app: true }
+            layout: { webHits: appHits, webPage: appBox, web: lay, video: true, app: true }
         };
     }
     if (info.app && !showVideo) {
@@ -3812,10 +3975,11 @@ function buildWebFrame(width, height, web) {
     draw.rect(c.cx - 3, c.cy + 4, 6, 9, CARD_HI);
 
     // the address: its text, or what to type
-    draw.round(lay.url.x, lay.url.y, lay.url.w, lay.url.h, 18, WELL);
+    draw.round(lay.url.x, lay.url.y, lay.url.w, lay.url.h, TOK.r.pill, hoverOn(lay.url.x, lay.url.y, lay.url.w, lay.url.h) && ready ? 0x323741FF : WELL);
     if (ready) {
         hits.push(lay.url);
     }
+    drawWebWhere(draw, hits, lay.where, info);
     shown = String(info.url || '').replace(/^https?:\/\//i, '').replace(/\/$/, '');
     if (shown) {
         secure = /^https:/i.test(String(info.url));
@@ -3878,6 +4042,7 @@ function buildWebFrame(width, height, web) {
         draw.round((midX - Math.floor(tw / 2)) - 28, height - 78, tw + 56, 52, 26, RED_CARD);
         draw.text(tr(info.err), (midX - Math.floor(tw / 2)), height - 78 + 16, 3, INK);
     }
+    webSheet(draw, lay, info, hits);
     return {
         frame: packFrame(draw),
         rects: draw.rects,
@@ -3929,6 +4094,8 @@ function createMenuSurface(opts) {
     var ytCursor = 0;
     var ytState = null;
     var whereCursor = 0;
+    // whose screens the open panel chooses: 'air' (AirPlay) or 'web' (Przeglądarka and the apps)
+    var whereMode = 'air';
     var movePos = false;
     var shown = false;
     var front = false;
@@ -4195,7 +4362,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!webView.where, video: native
             };
             var webBuilt;
             useTheme(webView.app ? 'store' : 'browser');
@@ -4246,6 +4413,7 @@ function createMenuSurface(opts) {
         if (airState) {
             airState.yt = screenName === 'youtube' ? ytState : null;
             airState.whereOpen = whereOpen;
+            airState.whereMode = whereMode;
             airState.whereCursor = whereCursor;
             airState.movePos = movePos;
             // full screen: the app's flag (no longer a saved 1920x720 window, which came back
@@ -4731,6 +4899,13 @@ function createMenuSurface(opts) {
             paint();
             return;
         }
+        if (item && (item.name === 'air-screen' || item.name === 'aset-screens')) {
+            whereMode = item.name === 'aset-screens' ? 'web' : 'air';
+            whereOpen = !whereOpen;
+            whereCursor = 0;
+            paint();
+            return;
+        }
         if (item && item.name === 'lang-toggle') {
             uiLang = uiLang === 'en' ? 'pl' : 'en';
             paint();
@@ -4878,21 +5053,25 @@ function createMenuSurface(opts) {
                 step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
                 if (tilt === 's') {
                     ytCursor = 3;
-                } else if (tilt === 'n' && ytCursor === 3) {
+                } else if (tilt === 'n' && ytCursor >= 3) {
                     ytCursor = 1;
                 }
             }
             if (step) {
                 ytCursor += step > 0 ? 1 : -1;
                 if (ytCursor < 0) {
-                    ytCursor = 3;
+                    ytCursor = 4;
                 }
-                if (ytCursor > 3) {
+                if (ytCursor > 4) {
                     ytCursor = 0;
                 }
             }
             if (push === 1 && lastPush !== 1) {
-                if (ytCursor >= 3) {
+                if (ytCursor === 4) {
+                    ytOpen = false;
+                    ytGo = false;
+                    choose('where-options');
+                } else if (ytCursor >= 3) {
                     ytOpen = false;
                     if (ytGo) {
                         ytGo = false;
@@ -4917,28 +5096,27 @@ function createMenuSurface(opts) {
                 step = tilt === 'e' ? 1 : (tilt === 'w' ? -1 : 0);
                 if (tilt === 's') {
                     whereCursor = 3;
-                } else if (tilt === 'n' && whereCursor === 3) {
+                } else if (tilt === 'n' && whereCursor >= 3) {
                     whereCursor = 1;
                 }
             }
             if (step) {
                 whereCursor += step > 0 ? 1 : -1;
                 if (whereCursor < 0) {
-                    whereCursor = 3;
+                    whereCursor = 4;
                 }
-                if (whereCursor > 3) {
+                if (whereCursor > 4) {
                     whereCursor = 0;
                 }
             }
             if (push === 1 && lastPush !== 1) {
-                if (whereCursor >= 3) {
+                if (whereCursor === 4) {
                     whereOpen = false;
-                } else if (whereCursor === 0) {
-                    choose('air-pick-cluster');
-                } else if (whereCursor === 1) {
-                    choose('air-pick-hud');
+                    choose('where-options');
+                } else if (whereCursor >= 3) {
+                    whereOpen = false;
                 } else {
-                    choose('air-pick-central');
+                    choose((whereMode === 'web' ? 'web-pick-' : 'air-pick-') + (whereCursor === 0 ? 'cluster' : (whereCursor === 1 ? 'hud' : 'central')));
                 }
             }
             lastPush = push;
@@ -5467,9 +5645,17 @@ function createMenuSurface(opts) {
                             paint();
                         } else if (touchDown.stream === 'yt-play') {
                             choose('yt-play');
-                        } else if (touchDown.stream === 'air-where') {
+                        } else if (touchDown.stream === 'air-where' || touchDown.stream === 'web-where') {
+                            whereMode = touchDown.stream === 'web-where' ? 'web' : 'air';
                             whereOpen = !whereOpen;
                             whereCursor = 0;
+                            paint();
+                        } else if (touchDown.stream === 'where-options') {
+                            // "Opcje": the panel closes, main.js opens the screens' settings
+                            whereOpen = false;
+                            ytOpen = false;
+                            ytGo = false;
+                            choose('where-options');
                             paint();
                         } else if (touchDown.stream === 'air-where-close') {
                             whereOpen = false;
@@ -5816,7 +6002,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.where ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -5957,6 +6143,24 @@ function createMenuSurface(opts) {
             paint();
         },
         /** THEiPlay's YouTube tile: the sheet "where to show YouTube"; its button chooses 'yt-where-go', a tap beside it 'yt-where-cancel'. */
+        // the panel "Ekrany" opened from outside (a list's own "Ekrany" row): 'air' or 'web'
+        openWhere: function (mode) {
+            whereMode = mode === 'web' ? 'web' : 'air';
+            whereOpen = true;
+            whereCursor = 0;
+            paint();
+        },
+        // which screens a page and an app show on (the panel "Ekrany" of Przeglądarka and the apps)
+        setWebOut: function (o) {
+            var c = !!(o && o.cluster);
+            var hd = !!(o && o.hud);
+            if (c === WEB_OUT.cluster && hd === WEB_OUT.hud) {
+                return;
+            }
+            WEB_OUT.cluster = c;
+            WEB_OUT.hud = hd;
+            paint();
+        },
         openYtWhere: function () {
             ytGo = true;
             ytOpen = true;
@@ -6071,6 +6275,7 @@ module.exports = {
     ICONS: ICONS,
     message: message,
     buildFrame: buildFrame,
+    TOK: TOK,
     useTheme: useTheme,
     themeFor: themeFor,
     THEMES: THEMES,

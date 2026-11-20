@@ -1301,6 +1301,7 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'apps') { this.tellApps(); return; }
     if (m.op === 'sysinfo') { this.emit({ ev: 'sysinfo', info: Object.assign(sysInfo(), { gputest: this.gpuText || '' }) }); return; }
     if (m.op === 'gputest') { this.gpuTest(); return; }
+    if (m.op === 'restart-services') { this.restartServices(); return; }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -2765,6 +2766,39 @@ Daemon.prototype.checkMemory = function () {
         this.killEngine();
         this.set({ engine: 'failed', err: 'strona zużyła za dużo pamięci', loading: false, live: false });
     }
+};
+/*
+ * "Zresetuj usługi" (THEiPlay, Ustawienia > Ogólne; owner, 2026-11-20): the tools THEiPlay plays through are started
+ * again, in one go, when one of them hangs: the sound (g21-audio), AirPlay (g21-airplay-open), the controller
+ * (g21-input), YouTube's daemon (jap-ridetube-d) and, last, this tool itself. Only these units, by name; nothing
+ * of BMW's. The app cannot do it itself (it is not root); this daemon is, and the app already talks to it.
+ */
+const SERVICE_UNITS = ['g21-audio.service', 'g21-airplay-open.service', 'g21-input.service', 'jap-ridetube-d.service'];
+Daemon.prototype.restartServices = function () {
+    if (this.restarting) return;
+    this.restarting = true;
+    const env = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin' };
+    this.log('services: restart asked by the app: ' + SERVICE_UNITS.join(', ') + ', then g21-browser.service');
+    this.emit({ ev: 'services', phase: 'restarting' });
+    let left = SERVICE_UNITS.length;
+    const done = () => {
+        left -= 1;
+        if (left > 0) return;
+        this.emit({ ev: 'services', phase: 'done' });
+        // this tool last, by systemd (the unit stops this process and starts a new one; the app connects again)
+        setTimeout(() => {
+            try { cp.spawn('systemctl', ['--no-block', 'restart', 'g21-browser.service'], { env: env, stdio: 'ignore', detached: true }).unref(); } catch (e) { this.log('services: g21-browser.service: ' + e.message); this.restarting = false; }
+        }, 300);
+    };
+    SERVICE_UNITS.forEach((u) => {
+        let child;
+        try { child = cp.spawn('systemctl', ['restart', u], { env: env, stdio: ['ignore', 'ignore', 'pipe'] }); } catch (e) { this.log('services: ' + u + ': ' + e.message); done(); return; }
+        let err = '';
+        const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch (e) { /* gone */ } }, 20000);
+        child.stderr.on('data', (d) => { if (err.length < 300) err += d; });
+        child.on('error', (e) => { clearTimeout(t); this.log('services: ' + u + ': ' + e.message); done(); });
+        child.on('exit', (code) => { clearTimeout(t); this.log('services: ' + u + (code === 0 ? ' started again' : ' not started again (' + code + ') ' + err.trim().slice(0, 160))); done(); });
+    });
 };
 Daemon.prototype.stopEngine = async function (why) {
     this.filmStop('engine stops', '');

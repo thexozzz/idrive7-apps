@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.1.213',
+        version: (this._packageJson && this._packageJson.version) || '0.2.0',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.1.213') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.0') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -926,7 +926,7 @@ AirPlayApp.prototype._openProtocolScreen = function (protocol) {
 AirPlayApp.prototype._goRoot = function () {
     this._chosen = 'airplay';
     if (this._menu && typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('multimedia');   // AirPlay lives in Multimedia
+        this._menu.setScreen('root');   // AirPlay is a module of the home screen
     }
     this._sync();
 };
@@ -1972,7 +1972,7 @@ AirPlayApp.prototype._rtClosed = function () {
     }
     this._menu.open();
     if (typeof this._menu.setScreen === 'function') {
-        this._menu.setScreen('multimedia');   // YouTube lives in Multimedia
+        this._menu.setScreen('root');   // YouTube is a module of the home screen
     }
     this._syncMouse('youtube closed');
 };
@@ -2394,12 +2394,10 @@ AirPlayApp.prototype._onAirAction = function (name) {
         return;
     }
     if (name === 'air-screen') {
-        if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('air-out');
+        // the one panel "Ekrany" (0.1.214); until then a page of its own, Ekrany > Środek / Zegary / HUD > Włącz
+        if (this._menu && typeof this._menu.openWhere === 'function') {
+            this._menu.openWhere('air');
         }
-        this._paintAirOut();
-        this._tellMenu('pick-out');
-        this._sync();
         return;
     }
     if (name === 'air-out-back' || name === 'air-box-back') {
@@ -3253,7 +3251,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-back') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('multimedia');
+            this._menu.setScreen('root');
         }
         return;
     }
@@ -3266,7 +3264,7 @@ AirPlayApp.prototype._onMenuChoice = function (name) {
     }
     if (name === 'yt-where-cancel') {
         if (this._menu && typeof this._menu.setScreen === 'function') {
-            this._menu.setScreen('multimedia');
+            this._menu.setScreen('root');
         }
         return;
     }
@@ -5399,7 +5397,8 @@ AirPlayApp.prototype._paintWeb = function () {
         fsBox: this._webFsBox(),
         fsFull: !!this._webFsFull,
         app: this._webApp || '',
-        appName: this._webApp ? this._storeAppName(this._webApp) : ''
+        appName: this._webApp ? this._storeAppName(this._webApp) : '',
+        where: !!this._webWhere
     });
 };
 
@@ -5587,8 +5586,10 @@ AirPlayApp.prototype._paintApps = function () {
     if (!m || typeof m.setItemHint !== 'function') {
         return;
     }
-    m.setItemHint('aset-cluster', this._webCluster ? 'włączone' : 'wyłączone');
-    m.setItemHint('aset-hud', this._webHud ? 'włączone' : 'wyłączone');
+    m.setItemHint('aset-screens', 'środek' + (this._webCluster ? ' + zegary' : '') + (this._webHud ? ' + HUD' : ''));
+    if (typeof m.setWebOut === 'function') {
+        m.setWebOut({ cluster: !!this._webCluster, hud: !!this._webHud });
+    }
     // the engine's rules: from the tool's daemon; a dash while it does not answer
     m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
     m.setItemHint('aset-home', pol ? (pol.homepage ? pol.homepage.replace(/^https?:\/\//, '').slice(0, 40) : 'wbudowana') : '—');
@@ -5624,12 +5625,12 @@ AirPlayApp.prototype._syncStoreMenu = function () {
     var fixedRows = rows.filter(function (i) { return i.name.indexOf('store-rm-') !== 0; });
     tiles.length = 0;
     fixedTiles.forEach(function (i, at) {
-        tiles.push(i);
         if (at === 0) {
             apps.forEach(function (a) {
                 tiles.push({ name: 'app-' + a.id, title: a.name, hint: a.repo, icon: 'grid' });
             });
         }
+        tiles.push(i);
     });
     rows.length = 0;
     fixedRows.forEach(function (i) {
@@ -5722,6 +5723,57 @@ AirPlayApp.prototype._paintSystem = function () {
 /** true: the choice was of Aplikacje or its Ustawienia */
 AirPlayApp.prototype._onAppsChoice = function (name) {
     var m = this._menu;
+    // The panel "Ekrany" of Przeglądarka and the apps: its tiles are the two switches Ustawienia > Aplikacje had
+    // (Zegary, HUD); the centre is always on.
+    if (name === 'web-pick-cluster' || name === 'web-pick-hud') {
+        return this._onAppsChoice(name === 'web-pick-cluster' ? 'aset-cluster' : 'aset-hud');
+    }
+    if (name === 'web-pick-central') {
+        return true;
+    }
+    if (name === 'svc-restart') {
+        // "Zresetuj usługi": asked twice within 4 s (it stops the sound and AirPlay for a moment); done by the browser
+        // tool's daemon, which is root
+        var self2 = this;
+        var hintSvc = function (t) { if (m && typeof m.setItemHint === 'function') { m.setItemHint('svc-restart', t); } };
+        if (!(this._svcAskAt && Date.now() - this._svcAskAt < 4000)) {
+            this._svcAskAt = Date.now();
+            hintSvc('wybierz jeszcze raz, aby potwierdzić');
+            setTimeout(function () { if (self2._svcAskAt && Date.now() - self2._svcAskAt >= 3900) { self2._svcAskAt = 0; hintSvc('dźwięk, AirPlay, YouTube, przeglądarka'); } }, 4000);
+            return true;
+        }
+        this._svcAskAt = 0;
+        this._webClient().look();
+        if (this._web && this._web.state().connected) {
+            this._web.send({ op: 'restart-services' });
+            hintSvc('uruchamiam ponownie…');
+            noteStart('services: restart asked');
+        } else {
+            hintSvc('brak narzędzia Przeglądarka');
+        }
+        setTimeout(function () { hintSvc('dźwięk, AirPlay, YouTube, przeglądarka'); }, 9000);
+        return true;
+    }
+    if (name === 'aset-screens') {
+        if (m && typeof m.openWhere === 'function') {
+            m.openWhere('web');
+        }
+        return true;
+    }
+    if (name === 'where-options') {
+        // "Opcje" of the panel: straight to the screens' settings; their way back leads to where it was opened
+        this._screensReturn = m && typeof m.screen === 'function' ? m.screen() : '';
+        if (this._webOn) {
+            this._webWhere = false;
+            this._closeBrowser();
+            this._screensReturn = 'root';
+        }
+        if (m && typeof m.setScreen === 'function') {
+            m.setScreen('set-display');
+        }
+        this._paintSystem();
+        return true;
+    }
     var s;
     var pol;
     var at;
@@ -5937,7 +5989,18 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         this._paintApps();
         return true;
     }
+    if (name === 'sgd-back' && this._screensReturn && this._screensReturn !== 'set-display') {
+        // opened with "Opcje" of the panel "Ekrany": back to the module it was opened from
+        at = this._screensReturn;
+        this._screensReturn = '';
+        go(at);
+        if (at === 'apps-settings' || at === 'set-apps') {
+            this._paintApps();
+        }
+        return true;
+    }
     if (name === 'sgd-back' || name === 'sgi-back' || name === 'sgg-back') {
+        this._screensReturn = '';
         go('system');
         return true;
     }
@@ -6060,7 +6123,18 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         }
         return true;
     }
+    if (name === 'web-where' || name === 'web-where-close') {
+        this._webWhere = name === 'web-where' ? !this._webWhere : false;
+        this._paintWeb();
+        return true;
+    }
+    if (name === 'web-pick-cluster' || name === 'web-pick-hud' || name === 'web-pick-central') {
+        this._onAppsChoice(name);
+        this._paintWeb();
+        return true;
+    }
     if (name === 'web-exit') {
+        this._webWhere = false;
         this._closeBrowser();
         return true;
     }
