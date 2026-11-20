@@ -261,15 +261,15 @@ function socks(port, host, dport) {
 function testPolicy(base) {
     const file = path.join(base, 'policy-test.json');
     let r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } }, 'no file: the defaults');
     assert.deepStrictEqual([r.problems, r.file], [[], false]);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 0.5, audio: 'off', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1200, network: { blockPrivate: true, allow: ['127.0.0.1:1235', '192.168.0.10:*'] } });
     assert.deepStrictEqual(r.problems, []);
     fs.writeFileSync(file, JSON.stringify({ sandbox: 'never', gpu: 'car', picture: 0.9, audio: 'loud', memoryLimitMb: 5, root: true, network: { blockPrivate: 'no', allow: ['example.com:80', '1.2.3.4', '300.1.1.1:5', '10.0.0.1:0', '10.0.0.2:443'] } }));
     r = d.readPolicy(file);
-    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
+    assert.deepStrictEqual(r.policy, { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: ['10.0.0.2:443'] } }, 'values that are not allowed keep the defaults');
     assert.strictEqual(r.problems.length, 11, r.problems.join(' | '));
     fs.writeFileSync(file, '{ sandbox: off }');
     r = d.readPolicy(file);

@@ -28,7 +28,7 @@ function check(text, ok, got) { if (!ok) fails += 1; console.log((ok ? 'ok   ' :
     const worldFile = path.join(dir, 'world.json');
     const stand = await require('./stand.js').start({ repo: repo, dir: dir, input: true, browser: web, idleMs: 6000,
         apps: { demo: { name: 'Demo', url: url + 'app-demo' } },
-        daemon: { systemctl: [process.execPath, fake, '--fake-systemctl'], systemctlEnv: { FAKE_WORLD: worldFile }, serviceSettleMs: 100, selfRestartMs: 8000 } });
+        daemon: { control: 'devtools', systemctl: [process.execPath, fake, '--fake-systemctl'], systemctlEnv: { FAKE_WORLD: worldFile }, serviceSettleMs: 100, selfRestartMs: 8000 } });
     const app = stand.app, menu = stand.menu;
     const shot = async (name) => { shotN += 1; return stand.shot(String(shotN).padStart(2, '0') + '-' + name); };
     const names = () => menu.snapshot().items.map((i) => i.name);

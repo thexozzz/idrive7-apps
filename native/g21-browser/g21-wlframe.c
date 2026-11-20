@@ -36,7 +36,10 @@
  *                         "c <text>"             the engine came / went, a window appeared
  *                         "e <text>"             something that could not be done
  *
- * Usage: g21-wlframe <video file> <601|709|full> <socket path> <w> <h> [fps]
+ *                         with "input" (see "input" below): "pm <x> <y>" "pb <button> <0|1>" "pa <dy>" the pointer,
+ *                         "td <id> <x> <y>" "tm <id> <x> <y>" "tu <id>" a finger, "k <key> <0|1> [mods]" a key
+ *
+ * Usage: g21-wlframe <video file> <601|709|full> <socket path> <w> <h> [fps] [input]
  * No root actions. Ends when stdin closes or on SIGTERM.
  */
 #define _GNU_SOURCE
@@ -49,6 +52,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/uio.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -63,12 +67,13 @@
 #define MAXCLIENT 4
 #define MAXSURF 64
 #define MAXCB 64
+#define MAXDEV 4
 #define MAXOBJ (1u << 16)
 #define INBUF 65536
 #define OUTBUF 16384
 
 enum { T_NONE, T_DISPLAY, T_REGISTRY, T_COMPOSITOR, T_SHM, T_POOL, T_BUFFER, T_SURFACE, T_REGION, T_SUBCOMP, T_SUBSURF,
-    T_OUTPUT, T_SEAT, T_WMBASE, T_POSITIONER, T_XDGSURF, T_TOPLEVEL, T_POPUP, T_OTHER };
+    T_OUTPUT, T_SEAT, T_WMBASE, T_POSITIONER, T_XDGSURF, T_TOPLEVEL, T_POPUP, T_POINTER, T_KEYBOARD, T_TOUCH, T_OTHER };
 
 /* the globals, by registry name (1-based) */
 static const struct { const char *name; uint32_t ver; int type; } GLOBALS[] = {
@@ -99,6 +104,8 @@ typedef struct {
     surf_t surf[MAXSURF];
     surf_t *main;                       /* the surface with the first xdg_toplevel */
     uint32_t serial;
+    uint32_t ptr[MAXDEV], kbd[MAXDEV], tch[MAXDEV];   /* the engine's wl_pointer, wl_keyboard, wl_touch objects */
+    int ptr_in, kbd_in;                 /* the pointer / the keyboard is in the main window */
 } client_t;
 
 static client_t *clients[MAXCLIENT];
@@ -109,6 +116,7 @@ static uint32_t held_id = 0;
 static long long retry_us = 0;       /* the kept buffer is tried again then (the video file could not be made) */
 static int retry_left = 0;
 static volatile sig_atomic_t stop_now = 0;
+static int input_on = 0;             /* "input": the engine gets a pointer, a touch screen and a keyboard from here */
 
 static long long now_us(void)
 {
@@ -429,6 +437,128 @@ static int take_fd(client_t *c)
     return fd;
 }
 
+/* ------------------------------------------------------------------ input: a pointer, a touch screen, a keyboard
+ *
+ * With "input" the engine is driven as any program under a display server is: what the daemon is told by the app (a
+ * finger, the pad's cursor, the knob, the keys of the app's keyboard) comes here as lines on stdin and goes to the
+ * engine as wl_pointer, wl_touch and wl_keyboard events. No DevTools is needed for it, so the engine can run without
+ * that interface. The keyboard has the few keys the daemon presses (text itself is put into a page's field another
+ * way); its keymap is written out below.
+ */
+static const char KEYMAP[] =
+    "xkb_keymap {\n"
+    "xkb_keycodes \"g21\" { minimum = 8; maximum = 255;\n"
+    " <ESC> = 9; <BKSP> = 22; <TAB> = 23; <RTRN> = 36; <LCTL> = 37; <LFSH> = 50; <LALT> = 64; <SPCE> = 65;\n"
+    " <FK05> = 71; <FK11> = 95; <HOME> = 110; <UP> = 111; <PGUP> = 112; <LEFT> = 113; <RGHT> = 114; <END> = 115;\n"
+    " <DOWN> = 116; <PGDN> = 117; <DELE> = 119; <AC01> = 38; <AB03> = 54; <AB04> = 55; <AB02> = 53; <AE11> = 20;\n"
+    " <AE12> = 21; <AE10> = 19; };\n"
+    "xkb_types \"g21\" { type \"ONE_LEVEL\" { modifiers = none; map[None] = Level1; level_name[Level1] = \"Any\"; };\n"
+    " type \"TWO_LEVEL\" { modifiers = Shift; map[Shift] = Level2; level_name[Level1] = \"Base\"; level_name[Level2] = \"Shift\"; }; };\n"
+    "xkb_compat \"g21\" { interpret Any+AnyOf(all) { action = SetMods(modifiers=modMapMods,clearLocks); }; };\n"
+    "xkb_symbols \"g21\" {\n"
+    " key <ESC> { [ Escape ] }; key <BKSP> { [ BackSpace ] }; key <TAB> { [ Tab, ISO_Left_Tab ] }; key <RTRN> { [ Return ] };\n"
+    " key <LCTL> { [ Control_L ] }; key <LFSH> { [ Shift_L ] }; key <LALT> { [ Alt_L ] }; key <SPCE> { [ space ] };\n"
+    " key <FK05> { [ F5 ] }; key <FK11> { [ F11 ] }; key <HOME> { [ Home ] }; key <UP> { [ Up ] }; key <PGUP> { [ Prior ] };\n"
+    " key <LEFT> { [ Left ] }; key <RGHT> { [ Right ] }; key <END> { [ End ] }; key <DOWN> { [ Down ] }; key <PGDN> { [ Next ] };\n"
+    " key <DELE> { [ Delete ] }; key <AC01> { [ a, A ] }; key <AB03> { [ c, C ] }; key <AB04> { [ v, V ] }; key <AB02> { [ x, X ] };\n"
+    " key <AE11> { [ minus, underscore ] }; key <AE12> { [ equal, plus ] }; key <AE10> { [ 0, parenright ] };\n"
+    " modifier_map Shift { <LFSH> }; modifier_map Control { <LCTL> }; modifier_map Mod1 { <LALT> }; };\n"
+    "};\n";
+
+static uint32_t ms_now(void) { return (uint32_t)(now_us() / 1000); }
+static void dev_gone(uint32_t *list, uint32_t id) { int k; for (k = 0; k < MAXDEV; k++) if (list[k] == id) list[k] = 0; }
+
+/* wl_keyboard.keymap(xkb_v1, fd, size): the one event here that carries a file (the fd is no word on the wire) */
+static void send_keymap(client_t *c, uint32_t kid)
+{
+    union { char buf[CMSG_SPACE(sizeof(int))]; struct cmsghdr align; } u;
+    uint32_t m[4];
+    struct iovec io = { m, sizeof m };
+    struct msghdr mh;
+    struct cmsghdr *cm;
+    int fd = memfd_create("g21-keymap", MFD_CLOEXEC);
+    if (fd < 0) { printf("e keymap: %s\n", strerror(errno)); return; }
+    if (write(fd, KEYMAP, sizeof KEYMAP) != (ssize_t)sizeof KEYMAP) { printf("e keymap: %s\n", strerror(errno)); close(fd); return; }
+    flush(c);
+    if (c->fd < 0) { close(fd); return; }
+    m[0] = kid; m[1] = (16u << 16) | 0u; m[2] = 1; m[3] = (uint32_t)sizeof KEYMAP;
+    memset(&mh, 0, sizeof mh); memset(&u, 0, sizeof u);
+    mh.msg_iov = &io; mh.msg_iovlen = 1; mh.msg_control = u.buf; mh.msg_controllen = sizeof u.buf;
+    cm = CMSG_FIRSTHDR(&mh); cm->cmsg_level = SOL_SOCKET; cm->cmsg_type = SCM_RIGHTS; cm->cmsg_len = CMSG_LEN(sizeof(int));
+    memcpy(CMSG_DATA(cm), &fd, sizeof fd);
+    if (sendmsg(c->fd, &mh, MSG_NOSIGNAL) < 0) printf("e keymap: %s\n", strerror(errno));
+    close(fd);
+    { uint32_t r[2] = { 0, 0 }; ev(c, kid, 5, r, 2); }      /* repeat_info: the keys do not repeat by themselves */
+}
+
+/* the keyboard and the pointer are in the main window (said once it is there, and again for a new window) */
+static void focus(client_t *c, int px, int py)
+{
+    int k;
+    if (!c->main) return;
+    if (!c->kbd_in) {
+        for (k = 0; k < MAXDEV; k++) if (c->kbd[k]) {
+            uint32_t a[3], m[5];
+            a[0] = ++c->serial; a[1] = c->main->id; a[2] = 0;
+            ev(c, c->kbd[k], 1, a, 3);                       /* enter(serial, surface, no keys down) */
+            m[0] = ++c->serial; m[1] = 0; m[2] = 0; m[3] = 0; m[4] = 0;
+            ev(c, c->kbd[k], 4, m, 5);                       /* modifiers */
+        }
+        c->kbd_in = 1;
+    }
+    if (!c->ptr_in && px >= 0) {
+        for (k = 0; k < MAXDEV; k++) if (c->ptr[k]) {
+            uint32_t a[4];
+            a[0] = ++c->serial; a[1] = c->main->id; a[2] = (uint32_t)(px * 256); a[3] = (uint32_t)(py * 256);
+            ev(c, c->ptr[k], 0, a, 4);                       /* enter */
+            ev0(c, c->ptr[k], 5);                            /* frame */
+        }
+        c->ptr_in = 1;
+    }
+}
+
+/* one line of input from the daemon; 1 when it was one */
+static int input_line(const char *line)
+{
+    int a = 0, b = 0, d = 0, i, k;
+    char what[8];
+    if (!input_on || sscanf(line, "%7s", what) != 1) return 0;
+    if (strcmp(what, "pm") && strcmp(what, "pb") && strcmp(what, "pa") && strcmp(what, "td") && strcmp(what, "tm") && strcmp(what, "tu") && strcmp(what, "k")) return 0;
+    for (i = 0; i < MAXCLIENT; i++) {
+        client_t *c = clients[i];
+        uint32_t t = ms_now(), w[6];
+        if (!c || !c->main) continue;
+        if (!strcmp(what, "pm") && sscanf(line, "pm %d %d", &a, &b) == 2) {
+            focus(c, a, b);
+            for (k = 0; k < MAXDEV; k++) if (c->ptr[k]) { w[0] = t; w[1] = (uint32_t)(a * 256); w[2] = (uint32_t)(b * 256); ev(c, c->ptr[k], 2, w, 3); ev0(c, c->ptr[k], 5); }
+        } else if (!strcmp(what, "pb") && sscanf(line, "pb %d %d", &a, &b) == 2) {
+            focus(c, 0, 0);
+            for (k = 0; k < MAXDEV; k++) if (c->ptr[k]) { w[0] = ++c->serial; w[1] = t; w[2] = 0x110u + (uint32_t)(a & 7); w[3] = b ? 1u : 0u; ev(c, c->ptr[k], 3, w, 4); ev0(c, c->ptr[k], 5); }
+        } else if (!strcmp(what, "pa") && sscanf(line, "pa %d", &a) == 1) {
+            focus(c, 0, 0);
+            for (k = 0; k < MAXDEV; k++) if (c->ptr[k]) { w[0] = 0; ev(c, c->ptr[k], 6, w, 1); w[0] = t; w[1] = 0; w[2] = (uint32_t)(a * 256); ev(c, c->ptr[k], 4, w, 3); ev0(c, c->ptr[k], 5); }
+        } else if ((!strcmp(what, "td") || !strcmp(what, "tm")) && sscanf(line + 2, " %d %d %d", &d, &a, &b) == 3) {
+            focus(c, -1, -1);
+            for (k = 0; k < MAXDEV; k++) if (c->tch[k]) {
+                if (what[1] == 'd') { w[0] = ++c->serial; w[1] = t; w[2] = c->main->id; w[3] = (uint32_t)d; w[4] = (uint32_t)(a * 256); w[5] = (uint32_t)(b * 256); ev(c, c->tch[k], 0, w, 6); }
+                else { w[0] = t; w[1] = (uint32_t)d; w[2] = (uint32_t)(a * 256); w[3] = (uint32_t)(b * 256); ev(c, c->tch[k], 2, w, 4); }
+                ev0(c, c->tch[k], 3);
+            }
+        } else if (!strcmp(what, "tu") && sscanf(line, "tu %d", &d) == 1) {
+            for (k = 0; k < MAXDEV; k++) if (c->tch[k]) { w[0] = ++c->serial; w[1] = t; w[2] = (uint32_t)d; ev(c, c->tch[k], 1, w, 3); ev0(c, c->tch[k], 3); }
+        } else if (!strcmp(what, "k") && sscanf(line, "k %d %d %d", &a, &b, &d) >= 2) {
+            /* k <evdev key> <1 down | 0 up> [modifiers held: 1 Shift, 4 Control, 8 Alt] */
+            focus(c, -1, -1);
+            for (k = 0; k < MAXDEV; k++) if (c->kbd[k]) {
+                w[0] = ++c->serial; w[1] = (uint32_t)d; w[2] = 0; w[3] = 0; w[4] = 0; ev(c, c->kbd[k], 4, w, 5);
+                w[0] = ++c->serial; w[1] = t; w[2] = (uint32_t)a; w[3] = b ? 1u : 0u; ev(c, c->kbd[k], 3, w, 4);
+            }
+        }
+        flush(c);
+    }
+    return 1;
+}
+
 /* one request; a is its arguments (n bytes) */
 static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, uint32_t n)
 {
@@ -467,7 +597,10 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
                 w[0] = 3; w[1] = (uint32_t)(win_w > 1920 ? win_w : 1920); w[2] = (uint32_t)(win_h > 720 ? win_h : 720); w[3] = 60000;
                 ev(c, nid, 1, w, 4);                                                          /* mode: current, preferred */
                 if (ver >= 2) { ev1(c, nid, 3, 1); ev0(c, nid, 2); }                          /* scale 1, done */
-            } else if (GLOBALS[name - 1].type == T_SEAT) ev1(c, nid, 0, 0);                   /* no pointer, no keyboard */
+            } else if (GLOBALS[name - 1].type == T_SEAT) {
+                ev1(c, nid, 0, input_on ? 7u : 0u);                                          /* pointer, keyboard, touch; or none */
+                if (ver >= 2) { uint32_t w[8]; int k = put_str(w, "g21"); ev(c, nid, 1, w, k); }
+            }
         }
         break;
     case T_COMPOSITOR:
@@ -525,7 +658,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
             int k;
             for (k = 0; k < s->ncb; k++) gone(c, s->cb[k]);
             for (k = 0; k < s->ndue; k++) gone(c, s->due[k]);
-            if (c->main == s) { c->main = NULL; printf("c window closed\n"); }
+            if (c->main == s) { c->main = NULL; c->ptr_in = 0; c->kbd_in = 0; printf("c window closed\n"); }
             s->used = 0;
             gone(c, id);
             break;
@@ -543,7 +676,21 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
         else if (op == 1) set(c, a[0], T_SUBSURF, NULL);
         break;
     case T_SUBSURF: if (op == 0) gone(c, id); break;
-    case T_SEAT: if (op == 3) gone(c, id); else if (op <= 2) set(c, a[0], T_OTHER, NULL); break;
+    case T_SEAT:
+        if (op == 3) gone(c, id);
+        else if (op <= 2 && !input_on) set(c, a[0], T_OTHER, NULL);
+        else if (op <= 2) {
+            uint32_t *list = op == 0 ? c->ptr : (op == 1 ? c->kbd : c->tch);
+            int k;
+            set(c, a[0], op == 0 ? T_POINTER : (op == 1 ? T_KEYBOARD : T_TOUCH), NULL);
+            for (k = 0; k < MAXDEV && list[k]; k++) { /* a free place */ }
+            if (k < MAXDEV) list[k] = a[0];
+            if (op == 1) { send_keymap(c, a[0]); c->kbd_in = 0; }
+        }
+        break;
+    case T_POINTER: if (op == 1) { dev_gone(c->ptr, id); gone(c, id); } break;      /* (0: set_cursor: there is no cursor here) */
+    case T_KEYBOARD: if (op == 0) { dev_gone(c->kbd, id); gone(c, id); } break;
+    case T_TOUCH: if (op == 0) { dev_gone(c->tch, id); gone(c, id); } break;
     case T_WMBASE:
         if (op == 0) gone(c, id);
         else if (op == 1) set(c, a[0], T_POSITIONER, NULL);
@@ -567,7 +714,7 @@ static void request(client_t *c, uint32_t id, uint32_t op, const uint8_t *raw, u
     }
     case T_TOPLEVEL: {
         surf_t *s = o->p;
-        if (op == 0) { if (s && s->used && s->top == id) { s->top = 0; s->configured = 0; if (c->main == s) { c->main = NULL; printf("c window closed\n"); } } gone(c, id); }
+        if (op == 0) { if (s && s->used && s->top == id) { s->top = 0; s->configured = 0; if (c->main == s) { c->main = NULL; c->ptr_in = 0; c->kbd_in = 0; printf("c window closed\n"); } } gone(c, id); }
         else if ((op >= 9 && op <= 13) && s && s->used && s->top == id && s->configured) configure(c, s);  /* (un)maximise, full screen: it stays as it is */
         break;
     }
@@ -637,7 +784,7 @@ int main(int argc, char **argv)
 {
     struct sockaddr_un sa;
     struct sigaction act;
-    char line[256];
+    char line[1024];
     size_t nline = 0;
     int lfd, i;
     if (argc < 6) { fprintf(stderr, "usage: g21-wlframe <video file> <601|709|full> <socket path> <w> <h> [fps]\n"); return 2; }
@@ -647,6 +794,7 @@ int main(int argc, char **argv)
     make_coef();
     win_w = atoi(argv[4]); win_h = atoi(argv[5]);
     if (argc > 6) fps = atoi(argv[6]);
+    if (argc > 7 && strcmp(argv[7], "input") == 0) input_on = 1;
     if (win_w < 16 || win_h < 16 || win_w > MAX_W || win_h > MAX_H) { fprintf(stderr, "size out of range\n"); return 2; }
     if (fps < 20 || fps > 120) fps = 60;
     memset(&act, 0, sizeof act);
@@ -727,6 +875,7 @@ int main(int argc, char **argv)
                     }
                 }
                 else if (strcmp(line, "mark") == 0) mark_us = now_us();
+                else input_line(line);
                 nline -= (size_t)(nl + 1 - line);
                 memmove(line, nl + 1, nline + 1);
             }

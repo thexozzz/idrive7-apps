@@ -16,7 +16,7 @@ let fails = 0, shotN = 0;
 function check(text, ok, got) { if (!ok) fails += 1; console.log((ok ? 'ok   ' : 'FAIL ') + text + (ok ? '' : ': ' + JSON.stringify(got))); }
 
 (async () => {
-    const stand = await require('./stand.js').start({ repo: repo, dir: dir, input: true, browser: true, idleMs: 90000 });
+    const stand = await require('./stand.js').start({ repo: repo, dir: dir, input: true, browser: true, idleMs: 90000, daemon: { control: /native/.test(process.argv.slice(5).join(' ')) ? 'native' : 'devtools' } });
     const app = stand.app, menu = stand.menu;
     const dm = () => stand.daemon;
     const st = () => app._web.state();

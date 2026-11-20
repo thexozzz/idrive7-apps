@@ -41,6 +41,7 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const cp = require('child_process');
+const native = require('./g21-native.js');
 const crypto = require('crypto');
 const zlib = require('zlib');
 
@@ -962,7 +963,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
 const FRAMES = ['direct', 'direct30', 'cast'];
 // (the defaults are the owner's own settings on the car, 2026-11-19: full Chrome, direct frames, the picture at the
 // screen's own pixels, pages at 100%, the sandbox required, 1500 MB)
-const POLICY_DEFAULT = { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } };
+const POLICY_DEFAULT = { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -970,7 +971,7 @@ function readPolicy(file) {
     if (text !== null) { try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push('not JSON, every rule is at its default'); } }
     if (raw && (typeof raw !== 'object' || Array.isArray(raw))) { problems.push('not an object, every rule is at its default'); raw = null; }
     if (raw) {
-        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, mobile: 1, frames: 1, timezone: 1, player: 1, memoryLimitMb: 1, network: 1 };
+        const known = { version: 1, sandbox: 1, gpu: 1, picture: 1, audio: 1, homepage: 1, autoplay: 1, fullscreen: 1, carData: 1, carDiag: 1, video: 1, engine: 1, mobile: 1, frames: 1, control: 1, timezone: 1, player: 1, memoryLimitMb: 1, network: 1 };
         Object.keys(raw).forEach((k) => { if (!known[k]) problems.push('unknown rule "' + String(k).slice(0, 40) + '" ignored'); });
         const pick = (k, ok) => { if (raw[k] === undefined) return; if (ok(raw[k])) p[k] = raw[k]; else problems.push('"' + k + '": value not allowed, default kept'); };
         pick('sandbox', (v) => ['ask', 'required', 'off'].indexOf(v) >= 0);
@@ -985,6 +986,8 @@ function readPolicy(file) {
         pick('video', (v) => v === 'light' || v === 'any');
         pick('engine', (v) => v === 'chrome' || v === 'shell');
         pick('mobile', (v) => v === 'on' || v === 'off');
+        // "native" (the default): the engine runs without its DevTools interface (g21-native.js); "devtools": as before 0.1.53
+        pick('control', (v) => v === 'native' || v === 'devtools');
         pick('frames', (v) => FRAMES.indexOf(v) >= 0);
         pick('timezone', (v) => typeof v === 'string' && /^(UTC|[A-Z][A-Za-z_]{1,20}\/[A-Za-z_\/+-]{1,40})$/.test(v));
         pick('player', (v) => v === 'on' || v === 'off');
@@ -1508,13 +1511,13 @@ Daemon.prototype.picture = function () { return this.opts.picture || this.policy
 Daemon.prototype.startProxy = function () {
     // (the network rules changed: the proxy that runs has the old ones)
     const net1 = this.policy().network;
-    const allow1 = net1.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : []);
+    const allow1 = net1.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : [], this.ctlPort ? ['127.0.0.1:' + this.ctlPort] : []);
     const want = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net1.blockPrivate ? ['--allow-local'] : []).concat(allow1.length ? ['--allow=' + allow1.join(',')] : []).join(' ');
     if (this.proxy && this.proxyKey !== want) { const old = this.proxy; this.proxy = null; this.proxyPort = 0; this.log('proxy: network rules changed, starting it again'); try { old.kill('SIGKILL'); } catch (e) { /* gone */ } }
     if (this.proxy) return Promise.resolve(this.proxyPort);
     return new Promise((resolve, reject) => {
         const net0 = this.policy().network;
-        const allow0 = net0.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : []);
+        const allow0 = net0.allow.concat(this.appsPort ? ['127.0.0.1:' + this.appsPort] : [], this.ctlPort ? ['127.0.0.1:' + this.ctlPort] : []);
         const args = [__filename, '--proxy', this.opts.leaseFile].concat(this.opts.allowLocal || !net0.blockPrivate ? ['--allow-local'] : []).concat(allow0.length ? ['--allow=' + allow0.join(',')] : []);
         this.proxyKey = args.join(' ');
         const child = cp.spawn(process.execPath, args, Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'pipe'] }));
@@ -2122,7 +2125,7 @@ Daemon.prototype.startFrame = function () {
     try { fs.unlinkSync(this.opts.ring); } catch (e) { /* none */ }
     try { fs.unlinkSync(this.opts.ring + '.ring'); } catch (e) { /* none */ }
     const how = Object.assign(this.ids(), { cwd: '/', env: {}, stdio: ['pipe', 'pipe', 'ignore'] });
-    const child = direct && css ? cp.spawn(this.opts.wlframe, [this.opts.ring, colour, this.wlSock, String(css.pw), String(css.ph), String(this.frameFps())], how) : cp.spawn(this.opts.webframe, [this.opts.ring, colour], how);
+    const child = direct && css ? cp.spawn(this.opts.wlframe, [this.opts.ring, colour, this.wlSock, String(css.pw), String(css.ph), String(this.frameFps())].concat(this.native ? ['input'] : []), how) : cp.spawn(this.opts.webframe, [this.opts.ring, colour], how);
     child.g21wl = !!(direct && css);
     this.frameSeen = false;
     this.frame = child;
@@ -2326,7 +2329,11 @@ function pageCss(w, h, z, q) {
     const cw = Math.max(sw, Math.floor(w / z / sw) * sw), ch = Math.max(sh, Math.floor(h / z / sh) * sh);
     return { w: cw, h: ch, scale: k / 16, pw: cw * k / 16, ph: ch * k / 16, dw: Math.round(cw * z), dh: Math.round(ch * z) };
 }
-Daemon.prototype.engineArgs = function (dirs, url, sandbox) { const a = Daemon.prototype.engineArgs2.call(this, dirs, url, sandbox); this.lastArgs = a.slice(); this.lastSandbox = !!sandbox; return a; };
+Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
+    let a = Daemon.prototype.engineArgs2.call(this, dirs, url, sandbox);
+    // without DevTools: no debugging pipe, and the one extension that stands in for it
+    if (this.native && this.extDir) a = a.filter((x) => x !== '--remote-debugging-pipe' && x !== '--disable-extensions' && x !== '--disable-component-extensions-with-background-pages').concat(['--load-extension=' + this.extDir, '--disable-extensions-except=' + this.extDir]);
+    this.lastArgs = a.slice(); this.lastSandbox = !!sandbox; return a; };
 Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
     // height even (what the renderer's video layer takes): never larger than the page area the app has.
@@ -2478,6 +2485,21 @@ Daemon.prototype.startEngine2 = async function (url) {
     this.direct = dirs.kind === 'chrome' && this.policy().frames !== 'cast' && this.policy().player !== 'on' && !this.directFailed && fs.existsSync(o.wlframe);
     this.wlSock = path.join(dirs.tmp, 'g21wl');
     this.set({ engine: 'starting', err: '', ask: '', pct: 100, url: '', title: '', loading: true, back: false, fwd: false, editable: false });
+    /*
+     * Without DevTools (rule "control": "native", the default; needs the engine's own window): the engine is driven
+     * through its window's input and its extension, see g21-native.js. The line the extension connects to is made
+     * once and kept; the proxy lets the engine reach it. If the extension does not come, this start goes on with
+     * DevTools, and so does every later one until the tool starts again (nativeFailed).
+     */
+    this.native = !!this.direct && (this.opts.control || this.policy().control) !== 'devtools' && !this.nativeFailed && fs.existsSync(path.join(__dirname, 'ext', 'manifest.json'));
+    if (this.native) {
+        try {
+            if (!this.link) { const l = new native.Link({ log: (t) => this.log('native: ' + t) }); await l.listen(); this.link = l; }
+            this.ctlPort = this.link.port;
+            this.extDir = this.writeExt(dirs);
+        } catch (x) { this.log('native: ' + x.message + ': DevTools instead'); this.native = false; }
+    }
+    if (!this.native) this.ctlPort = 0;
     await this.startApps();
     await this.startProxy();
     this.startFrame();
@@ -2496,7 +2518,11 @@ Daemon.prototype.startEngine2 = async function (url) {
     if (sandbox && !this.sandboxPossible()) throw refuse('no sandbox on this system (no user namespaces, no setuid helper)');
     let e = null;
     {
-        try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x) {
+        try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x0) {
+            let x = x0;
+            // (the engine's extension did not come: the same start once more, with DevTools)
+            if (this.native && this.nativeFailed) { this.killEngine(); this.native = false; try { e = await this.launch(dirs, url || this.home(), sandbox); } catch (x2) { x = x2; } }
+            if (!e) {
             // what the engine itself said (a missing library, a kernel it cannot run on): the only trace of a start that failed
             const said = this.engine ? String(this.engine.err).split('\n').filter((l) => l.trim() && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 600) : '';
             if (said) this.log('engine said: ' + said);
@@ -2510,6 +2536,7 @@ Daemon.prototype.startEngine2 = async function (url) {
             if (dirs.kind === 'chrome') throw new Error('the full engine did not start (' + x.message + ')');
             // it may be the sandbox, it may be something else: only a start without it tells, and that is the owner's to allow
             throw refuse('engine did not start with its sandbox (' + x.message + ')');
+            }
         }
     }
     this.log('engine up: ' + e.product + (sandbox ? (this.helper ? ', sandbox (setuid helper beside the engine)' : ', sandbox') : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
@@ -2519,6 +2546,28 @@ Daemon.prototype.startEngine2 = async function (url) {
     clearInterval(this.pollTimer);
     this.pollTimer = setInterval(() => { if (this.client && this.engine === e) this.guard(() => this.refresh(e)); }, o.pollMs);
     if (!this.client) this.away();
+};
+// the engine's extension, in the engine's own temporary directory, with the port and the word of this daemon's line
+Daemon.prototype.writeExt = function (dirs) {
+    const dir = path.join(dirs.tmp, 'g21-ext'), src = path.join(__dirname, 'ext');
+    const own = (f) => { if (!this.opts.noSetuid && process.getuid && process.getuid() === 0) fs.chownSync(f, this.uid, this.uid); };
+    mkdirp(dir, 0o700);
+    own(dir);
+    ['sw.js', 'page.js'].forEach((n) => { const to = path.join(dir, n); fs.writeFileSync(to, fs.readFileSync(path.join(src, n)), { mode: 0o600 }); own(to); });
+    // The rule "video": "light" (H.264 only, see LIGHT_VIDEO): DevTools put that script into every page; here it is a
+    // script of the extension that runs in the page's own world before the page's scripts.
+    const man = JSON.parse(fs.readFileSync(path.join(src, 'manifest.json'), 'utf8'));
+    if (this.policy().video !== 'any') {
+        const lf = path.join(dir, 'light.js');
+        fs.writeFileSync(lf, LIGHT_VIDEO + '\n', { mode: 0o600 });
+        own(lf);
+        man.content_scripts.push({ matches: ['<all_urls>'], js: ['light.js'], run_at: 'document_start', all_frames: true, match_about_blank: true, world: 'MAIN' });
+    }
+    { const mf = path.join(dir, 'manifest.json'); fs.writeFileSync(mf, JSON.stringify(man, null, 2) + '\n', { mode: 0o600 }); own(mf); }
+    const cfg = path.join(dir, 'config.js');
+    fs.writeFileSync(cfg, 'self.G21 = ' + JSON.stringify({ port: this.link.port, word: this.link.word }) + ';\n', { mode: 0o600 });
+    own(cfg);
+    return dir;
 };
 Daemon.prototype.launch = async function (dirs, url, sandbox) {
     const o = this.opts;
@@ -2536,9 +2585,19 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     child.on('error', (x) => { e.err += ' spawn: ' + x.message; });
     child.on('exit', (code, sig) => this.guard(() => this.onEngineExit(e, code, sig)));
     try { fs.writeFileSync('/proc/' + child.pid + '/oom_score_adj', '900'); } catch (x) { /* not Linux or gone */ }
-    e.cdp = new Cdp(child);
+    if (this.native) {
+        e.native = true;
+        e.cdp = new native.NativeCdp({ link: this.link, input: (l) => this.frameTell(l), product: 'Chrome/' + (dirs.major || '') + ' (without DevTools)', log: (t) => this.log('native: ' + t),
+            exprs: { edit: EDIT_PROBE, quiet: QUIET_PAGE, why: PLAYER_WHY } });
+        // (a page went into or out of full screen: looked at now, not at the next poll)
+        e.cdp.onFullScreen = () => { if (this.engine === e) this.guard(() => this.refresh(e)); };
+    } else e.cdp = new Cdp(child);
     e.cdp.onFault = (x) => this.fault(x);
-    const ver = await e.cdp.send('Browser.getVersion', {}, null, o.startMs);
+    let ver;
+    try { ver = await e.cdp.send('Browser.getVersion', {}, null, o.startMs); } catch (x) {
+        if (e.native) { this.nativeFailed = true; this.log('native: ' + x.message + ': the engine is started with DevTools until the tool starts again'); }
+        throw x;
+    }
     e.product = ver.product || '';
     e.cdp.onEvent = (m) => this.onEvent(e, m);
     const tg = await e.cdp.send('Target.getTargets', {});
@@ -2557,7 +2616,7 @@ Daemon.prototype.launch = async function (dirs, url, sandbox) {
     e.mainFrame = tree.frameTree.frame.id;
     this.s.url = tree.frameTree.frame.url || '';
     // the logins of the last engine; the first page began to load without them: once more, with them
-    try { if (await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
+    try { if (!e.native && await this.restoreCookies(e, this.s.url)) await send('Page.reload', {}); else if (e.native) e.cookiesReady = true; } catch (x) { e.cookiesReady = true; this.log('cookies: ' + x.message); }
     await this.cast(true);
     if (this.direct) {
         const t0 = Date.now();
@@ -2693,7 +2752,7 @@ function cookieParam(c, now) {
 }
 Daemon.prototype.saveCookies = async function (e, force) {
     const now = Date.now();
-    if (!e || !e.cookiesReady || (!force && now - (e.cookiesAt || 0) < 20000)) return;
+    if (!e || e.native || !e.cookiesReady || (!force && now - (e.cookiesAt || 0) < 20000)) return;
     e.cookiesAt = now;
     const r = await e.cdp.send('Storage.getCookies', {});
     const list = (r && Array.isArray(r.cookies) ? r.cookies : []).map((c) => cookieParam(c, now / 1000)).filter(Boolean).slice(0, 4000);

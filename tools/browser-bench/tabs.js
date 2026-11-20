@@ -19,7 +19,7 @@ function ring() {
     const srv = http.createServer((q, r) => { r.setHeader('content-type', 'text/html'); r.end(page(q.url.replace(/^\//, '') || 'root')); });
     await new Promise((r) => srv.listen(0, '127.0.0.1', r));
     const url = 'http://127.0.0.1:' + srv.address().port + '/';
-    const dm = new d.Daemon({ idleMs: 60000, pollMs: 300, wlframe: B + '/g21-wlframe', webframe: B + '/g21-webframe', libDir: B + '/lib' });
+    const dm = new d.Daemon({ control: 'devtools', idleMs: 60000, pollMs: 300, wlframe: B + '/g21-wlframe', webframe: B + '/g21-webframe', libDir: B + '/lib' });
     dm.prepare = async function () {
         const profile = base + '/profile', tmp = base + '/tmp';
         [profile, tmp].forEach((x) => { fs.rmSync(x, { recursive: true, force: true }); fs.mkdirSync(x, { recursive: true, mode: 0o700 }); });

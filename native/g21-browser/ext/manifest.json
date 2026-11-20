@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "G21 Browser",
+  "version": "1.0",
+  "description": "THEiPlay's browser tool: tells g21-browserd what the page is (address, title, loading, full screen, a text field) and does what it asks (go to an address, back, forward, text into a field). In place of the DevTools interface.",
+  "permissions": ["tabs", "webNavigation", "scripting", "downloads"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "sw.js" },
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["page.js"], "run_at": "document_start", "all_frames": true, "match_about_blank": true }
+  ]
+}

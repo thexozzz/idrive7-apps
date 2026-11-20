@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.6
+
+- Właściciel, 2026-11-20: nie da się zalogować do Google z YouTube („Ta przeglądarka lub aplikacja może nie być bezpieczna", adres `signin/rejected`), Crunchyroll pokazuje „Coś poszło nie tak"; „przeglądarka ma działać tak, że wszystkie strony można na niej otworzyć".
+- Przyczyna (stanowisko, ten sam Chrome): demon sterował silnikiem przez jego interfejs DevTools, a silnik uruchomiony z tym interfejsem sam mówi o tym każdej stronie (`navigator.webdriver` = true). Strony, które po tym sortują przeglądarki, odmawiały: Google przy logowaniu, serwery Crunchyroll odpowiedzią 403, YouTube odmową strumienia po 30–75 s (`ump.spsrejectfailure`, 0.2.3). Ten sam silnik bez tego interfejsu otwiera Crunchyroll i gra film z YouTube dalej niż trzy minuty.
+- `g21-browser` 0.1.53: silnik działa bez interfejsu DevTools, jak przeglądarka używana przez człowieka – nic nie jest ukrywane ani podrabiane, tego interfejsu po prostu nie ma. Palec, kursor gładzika, pokrętło i klawisze trafiają do silnika przez jego okno jako prawdziwe urządzenia (`g21-wlframe` dostał wskaźnik, ekran dotykowy i klawiaturę). Adres, tytuł, ładowanie, „wstecz/dalej", pełny ekran, pole tekstowe i tekst z klawiatury THEiPlay idą przez własne rozszerzenie silnika (`ext/`), połączone z demonem na tej samej jednostce (port i hasło jednego uruchomienia; tylko rozszerzenie jest wpuszczane). Reguła „lekkie wideo" i zakaz pobierania działają także tak.
+- Zapas: gdy rozszerzenie nie zgłosi się w 15 s, ten sam start idzie dalej po staremu (DevTools) i tak zostaje do następnego startu narzędzia; log mówi dlaczego. Reguła `"control": "devtools"` w `policy.json` wymusza stary sposób.
+- Co się zmienia dla właściciela: logowania zapisane dotąd przez demona (`cookies.json`) nie przechodzą – silnik trzyma teraz własne ciasteczka w swoim profilu, więc do stron trzeba zalogować się raz od nowa. Powiększenie strony jest ustawiane przez rozszerzenie przy każdej nowej stronie (krótkie przeskalowanie na starcie strony przy powiększeniu innym niż 100 %). Wiersz „odtwarzacz strony: …" (0.2.4) działa tylko w starym sposobie.
+- Sprawdzone na stanowisku (`tools/sim/native.js`, prawdziwa aplikacja, demon i Chrome): stuknięcie w link, wstecz i dalej, pole tekstowe i tekst z polskimi znakami, Enter, przewijanie pokrętłem i palcem, pełny ekran i Escape, link do nowego okna, ustawienia nad stroną, powiększenie, aplikacja ze Sklepu obok przeglądarki; strona widzi `navigator.webdriver` = false i prawdziwe zdarzenia. Crunchyroll się otwiera, film z YouTube gra po 170 s (także z „lekkim wideo"). Stary sposób: dotychczasowe testy przechodzą bez zmian. Nowy test `tools/test_browser_native.js`.
+- NIESPRAWDZONE: nic z tego w aucie; samo zalogowanie do Google (nie wpisuję cudzych haseł – strona logowania się otwiera, wynik po wpisaniu hasła zna tylko właściciel).
+
 ## 0.2.5
 
 - Właściciel, 2026-11-20 (`g21-audio` 0.1.23): dźwięk nie działa wcale. Odczyt z auta w trakcie: demon dźwięku stał w miejscu zaraz po wpisie „speakers claimed" – nie odpowiadał na „status", wszystkie jego wątki czekały (futex), zero czasu procesora. Tak samo kończy się log każdego uruchomienia od 0.1.18: po pierwszym przejęciu głośników nie ma już ani jednego wpisu aż do następnego startu jednostki.
