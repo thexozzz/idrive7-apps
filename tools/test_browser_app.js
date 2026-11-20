@@ -171,10 +171,13 @@ function glueApp() {
     assert.deepStrictEqual([g.hints['aset-picture'], g.hints['aset-sandbox'], g.hints['aset-memory']], ['75%', 'pytaj, gdy się nie da', '900 MB']);
     g._onAppsChoice('aset-picture'); g._onAppsChoice('aset-sandbox'); g._onAppsChoice('aset-memory');
     assert.deepStrictEqual(g.sent, [{ op: 'policy', key: 'picture', value: 0.5 }, { op: 'policy', key: 'sandbox', value: 'required' }, { op: 'policy', key: 'memoryLimitMb', value: 1200 }]);
-    g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 1500 } });
+    g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 2048 } });
     g.sent.length = 0;
     g._onAppsChoice('aset-picture'); g._onAppsChoice('aset-sandbox'); g._onAppsChoice('aset-memory');
     assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [1, 'ask', 600], 'the choices go round; the sandbox is never set to off from here');
+    g.setState({ pol: { sandbox: 'required', picture: 0.5, memoryLimitMb: 1500 } });
+    g.sent.length = 0; g._onAppsChoice('aset-memory');
+    assert.deepStrictEqual(g.sent.map(function (o) { return o.value; }), [2048], 'after 1500 MB comes 2048 MB, the default');
     // cluster and HUD for the page
     // (the panel "Ekrany": its tiles are the two switches)
     g._onAppsChoice('web-pick-cluster');

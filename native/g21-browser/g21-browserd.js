@@ -953,7 +953,7 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  *   audio     "on"        pages are heard: the engine's sound goes to G21 Audio (the tool g21-audio), which takes
  *                         the car's speakers while a page plays and gives them back after (default)
  *             "off"       pages are silent
- *   memoryLimitMb  300..3000   the engine's processes together; above it the engine is stopped (default 900)
+ *   memoryLimitMb  300..3000   the engine's processes together; above it the engine is stopped (default 2048)
  *   network.blockPrivate  true: pages cannot reach loopback, private, link-local and Tailscale addresses (default)
  *   network.allow  ["127.0.0.1:1235", "192.168.0.10:*"]  exceptions to blockPrivate: exact IPv4 address and port
  *                  (or * for any port). This is how a page is let to a tool inside the car.
@@ -966,8 +966,8 @@ const EDIT_PROBE = '(function(x,y){var e=document.activeElement;if(!e||e===docum
  */
 const FRAMES = ['direct', 'direct30', 'cast'];
 // (the defaults are the owner's own settings on the car, 2026-11-19: full Chrome, direct frames, the picture at the
-// screen's own pixels, pages at 100%, the sandbox required, 1500 MB)
-const POLICY_DEFAULT = { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 1500, network: { blockPrivate: true, allow: [] } };
+// screen's own pixels, pages at 100%, the sandbox required, 2048 MB)
+const POLICY_DEFAULT = { version: 1, sandbox: 'required', gpu: 'off', picture: 1, audio: 'on', homepage: '', autoplay: 'allow', fullscreen: 'screen', carData: 'apps', carDiag: 'apps', video: 'light', engine: 'chrome', mobile: 'on', frames: 'direct', control: 'native', timezone: 'Europe/Warsaw', player: 'off', memoryLimitMb: 2048, network: { blockPrivate: true, allow: [] } };
 function readPolicy(file) {
     const p = JSON.parse(JSON.stringify(POLICY_DEFAULT)), problems = [];
     let raw = null, text = null;
@@ -3148,6 +3148,25 @@ Daemon.prototype.start = async function () {
     [o.cacheDir, o.logDir].forEach((d) => { try { mkdirp(d); } catch (e) { /* logged on use */ } });
     try { mkdirp(o.stateDir, 0o700); } catch (e) { /* logged on use */ }
     this.killStrays(); // an engine a killed daemon left behind
+    /*
+     * The memory limit's default is 2048 MB since 0.1.55 (owner, 2026-11-20; it was 1500). The app writes the whole
+     * set of rules whenever one is changed, so the old default stands written out in the owner's policy.json and a
+     * new default alone would change nothing there: a 1500 in the file is raised once (noted in settings.json).
+     * A limit the owner sets after that, 1500 too, stays.
+     */
+    try {
+        if (!this.settings().mem2048) {
+            const j = readJson(o.policyFile);
+            if (j && j.memoryLimitMb === 1500) {
+                j.memoryLimitMb = 2048;
+                const tmp = o.policyFile + '.new';
+                fs.writeFileSync(tmp, JSON.stringify(j, null, 2) + '\n', { mode: 0o600 });
+                fs.renameSync(tmp, o.policyFile);
+                this.log('policy: "memoryLimitMb" 1500 (the old default) raised to 2048, the new one');
+            }
+            this.saveSettings({ mem2048: true });
+        }
+    } catch (e) { this.log('policy: memory limit: ' + e.message); }
     this.servicesAfterRestart();
     try { fs.unlinkSync(o.ring); } catch (e) { /* none */ }
     this.listen();

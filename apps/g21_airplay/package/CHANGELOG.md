@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.8
+
+- Limit pamięci silnika przeglądarki: domyślnie 2048 MB (właściciel, 2026-11-20; było 1500). `g21-browser` 0.1.55. Aplikacja zapisuje cały zestaw reguł przy każdej zmianie, więc stare 1500 stoi wpisane w `policy.json` właściciela: przy pierwszym starcie tej wersji jest raz podnoszone do 2048 (limit ustawiony później, także 1500, zostaje). „Limit pamięci" w ustawieniach ma teraz stopnie 600, 900, 1200, 1500 i 2048 MB. W aucie NIESPRAWDZONE – nie wiem, ile pamięci jednostka ma wtedy wolnej dla reszty.
+
 ## 0.2.7
 
 - Przegląd nowego sposobu sterowania przeglądarką (0.2.6) na życzenie właściciela; `g21-browser` 0.1.54. Wszystko poniżej sprawdzone na stanowisku (prawdziwa aplikacja, demon i Chrome), nic w aucie.
