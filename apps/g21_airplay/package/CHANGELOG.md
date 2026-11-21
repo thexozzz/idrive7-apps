@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.13
+
+- Serwer logów działa na komputerze właściciela (decyzja właściciela, 2026-11-21), więc `g21-browser` 0.1.59 wysyła logi na `100.89.159.94:12346` zamiast na adres z 0.1.58. Logi leżą w `dev-logs/car/` (poza gitem) i dochodzą tylko wtedy, gdy ten komputer jest włączony; reszta bez zmian. W aucie NIESPRAWDZONE.
+
 ## 0.2.12
 
 - Właściciel, 2026-11-21: po restarcie MGU film w przeglądarce grał dobrze; po zamknięciu przeglądarki i włączeniu AirPlay dźwięk się zacinał, po powrocie do filmu w przeglądarce też. Auto poza siecią, więc bez logu – przyczyna NIE jest ustalona. Pasuje do znanego objawu (pierwsze otwarcie urządzenia dźwięku trafia w pełne tempo, następne w trzy czwarte), ale to trzeba zobaczyć w logu.

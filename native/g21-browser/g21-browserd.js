@@ -1160,7 +1160,8 @@ Daemon.prototype.go = async function (e, url) {
  * niego", with this address). On unless the owner switches it off in the app (settings.json "logs": "off");
  * another server: "logServer": "host:port" in settings.json. See g21-logship.js for what is sent and how.
  */
-const LOG_SERVER = '100.89.166.19:12346';
+// (the owner's PC since 0.1.59: the server runs there; 0.1.58 had the address of another machine of his)
+const LOG_SERVER = '100.89.159.94:12346';
 Daemon.prototype.logsStart = function () {
     if (!this.opts.logShip && !this.opts.logShipTest) return;
     const st = this.settings();
