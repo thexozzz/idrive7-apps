@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.14
+
+- Pierwsze logi wysłane przez auto (2026-11-21, serwer logów na komputerze właściciela) – wysyłka działa. Odczyt z logu dźwięku (`g21-audio` 0.1.25, wejście odtwarzacza BMW): w czterech startach jednostki na cztery PIERWSZE otwarcie urządzenia dźwięku brało pełne 48 000 próbek na sekundę (raz AirPlay grał tak 24 minuty bez przerwy), a prawie każde następne 36 000 – po osiem prób z rzędu. To jest zgłoszone zacinanie: „po restarcie MGU film gra dobrze, po przejściu na AirPlay i z powrotem się zacina". Wejście odtwarzacza BMW ma więc tę samą wadę co wejście CarLife. Urządzenie przyznaje zawsze bufor 3072 próbek i okres 1024, o cokolwiek prosimy.
+- `g21-audio` 0.1.26: program zapisujący zamyka urządzenie dźwięku przed wyjściem (`drop`, `close`, razem najwyżej 400 ms; gdy nie wrócą, wychodzi jak dotąd i zapisuje to w logu). Dotąd wychodził z otwartym urządzeniem, bo zamknięcie raz nie wróciło (auto, 2026-11-15). Tym pierwsze otwarcie różni się od następnych: nikt nie zostawił strumienia otwartego. Wszystkie inne projekty grające przez to urządzenie je zamykają (docs/12). Czy to przywraca pełne tempo, NIE WIADOMO – to próba; następny log pokaże wiersze `out: device closed in … ms` i czy po nich są jeszcze `out: slow`.
+- `g21-browser` 0.1.60: wysyłka logów nie zapisuje już do logu wiersza o każdej udanej rundzie. Ten wiersz był nowym logiem do wysłania, więc auto wysyłało 45 bajtów co 30 s bez końca.
+- Znane i nienaprawione, z tego samego logu: gdy wejście odtwarzacza BMW przestaje przyjmować dźwięk i narzędzie wraca do wejścia CarLife, przejęcie głośników dla CarLife zostało odrzucone (`connect: E_NOT_POSSIBLE`) i dźwięku nie było do zamknięcia strony.
+- Sprawdzone na stanowisku (test strumieni z prawdziwą binarką: urządzenie jest zamykane). W aucie NIESPRAWDZONE.
+
 ## 0.2.13
 
 - Serwer logów działa na komputerze właściciela (decyzja właściciela, 2026-11-21), więc `g21-browser` 0.1.59 wysyła logi na `100.89.159.94:12346` zamiast na adres z 0.1.58. Logi leżą w `dev-logs/car/` (poza gitem) i dochodzą tylko wtedy, gdy ten komputer jest włączony; reszta bez zmian. W aucie NIESPRAWDZONE.

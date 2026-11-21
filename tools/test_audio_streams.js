@@ -216,6 +216,7 @@ async function until(what, fn, ms) {
     if (tryIt.status !== 0) console.log('SKIP streams with the real writer: g21-audio-out does not run here (' + String(tryIt.stderr || (tryIt.error && tryIt.error.message) || '').trim().split('\n').pop().slice(0, 100) + ')');
     else {
         // what the device really gave is said beside what was asked for (the car's 36 000 / 48 000 question)
+        assert.ok(/out: device closed in \d+ ms\n/.test(tryIt.stderr), 'the device is closed before the writer leaves: ' + tryIt.stderr);
         assert.ok(/out: device buffer \d+ frames, period \d+ frames/.test(tryIt.stderr), 'the granted buffer and period are logged: ' + tryIt.stderr);
         // the stream's lock: one that root made is given to the lock folder's owner, 660 (as root only)
         if (process.getuid() === 0) {

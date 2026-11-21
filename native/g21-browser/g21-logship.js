@@ -176,7 +176,7 @@ LogShip.prototype.round = async function () {
         for (const f of this.o.files) { if (!this.server) break; await this.one(f); }
         if (this.err) this.o.log('logs: the server takes them again');
         this.err = '';
-        if (this.sent !== before) this.o.log('logs: ' + (this.sent - before) + ' bytes sent');
+        // (nothing is written to the log about a round that went well: that line would be new log to send, every round, for ever: car, 2026-11-21, 45 bytes every 30 s)
     } catch (e) {
         const why = String(e && e.message || e).slice(0, 80);
         if (why !== this.err) this.o.log('logs: not sent: ' + why);

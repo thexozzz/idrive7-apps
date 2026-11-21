@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 #include <grp.h>
@@ -51,6 +52,8 @@ static struct {
     int (*delay)(snd_pcm_t *, long *);
     long (*avail)(snd_pcm_t *);   /* optional */
     int (*get_params)(snd_pcm_t *, unsigned long *, unsigned long *);   /* optional */
+    int (*drop)(snd_pcm_t *);    /* optional */
+    int (*close)(snd_pcm_t *);   /* optional */
     const char *(*strerror)(int);
 } A;
 enum { PLAYBACK = 0, NONBLOCK = 1, S16_LE = 2, RW_INTERLEAVED = 3 };
@@ -73,7 +76,7 @@ static volatile sig_atomic_t stopping;
 static void on_stop(int s) { (void)s; stopping = 1; }
 static double mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000.0 + t.tv_nsec / 1e6; }
 static unsigned buffer_us(void) { const char *e = getenv("G21_AUDIO_US"); long v = e ? atol(e) : 0; return v >= 20000 && v <= 500000 ? (unsigned)v : 250000; }
-static void leave(int code) { fflush(stderr); _exit(code); }
+static void leave(int code);
 
 static int alsa_load(void)
 {
@@ -81,7 +84,7 @@ static int alsa_load(void)
     if (!h) { fprintf(stderr, "[G21-AUDIO] out: libasound.so.2: %s\n", dlerror()); return 0; }
 #define SYM(f, n) ((A.f = dlsym(h, n)) != NULL)
     if (SYM(open, "snd_pcm_open") && SYM(set_params, "snd_pcm_set_params") && SYM(writei, "snd_pcm_writei") &&
-        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) { A.avail = dlsym(h, "snd_pcm_avail_update"); A.get_params = dlsym(h, "snd_pcm_get_params"); return 1; }
+        SYM(recover, "snd_pcm_recover") && SYM(delay, "snd_pcm_delay") && SYM(strerror, "snd_strerror")) { A.avail = dlsym(h, "snd_pcm_avail_update"); A.get_params = dlsym(h, "snd_pcm_get_params"); A.drop = dlsym(h, "snd_pcm_drop"); A.close = dlsym(h, "snd_pcm_close"); return 1; }
 #undef SYM
     fprintf(stderr, "[G21-AUDIO] out: libasound.so.2 lacks a function\n");
     return 0;
@@ -141,6 +144,54 @@ static void drop_root(void)
 }
 
 /*
+ * Leaving. Until 0.1.25 the writer left by _exit with the device still open, because snd_pcm_close on a SmartX
+ * stream did not return once (car, 2026-11-15). What that costs was read from the car on 2026-11-21 (the first logs
+ * the car sent by itself): in four starts of the head unit out of four the FIRST opening of the device took the full
+ * 48 000 frames a second (once for 24 minutes without a break) and nearly every later opening took 36 000, eight
+ * tries in a row, on the media input as before on the CarLife input. What the first opening has and the later ones
+ * do not is a stream nobody left open. The other projects that play through SmartX (idrive-enginesound, Vizualyse's
+ * pcm_play) all close it.
+ * So the device is closed: drop (what waits in it is thrown away, nothing is waited for), then close, with 400 ms
+ * for both. If they do not return in that time the writer leaves as it did before, and says so: the daemon gives a
+ * stopped writer 600 ms before it kills it. That this mends the pace is NOT known yet; the next log says it.
+ */
+static snd_pcm_t *G_pcm;
+static volatile sig_atomic_t leave_code;
+static void on_close_late(int s)
+{
+    static const char m[] = "[G21-AUDIO] out: the device did not close in 400 ms, left open\n";
+    (void)s;
+    if (write(2, m, sizeof m - 1) < 0) { /* nothing to do about it */ }
+    _exit(leave_code);
+}
+static void leave(int code)
+{
+    snd_pcm_t *pcm = G_pcm;
+    G_pcm = NULL;
+    if (pcm && A.close) {
+        struct itimerval it;
+        struct sigaction sa;
+        const double t0 = mono_ms();
+        int rc;
+        fflush(stderr);
+        leave_code = code;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = on_close_late;
+        sigaction(SIGALRM, &sa, NULL);
+        memset(&it, 0, sizeof it);
+        it.it_value.tv_usec = 400000;
+        setitimer(ITIMER_REAL, &it, NULL);
+        if (A.drop) A.drop(pcm);
+        rc = A.close(pcm);
+        memset(&it, 0, sizeof it);
+        setitimer(ITIMER_REAL, &it, NULL);
+        fprintf(stderr, "[G21-AUDIO] out: device closed in %.0f ms%s%s\n", mono_ms() - t0, rc < 0 ? ": " : "", rc < 0 ? A.strerror(rc) : "");
+    }
+    fflush(stderr);
+    _exit(code);
+}
+
+/*
  * The stream's lock. SmartX keeps one file a stream, /run/smartx/smartx_<stream>_p.lock, made by whoever opens the
  * stream first, as that user. Made by root it may be one the stream's real owner (BMW's media engine, CarPlay)
  * cannot take, and that owner is then silent until the head unit restarts: Vizualyse/idrive-apps, knowledge/sound.md,
@@ -190,6 +241,7 @@ static snd_pcm_t *dev_open(const char *dev)
     int rc;
     umask(0007);
     rc = A.open(&pcm, dev, PLAYBACK, NONBLOCK);
+    if (rc >= 0) G_pcm = pcm;
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: open %s: %s\n", dev, A.strerror(rc)); return NULL; }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: set_params %s: %s\n", dev, A.strerror(rc)); return NULL; }
@@ -541,6 +593,7 @@ static int probe(const char *dev, const char *mode)
     int rc;
     umask(0007);
     rc = A.open(&pcm, name, PLAYBACK, blocking ? 0 : NONBLOCK);
+    if (rc >= 0) G_pcm = pcm;
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: open %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
     rc = A.set_params(pcm, S16_LE, RW_INTERLEAVED, CH, RATE, 1, buffer_us());
     if (rc < 0) { fprintf(stderr, "[G21-AUDIO] out: probe %s: set_params %s: %s\n", mode, name, A.strerror(rc)); leave(1); }
