@@ -902,7 +902,7 @@ var SET_ADVANCED_ITEMS = [
     // second at most) or DevTools photographs (JPEG, 20 at most; the only way of the light engine)
     { name: 'aset-frames', title: 'Tor obrazu', hint: 'bezpośredni 60 kl./s', icon: 'desktop' },
     { name: 'aset-picture', title: 'Obraz stron', hint: '100%', icon: 'desktop' },
-    // the engine drawing on the car's graphics chip: a trial, on by hand, never kept over a start of the tool
+    // the engine drawing on the car's graphics chip: a trial, on by hand; kept until switched off or a run in it ends badly
     { name: 'aset-gpu', title: 'Układ graficzny (próba)', hint: 'wyłączony', icon: 'gear' },
     // films in the format this head unit decodes without stutter
     { name: 'aset-video', title: 'Lekkie wideo', hint: 'H.264 do 720p', icon: 'play' },

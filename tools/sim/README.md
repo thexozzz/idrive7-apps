@@ -34,4 +34,5 @@ Testy samego silnika (karty, rozmiary, historia): `tools/browser-bench/tabs.js`.
 Film w przeglądarce (potrzebny internet; domyślnie film z YouTube): `sh tools/sim/run.sh video.js [adres] [desktop] [long|fslong] [nohide] [trace] [anyvideo] [zoom=0.75]`.
 Dźwięk obok stanowiska: prawdziwy `g21-audiod.js` z `G21_AUDIO_OUT` wskazującym `tools/sim/pcm_out.js` (czyta w tempie zegara).
 Silnik bez interfejsu DevTools (domyślny od g21-browser 0.1.53): `sh tools/sim/run.sh native.js` (zachowania), `pages.js <adres>...` (czy strona się otwiera), `watch.js <adres> [kroki]` (strona w czasie, ze stuknięciami). `walk.js`, `video.js` i `tools/browser-bench/tabs.js` pytają stronę przez DevTools, więc chodzą w starym sposobie.
+`smooth.js [hogs=N] [picture=0.75] [frames=direct30] [flags=--a,--b]`: płynność przewijania ciężkiej strony (klatki na sekundę, przerwy, czas procesora silnika); sens ma dopiero z ograniczeniem procesora (cgroup `cpu.max`), bo stanowisko jest kilka razy szybsze niż jednostka.
 `fallback.js`: rozszerzenie nie może się połączyć – tryb awaryjny jest ogłaszany i sam ustępuje. `caps.js [devtools]`: formaty, Widevine, czas od stuknięcia do obrazu.

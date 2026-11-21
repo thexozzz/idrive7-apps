@@ -207,7 +207,13 @@ function glueApp() {
     assert.strictEqual(g._gpuHint(g._web.state()), 'włączony, ale silnik rysuje procesorem', 'the engine gave the chip up by itself: said');
     g.sent.length = 0;
     g._onAppsChoice('aset-gpu');
+    assert.deepStrictEqual(g.sent, [], 'a press while the engine starts anew after the switch is not a second wish');
+    g.setState({ gpu: { on: true, now: 'starting', why: '', hung: '' } });
+    assert.strictEqual(g._gpuHint(g._web.state()), 'włączony: silnik się uruchamia…');
+    g._gpuSentAt = Date.now() - 7000;
+    g._onAppsChoice('aset-gpu');
     assert.deepStrictEqual(g.sent, [{ op: 'gpu', on: false }], 'off with one press');
+    g._gpuSentAt = 0;
     g.setState({ gpu: { on: false, now: 'off', why: 'brak: renderD128', hung: '' } });
     assert.strictEqual(g._gpuHint(g._web.state()), 'brak: renderD128', 'why it cannot be tried');
     g.setState({ gpu: { on: false, now: 'off', why: '', hung: '2026-11-20T10:00:00' } });

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.15
+
+- Płynność przeglądarki (prośba właściciela, 2026-11-21). Z logu auta: jednostka jest stale przeciążona (obciążenie 8–37 przy czterech rdzeniach), silnik przeglądarki dostaje ok. jednego rdzenia (do 130 %) i przy 100 % obrazu pokazuje 10–40 klatek/s; zamiana klatki na format ekranu kosztuje 3–15 ms i nie jest wąskim gardłem.
+- Pomiar na stanowisku (`tools/sim/smooth.js`: ciężka strona przewijana 12 s, całość ograniczona do 15 % rdzenia, co daje tempo podobne do auta – 12–13 klatek/s, powtarzalnie). Przełączniki silnika nie dają nic ponad szum pomiaru (12,7–14,4 klatki/s): bez wygładzania liter, bez rozmycia tła, 1 lub 4 wątki rysujące, kafle 512, kafle niskiej rozdzielczości, bez wygładzania krawędzi, strony mobilne. Limit 30 klatek/s też nie (10,8). Daje liczba pikseli: „Obraz stron" 75 % – 18 klatek/s (+50 %), 50 % – 37 klatek/s (trzy razy więcej). Żadnego z tych przełączników nie włączam, bo nie ma czego potwierdzić. Liczby porównują warianty na stanowisku, nie przewidują auta.
+- Tryb GPU: z logu auta (2026-11-20, 23:17) wynika, że RUSZYŁ dwa razy – biblioteki jednostki się załadowały, klatki szły z układu graficznego (`wlframe: frames: gpu`), jednostka się nie zawiesiła. Był jednak włączony łącznie ok. 5 s: drugie naciśnięcie w trakcie restartu silnika wyłączało go, a każdy start narzędzia i tak go cofał, więc nie ma ani jednego pomiaru w tym trybie.
+- `g21-browser` 0.1.61: przełącznik trybu GPU jest zapamiętywany (do wyłączenia przez właściciela). Sam się wyłącza, gdy silnik zakończy się w tym trybie albo gdy uruchomienie w nim nie skończyło się normalnie (znacznik zostaje teraz na cały czas pracy w trybie, nie na 45 s) – także po odcięciu zasilania z otwartą przeglądarką. Naciśnięcie w ciągu 6 s po przełączeniu jest pomijane; ustawienie pokazuje „silnik się uruchamia…".
+- Wiersz `perf:` w logu zaczyna się od „GPU mode", gdy silnik rysuje układem, i kończy tym, kto ma procesor jednostki: ile z czterech rdzeni jest zajęte i pięć procesów, które zużyły najwięcej (same nazwy, odczyt z /proc). Dotąd nie było wiadomo, czyje jest to obciążenie.
+- Tryb GPU nadal NIE jest zmierzony – ani w aucie, ani na stanowisku (nie ma tam tego układu). Po próbie w aucie log sam pokaże, czy jest szybszy.
+
 ## 0.2.14
 
 - Pierwsze logi wysłane przez auto (2026-11-21, serwer logów na komputerze właściciela) – wysyłka działa. Odczyt z logu dźwięku (`g21-audio` 0.1.25, wejście odtwarzacza BMW): w czterech startach jednostki na cztery PIERWSZE otwarcie urządzenia dźwięku brało pełne 48 000 próbek na sekundę (raz AirPlay grał tak 24 minuty bez przerwy), a prawie każde następne 36 000 – po osiem prób z rzędu. To jest zgłoszone zacinanie: „po restarcie MGU film gra dobrze, po przejściu na AirPlay i z powrotem się zacina". Wejście odtwarzacza BMW ma więc tę samą wadę co wejście CarLife. Urządzenie przyznaje zawsze bufor 3072 próbek i okres 1024, o cokolwiek prosimy.

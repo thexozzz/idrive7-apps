@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.14',
+        version: (this._packageJson && this._packageJson.version) || '0.2.15',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.14') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.15') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5503,7 +5503,7 @@ AirPlayApp.prototype._gpuHint = function (s) {
         return 'może zrestartować jednostkę: naciśnij ponownie';
     }
     if (g.on) {
-        return g.now === 'gpu' ? 'włączony: rysuje układ graficzny' : (g.now === 'cpu' ? 'włączony, ale silnik rysuje procesorem' : 'włączony (do restartu narzędzia)');
+        return g.now === 'gpu' ? 'włączony: rysuje układ graficzny' : (g.now === 'cpu' ? 'włączony, ale silnik rysuje procesorem' : (g.now === 'starting' ? 'włączony: silnik się uruchamia…' : 'włączony'));
     }
     if (g.why) {
         return g.why;
@@ -5535,8 +5535,14 @@ AirPlayApp.prototype._gpuPress = function () {
     if (!g) {
         return;
     }
+    // (the engine starts anew after the switch, which takes seconds: a press in that time is not a second wish.
+    // Car, 2026-11-20: on, off, on, off within ten seconds, and the mode never ran long enough to be seen.)
+    if (this._gpuSentAt && Date.now() - this._gpuSentAt < 6000) {
+        return;
+    }
     if (g.on) {
         this._gpuAsk = 0;
+        this._gpuSentAt = Date.now();
         this._web.send({ op: 'gpu', on: false });
         return;
     }
@@ -5549,6 +5555,7 @@ AirPlayApp.prototype._gpuPress = function () {
     }
     this._gpuAsk = 0;
     noteStart('gpu: switched on by the owner');
+    this._gpuSentAt = Date.now();
     this._web.send({ op: 'gpu', on: true });
 };
 

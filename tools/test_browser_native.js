@@ -208,8 +208,33 @@ function ext(port, word, origin, onAsk) {
         const ga = d.Daemon.prototype.engineArgs.call(Object.assign({}, self, { native: true, gpu: true }), { profile: '/p', kind: 'chrome', major: '153' }, 'https://example.org/', true);
         assert.ok(ga.indexOf('--disable-gpu') < 0 && ga.indexOf('--use-angle=gles-egl') > 0 && ga.indexOf('--use-gl=angle') > 0 && ga.indexOf('--disable-gpu-sandbox') > 0 && ga.indexOf('--no-sandbox') < 0, 'the engine on the unit\'s EGL; only the graphics process without its sandbox: ' + ga.filter((x) => /gpu|angle|sandbox|use-gl/.test(x)).join(' '));
         assert.ok(args.indexOf('--disable-gpu') >= 0 && !args.some((x) => /use-angle/.test(x)), 'without the mode: on the processor, as always');
+        // the switch is kept (settings.json), and the performance line names the mode
+        assert.strictEqual(JSON.parse(fs.readFileSync(path.join(state, 'settings.json'), 'utf8')).gpu, 'on', 'the owner\'s switch is written down');
         await g.gpuSet(false);
         assert.strictEqual(g.gpuWant, false);
+        assert.strictEqual(JSON.parse(fs.readFileSync(path.join(state, 'settings.json'), 'utf8')).gpu, 'off');
+        {
+            const pl = d.Daemon.prototype.perfLine.call({ perf: { sumN: 0, sumMs: 0, unit: 'the unit: 80% of 4 cores busy, most: engine 110%, hmi 60%' }, direct: true, gpu: true, gpuFrames: 'gpu', frameFps: () => 60, opts: {} });
+            assert.ok(/^GPU mode \(frames from gpu\), frames direct/.test(pl) && /; the unit: 80% of 4 cores busy, most: engine 110%, hmi 60%$/.test(pl), pl);
+            assert.ok(!/GPU mode/.test(d.Daemon.prototype.perfLine.call({ perf: { sumN: 0, sumMs: 0 }, direct: true, gpu: false, frameFps: () => 60, opts: {} })));
+        }
+        // who has the processor: from a /proc made here, two looks apart
+        {
+            const proc = path.join(base, 'proc');
+            const put = (cpuLine, list) => { fs.rmSync(proc, { recursive: true, force: true }); fs.mkdirSync(proc); fs.writeFileSync(path.join(proc, 'stat'), cpuLine + '\ncpu0 1 2 3\n');
+                list.forEach((p) => { fs.mkdirSync(path.join(proc, String(p[0]))); fs.writeFileSync(path.join(proc, String(p[0]), 'stat'), p[0] + ' (' + p[1] + ') S 1 1 1 0 -1 0 0 0 0 0 ' + p[2] + ' ' + p[3] + ' 0 0 20 0 1 0 0 0 0\n'); }); };
+            const u = Object.create(d.Daemon.prototype);
+            Object.assign(u, { opts: { procDir: proc }, engineProcs: () => [20, 21] });
+            put('cpu  1000 0 500 8000 500 0 0 0 0 0', [[10, 'hmi main (x)', 100, 50], [20, 'chrome', 10, 10], [21, 'chrome', 5, 5], [30, 'quiet', 7, 0]]);
+            assert.strictEqual(u.perfUnit(), '', 'nothing to say at the first look');
+            const cores = require('os').cpus().length;
+            // 4000 ticks later: 1000 of them idle; hmi used 600, the engine's two processes 300 and 100, another 1
+            put('cpu  3500 0 1000 8800 700 0 0 0 0 0', [[10, 'hmi main (x)', 500, 250], [20, 'chrome', 210, 110], [21, 'chrome', 85, 25], [30, 'quiet', 8, 0], [40, 'new', 900, 0]]);
+            const line = u.perfUnit();
+            const share = (ticks) => Math.round(ticks * 100 * cores / 4000);
+            assert.strictEqual(line, 'the unit: 75% of ' + cores + ' cores busy, most: hmi_main__x_ ' + share(600) + '%, engine ' + share(400) + '%', line);
+        }
+        console.log('ok native: the GPU switch is kept; the performance line names the mode and who has the processor');
         fs.rmSync(base, { recursive: true, force: true });
     }
     console.log('ok native: the GPU mode is tried only when all it needs is there, by hand; its library folder, marker and arguments');

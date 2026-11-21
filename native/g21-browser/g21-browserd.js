@@ -2264,6 +2264,38 @@ function procTicks(procDir, pid) {
     const f = st.slice(st.lastIndexOf(')') + 2).split(' ');
     return f.length > 13 ? Number(f[11]) + Number(f[12]) : 0;
 }
+/*
+ * Who has the head unit's processor, for the "perf:" line (every 30 s while frames flow). The car's log of
+ * 2026-11-21: load 8 to 37 on four cores while the engine got about one core. Whose load that is was not in the
+ * log. Read from /proc only: all cores' busy share since the last line, and the five processes that used the most
+ * (by name; threads of one process together), the engine's own processes as "engine".
+ */
+Daemon.prototype.perfUnit = function () {
+    const o = this.opts, now = Date.now(), prev = this.unitWas || null;
+    const cpu = (lines(path.join(o.procDir, 'stat'))[0] || '').trim().split(/\s+/).slice(1).map(Number);
+    if (cpu.length < 5) return '';
+    const total = cpu.reduce((a, b) => a + b, 0), idle = cpu[3] + cpu[4];
+    const mine = {};
+    this.engineProcs().forEach((pid) => { mine[pid] = 1; });
+    const procs = {};
+    let names = [];
+    try { names = fs.readdirSync(o.procDir).filter((x) => /^\d+$/.test(x)); } catch (e) { return ''; }
+    names.forEach((pid) => {
+        const st = lines(path.join(o.procDir, pid, 'stat'))[0] || '';
+        const a = st.indexOf('('), b = st.lastIndexOf(')');
+        if (a < 0 || b < a) return;
+        const f = st.slice(b + 2).split(' ');
+        procs[pid] = { name: mine[pid] ? 'engine' : st.slice(a + 1, b).replace(/[^A-Za-z0-9._:+-]/g, '_').slice(0, 20), ticks: Number(f[11]) + Number(f[12]) };
+    });
+    this.unitWas = { at: now, total: total, idle: idle, procs: procs };
+    if (!prev || total <= prev.total || now - prev.at > 120000) return '';
+    const dTotal = total - prev.total, cores = Math.max(1, require('os').cpus().length);
+    const by = {};
+    Object.keys(procs).forEach((pid) => { const was = prev.procs[pid]; const d = procs[pid].ticks - (was && was.name === procs[pid].name ? was.ticks : 0); if (d > 0 && was) by[procs[pid].name] = (by[procs[pid].name] || 0) + d; });
+    // (share of one core, as the engine's number above: ticks of this process against the ticks one core had)
+    const top = Object.keys(by).map((n) => ({ n: n, pct: Math.round(by[n] * 100 * cores / dTotal) })).filter((x) => x.pct >= 3).sort((x, y) => y.pct - x.pct).slice(0, 5);
+    return 'the unit: ' + Math.round((dTotal - (idle - prev.idle)) * 100 / dTotal) + '% of ' + cores + ' cores busy' + (top.length ? ', most: ' + top.map((x) => x.n + ' ' + x.pct + '%').join(', ') : '');
+};
 Daemon.prototype.perfSample = function () {
     const p = this.perf, o = this.opts, now = Date.now();
     let eng = 0;
@@ -2277,6 +2309,7 @@ Daemon.prototype.perfSample = function () {
     p.cpuAt = now; p.cpuEng = eng; p.cpuFr = fr; p.cpuOwn = own;
     if (p.sumN && now - (p.logAt || 0) >= 30000) {
         p.logAt = now;
+        try { p.unit = this.perfUnit(); } catch (e) { p.unit = ''; }
         this.log('perf: ' + this.perfLine());
         p.sumN = 0; p.sumMs = 0; p.sumUs = 0; p.sumMax = 0; p.sumP95 = 0;
     }
@@ -2284,11 +2317,11 @@ Daemon.prototype.perfSample = function () {
 Daemon.prototype.perfLine = function () {
     const p = this.perf, f = p.frames, c = p.cpu;
     const load = (lines('/proc/loadavg')[0] || '').split(' ')[0] || '';
-    return 'frames ' + (this.direct ? 'direct (the engine window, at most ' + this.frameFps() + ' a second)' : 'cast (photographs, at most ' + Math.round(1000 / this.opts.frameGapMs) + ' a second)')
+    return (this.gpu ? 'GPU mode (frames from ' + (this.gpuFrames || '?') + '), ' : '') + 'frames ' + (this.direct ? 'direct (the engine window, at most ' + this.frameFps() + ' a second)' : 'cast (photographs, at most ' + Math.round(1000 / this.opts.frameGapMs) + ' a second)')
         + ', ' + (p.sumMs ? (p.sumN * 1000 / p.sumMs).toFixed(1) : '0') + ' fps shown while the picture moved'
         + (f ? ', between frames ' + f.med + ' ms middle / ' + p.sumP95 + ' ms 95% / ' + p.sumMax + ' ms longest, ' + (p.sumN ? (p.sumUs / p.sumN / 1000).toFixed(2) : '0') + ' ms a frame in the frame tool' + (this.direct ? ' (' + f.pct + '% of the picture)' : '') : '')
         + (c ? '; CPU of one core: engine ' + c.engine + '%, frame tool ' + c.frame + '%, daemon ' + c.daemon + '%' : '') + (p.memMb ? '; engine memory ' + p.memMb + ' MB' : '') + (load ? '; load ' + load : '')
-        + (p.loadMs ? '; last page loaded in ' + p.loadMs + ' ms' : '') + (p.tapMs ? '; tap to next picture ' + p.tapMs + ' ms' : '');
+        + (p.loadMs ? '; last page loaded in ' + p.loadMs + ' ms' : '') + (p.tapMs ? '; tap to next picture ' + p.tapMs + ' ms' : '') + (p.unit ? '; ' + p.unit : '');
 };
 Daemon.prototype.perfLoaded = function () { if (this.loadT0) { this.perf.loadMs = Date.now() - this.loadT0; this.loadT0 = 0; } };
 // what the engine itself says about its graphics (the same data as chrome://gpu): into the log once a start
@@ -2374,6 +2407,8 @@ Daemon.prototype.engineArgs = function (dirs, url, sandbox) {
     if (this.gpu) a = a.filter((x) => x !== '--disable-gpu' && x !== '--disable-software-rasterizer').concat(['--use-gl=angle', '--use-angle=gles-egl', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-gpu-sandbox']);
     // without DevTools: no debugging pipe, and the one extension that stands in for it
     if (this.native && this.extDir) a = a.filter((x) => x !== '--remote-debugging-pipe' && x !== '--disable-extensions' && x !== '--disable-component-extensions-with-background-pages').concat(['--load-extension=' + this.extDir, '--disable-extensions-except=' + this.extDir]);
+    // (the stand's measurements, tools/sim/smooth.js: switches tried there before they are made the rule here)
+    if (Array.isArray(this.opts.engineExtra) && this.opts.engineExtra.length) a = this.opts.engineExtra.concat(a);
     this.lastArgs = a.slice(); this.lastSandbox = !!sandbox; return a; };
 Daemon.prototype.engineArgs2 = function (dirs, url, sandbox) {
     // The window in CSS pixels, so that the picture (window x zoom) is whole pixels, its width a multiple of 4 and its
@@ -2609,7 +2644,7 @@ Daemon.prototype.startEngine2 = async function (url) {
     if (this.gpu) {
         // it ran with the chip for a while: the try did not take the unit down
         clearTimeout(this.gpuTimer);
-        this.gpuTimer = setTimeout(() => { if (this.engine === e && this.gpu) { this.gpuMark(false); this.log('gpu: 45 s in the GPU mode, frames from ' + (this.gpuFrames || '?') + '; state/gpu-trial removed'); } }, 45000);
+        this.gpuTimer = setTimeout(() => { if (this.engine === e && this.gpu) this.log('gpu: 45 s in the GPU mode, frames from ' + (this.gpuFrames || '?')); }, 45000);
     }
     this.log('engine up: ' + e.product + (this.gpu ? ', GPU mode' : '') + (sandbox ? (this.helper ? ', sandbox (setuid helper beside the engine)' : ', sandbox') : ', no sandbox') + ', ' + this.want.w + 'x' + this.want.h + ' zoom ' + this.zoom);
     this.set({ engine: 'ready' });
@@ -2685,7 +2720,8 @@ Daemon.prototype.gpuSet = async function (on) {
     if (on === !!this.gpuWant) { this.push(true); return; }
     this.gpuWant = on;
     this.gpuWhy = '';
-    this.log('gpu: the GPU mode is switched ' + (on ? 'on (for this run of the tool; never kept)' : 'off'));
+    this.saveSettings({ gpu: on ? 'on' : 'off' });
+    this.log('gpu: the GPU mode is switched ' + (on ? 'on (kept until it is switched off, or a run in it does not end in order)' : 'off'));
     if (this.want) { const url = /^https?:/.test(this.s.url) ? this.s.url : null; await this.stopEngine('GPU mode ' + (on ? 'on' : 'off')); await this.startEngine(url); }
     else this.push(true);
 };
@@ -3104,7 +3140,7 @@ Daemon.prototype.onEngineExit = function (e, code, sig) {
     const tail = e.err.split('\n').filter((l) => /FATAL|ERROR|error while loading|No usable sandbox|cannot|spawn/.test(l) && !/dbus|Floss|bluez/i.test(l)).slice(-3).join(' | ').slice(0, 500);
     this.log('engine exited ' + (sig || code) + (tail ? ': ' + tail : ''));
     // (in the GPU mode: the mode is off; the next start is on the processor, and the app says why)
-    if (this.gpu) { this.gpu = false; this.gpuWant = false; this.gpuWhy = NOTE_GPU_OFF; clearTimeout(this.gpuTimer); this.gpuMark(false); this.log('gpu: the engine ended in the GPU mode: the mode is off'); }
+    if (this.gpu) { this.gpu = false; this.gpuWant = false; this.gpuWhy = NOTE_GPU_OFF; try { this.saveSettings({ gpu: 'off' }); } catch (x) { /* logged on use */ } clearTimeout(this.gpuTimer); this.gpuMark(false); this.log('gpu: the engine ended in the GPU mode: the mode is off'); }
     if (!this.starting) this.set({ engine: 'failed', err: 'silnik się zatrzymał: odśwież', loading: false, live: false });
 };
 Daemon.prototype.killEngine = function () {
@@ -3284,7 +3320,7 @@ Daemon.prototype.start = async function () {
     try { mkdirp(o.stateDir, 0o700); } catch (e) { /* logged on use */ }
     this.killStrays(); // an engine a killed daemon left behind
     // the GPU mode's marker left over: the last try ended with this tool (most likely the unit) going down
-    try { const gm = path.join(o.stateDir, 'gpu-trial'); if (fs.existsSync(gm)) { this.gpuHung = String(fs.readFileSync(gm, 'utf8')).trim().slice(0, 30); fs.unlinkSync(gm); this.log('gpu: state/gpu-trial was left from ' + this.gpuHung + ': the last try in the GPU mode did not end in order (the unit went down?). The mode is off, as at every start.'); } } catch (e) { /* no state folder yet */ }
+    try { const gm = path.join(o.stateDir, 'gpu-trial'); if (fs.existsSync(gm)) { this.gpuHung = String(fs.readFileSync(gm, 'utf8')).trim().slice(0, 30); fs.unlinkSync(gm); this.log('gpu: state/gpu-trial was left from ' + this.gpuHung + ': the last try in the GPU mode did not end in order (the unit went down?). The mode is switched off.'); } } catch (e) { /* no state folder yet */ }
     /*
      * The memory limit's default is 2048 MB since 0.1.55 (owner, 2026-11-20; it was 1500). The app writes the whole
      * set of rules whenever one is changed, so the old default stands written out in the owner's policy.json and a
@@ -3304,6 +3340,19 @@ Daemon.prototype.start = async function () {
             this.saveSettings({ mem2048: true });
         }
     } catch (e) { this.log('policy: memory limit: ' + e.message); }
+    /*
+     * The GPU mode is kept since 0.1.61. The car, 2026-11-20 (the first log the car sent): the mode started twice,
+     * the engine drew on the unit's chip ("wlframe: frames: gpu") and nothing went down; it was on for five seconds
+     * in all, because every start of the tool put it back and a second press switched it off. So it could never be
+     * measured. Now the owner's switch stays (settings.json "gpu") until he switches it off. What still puts it off
+     * by itself: the engine ending in the mode, and state/gpu-trial found at a start, which is written before the
+     * chip is touched and stays for the whole run in the mode (a run that did not end in order: the unit went
+     * down, or lost its power with the browser open).
+     */
+    try {
+        if (this.gpuHung) this.saveSettings({ gpu: 'off' });
+        else if (this.settings().gpu === 'on') { this.gpuWant = true; this.log('gpu: the GPU mode is on (the owner\'s switch, kept)'); }
+    } catch (e) { this.log('gpu: settings: ' + e.message); }
     this.servicesAfterRestart();
     this.logsStart();
     try { fs.unlinkSync(o.ring); } catch (e) { /* none */ }
