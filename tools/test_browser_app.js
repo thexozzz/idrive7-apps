@@ -147,7 +147,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_gpuHint', '_logsHint', '_webAway', '_tellWebOut', '_setScreen', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_gpuHint', '_logsHint', '_webAway', '_tellWebOut', '_setScreen', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_webPace', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -236,6 +236,16 @@ function glueApp() {
     g._onAppsChoice('web-pick-hud');
     g._webGaugeAt = 0; g._takeWeb();
     assert.deepStrictEqual(g.faces[1], [1332, 396, 'cluster,hud'], 'HUD switched on: the page goes there too');
+    // how often: every look of the timer while a page is cheap, a quarter of the time when it costs
+    g._webCost = undefined; g._webPace(2);
+    assert.strictEqual(g._webGaugeGap, 40, 'a cheap page: 24 a second');
+    g._webCost = undefined; g._webPace(15);
+    assert.strictEqual(g._webGaugeGap, 60, 'a page of 15 ms: one every 60 ms');
+    g._webCost = undefined; g._webPace(500);
+    assert.strictEqual(g._webGaugeGap, 250, 'never slower than 4 a second');
+    g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 }; g._webGaugeAt = Date.now(); g._takeWeb();
+    assert.strictEqual(g.faces.length, 2, 'not before its time');
+    g._webCost = undefined; g._webGaugeGap = 0; g.ring = null;
     g._ytGaugeFrame = {}; g.ring = { i420: Buffer.alloc(6), w: 1332, h: 396 }; g._webGaugeAt = 0; g._takeWeb();
     assert.strictEqual(g.faces.length, 2, 'a YouTube film has the cluster and the HUD first');
     g._ytGaugeFrame = null;

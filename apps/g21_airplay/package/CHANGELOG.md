@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.21
+
+- Przeglądarka na zegarach i HUD: strona idzie tam do 24 razy na sekundę zamiast 8 (właściciel, 2026-11-22: „Tak, podnieś"). Film puszczony na stronie był tam dotąd pokazem 8 obrazów na sekundę.
+- Hamulec kosztu: czytanie i zmniejszanie strony to praca procesora w samej aplikacji, a jednostka przy filmie jest zajęta w ok. 80 %. Aplikacja mierzy, ile trwa jedna strona, i bierze na to najwyżej ćwierć czasu (strona za 15 ms idzie co 60 ms; nigdy rzadziej niż 4 razy na sekundę).
+- Do logu co 15 s, gdy strony idą: `web-pace … pages a second …, … ms each` – ile faktycznie wyszło i ile kosztuje jedna strona w aucie.
+- Bez zmian: strona, która się nie zmienia, nie jest wysyłana ponownie; film AirPlay i YouTube idzie swoją drogą.
+- Sprawdzone testami na stanowisku; w aucie jeszcze nie. Kosztu w aucie nie znam (na tym komputerze zmniejszenie strony 1796 × 548 trwa ok. 2 ms; jednostka jest wielokrotnie wolniejsza).
+
 ## 0.2.20
 
 - Przeglądarka, panel „Ekrany": kafle pokazują teraz faktyczny wybór (właściciel, 2026-11-22: „dla przeglądarki nie wybiera się, gdzie ma się wyświetlać, w przycisku Ekrany"). Od 0.2.18 wybór ekranów jest wspólny, ale panel przeglądarki dowiadywał się o nim tylko ze stron ustawień i po własnym stuknięciu – po otwarciu przeglądarki pokazywał „tylko środek" bez względu na to, co było wybrane. Stuknięcie kafla przełączało więc prawdziwy wybór odwrotnie, niż było widać (np. wyłączało zegary, które panel pokazywał jako wyłączone). Panel czyta teraz wspólną listę przy każdym rysowaniu, także po zmianie zrobionej w AirPlay albo w ustawieniach.

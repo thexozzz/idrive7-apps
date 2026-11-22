@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.20',
+        version: (this._packageJson && this._packageJson.version) || '0.2.21',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -577,7 +577,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.20') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.21') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -4849,7 +4849,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride, s
      * A page of Przeglądarka (sharp): not the KOMBI profile, which is a film's (480 x 288 by the owner's setting: a
      * page 1796 wide became 480, by leaving three pixels of four out, and the renderer then stretched that to the
      * window, 612 wide on the cluster: car, 2026-11-22, "bardzo rozpikselizowana"). The page is made the size of
-     * the window it is drawn in, pixel for pixel, with its pixels averaged. At most 8 pages a second (_takeWeb).
+     * the window it is drawn in, pixel for pixel, with its pixels averaged. At most 24 pages a second, fewer when they cost much (_webPace).
      * The window's size is the limit that stays: a page 1796 wide in a window 612 wide has letters a third of
      * their size; a larger window ("Pozycja") or a larger zoom of the page makes them readable.
      */
@@ -5707,8 +5707,8 @@ AirPlayApp.prototype._takeWeb = function () {
     if (this._airStarting || (this._sessions && this._sessions.active() === 'airplay') || this._ytGaugeFrame) {
         return;
     }
-    // at most 8 pages a second: each one is read and scaled on the CPU
-    if (this._webGaugeAt && (now - this._webGaugeAt) < 125) {
+    // at most 24 pages a second (every look of the 42 ms timer); fewer when a page costs much: _webPace
+    if (this._webGaugeAt && (now - this._webGaugeAt) < (this._webGaugeGap || 40)) {
         return;
     }
     this._webGaugeAt = now;
@@ -5743,6 +5743,34 @@ AirPlayApp.prototype._takeWeb = function () {
     }
     this._webFaces = true;
     this._webGaugeOuts = this._placeMirrorFaces(this._webFrame.i420, this._webFrame.w, this._webFrame.h, outs, true) ? outs.join(',') : '';
+    if (frame && this._webGaugeOuts) {
+        this._webPace(Date.now() - now);
+    }
+};
+
+/*
+ * How often a page goes to the cluster and the HUD. It was 8 times a second, whatever it cost (owner, 2026-11-22:
+ * raise it; a film on a page was 8 pictures a second there). Now every look of the timer may take one (24 a second),
+ * but reading and scaling them is this process's own work on a unit that is 80 % busy with a film: it may have a
+ * quarter of the time, so a page that costs 15 ms goes every 60 ms. The cost is the middle of the last ones; the
+ * log gets a line every 15 s while pages go, so the car's log says what was reached.
+ */
+AirPlayApp.prototype._webPace = function (ms) {
+    var now = Date.now();
+    var gap;
+    this._webCost = (typeof this._webCost === 'number') ? this._webCost * 0.8 + ms * 0.2 : ms;
+    gap = Math.round(this._webCost * 4);
+    this._webGaugeGap = gap < 40 ? 40 : (gap > 250 ? 250 : gap);
+    this._webPaceN = (this._webPaceN || 0) + 1;
+    if (!this._webPaceAt) {
+        this._webPaceAt = now;
+        this._webPaceN = 0;
+    } else if (now - this._webPaceAt >= 15000) {
+        noteStart('web-pace ' + (this._webPaceN * 1000 / (now - this._webPaceAt)).toFixed(1) + ' pages a second on ' + this._webGaugeOuts +
+            ', ' + this._webCost.toFixed(1) + ' ms each, one every ' + this._webGaugeGap + ' ms at most');
+        this._webPaceAt = now;
+        this._webPaceN = 0;
+    }
 };
 
 // ---- Aplikacje ---------------------------------------------------------------------------------
