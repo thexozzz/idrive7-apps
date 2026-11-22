@@ -51,7 +51,7 @@ assert.deepStrictEqual(Array.prototype.slice.call(seen.video), [104, 172, 1796, 
 assert.ok(!seen[6] && !seen[7] && !seen[10], 'only ops proven on the car (no CARD, RAMPRECT, TRIS)');
 assert.ok(f.frame.length < 8000, 'a small frame: ' + f.frame.length);
 var names = f.layout.webHits.map(function (h) { return h.name; });
-assert.deepStrictEqual(names, ['web-exit', 'web-back', 'web-reload', 'web-home', 'web-url', 'web-where', 'web-keys', 'web-enter', 'web-zoom-out', 'web-zoom-in', 'app-exit'], 'forward is off without a page ahead; "Ekrany" is on the bar');
+assert.deepStrictEqual(names, ['web-exit', 'web-back', 'web-reload', 'web-home', 'web-url', 'web-where', 'web-wide', 'web-keys', 'web-enter', 'web-zoom-out', 'web-zoom-in', 'app-exit'], 'forward is off without a page ahead; "Ekrany" is on the bar');
 f.layout.webHits.forEach(function (h) { assert.ok(h.h >= 56 && h.w >= 64 && h.x >= 104 && h.x + h.w <= 1900 && h.y >= 88 && h.y + h.h <= 172, h.name + ' is a finger wide, inside the toolbar and inside the touch claim'); });
 assert.ok(names.indexOf('app-exit') !== -1, '"Wyłącz aplikację" is on this screen too');
 // zoom at its ends
@@ -147,7 +147,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_gpuHint', '_logsHint', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_gpuHint', '_logsHint', '_webAway', '_setScreen', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -244,6 +244,57 @@ function glueApp() {
     g._onAppsChoice('aset-back');
     assert.ok(g.screen === 'system' && g.calls.indexOf('leave') !== -1, 'leaving the group lets the daemon go');
     console.log('ok Aplikacje: Przeglądarka, YouTube, Ustawienia; rules through the daemon; the page on the cluster and the HUD');
+}());
+// ---- "Ekrany": one choice for AirPlay, YouTube and Przeglądarka; a page with the bar hidden
+(function () {
+    var outs = ['central'];
+    var saved = 0;
+    var settings = { outputs: function () { return outs.slice(); }, toggleOutput: function (k) { var i = outs.indexOf(k); if (i < 0) { outs.push(k); } else { outs.splice(i, 1); } } };
+    // the modules' switches are views of the one list (the block of main.js that defines them, on a class made here)
+    var block = /\[\['_ytCentral', 'central'\][\s\S]*?\r?\n\}\);\r?\n/.exec(main);
+    assert.ok(block, 'the shared switches are defined');
+    function Fake() {}
+    new Function('AirPlayApp', block[0])(Fake);
+    var one = new Fake();
+    one._settings = settings;
+    one._setScreen = method('_setScreen', {});
+    one._saveWindows = function () { saved += 1; };
+    one._refreshAirBadge = function () {};
+    one._routerMode = function () { return 'x'; };
+    assert.deepStrictEqual([one._ytCentral, one._ytCluster, one._ytHud, one._webCluster, one._webHud], [true, false, false, false, false]);
+    one._webCluster = true;
+    assert.deepStrictEqual([outs, one._ytCluster, saved], [['central', 'cluster'], true, 1], 'the browser\'s switch is YouTube\'s and AirPlay\'s too, and it is saved');
+    one._webCluster = true;
+    assert.strictEqual(saved, 1, 'set to what it is: nothing happens');
+    one._ytHud = true; one._ytCentral = false;
+    assert.deepStrictEqual([outs, one._webHud], [['cluster', 'hud'], true], 'YouTube\'s switches change the same list');
+    one._webAway = method('_webAway', {});
+    assert.strictEqual(one._webAway(), 'Ekrany: zegary + HUD', 'a page without the centre says where it is');
+    outs.length = 0;
+    assert.strictEqual(one._webAway(), '', 'no screen chosen at all: the centre');
+    // the centre's frame says so, and shows no page
+    var base = { connected: true, engine: 'ready', live: true, video: true, w: 1796, h: 548, url: 'https://example.org/' };
+    var away = menu.buildWebFrame(1920, 720, Object.assign({}, base, { away: 'Ekrany: zegary' }));
+    var there = menu.buildWebFrame(1920, 720, base);
+    assert.ok(there.layout.video !== false && !away.frame.equals(there.frame), 'without the centre the page is not drawn on it');
+    assert.deepStrictEqual(menu.webOutScreens ? menu.webOutScreens().length : 3, 3);
+    // the bar hidden: the page has the whole part of the screen, one floating sign brings the bar back
+    var wide = menu.buildWebFrame(1920, 720, Object.assign({}, base, { wide: true, w: 1796, h: 632 }));
+    assert.deepStrictEqual(wide.layout.webHits.map(function (h) { return h.name; }), ['web-wide'], 'only the sign that brings the bar back');
+    assert.deepStrictEqual(wide.layout.webPage, { x: 104, y: 88, w: 1796, h: 632 }, 'the page is the whole part of the screen');
+    assert.ok(!menu.buildWebFrame(1920, 720, Object.assign({}, base, { wide: true, fs: true, fsBox: { x: 0, y: 0, w: 1920, h: 720 } })).layout.wide, 'a film\'s full screen is its own, not this');
+    var g = glueApp();
+    g._onWebChoice('browser');
+    g.setState({ connected: true, engine: 'ready', live: true, w: 1796, h: 548 });
+    g.tell();
+    g._menu.webWidePage = function () { return { x: 104, y: 88, w: 1796, h: 632 }; };
+    g.calls.length = 0;
+    g._onWebChoice('web-wide');
+    assert.ok(g._webWide === true && g.calls.indexOf('open 1796x632') !== -1 && g.web[g.web.length - 1].wide === true, 'the bar\'s button: the page is asked at the whole size: ' + g.calls.join());
+    g.calls.length = 0;
+    g._onWebChoice('web-wide');
+    assert.ok(g._webWide === false && g.calls.length === 1 && g.calls[0] !== 'open 1796x632' && g.web[g.web.length - 1].wide === false, 'again: the bar is back');
+    console.log('ok Ekrany: one choice for the three modules; a page with the bar hidden');
 }());
 // ---- G21 Input: the cursor only in an app with mouse: yes, in front, with the switch on
 (function () {

@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.17',
+        version: (this._packageJson && this._packageJson.version) || '0.2.18',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -477,16 +477,10 @@ function AirPlayApp() {
         noteStart('full-migrate centre window 640x360');
     }
     // YouTube screens come back as they were left (saved in the settings).
-    var ytScreens = this._desk.ytScreens ? this._desk.ytScreens() : { central: true, cluster: false, hud: false };
-    this._ytCentral = ytScreens.central !== false;
-    this._ytCluster = !!ytScreens.cluster;
-    this._ytHud = !!ytScreens.hud;
+    // (since 0.2.18 YouTube's and Przeglądarka's screens are the one choice of "Ekrany": see sharedScreen below)
     this._ytLive = false;
     this._ytFile = youtubeFile.createYoutubeFile();
     // Przeglądarka on the cluster and the HUD: the same reader on the browser's video file
-    var webScreens = this._desk.webScreens ? this._desk.webScreens() : { cluster: false, hud: false };
-    this._webCluster = !!webScreens.cluster;
-    this._webHud = !!webScreens.hud;
     this._webFile = youtubeFile.createYoutubeFile(menuDraw.WEB_FILE);
     // G21 Input: one switch for the whole app (the icon beside "Wyłącz aplikację"); the cursor only in apps with mouse: yes
     this._mouseOn = this._desk.mouse ? this._desk.mouse() : true;
@@ -583,7 +577,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.17') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.18') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -3332,6 +3326,13 @@ AirPlayApp.prototype._onMenuChoice2 = function (name) {
     if (name === 'air-pick-central' || name === 'air-pick-cluster' || name === 'air-pick-hud') {
         this._settings.toggleOutput(name.replace('air-pick-', ''));
         this._airNeedPick = false;
+        // (the same list is YouTube's and Przeglądarka's)
+        this._webGaugeOuts = '';
+        this._ytGaugeOuts = '';
+        if (this._webOn) {
+            this._paintApps();
+            this._paintWeb();
+        }
         this._saveWindows();
         if (this._router) {
             this._router.setMode(this._routerMode());
@@ -5397,6 +5398,7 @@ AirPlayApp.prototype._closeBrowser = function () {
     this._webHeld = false;
     this._webHeldScreen = '';
     this._webApp = '';
+    this._webWide = false;
     noteStart('web-close');
     this._dropWebFaces();
     this._syncMouse('browser closed');
@@ -5443,6 +5445,8 @@ AirPlayApp.prototype._paintWeb = function () {
         cy: this._mouseY,
         fs: !!s.fs,
         stretch: !!s.stretch,
+        wide: !!this._webWide && !this._webApp,
+        away: this._webAway(),
         film: s.film || null,
         fsBox: this._webFsBox(),
         fsFull: !!this._webFsFull,
@@ -5468,6 +5472,9 @@ AirPlayApp.prototype._storeAppName = function (id) {
 AirPlayApp.prototype._webPageBox = function () {
     if (this._webApp && this._menu && typeof this._menu.webAppPage === 'function') {
         return this._menu.webAppPage();
+    }
+    if (this._webWide && this._menu && typeof this._menu.webWidePage === 'function') {
+        return this._menu.webWidePage();
     }
     return this._menu.webPage();
 };
@@ -5704,9 +5711,9 @@ AirPlayApp.prototype._paintApps = function () {
     if (!m || typeof m.setItemHint !== 'function') {
         return;
     }
-    m.setItemHint('aset-screens', 'środek' + (this._webCluster ? ' + zegary' : '') + (this._webHud ? ' + HUD' : ''));
+    m.setItemHint('aset-screens', [this._webAway() ? '' : 'środek', this._webCluster ? 'zegary' : '', this._webHud ? 'HUD' : ''].filter(Boolean).join(' + '));
     if (typeof m.setWebOut === 'function') {
-        m.setWebOut({ cluster: !!this._webCluster, hud: !!this._webHud });
+        m.setWebOut({ central: !this._webAway(), cluster: !!this._webCluster, hud: !!this._webHud });
     }
     // the engine's rules: from the tool's daemon; a dash while it does not answer
     m.setItemHint('aset-picture', pol && pol.picture ? Math.round(pol.picture * 100) + '%' : '—');
@@ -5901,6 +5908,9 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         return this._onAppsChoice(name === 'web-pick-cluster' ? 'aset-cluster' : 'aset-hud');
     }
     if (name === 'web-pick-central') {
+        this._setScreen('central', !!this._webAway());
+        this._paintApps();
+        this._paintWeb();
         return true;
     }
     if (name === 'svc-restart') {
@@ -6240,6 +6250,7 @@ AirPlayApp.prototype._onAppsChoice = function (name) {
         noteStart('web-screens' + (this._webCluster ? ' cluster' : '') + (this._webHud ? ' hud' : ''));
         this._webGaugeOuts = '';
         this._paintApps();
+        this._paintWeb();
         return true;
     }
     if (name === 'aset-home' || name === 'aset-zoom' || name === 'aset-fs' || name === 'aset-autoplay' || name === 'aset-car' || name === 'aset-diag' || name === 'aset-video' || name === 'aset-engine' || name === 'aset-frames' || name === 'aset-mobile') {
@@ -6381,6 +6392,15 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         // THEiPlay Player's buttons
         web.send(name === 'web-film-play' ? { op: 'film', a: 'toggle' } : (name === 'web-film-rw' ? { op: 'film', a: 'seek', d: -10 } : (name === 'web-film-ff' ? { op: 'film', a: 'seek', d: 10 }
             : (name === 'web-film-q' ? { op: 'film', a: 'quality' } : { op: 'film', a: 'zoom' }))));
+    } else if (name === 'web-wide') {
+        // The page over the whole part of the screen, the bar hidden; the floating sign brings the bar back.
+        // Not the full screen of a film: that is the page's own, with its own way out.
+        this._webWide = !this._webWide;
+        noteStart('web-wide ' + (this._webWide ? 'on' : 'off'));
+        var widePage = this._webPageBox();
+        var wideWin = this._webFsBox();
+        this._webClient().open(widePage.w, widePage.h, this._webApp || '', wideWin.w, wideWin.h);
+        this._paintWeb();
     } else if (name === 'web-stretch') {
         // the round sign beside the way out: the film over the whole screen (the daemon keeps the switch)
         noteStart('web-stretch ' + (s.stretch ? 'off' : 'on'));
@@ -6439,6 +6459,60 @@ AirPlayApp.prototype._onWebChoice = function (name) {
 
 // ---- G21 Input: the controller's touchpad as a mouse ----------------------------------------
 // Apps started from "Aplikacje" say whether they take the mouse (mouse: 'yes'); nothing else gets a cursor.
+/*
+ * "Ekrany" is one choice for the whole app (owner, 2026-11-22: "opcja w menu Ekrany nie jest absolutna dla AirPlay,
+ * YouTube, Przeglądarka"). There used to be three lists, one a module (AirPlay's outputs, YouTube's screens, the
+ * browser's cluster and HUD with the centre always on), so what was picked in one did not hold in another. Now
+ * there is one list, the settings' outputs, and the modules' old switches are views of it: reading one reads the
+ * list, setting one changes the list for all three.
+ */
+AirPlayApp.prototype._setScreen = function (key, on) {
+    var s = this._settings;
+    if (!s || typeof s.outputs !== 'function' || (s.outputs().indexOf(key) !== -1) === !!on) {
+        return;
+    }
+    s.toggleOutput(key);
+    noteStart('screens: ' + (s.outputs().join('+') || 'none') + ' (for AirPlay, YouTube and Przeglądarka)');
+    this._webGaugeOuts = '';
+    this._ytGaugeOuts = '';
+    try {
+        this._saveWindows();
+        if (this._router) {
+            this._router.setMode(this._routerMode());
+        }
+        this._refreshAirBadge();
+    } catch (e) {
+        noteStart('screens: ' + (e && e.message));
+    }
+};
+[['_ytCentral', 'central'], ['_ytCluster', 'cluster'], ['_ytHud', 'hud'], ['_webCluster', 'cluster'], ['_webHud', 'hud']].forEach(function (p) {
+    Object.defineProperty(AirPlayApp.prototype, p[0], {
+        configurable: true,
+        get: function () {
+            return !!(this._settings && typeof this._settings.outputs === 'function' && this._settings.outputs().indexOf(p[1]) !== -1);
+        },
+        set: function (on) {
+            this._setScreen(p[1], !!on);
+        }
+    });
+});
+// where a page shows when the centre is not among the chosen screens ('' when it is on the centre)
+AirPlayApp.prototype._webAway = function () {
+    var outs = this._settings && typeof this._settings.outputs === 'function' ? this._settings.outputs() : ['central'];
+    var names = [];
+    if (outs.indexOf('central') !== -1) {
+        return '';
+    }
+    if (outs.indexOf('cluster') !== -1) {
+        names.push('zegary');
+    }
+    if (outs.indexOf('hud') !== -1) {
+        names.push('HUD');
+    }
+    // (no screen chosen at all: the centre, as YouTube does)
+    return names.length ? 'Ekrany: ' + names.join(' + ') : '';
+};
+
 AirPlayApp.APPS = {
     chromium: { mouse: 'yes' },   // Przeglądarka: real mouse events into the engine (g21-browserd op "mouse")
     youtube: { mouse: 'yes' }     // (its own screens have no mouse adapter yet: the cursor shows only where one is ready)

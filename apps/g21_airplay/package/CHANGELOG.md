@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.18
+
+- „Ekrany" to teraz jeden wybór dla całej aplikacji (właściciel, 2026-11-22: „opcja w menu Ekrany nie jest absolutna dla AirPlay, YouTube, Przeglądarka"). Dotąd były trzy osobne listy – wyjścia AirPlay, ekrany YouTube oraz zegary / HUD przeglądarki ze środkiem włączonym na stałe – więc to, co wybrano w jednym module, nie obowiązywało w drugim. Teraz jest jedna lista (środek, zegary, HUD): zmiana w panelu „Ekrany" dowolnego modułu albo w ustawieniach obowiązuje wszystkie trzy i jest zapamiętywana. Obowiązuje dotychczasowy wybór AirPlay; osobne zapisane wybory YouTube i przeglądarki przestają być czytane.
+- Przeglądarka: kafel „środek" w panelu „Ekrany" da się wyłączyć jak w AirPlay. Bez środka strona jest tylko na zegarach / HUD, a ekran środkowy pokazuje pasek przeglądarki i napis „Strona jest na innym ekranie". Gdy nie wybrano żadnego ekranu – środek, jak w YouTube.
+- Przeglądarka: nowy przycisk na pasku (cztery narożniki, obok klawiatury) chowa pasek i daje stronie całą dotykową część ekranu (1796 × 632 zamiast 1796 × 548). Pływający znak w prawym górnym rogu przywraca pasek. To osobna rzecz niż pełny ekran filmu, który nadal włącza sama strona i który ma własne wyjście. Tryb nie jest zapamiętywany po zamknięciu przeglądarki.
+- Sprawdzone testami na stanowisku; w aucie jeszcze nie.
+
 ## 0.2.17
 
 - Przeglądarka, pełny ekran: nowy okrągły przycisk „rozciągnij" obok wyjścia (taki sam jak w pełnym ekranie AirPlay). Włączony – film wypełnia cały ekran środkowy, bez czarnych pasów po bokach (obraz jest wtedy szerszy niż w oryginale). Przełącznik jest zapamiętywany. `g21-browser` 0.1.63: okno silnika dostaje kształt filmu (dla 16:9 – 852 × 480 zamiast 1280 × 480, więc mniej pikseli do narysowania), a aplikacja rysuje je na całym ekranie; kształt filmu odczytywany ze strony, 16:9, gdy strona go nie podaje (odtwarzacz w ramce innej witryny). Nie dotyczy THEiPlay Player, który ma własny przycisk.

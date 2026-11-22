@@ -429,9 +429,9 @@ function drawBtn(draw, b, state) {
     return hov;
 }
 // which screens a page and an app from Sklep show on besides the centre (main.js tells: setWebOut)
-var WEB_OUT = { cluster: false, hud: false };
+var WEB_OUT = { central: true, cluster: false, hud: false };
 function webOutScreens() {
-    return [{ key: 'central', on: true, hint: 'zawsze' }, { key: 'cluster', on: !!WEB_OUT.cluster }, { key: 'hud', on: !!WEB_OUT.hud }];
+    return [{ key: 'central', on: WEB_OUT.central !== false }, { key: 'cluster', on: !!WEB_OUT.cluster }, { key: 'hud', on: !!WEB_OUT.hud }];
 }
 /*
  * Every app has its menu in its own colour, and the menu says whose it is (owner, 2026-11-20): THEiPlay's own pages
@@ -2948,7 +2948,7 @@ function applyAirOverlay(draw, lay, air, versionText) {
         });
     }
     if (air && air.whereOpen && air.whereMode === 'web') {
-        drawWhereSheet(draw, lay, { screens: webOutScreens(), whereCursor: air.whereCursor, pickPrefix: 'web-pick-', pickClose: 'air-where-close', fixedCentral: true, sheetLabel: 'Przeglądarka i aplikacje' });
+        drawWhereSheet(draw, lay, { screens: webOutScreens(), whereCursor: air.whereCursor, pickPrefix: 'web-pick-', pickClose: 'air-where-close', sheetLabel: 'Przeglądarka i aplikacje' });
     } else if (air && air.whereOpen && air.whereMode === 'base') {
         drawWhereSheet(draw, lay, { screens: [], whereCursor: air.whereCursor, pickClose: 'air-where-close', disabled: true, sheetLabel: 'żaden moduł teraz nie gra' });
     } else if (air && air.whereOpen) {
@@ -3907,7 +3907,9 @@ function webLayout(width, height) {
         keys: { name: 'web-keys', x: right - 352, y: y, w: 64, h: bh }
     };
     // "Ekrany": the one button for where this module shows, as in the corner of every menu page
-    lay.where = { name: 'web-where', x: lay.keys.x - 12 - 148, y: y, w: 148, h: bh };
+    // the page over the whole part of the screen (the bar hidden), left of the keyboard; "Ekrany" left of that
+    lay.wide = { name: 'web-wide', x: lay.keys.x - 8 - 64, y: y, w: 64, h: bh };
+    lay.where = { name: 'web-where', x: lay.wide.x - 12 - 148, y: y, w: 148, h: bh };
     lay.url = { name: 'web-url', x: ox + 456, y: y, w: lay.where.x - 12 - (ox + 456), h: bh };
     lay.page = { x: ox, y: oy + WEB_BAR_H, w: w, h: (h - WEB_BAR_H) & ~1 };
     return lay;
@@ -3931,6 +3933,9 @@ function webStatus(web) {
     }
     if (web.engine === 'unpacking') {
         return { title: 'Sprawdzam i rozpakowuję silnik', hint: (web.pct | 0) + '%', busy: true };
+    }
+    if (web.away && web.live) {
+        return { title: 'Strona jest na innym ekranie', hint: web.away, busy: false };
     }
     if (web.live && !web.video) {
         return { title: 'Brak obrazu strony', hint: 'renderer bez warstwy wideo', busy: false };
@@ -3958,7 +3963,7 @@ function webSheet(draw, lay, info, hits) {
         return;
     }
     board = { ox: lay.ox, oy: lay.oy, boxW: lay.w, boxH: lay.h, airHits: [] };
-    drawWhereSheet(draw, board, { screens: webOutScreens(), whereCursor: info.whereCursor == null ? -1 : info.whereCursor, pickPrefix: 'web-pick-', pickClose: 'web-where-close', fixedCentral: true, sheetLabel: info.app ? (info.appName || 'Aplikacja') : 'Przeglądarka' });
+    drawWhereSheet(draw, board, { screens: webOutScreens(), whereCursor: info.whereCursor == null ? -1 : info.whereCursor, pickPrefix: 'web-pick-', pickClose: 'web-where-close', sheetLabel: info.app ? (info.appName || 'Aplikacja') : 'Przeglądarka' });
     // (only the panel answers while it is open; the last one pushed is looked at first, as in the menu)
     hits.length = 0;
     for (i = 0; i < board.airHits.length; i += 1) {
@@ -3992,6 +3997,10 @@ function webReloadGlyph(draw, cx, cy, ink) {
     draw.quad([[px + tx * 9, py + ty * 9], [px + nx * 6.5, py + ny * 6.5], [px - nx * 6.5, py - ny * 6.5]], ink);
 }
 
+function webWideBox() {
+    return { x: CONTENT.x, y: CONTENT.y, w: CONTENT.w & ~3, h: CONTENT.h & ~1 };
+}
+
 function buildWebFrame(width, height, web) {
     var draw = new FrameBuilder();
     var lay = webLayout(width, height);
@@ -4000,7 +4009,8 @@ function buildWebFrame(width, height, web) {
     var vh;
     var hits = [];
     var info = web || {};
-    var showVideo = !!(info.live && info.video);
+    // ("Ekrany" without the centre: the page is on the cluster or the HUD only, and the centre says so)
+    var showVideo = !!(info.live && info.video) && !info.away;
     var ready = !!(info.connected && info.engine === 'ready');
     var zoomAt = WEB_ZOOMS.indexOf(Number(info.zoom));
     var c;
@@ -4134,6 +4144,28 @@ function buildWebFrame(width, height, web) {
             layout: { webHits: fsHits, webPage: fsBox, web: lay, video: true, fs: true, film: !!info.film }
         };
     }
+    if (showVideo && info.wide && !info.app) {
+        // The page over the whole part of the screen the app gets touches from, the bar hidden (the bar's button
+        // with the four corners). The same sign floats at the top right and brings the bar back.
+        var wideBox = webWideBox();
+        var wideW = info.w > 0 && info.w <= wideBox.w ? info.w : wideBox.w;
+        var wideH = info.h > 0 && info.h <= wideBox.h ? info.h : wideBox.h;
+        draw.video(wideBox.x, wideBox.y, wideW, wideH, 1);
+        var wideOut = { name: 'web-wide', x: FULL_EXIT.x, y: FULL_EXIT.y, w: FULL_EXIT.w, h: FULL_EXIT.h };
+        drawIconBtn(draw, wideOut, 'full', true);
+        var wideHits = [wideOut];
+        if (info.mouse) {
+            var wx = wideBox.x + Math.max(0, Math.min(wideBox.w - 1, Math.round(info.cx || 0)));
+            var wy = wideBox.y + Math.max(0, Math.min(wideBox.h - 1, Math.round(info.cy || 0)));
+            draw.quad([[wx - 2, wy - 4], [wx - 2, wy + 27], [wx + 21, wy + 19]], 0x101010FF);
+            draw.quad([[wx, wy], [wx, wy + 22], [wx + 16, wy + 16]], 0xFFFFFFFF);
+        }
+        return {
+            frame: packFrame(draw, { webHits: wideHits }),
+            rects: draw.rects,
+            layout: { webHits: wideHits, webPage: wideBox, web: lay, video: true, wide: true }
+        };
+    }
     if (showVideo) {
         // 1:1, at the size the engine made the picture (a few pixels under the page area at some zooms)
         vw = info.w > 0 && info.w <= lay.page.w ? info.w : lay.page.w;
@@ -4203,6 +4235,15 @@ function buildWebFrame(width, height, web) {
         hits.push(lay.url);
     }
     drawWebWhere(draw, hits, lay.where, info);
+    // four corners: the page over the whole part of the screen
+    c = webButton(draw, hits, lay.wide, ready && showVideo);
+    ink = ready && showVideo ? INK : LINE;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) {
+        var qx = c.cx + q[0] * 12;
+        var qy = c.cy + q[1] * 10;
+        draw.rect(q[0] < 0 ? qx : qx - 8, q[1] < 0 ? qy : qy - 3, 9, 3, ink);
+        draw.rect(q[0] < 0 ? qx : qx - 2, q[1] < 0 ? qy : qy - 8, 3, 9, ink);
+    });
     shown = String(info.url || '').replace(/^https?:\/\//i, '').replace(/\/$/, '');
     if (shown) {
         secure = /^https:/i.test(String(info.url));
@@ -4706,7 +4747,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, stretch: !!webView.stretch, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!(whereOpen && whereMode === 'web'), whereCursor: whereCursor, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, stretch: !!webView.stretch, wide: !!webView.wide, away: webView.away || '', film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!(whereOpen && whereMode === 'web'), whereCursor: whereCursor, video: native
             };
             var webBuilt;
             useTheme(webView.app ? 'store' : 'browser');
@@ -6636,7 +6677,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.stretch ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.held ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.stretch ? 1 : 0, next.wide ? 1 : 0, next.away || '', next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.held ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }
@@ -6663,6 +6704,10 @@ function createMenuSurface(opts) {
         /** an app from Sklep: the whole part of the screen the app gets touches from */
         webAppPage: function () {
             return { x: CONTENT.x, y: CONTENT.y, w: CONTENT.w & ~3, h: (CONTENT.h - APP_NAV_H) & ~1 };
+        },
+        /** a page with the bar hidden: the whole part of the screen the app gets touches from */
+        webWidePage: function () {
+            return webWideBox();
         },
         /** the whole centre screen (Przeglądarka's full screen) */
         webScreen: function () {
@@ -6799,9 +6844,11 @@ function createMenuSurface(opts) {
         setWebOut: function (o) {
             var c = !!(o && o.cluster);
             var hd = !!(o && o.hud);
-            if (c === WEB_OUT.cluster && hd === WEB_OUT.hud) {
+            var mid = !(o && o.central === false);
+            if (c === WEB_OUT.cluster && hd === WEB_OUT.hud && mid === WEB_OUT.central) {
                 return;
             }
+            WEB_OUT.central = mid;
             WEB_OUT.cluster = c;
             WEB_OUT.hud = hd;
             paint();
