@@ -267,6 +267,25 @@ function ext(port, word, origin, onAsk) {
             assert.strictEqual(f.fs, null, 'out of full screen');
             console.log('ok native: the stretch of a full screen takes the film\'s shape');
         }
+        // a new page area (the bar hidden): the engine that runs gets the size, it is not started again
+        {
+            const sizes = [], stops = [], metrics = [];
+            const e = { session: 's', mode: '', cdp: { send: async (m, p) => { if (m === 'Emulation.setDeviceMetricsOverride') metrics.push(p.width + 'x' + p.height); return {}; } } };
+            const f = Object.create(d.Daemon.prototype);
+            Object.assign(f, { want: { w: 1796, h: 548, fw: 1920, fh: 720 }, policy: () => ({ fullscreen: 'screen', mobile: 'off' }), direct: true, zoom: 1, picture: () => 1, settings: () => ({}),
+                frameSize: (w, h) => sizes.push(w + 'x' + h), changed: () => {}, log: () => {}, set: () => {}, push: () => {}, engine: e, s: {}, fs: null,
+                stopEngine: async (why) => { stops.push(why); f.engine = null; }, startEngine: async () => { stops.push('start'); }, switchTab: async () => false, cast: async () => {} });
+            await f.onCommand({ op: 'open', w: 1796, h: 632, fw: 1920, fh: 720 });
+            assert.deepStrictEqual([stops, sizes, metrics, f.want.h], [[], ['1796x632'], ['1796x632'], 632], 'the bar hidden: the page is 632 high in the same engine');
+            await f.onCommand({ op: 'open', w: 1796, h: 632, fw: 1920, fh: 720 });
+            assert.deepStrictEqual([stops.length, sizes.length], [0, 1], 'the same size again: nothing');
+            await f.onCommand({ op: 'open', w: 1796, h: 548, fw: 1920, fh: 720 });
+            assert.deepStrictEqual([stops, sizes.pop(), f.want.h], [[], '1796x548', 548], 'and back');
+            await f.onCommand({ op: 'open', w: 1796, h: 548, fw: 1920, fh: 720, zoom: 1.25 });
+            assert.deepStrictEqual(stops, ['new size', 'start'], 'another zoom is still a new engine');
+            clearTimeout(f.idleTimer);
+            console.log('ok native: a new page area goes to the engine that runs');
+        }
         fs.rmSync(base, { recursive: true, force: true });
     }
     console.log('ok native: the GPU mode is tried only when all it needs is there, by hand; its library folder, marker and arguments');

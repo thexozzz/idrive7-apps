@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.19
+
+- Przeglądarka: przycisk „pełna strona" (pasek schowany) nie uruchamia już silnika od nowa. Auto, 2026-11-22: każde schowanie i przywrócenie paska kończyło się wpisem „engine stopped (new size)" – 3–4 s bez obrazu i strona ładowana od początku (cztery razy tego dnia). `g21-browser` 0.1.64: strona dostaje nowy rozmiar w działającym silniku, tak jak przy zmianie karty i przy pełnym ekranie filmu. Inne powiększenie strony nadal oznacza nowy silnik.
+- Dźwięk: `g21-audio` 0.1.27. Auto, 2026-11-22 13:11, film w przeglądarce: po 2 min 10 s „out: dead, the device takes 0 frames a second", przejście na wejście CarLife, a tam dwa razy „not connected: CS_SUSPENDED" – auto zawiesiło nasze połączenie z głośnikami (na wyjściu stało wtedy własne źródło auta, 256, widziane ten jeden raz; rozmowa albo komunikat). Narzędzie uruchomiło potem zapis dźwięku bez głośników i niczego już nie ponawiało: cisza przez 18 minut, do zamknięcia przeglądarki. Teraz: (1) urządzenie, które nic nie bierze, gdy nasze połączenie jest zawieszone, nie jest usterką – strumień czeka (odtwarzacz idzie dalej, bez dźwięku), głośniki zostają nasze, stan połączenia jest czytany co sekundę i po końcu zawieszenia dźwięk wraca sam; po 10 minutach zawieszenia albo gdy nie ma już odtwarzacza, głośniki są oddawane; (2) odmowa głośników z powodu zawieszenia nie przełącza już na stałe na wejście CarLife; (3) zapis dźwięku nigdy nie jest uruchamiany bez głośników – strumień czeka i prosi o nie ponownie przy następnym dźwięku.
+- Sprawdzone testami na stanowisku; w aucie jeszcze nie. Nie wiadomo z auta, czy menedżer dźwięku BMW podaje stan „zawieszone" dla wejścia multimediów w chwili, gdy urządzenie przestaje brać dźwięk (odczytano go dla wejścia CarLife 8 s później), ani czy sam wznawia połączenie.
+
 ## 0.2.18
 
 - „Ekrany" to teraz jeden wybór dla całej aplikacji (właściciel, 2026-11-22: „opcja w menu Ekrany nie jest absolutna dla AirPlay, YouTube, Przeglądarka"). Dotąd były trzy osobne listy – wyjścia AirPlay, ekrany YouTube oraz zegary / HUD przeglądarki ze środkiem włączonym na stałe – więc to, co wybrano w jednym module, nie obowiązywało w drugim. Teraz jest jedna lista (środek, zegary, HUD): zmiana w panelu „Ekrany" dowolnego modułu albo w ustawieniach obowiązuje wszystkie trzy i jest zapamiętywana. Obowiązuje dotychczasowy wybór AirPlay; osobne zapisane wybory YouTube i przeglądarki przestają być czytane.

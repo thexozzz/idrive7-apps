@@ -81,7 +81,7 @@ const ALSA_GID = env.G21_AUDIO_GID ? Number(env.G21_AUDIO_GID) : groupId('mgu_al
  * (g21-audio-out.c, G21_AUDIO_DROP). The source is BMW's, shared with RideTube: it is not marked available or
  * tidied up by this tool, and the two cannot sound at once.
  */
-const MEDIA_INPUT = (function () { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')).input !== 'carlife'; } catch (e) { return true; } })() && !DEVICE;
+const MEDIA_INPUT = (function () { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')).input !== 'carlife'; } catch (e) { return true; } })() && (!DEVICE || env.G21_AUDIO_FORCE_MEDIA === '1');      // (FORCE_MEDIA: tests)
 const MEDIA_DEVICE = 'smartx:MediaSink_AudioOut_Front_CF_48_COMBINED_STEREO_MULTICHANNEL';
 // how the writer is started: as nobody in the group mgu_alsa, or (the media input) as root that gives root up
 // how long the channel is held through a silence (ms): "holdMs" in config.json, 20 s when it says nothing
@@ -135,6 +135,49 @@ const SETTLE_MS = env.G21_AUDIO_SETTLE_MS !== undefined ? Number(env.G21_AUDIO_S
     const s = st.cur;
     if (s && st.writer && !st.moving) { s.yield = true; s.loudAt = Date.now(); park('another source took the speakers'); }
 }); });
+/*
+ * Suspended (0.1.27). Car, 2026-11-22 13:11, a film in the browser, 2 min 10 s into its sound: "out: dead, the device
+ * takes 0 frames a second". The tool took that for a media input that does not work, went to the CarLife input for
+ * good, and the claim there failed twice with "not connected: CS_SUSPENDED": the audio manager had suspended
+ * our connection (a source of the car's own had the speakers: a call, an announcement; source 256 stood there,
+ * seen that one time only). The writer was then started without the speakers and nothing was tried again: no sound
+ * for the 18 minutes until the browser was closed.
+ * Now a device that takes nothing while our connection is CS_SUSPENDED is not a fault: the stream is one of the
+ * waiting ones again (read and dropped, so its player goes on), the speakers stay claimed, nothing is asked of the
+ * audio manager but the state of our connection, once a second. Connected again: the next sound gets its writer.
+ * The connection gone: the next sound claims the speakers anew. Still suspended after ten minutes, or no player
+ * left: the speakers are given back.
+ * NOT seen on the car yet: that the audio manager says CS_SUSPENDED for the media source at that moment (it was read
+ * for the CarLife source 8 s later), and that it makes the connection CS_CONNECTED again by itself.
+ */
+let susp = null;
+const SUSPEND_POLL_MS = Number(env.G21_AUDIO_SUSPEND_POLL_MS) || 1000, SUSPEND_MAX_MS = Number(env.G21_AUDIO_SUSPEND_MAX_MS) || 600000;
+function connState() {
+    if (typeof sp.state !== 'function') return Promise.resolve('?');
+    return sp.state().then(function (v) { return String(v || ''); }, function () { return '?'; });
+}
+function suspendEnd(why) { const x = susp; if (!x) return; susp = null; clearInterval(x.timer); log('suspended: ' + why); }
+function suspend() {
+    if (susp) return;
+    log('the car has suspended our sound (a call or an announcement of its own): the stream waits, the speakers are kept');
+    uncur();
+    const x = { since: Date.now(), timer: null, busy: false };
+    susp = x;
+    x.timer = setInterval(function () {
+        if (susp !== x || x.busy) return;
+        if (!streams.length) { suspendEnd('no player is left'); release('its player went away'); return; }
+        if (Date.now() - x.since > SUSPEND_MAX_MS) { suspendEnd('still so after ' + Math.round(SUSPEND_MAX_MS / 60000) + ' min'); release('suspended for too long'); return; }
+        x.busy = true;
+        connState().then(function (v) {
+            x.busy = false;
+            if (susp !== x || v === 'CS_SUSPENDED' || v === '?') return;
+            const s = Math.round((Date.now() - x.since) / 1000);
+            if (v === 'CS_CONNECTED') { suspendEnd('over after ' + s + ' s, the next sound plays'); return; }
+            st.claimed = false;
+            suspendEnd('our connection is gone after ' + s + ' s (' + (v || 'none') + '): the next sound claims the speakers anew');
+        });
+    }, SUSPEND_POLL_MS);
+}
 function fallBack(why) {
     if (!onMedia()) return Promise.resolve();
     const old = sp, was = st.claimed;
@@ -179,7 +222,7 @@ function keeperStart() {
         // Carefully: a start every 5 s whenever the player was not playing would itself break the clock every 5 s.
         // Paused: asked to play on, at most every 20 s. Stopped (the file ended, or another program): the file again,
         // at most once a minute. Each is written down, to be read from the log.
-        if (keeper !== k || !k.started || !k.state || k.state === 'PLAYER_STATE_PLAY' || Date.now() - t0 < 5000) return;
+        if (susp || keeper !== k || !k.started || !k.state || k.state === 'PLAYER_STATE_PLAY' || Date.now() - t0 < 5000) return;
         const now = Date.now();
         if (k.state === 'PLAYER_STATE_PAUSE') {
             if (now - (k.nudged || 0) < 20000) return;
@@ -215,6 +258,7 @@ function claim() {
             st.claiming = null;
             st.claimed = false;
             log('speakers not claimed: ' + (e && e.message || e));
+            if (/CS_SUSPENDED/.test(String(e && e.message || e))) { log('the car has suspended our sound: the speakers are asked for again later'); return false; }
             if (onMedia()) return fallBack('the speakers were not connected').then(function () { return st.cur ? claim() : false; });
             return false;
         });
@@ -344,7 +388,7 @@ function tick() {
         readWaiting(s, now);
         if (!next && s !== st.cur && !s.yield && s.loudSince && now - s.loudSince >= 40 && now >= s.retryAt) next = s;
     }
-    if (st.moving) return;
+    if (st.moving || susp) return;
     if (st.cur && st.writer) {
         // nothing but silence for as long as the channel is held (a phone that mirrors its screen sends silence all
         // the time), or a writer that never got its first sound: the speakers go back
@@ -522,7 +566,19 @@ function startWriter() {
         // The media input: its device did not open (1) or is not read (4, and the speakers are ours): the CarLife input
         // from here on, the stream held meanwhile.
         if (child.g21media && onMedia() && !sig && (code === 1 || (code === 4 && st.claimed))) {
-            fallBack(code === 4 ? 'the device is open and the speakers are ours, but it takes nothing' : 'the device did not open').then(function () { return st.cur ? claim() : false; }).then(function () { if (st.holder) setTimeout(startWriter, SETTLE_MS || 200); });
+            const s0 = st.cur;
+            (code === 4 ? connState() : Promise.resolve('')).then(function (v) {
+                if (st.cur !== s0 || st.writer) return;
+                if (v === 'CS_SUSPENDED') { suspend(); return; }
+                fallBack(code === 4 ? 'the device is open and the speakers are ours, but it takes nothing' : 'the device did not open').then(function () { return st.cur ? claim() : false; }).then(function (ok) {
+                    if (!st.holder || st.writer) return;
+                    if (ok) { setTimeout(startWriter, SETTLE_MS || 200); return; }
+                    // (until 0.1.26 the writer was started here without the speakers and stayed: car, 2026-11-22,
+                    // "frames 3072 dropped 494208". The stream waits and its next sound asks for them again.)
+                    const s = uncur();
+                    if (s) s.retryAt = Date.now() + 10000;
+                });
+            });
             return;
         }
         const pace = code === 3 && !sig;

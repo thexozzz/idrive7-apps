@@ -20,7 +20,7 @@
       "description": "AirPlay, Windows Win+K (MS-MICE), RDP i VNC, YouTube i przeglądarka internetowa. Jedna aktywna sesja; lustro iPhone lub emisja PC na Wi-Fi Store.",
       "uninstallable": true,
       "mguHmi": ["ID7"],
-      "requires": { "g21-airplay-open": "0.1.63", "cluster-render": "0.5.4", "jap-ridetube-d": "0.3.9", "g21-browser": "0.1.63", "g21-audio": "0.1.26", "g21-input": "0.1.2" }
+      "requires": { "g21-airplay-open": "0.1.63", "cluster-render": "0.5.4", "jap-ridetube-d": "0.3.9", "g21-browser": "0.1.64", "g21-audio": "0.1.27", "g21-input": "0.1.2" }
     }
   ],
   "tools": [
@@ -45,7 +45,7 @@
     {
       "id": "g21-browser",
       "path": "native/g21-browser",
-      "version": "0.1.63",
+      "version": "0.1.64",
       "title": "Przeglądarka",
       "description": "Silnik przeglądarki dla THEiPlay (Google chrome-headless-shell, pobierany z Google przy pierwszym użyciu).",
       "uninstallable": true,
@@ -54,7 +54,7 @@
     {
       "id": "g21-audio",
       "path": "native/g21-audio",
-      "version": "0.1.26",
+      "version": "0.1.27",
       "title": "G21 Audio",
       "description": "Dźwięk THEiPlay na głośnikach auta (strumień PCM przez SmartX i AudioManager BMW).",
       "uninstallable": true,

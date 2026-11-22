@@ -1281,7 +1281,13 @@ Daemon.prototype.onCommand = async function (m) {
         // Until 0.1.49 this restarted the engine at every such change (stand, 2026-11-20: "engine stopped (new
         // size)"), so neither kept its page.
         const otherTab = !!this.engine && (m.app ? String(m.app) : '') !== (this.engine.mode || '') && this.zoom === z;
-        if (this.engine && this.want && !otherTab && (this.want.w !== w || this.want.h !== h || this.zoom !== z)) await this.stopEngine('new size');
+        // 0.1.64: only the page area changed (THEiPlay 0.2.18's button that hides the bar: 1796 x 548 <-> 1796 x 632).
+        // Car, 2026-11-22: each press was "engine stopped (new size)", 3 to 4 s without a picture and the page loaded
+        // again. The page that is shown gets the new size in the engine that runs (fitPage, as a change of tab and
+        // a full screen do). Another zoom, an engine that is not ready, or a full screen that is on: started again.
+        const differs = !!this.engine && !!this.want && !otherTab && (this.want.w !== w || this.want.h !== h || this.zoom !== z);
+        const resized = differs && this.zoom === z && !!this.engine.session && !this.fs;
+        if (differs && !resized) await this.stopEngine('new size');
         // fw x fh: the whole centre screen, for a player that goes full screen
         const fw = Math.max(0, Math.min(3840, Number(m.fw) | 0)) & ~3, fh = Math.max(0, Math.min(2160, Number(m.fh) | 0)) & ~1;
         // (the app's window for full screen: the whole screen or the owner's "Pozycja" window, which may be smaller
@@ -1306,7 +1312,8 @@ Daemon.prototype.onCommand = async function (m) {
             const en = this.engine;
             const made = await this.switchTab(en, mode);
             if (this.engine !== en) return;
-            if (made) { try { await this.fitPage(en); } catch (x) { this.log('tabs: size: ' + x.message); } }
+            if (made || resized) { try { await this.fitPage(en); } catch (x) { this.log('tabs: size: ' + x.message); } }
+            if (resized) this.log('the page area is ' + w + 'x' + h + ' now (the engine goes on)');
             await this.cast(true);
             if (m.keep && !made) { this.push(true); return; }
             if (firstUrl) { this.set({ err: '', loading: true, back: false, fwd: false }); await this.go(en, firstUrl); }

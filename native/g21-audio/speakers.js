@@ -258,6 +258,15 @@ class Speakers extends EventEmitter {
         });
     }
 
+    /* The state of our connection to the speakers as the audio manager tells it (CS_CONNECTED, CS_SUSPENDED, ...),
+     * '' when there is none. Read only: nothing is asked for. */
+    state() {
+        return this._proxies().then((px) => this._connections(px.cc)).then((list) => {
+            const c = list.filter((x) => x.sourceID === this.source && x.sinkID === SINK)[0];
+            return c ? String(c.connectionState || '') : '';
+        });
+    }
+
     _waitConnected(cc, until) {
         return this._connections(cc).then((list) => {
             const c = list.filter((x) => x.sourceID === this.source && x.sinkID === SINK)[0];

@@ -37,6 +37,8 @@ if (process.argv[2] === '--fake-out') {
         }
         if (!active && bytes) { active = true; loudAt = now; say('active'); say('open ' + process.argv[4] + ', S16LE 48000 Hz 2 ch, buffer 250000 us'); note('open ' + mode); }
         if (!active) return;
+        // (FAKE_OUT_DEAD names a file: when it appears the device "takes nothing", as the real writer finds on the media input)
+        if (process.env.FAKE_OUT_DEAD && fs.existsSync(process.env.FAKE_OUT_DEAD)) { try { fs.unlinkSync(process.env.FAKE_OUT_DEAD); } catch (e) { /* gone */ } note('dead ' + mode); say('dead, the device takes 0 frames a second'); process.exit(4); }
         if (loud) { loudAt = now; if (quiet) { quiet = false; say('sound'); } }
         else if (!quiet && now - loudAt > 1500) { quiet = true; say('quiet'); }
         if (now - last > idle) { note('idle ' + mode + ' ' + bytes); say('idle, frames ' + (bytes >> 2)); process.exit(0); }
@@ -274,6 +276,46 @@ async function until(what, fn, ms) {
             qa.end(); qb.end();
             console.log('ok streams with the real writer: AirPlay -> browser (' + fr + ' frames written to the device) -> AirPlay on one claim of the speakers');
         } finally { const g2 = new Promise((r) => d2.on('exit', r)); d2.kill('SIGTERM'); await g2; }
+    }
+    // ---- 0.1.27: the car suspends our connection (a call): the stream waits and comes back; nothing goes to the CarLife input
+    {
+        const run3 = path.join(base, 'run3'), connFile = path.join(base, 'conn'), deadFile = path.join(base, 'dead');
+        fs.mkdirSync(run3);
+        fs.writeFileSync(spLog, ''); fs.writeFileSync(outLog, '');
+        fs.writeFileSync(path.join(state, 'config.json'), JSON.stringify({ holdMs: 6000 }));
+        dlog = '';
+        const d3 = cp.spawn(process.execPath, [path.join(root, 'native', 'g21-audio', 'g21-audiod.js')], { stdio: ['ignore', 'pipe', 'pipe'], env: Object.assign({}, process.env, {
+            G21_AUDIO_RUN: run3, G21_AUDIO_ROOT: state, G21_AUDIO_SPEAKERS: path.join(root, 'tools', 'fake_speakers.js'), G21_AUDIO_DEVICE: 'null', G21_AUDIO_NOSETUID: '1', G21_AUDIO_FORCE_MEDIA: '1',
+            G21_AUDIO_OUT: fakeOut, G21_AUDIO_SETTLE_MS: '0', G21_AUDIO_SUSPEND_POLL_MS: '100', G21_FAKE_SPEAKERS_LOG: spLog, G21_FAKE_SPEAKERS_STATE: connFile, FAKE_OUT_DEAD: deadFile, FAKE_OUT_LOG: outLog }) });
+        d3.stdout.on('data', (d) => { dlog += d; });
+        d3.stderr.on('data', (d) => { dlog += d; });
+        try {
+            const sock3 = path.join(run3, 'ctl.sock');
+            await until('the third daemon listens', () => fs.existsSync(sock3), 5000);
+            const ctl3 = client(sock3), rc = client(sock3);
+            const st3 = () => ctl3.ask({ op: 'status' });
+            const has3 = (what) => until('the browser has the speakers (' + what + ')', async () => { const s = await st3(); return s.stream === 'chromium' && s.active && s.claimed ? s : null; });
+            const q = player((await rc.ask({ op: 'open', name: 'chromium', uid: process.getuid() })).fifo);
+            q.mode = 'loud';
+            await has3('at first');
+            fs.writeFileSync(connFile, 'CS_SUSPENDED');
+            fs.writeFileSync(deadFile, '1');
+            await until('the suspension is seen', () => /the car has suspended our sound/.test(dlog));
+            await sleep(700);
+            const mid = await st3();
+            assert.ok(mid.stream === null && mid.claimed === true, 'suspended: no stream has a writer, the speakers are kept: ' + JSON.stringify(mid));
+            assert.deepStrictEqual([count(outLog, / start /), count(spLog, /^claim/), count(spLog, /^release/), /CarLife input is used/.test(dlog)], [1, 1, 0, false], 'no writer without the speakers, nothing given back, the media input is kept');
+            fs.writeFileSync(connFile, 'CS_CONNECTED');
+            await has3('after the suspension');
+            assert.ok(/suspended: over after/.test(dlog), 'the end of it is written down');
+            assert.deepStrictEqual([count(outLog, / start /), count(spLog, /^claim/), count(spLog, /^release/)], [2, 1, 0], 'the same claim, a new writer');
+            // a device that takes nothing while we ARE connected is the fault it was: the CarLife input, with the speakers
+            fs.writeFileSync(deadFile, '1');
+            await until('the CarLife input is used', () => /CarLife input is used/.test(dlog));
+            await has3('on the CarLife input');
+            q.end();
+            console.log('ok a suspended connection: the stream waits with the speakers kept and plays on when it is over; a dead device while connected still goes to the CarLife input');
+        } finally { const g3 = new Promise((r) => d3.on('exit', r)); d3.kill('SIGTERM'); await g3; }
     }
     fs.rmSync(base, { recursive: true, force: true });
     console.log('test_audio_streams: ok');
