@@ -2285,7 +2285,15 @@ Daemon.prototype.perfUnit = function () {
         const a = st.indexOf('('), b = st.lastIndexOf(')');
         if (a < 0 || b < a) return;
         const f = st.slice(b + 2).split(' ');
-        procs[pid] = { name: mine[pid] ? 'engine' : st.slice(a + 1, b).replace(/[^A-Za-z0-9._:+-]/g, '_').slice(0, 20), ticks: Number(f[11]) + Number(f[12]) };
+        let name = st.slice(a + 1, b);
+        // ("node" says nothing on a unit where a dozen tools run on it. The car, 2026-11-22: "node 37%" of a core beside
+        // the engine, and no way to tell whose. The script's file name is added, nothing else of the command line.)
+        if (name === 'node' && !mine[pid]) {
+            let script = '';
+            try { script = fs.readFileSync(path.join(o.procDir, pid, 'cmdline'), 'utf8').split('\0').slice(1).filter((x) => x && x[0] !== '-')[0] || ''; } catch (e) { /* gone, or not ours to read */ }
+            if (script) name = 'node:' + path.basename(script);
+        }
+        procs[pid] = { name: mine[pid] ? 'engine' : name.replace(/[^A-Za-z0-9._:+-]/g, '_').slice(0, 32), ticks: Number(f[11]) + Number(f[12]) };
     });
     this.unitWas = { at: now, total: total, idle: idle, procs: procs };
     if (!prev || total <= prev.total || now - prev.at > 120000) return '';

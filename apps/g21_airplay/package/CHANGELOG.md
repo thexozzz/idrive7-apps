@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.16
+
+- Z logu auta (2026-11-22, film 21 minut, wersja 0.2.15, rysowanie procesorem): 21–24 klatki/s, silnik 105–125 % jednego rdzenia, jednostka zajęta w ok. 90 %. Obok silnika: `node` 36–37 %, `NavigationBasic` 31–35 %, `avb_streamhandl` 14 %, `AlsaRoutingAdap` 14 %. Właściciel: „już wszystko jest płynnie". Trybu GPU nadal nikt nie włączył, więc nie jest zmierzony.
+- `node` to kilkanaście różnych narzędzi na jednostce (nasze i cudze) i z logu nie wynikało, które zużywa procesor; po zakończeniu filmu udział `node` nie spadł (42–57 %), więc nie jest to samo odtwarzanie. `g21-browser` 0.1.62: w wierszu `perf:` proces `node` ma dopisaną nazwę pliku skryptu (np. `node:g21-audiod.js`), nic więcej z wiersza poleceń.
+- Dźwięk (`g21-audio` 0.1.26) w tym samym logu: po aktualizacji pierwsze otwarcie urządzenia jeszcze wolne (35 581 ramek/s), urządzenie zamknięte w 2 ms, pięć kolejnych otwarć w pełnym tempie, 21 minut filmu bez zgubionych ramek. Jedna sesja – to jeszcze nie potwierdzenie.
+
 ## 0.2.15
 
 - Płynność przeglądarki (prośba właściciela, 2026-11-21). Z logu auta: jednostka jest stale przeciążona (obciążenie 8–37 przy czterech rdzeniach), silnik przeglądarki dostaje ok. jednego rdzenia (do 130 %) i przy 100 % obrazu pokazuje 10–40 klatek/s; zamiana klatki na format ekranu kosztuje 3–15 ms i nie jest wąskim gardłem.
