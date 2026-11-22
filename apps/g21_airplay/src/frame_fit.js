@@ -311,6 +311,64 @@ function fitI420(i420, sw, sh, dw, dh, mode) {
     return { w: dw, h: dh, rect: rect, i420: out };
 }
 
+/*
+ * A whole frame made smaller with its pixels averaged (up to 3 x 3 of the source for each one of the result),
+ * for a picture with text: a page of Przeglądarka on the cluster and the HUD. fitI420 takes one source pixel
+ * for each pixel of the result and leaves the others out, which a film stands and a page's letters do not
+ * (car, 2026-11-22: 1796 wide to 480, three pixels of four left out, "bardzo rozpikselizowana").
+ * dw x dh is the size wanted, already in the frame's own shape; nothing is cut and nothing is enlarged here.
+ */
+function shrinkPlane(src, so, sw, sh, out, oo, dw, dh, maxTaps) {
+    var nx = Math.max(1, Math.min(maxTaps, Math.round(sw / dw)));
+    var ny = Math.max(1, Math.min(maxTaps, Math.round(sh / dh)));
+    var n = nx * ny;
+    var half = n >> 1;
+    var xs = new Int32Array(dw * nx);
+    var ys = new Int32Array(ny);
+    var row;
+    var col;
+    var i;
+    var j;
+    var v;
+    var sum;
+    var base;
+    var o;
+    for (col = 0; col < dw; col += 1) {
+        for (i = 0; i < nx; i += 1) {
+            v = ((col + (i + 0.5) / nx) * sw / dw) | 0;
+            xs[col * nx + i] = v >= sw ? sw - 1 : v;
+        }
+    }
+    for (row = 0; row < dh; row += 1) {
+        for (j = 0; j < ny; j += 1) {
+            v = ((row + (j + 0.5) / ny) * sh / dh) | 0;
+            ys[j] = so + (v >= sh ? sh - 1 : v) * sw;
+        }
+        o = oo + row * dw;
+        for (col = 0; col < dw; col += 1) {
+            sum = half;
+            base = col * nx;
+            for (j = 0; j < ny; j += 1) {
+                for (i = 0; i < nx; i += 1) {
+                    sum += src[ys[j] + xs[base + i]];
+                }
+            }
+            out[o + col] = (sum / n) | 0;
+        }
+    }
+}
+function shrinkI420(i420, sw, sh, dw, dh) {
+    var suvW = sw >> 1;
+    var suvH = sh >> 1;
+    var uvW = dw >> 1;
+    var uvH = dh >> 1;
+    var out = Buffer.alloc(dw * dh + uvW * uvH * 2);
+    shrinkPlane(i420, 0, sw, sh, out, 0, dw, dh, 3);
+    shrinkPlane(i420, sw * sh, suvW, suvH, out, dw * dh, uvW, uvH, 2);
+    shrinkPlane(i420, sw * sh + suvW * suvH, suvW, suvH, out, dw * dh + uvW * uvH, uvW, uvH, 2);
+    return { i420: out, w: dw, h: dh };
+}
+
 function rotateI420(i420, w, h, quarters) {
     var q = ((quarters % 4) + 4) % 4;
     var ySize = w * h;
@@ -389,5 +447,6 @@ module.exports = {
     fitsProfile: fitsProfile,
     scaleToProfile: scaleToProfile,
     fitI420: fitI420,
+    shrinkI420: shrinkI420,
     rotateI420: rotateI420,
 };

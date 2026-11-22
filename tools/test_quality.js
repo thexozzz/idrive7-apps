@@ -98,6 +98,54 @@ var small = fit.scaleToProfile(big, 1280, 720, 400, 240);
 assert.strictEqual(small.w, 400);
 assert.strictEqual(small.h, 224);
 assert.strictEqual(small.i420.length, 400 * 224 * 3 / 2);
+// a page for the cluster: averaged, so a thin line is still there (left out by the one-pixel way)
+(function () {
+    var sw = 1796, sh = 548, src = Buffer.alloc(sw * sh * 3 / 2, 16), x, y, lit = 0, i;
+    src.fill(128, sw * sh);
+    // one white column in every three (a letter's stems), at columns the one-pixel way does not read
+    for (y = 0; y < sh; y += 1) { for (x = 1; x < sw; x += 3) { src[y * sw + x] = 235; } }
+    var out = fit.shrinkI420(src, sw, sh, 612, 186);
+    assert.deepStrictEqual([out.w, out.h, out.i420.length], [612, 186, 612 * 186 * 3 / 2]);
+    for (i = 0; i < 612 * 186; i += 1) { if (out.i420[i] > 60 && out.i420[i] < 120) { lit += 1; } }
+    assert.ok(lit > 612 * 186 * 0.9, 'every pixel carries its share of the thin lines: ' + lit);
+    assert.strictEqual(out.i420[612 * 186 + 5], 128, 'the colour is kept');
+    var t0 = Date.now(); for (i = 0; i < 8; i += 1) { fit.shrinkI420(src, sw, sh, 612, 186); }
+    console.log('ok a page averaged to the window: 8 pages 1796x548 -> 612x186 in ' + (Date.now() - t0) + ' ms');
+}());
+// the app's own way to the cluster and the HUD: a film at the KOMBI profile, a page at its window's size
+(function () {
+    var mainSrc = require('fs').readFileSync(path.join(src, 'main.js'), 'utf8');
+    var m = /AirPlayApp\.prototype\._placeMirrorFaces = (function \([^)]*\) \{[\s\S]*?\r?\n\});/.exec(mainSrc);
+    assert.ok(m, '_placeMirrorFaces found');
+    var place = new Function('frameFit', 'videoDecoder', 'noteStart', 'return ' + m[1])(fit, { i420IntoAtlas: function (b, w, h) { return { w: w, h: h, n: b.length }; } }, function () {});
+    var made;
+    var boxes = { cluster: { x: 420, y: 198, w: 1080, h: 324 }, hud: { x: 144, y: 163, w: 512, h: 154 } };
+    var app = function () {
+        made = {};
+        return { _settings: { outputs: function () { return ['cluster', 'hud']; }, picture: function (n) { return boxes[n]; } }, _desk: { airClusterTarget: function () { return 'map'; } },
+            _dropMirrorFace: function () {}, _armFace: function () {}, _quality: function () { return { w: 480, h: 288 }; }, _client: { ready: true },
+            _mapBox: function (b, w, h) { return fit.projectBox(b, 1920, 720, w, h); },
+            _adapter: { createLayer: function (layer, g) { made[layer] = g; return { ok: true, w: g.vw, h: g.vh }; }, updateFrame: function (l, a) { made[l].sent = a; return { ok: true }; } } };
+    };
+    var page = Buffer.alloc(1796 * 548 * 3 / 2, 100);
+    var a = app();
+    assert.strictEqual(place.call(a, page, 1796, 548, ['cluster', 'hud']), true);
+    assert.deepStrictEqual([made.map.vw, made.map.w, made.hud.vw, made.hud.w], [480, 612, 480, 512], 'a film: the KOMBI profile, stretched to the window');
+    a = app();
+    assert.strictEqual(place.call(a, page, 1796, 548, ['cluster', 'hud'], true), true);
+    assert.deepStrictEqual([made.map.vw, made.map.vh, made.map.w, made.map.h], [600, 184, 600, 184], 'a page on the cluster: as many pixels as its window has');
+    assert.deepStrictEqual([made.hud.vw, made.hud.vh, made.hud.w, made.hud.h], [made.hud.w, made.hud.h, 504, 154], 'and on the HUD');
+    assert.deepStrictEqual([made.map.sent.w, made.map.sent.h, made.map.sent.n], [600, 184, 600 * 184 * 3 / 2]);
+    // a small page is never enlarged; a turned window gets a turned page
+    a = app();
+    place.call(a, Buffer.alloc(320 * 100 * 3 / 2, 100), 320, 100, ['hud'], true);
+    assert.deepStrictEqual([made.hud.vw, made.hud.vh], [320, 100], 'a page smaller than its window goes as it is');
+    boxes.hud = { x: 300, y: 0, w: 154, h: 480, rotate: 90 };
+    a = app();
+    place.call(a, page, 1796, 548, ['hud'], true);
+    assert.ok(made.hud.vh > made.hud.vw && made.hud.vw % 4 === 0 && made.hud.vh % 2 === 0, 'turned: ' + made.hud.vw + 'x' + made.hud.vh);
+    console.log('ok the cluster and the HUD: a film at the KOMBI profile, a page at its window\'s own size');
+}());
 var same = fit.scaleToProfile(Buffer.alloc(360 * 240 * 3 / 2), 360, 240, 400, 240);
 assert.strictEqual(same.w, 360, 'already the profile size: passed as it is');
 

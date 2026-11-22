@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.20
+
+- Przeglądarka, panel „Ekrany": kafle pokazują teraz faktyczny wybór (właściciel, 2026-11-22: „dla przeglądarki nie wybiera się, gdzie ma się wyświetlać, w przycisku Ekrany"). Od 0.2.18 wybór ekranów jest wspólny, ale panel przeglądarki dowiadywał się o nim tylko ze stron ustawień i po własnym stuknięciu – po otwarciu przeglądarki pokazywał „tylko środek" bez względu na to, co było wybrane. Stuknięcie kafla przełączało więc prawdziwy wybór odwrotnie, niż było widać (np. wyłączało zegary, które panel pokazywał jako wyłączone). Panel czyta teraz wspólną listę przy każdym rysowaniu, także po zmianie zrobionej w AirPlay albo w ustawieniach.
+- Przeglądarka na zegarach i HUD: obraz strony jest ostry na tyle, na ile pozwala okno. Dotąd strona szła przez profil jakości KOMBI przeznaczony dla filmu (z dziennika auta: 1796 × 548 → 480 × 144, przez pominięcie trzech pikseli z czterech, a potem rozciągnięcie do okna 612 × 184 na zegarach i 512 × 154 na HUD). Teraz strona jest zmniejszana dokładnie do rozmiaru okna, w którym jest rysowana (piksel w piksel), z uśrednianiem pikseli zamiast ich pomijania. Film AirPlay i YouTube idzie jak dotąd.
+- Czego to nie zmienia: strona szeroka na 1796 punktów w oknie szerokim na ok. 600 ma litery trzy razy mniejsze niż na ekranie środkowym. Czytelność poprawia większe okno („Pozycja" dla zegarów / HUD) albo większe powiększenie strony.
+- Sprawdzone testami na stanowisku; w aucie jeszcze nie.
+
 ## 0.2.19
 
 - Przeglądarka: przycisk „pełna strona" (pasek schowany) nie uruchamia już silnika od nowa. Auto, 2026-11-22: każde schowanie i przywrócenie paska kończyło się wpisem „engine stopped (new size)" – 3–4 s bez obrazu i strona ładowana od początku (cztery razy tego dnia). `g21-browser` 0.1.64: strona dostaje nowy rozmiar w działającym silniku, tak jak przy zmianie karty i przy pełnym ekranie filmu. Inne powiększenie strony nadal oznacza nowy silnik.

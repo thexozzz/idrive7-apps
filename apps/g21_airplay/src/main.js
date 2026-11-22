@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.19',
+        version: (this._packageJson && this._packageJson.version) || '0.2.20',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -577,7 +577,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.19') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.20') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -4789,7 +4789,7 @@ AirPlayApp.prototype._armFace = function (delay) {
     }, delay > 0 ? delay : 1);
 };
 
-AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
+AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride, sharp) {
     var self = this;
     var outs = outsOverride || this._settings.outputs();
     var panel = this._desk.airClusterTarget && this._desk.airClusterTarget() === 'panel';
@@ -4845,6 +4845,34 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
         }
         return kombiTurned[quarters];
     }
+    /*
+     * A page of Przeglądarka (sharp): not the KOMBI profile, which is a film's (480 x 288 by the owner's setting: a
+     * page 1796 wide became 480, by leaving three pixels of four out, and the renderer then stretched that to the
+     * window, 612 wide on the cluster: car, 2026-11-22, "bardzo rozpikselizowana"). The page is made the size of
+     * the window it is drawn in, pixel for pixel, with its pixels averaged. At most 8 pages a second (_takeWeb).
+     * The window's size is the limit that stays: a page 1796 wide in a window 612 wide has letters a third of
+     * their size; a larger window ("Pozycja") or a larger zoom of the page makes them readable.
+     */
+    var sharpMade = {};
+    function sharpFrame(name, spec) {
+        var box = self._settings.picture(name);
+        var quarters = (((box && box.rotate) || 0) / 90) | 0;
+        var odd = (quarters % 2) !== 0;
+        var rw = odd ? sh : sw;
+        var rh = odd ? sw : sh;
+        var place = frameFit.containPlace(rw, rh, name === 'cluster' ? self._mapBox(box, spec.maxW, spec.maxH) : box, spec.maxW, spec.maxH);
+        var tw = frameFit.even4(Math.min(place.w, rw));
+        var th = odd ? frameFit.even4(Math.min(place.h, rh)) : frameFit.even2(Math.min(place.h, rh));
+        var pw = odd ? th : tw;
+        var ph = odd ? tw : th;
+        var key = pw + 'x' + ph + '/' + quarters;
+        var base;
+        if (!sharpMade[key]) {
+            base = (pw === sw && ph === sh) ? { i420: i420, w: sw, h: sh } : frameFit.shrinkI420(i420, sw, sh, pw, ph);
+            sharpMade[key] = frameFit.rotateI420(base.i420, base.w, base.h, quarters);
+        }
+        return sharpMade[key];
+    }
     Object.keys(faces).forEach(function (name) {
         var spec = faces[name];
         var box;
@@ -4860,7 +4888,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
             return;
         }
         turned = null;
-        legal = kombiFrame(name);
+        legal = sharp ? sharpFrame(name, spec) : kombiFrame(name);
         if (!legal || legal.w > 1920 || legal.h > 720 || (legal.w % 4) !== 0 || (legal.h % 2) !== 0) {
             return;
         }
@@ -4903,7 +4931,7 @@ AirPlayApp.prototype._placeMirrorFaces = function (i420, sw, sh, outsOverride) {
                 fail: ''
             };
             self._mirrorFaces[name] = face;
-            noteStart('mirror-face ' + name + ' ' + sw + 'x' + sh + ' frame ' + legal.w + 'x' + legal.h + ' (kombi ' + kq.w + 'x' + kq.h + ') -> ' + view.w + 'x' + view.h);
+            noteStart('mirror-face ' + name + ' ' + sw + 'x' + sh + ' frame ' + legal.w + 'x' + legal.h + (sharp ? ' (a page: the window\'s size, averaged) -> ' : ' (kombi ' + kq.w + 'x' + kq.h + ') -> ') + view.w + 'x' + view.h);
         }
         src = legal;
         if (face.vw !== legal.w || face.vh !== legal.h) {
@@ -5410,12 +5438,26 @@ AirPlayApp.prototype._closeBrowser = function () {
     }
 };
 
+// The panel "Ekrany" of a page and of Aplikacje reads the one list of screens itself, each time it is drawn: it is
+// given the way to read it once, from whichever of the menu's paints comes first.
+AirPlayApp.prototype._tellWebOut = function () {
+    var app = this;
+    if (this._webOutTold || !this._menu || typeof this._menu.setWebOutSource !== 'function') {
+        return;
+    }
+    this._webOutTold = true;
+    this._menu.setWebOutSource(function () {
+        return { central: !app._webAway(), cluster: !!app._webCluster, hud: !!app._webHud };
+    });
+};
+
 AirPlayApp.prototype._paintWeb = function () {
     var s;
     var waiting;
     if (!this._menu || typeof this._menu.setWeb !== 'function') {
         return;
     }
+    this._tellWebOut();
     if (!this._webOn) {
         this._menu.setWeb(null);
         return;
@@ -5700,7 +5742,7 @@ AirPlayApp.prototype._takeWeb = function () {
         noteStart('web-faces ' + outs.join(',') + ' ' + this._webFrame.w + 'x' + this._webFrame.h);
     }
     this._webFaces = true;
-    this._webGaugeOuts = this._placeMirrorFaces(this._webFrame.i420, this._webFrame.w, this._webFrame.h, outs) ? outs.join(',') : '';
+    this._webGaugeOuts = this._placeMirrorFaces(this._webFrame.i420, this._webFrame.w, this._webFrame.h, outs, true) ? outs.join(',') : '';
 };
 
 // ---- Aplikacje ---------------------------------------------------------------------------------
@@ -5711,6 +5753,7 @@ AirPlayApp.prototype._paintApps = function () {
     if (!m || typeof m.setItemHint !== 'function') {
         return;
     }
+    this._tellWebOut();
     m.setItemHint('aset-screens', [this._webAway() ? '' : 'środek', this._webCluster ? 'zegary' : '', this._webHud ? 'HUD' : ''].filter(Boolean).join(' + '));
     if (typeof m.setWebOut === 'function') {
         m.setWebOut({ central: !this._webAway(), cluster: !!this._webCluster, hud: !!this._webHud });
@@ -5868,6 +5911,7 @@ AirPlayApp.prototype._paintSysInfo = function () {
 
 // the hints of the main Ustawienia
 AirPlayApp.prototype._paintSystem = function () {
+    this._tellWebOut();
     var m = this._menu;
     if (!m || typeof m.setItemHint !== 'function') {
         return;

@@ -83,7 +83,7 @@ assert.ok(menu.buildWebFrame(1920, 720, Object.assign({}, live, { zoom: 1 })).la
 (function () {
     var mainSrc = fs.readFileSync(path.join(__dirname, '..', 'apps', 'g21_airplay', 'src', 'main.js'), 'utf8');
     assert.ok(menu.ROOT_ITEMS.some(function (i) { return i.name === 'browser'; }) && menu.APPS_ITEMS.every(function (i) { return i.name !== 'browser'; }), 'Przeglądarka is a module of the home screen');
-    assert.ok(/self\._takeWeb\(\);/.test(mainSrc) && /_placeMirrorFaces\(this\._webFrame\.i420, this\._webFrame\.w, this\._webFrame\.h, outs\)/.test(mainSrc), 'the page goes to the cluster and HUD layers AirPlay and YouTube use');
+    assert.ok(/self\._takeWeb\(\);/.test(mainSrc) && /_placeMirrorFaces\(this\._webFrame\.i420, this\._webFrame\.w, this\._webFrame\.h, outs, true\)/.test(mainSrc), 'the page goes to the cluster and HUD layers AirPlay and YouTube use');
     assert.ok(/createYoutubeFile\(menuDraw\.WEB_FILE\)/.test(mainSrc) && menu.WEB_FILE === '/dev/shm/mgu-video-g21browser');
     assert.ok(/op: 'policy', key: 'picture'/.test(mainSrc) && !/op: 'policy', key: 'sandbox', value: 'off'/.test(mainSrc), 'the menu sets rules through the daemon, never the sandbox off');
 }());
@@ -147,7 +147,7 @@ function glueApp() {
             editing: function () { return app.editing; }
         }
     };
-    ['_gpuHint', '_logsHint', '_webAway', '_setScreen', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
+    ['_gpuHint', '_logsHint', '_webAway', '_tellWebOut', '_setScreen', '_gpuPress', '_webClient', '_openBrowser', '_closeBrowser', '_paintWeb', '_onWebState', '_onWebEdit', '_onWebChoice', '_webTouch', '_webScroll', '_onAppsChoice', '_paintApps', '_takeWeb', '_dropWebFaces', '_syncMouse', '_mouseMove', '_mouseButton', '_mouseTap', '_syncStoreMenu', '_storeMouse', '_onStoreApps', '_onStoreProgress', '_paintSystem', '_webFsBox', '_syncWebMouse', '_syncMenuMouse', '_padClient', '_menuMouseMove', '_menuMouseTap', '_mouseScroll', '_endAirplayFor', '_killApp', '_webPageBox', '_mouseBox', '_mouseHome', '_mouseTapMenu', '_padTwo', '_padSwipe', '_paintSysInfo'].forEach(function (n) { app[n] = method(n, deps); });
     return app;
 }
 // ---- Aplikacje and its Ustawienia; the page on the cluster and the HUD
@@ -278,6 +278,24 @@ function glueApp() {
     var there = menu.buildWebFrame(1920, 720, base);
     assert.ok(there.layout.video !== false && !away.frame.equals(there.frame), 'without the centre the page is not drawn on it');
     assert.deepStrictEqual(menu.webOutScreens ? menu.webOutScreens().length : 3, 3);
+    // the panel shows the choice as it is, without being told at each change (0.2.20)
+    (function () {
+        var real = { central: false, cluster: true, hud: true };
+        var surf = menu.createMenuSurface({ choose: function () {}, note: function () {} });
+        var tiles = function () {
+            var f = menu.buildWebFrame(1920, 720, Object.assign({}, base, { where: true }));
+            return f.layout.webHits.filter(function (h) { return /^web-pick-/.test(h.name); }).length;
+        };
+        var shown = function () { tiles(); return menu.webOutScreens().filter(function (s) { return s.on; }).map(function (s) { return s.key; }).join('+'); };
+        assert.strictEqual(typeof surf.setWebOutSource, 'function');
+        surf.setWebOutSource(function () { return real; });
+        assert.strictEqual(tiles(), 3, 'the panel over a page has its three tiles');
+        assert.strictEqual(shown(), 'cluster+hud', 'the panel opens with what is chosen, not with "only the centre"');
+        real = { central: true, cluster: false, hud: false };
+        assert.strictEqual(shown(), 'central', 'and follows a change made elsewhere (AirPlay\'s panel, the settings)');
+        surf.setWebOutSource(null);
+        assert.ok(/setWebOutSource\(function \(\) \{\s*return \{ central: !app\._webAway\(\), cluster: !!app\._webCluster, hud: !!app\._webHud \};/.test(main), 'main.js gives the one list');
+    }());
     // the bar hidden: the page has the whole part of the screen, one floating sign brings the bar back
     var wide = menu.buildWebFrame(1920, 720, Object.assign({}, base, { wide: true, w: 1796, h: 632 }));
     assert.deepStrictEqual(wide.layout.webHits.map(function (h) { return h.name; }), ['web-wide'], 'only the sign that brings the bar back');

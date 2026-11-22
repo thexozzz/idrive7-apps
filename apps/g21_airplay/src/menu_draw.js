@@ -430,7 +430,21 @@ function drawBtn(draw, b, state) {
 }
 // which screens a page and an app from Sklep show on besides the centre (main.js tells: setWebOut)
 var WEB_OUT = { central: true, cluster: false, hud: false };
+// (0.2.20) main.js gives a function that tells the choice as it is now: the panel reads it each time it is drawn.
+// Until then it was told only by setWebOut, which main.js called from the settings' pages and after a pick, not
+// when Przeglądarka opened: the panel showed "only the centre" whatever was chosen, and a tap on a tile changed
+// the real choice the other way round (owner, 2026-11-22: "dla przeglądarki nie wybiera się gdzie ma się wyświetlać").
+var WEB_OUT_SRC = null;
 function webOutScreens() {
+    var o = null;
+    if (WEB_OUT_SRC) {
+        try { o = WEB_OUT_SRC(); } catch (e) { o = null; }
+    }
+    if (o) {
+        WEB_OUT.central = o.central !== false;
+        WEB_OUT.cluster = !!o.cluster;
+        WEB_OUT.hud = !!o.hud;
+    }
     return [{ key: 'central', on: WEB_OUT.central !== false }, { key: 'cluster', on: !!WEB_OUT.cluster }, { key: 'hud', on: !!WEB_OUT.hud }];
 }
 /*
@@ -6841,6 +6855,11 @@ function createMenuSurface(opts) {
             return { zone: zone, name: focusName(), web: webFocus, where: whereOpen ? whereMode : '', cursor: whereCursor };
         },
         // which screens a page and an app show on (the panel "Ekrany" of Przeglądarka and the apps)
+        /** where the panel reads the chosen screens from each time it is drawn (null: what setWebOut said) */
+        setWebOutSource: function (fn) {
+            WEB_OUT_SRC = typeof fn === 'function' ? fn : null;
+            paint();
+        },
         setWebOut: function (o) {
             var c = !!(o && o.cluster);
             var hd = !!(o && o.hud);
@@ -6976,6 +6995,7 @@ module.exports = {
     streamWindow: streamWindow,
     buildKeyboardFrame: buildKeyboardFrame,
     buildWebFrame: buildWebFrame,
+    webOutScreens: webOutScreens,
     webLayout: webLayout,
     WEB_ZOOMS: WEB_ZOOMS,
     encoderStep: encoderStep,
