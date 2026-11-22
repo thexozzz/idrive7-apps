@@ -1074,6 +1074,7 @@ Daemon.prototype.push = function (force) {
         live: s.live, w: s.w, h: s.h, ino: s.ino, zoom: this.zoom, editable: s.editable, pct: s.pct, ring: this.opts.ring, ask: s.ask || '', note: this.note || '',
         gpu: { on: !!this.gpuWant, now: this.engine && this.gpu ? (this.gpuFrames === 'gpu' ? 'gpu' : (this.gpuFrames === 'memory' ? 'cpu' : 'starting')) : 'off', why: this.gpuWhy || '', hung: this.gpuHung || '' },
         logs: { on: !!this.logsOn, now: this.logs ? this.logs.status() : 'off' },
+        stretch: !!this.stretch,
         pol: { sandbox: this.policy().sandbox, picture: this.policy().picture, memoryLimitMb: this.policy().memoryLimitMb, audio: this.policy().audio, sound: this.audio ? 'g21-audio' : 'none',
             homepage: this.policy().homepage, autoplay: this.policy().autoplay, fullscreen: this.policy().fullscreen, carData: this.policy().carData, carDiag: this.policy().carDiag, video: this.policy().video, engine: this.policy().engine, mobile: this.policy().mobile, frames: this.policy().frames, framesNow: this.engine ? (this.direct ? 'direct' : 'cast') : '' }, fs: !!this.fs, film: this.filmView() };
     const text = JSON.stringify(o);
@@ -1366,6 +1367,16 @@ Daemon.prototype.onCommand = async function (m) {
     if (m.op === 'restart-services') { this.restartServices(); return; }
     if (m.op === 'gpu') { await this.gpuSet(m.on); return; }
     if (m.op === 'logs') { this.logsSet(!!m.on); return; }
+    if (m.op === 'stretch') {
+        // the round sign of the full screen: the film over the whole centre screen, its shape given up
+        this.stretch = !!m.on;
+        try { this.saveSettings({ stretch: this.stretch ? 'on' : 'off' }); } catch (x) { this.log('stretch: settings: ' + x.message); }
+        this.log('full screen: stretch ' + (this.stretch ? 'on' : 'off'));
+        const en = this.engine;
+        if (en && this.fs && !this.fs.film) await this.applyFs(en, true);
+        this.push(true);
+        return;
+    }
     if (m.op === 'app-install') {
         if (this.appBusy) { this.emit({ ev: 'app', phase: 'failed', err: 'trwa inny import' }); return; }
         this.appBusy = true;
@@ -1398,6 +1409,8 @@ Daemon.prototype.onCommand = async function (m) {
     const send = (method, params) => e.cdp.send(method, params, e.session);
     // (in full screen the picture is the whole screen at its own scale, not the zoom's)
     const z = this.fs ? this.fs.scale : this.zoom;
+    // (a stretched full screen has one scale across and another down)
+    const zy = this.fs && this.fs.sy ? this.fs.sy : z;
     switch (m.op) {
     case 'nav': {
         const url = this.resolve(m.url);
@@ -1418,7 +1431,7 @@ Daemon.prototype.onCommand = async function (m) {
         return;
     }
     case 'touch': {
-        const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / z;
+        const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / zy;
         const p = Number(m.p);
         if (p === 1) { this.frameTell('mark'); e.down = { x: x, y: y, moved: false }; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x, y: y }] }); }
         else if (p === 2 && e.down) { if (Math.abs(x - e.down.x) + Math.abs(y - e.down.y) > 12) e.down.moved = true; await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x, y: y }] }); }
@@ -1434,7 +1447,7 @@ Daemon.prototype.onCommand = async function (m) {
     case 'mouse': {
         // G21 Input: a real mouse for the page (the cursor is the app's; here are the events). x, y in the page area's
         // screen pixels, as touch. Hover, links, buttons, text selection and dragging are the engine's own.
-        const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / z;
+        const x = Math.max(0, Number(m.x) || 0) / z, y = Math.max(0, Number(m.y) || 0) / zy;
         if (m.t === 'move') await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x, y: y, button: m.down ? 'left' : 'none', buttons: m.down ? 1 : 0 });
         else if (m.t === 'down') { this.frameTell('mark'); e.mouseDown = { x: x, y: y }; await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x, y: y, button: 'left', buttons: 1, clickCount: 1 }); }
         else if (m.t === 'up') {
@@ -2101,10 +2114,19 @@ Daemon.prototype.applyFs = async function (e, on) {
     const w = this.want;
     if (this.film && this.film.shown) return; // THEiPlay Player has the screen
     const whole = on && w && w.fw > 0 && this.policy().fullscreen === 'screen';
-    if ((whole === !!this.fs && !this.fsStale) || this.fsBusy) return;
-    this.fsStale = false;
+    if (this.fsBusy) return;
     this.fsBusy = true;
     try {
+    /*
+     * Stretch (owner, 2026-11-22: "rozciągnąć wideo do granic ekranu"). The centre screen is 8:3 and a film 16:9, so a
+     * film in full screen had black bars left and right. With the stretch on, the engine's window gets the film's
+     * own shape (852 x 480 for 16:9) and the app draws that window over the whole screen as before: the film
+     * fills the screen, wider than it is. Fewer pixels than the unstretched 1280 x 480, so not slower.
+     */
+    const ar = whole && this.stretch ? await this.fsShape(e, w.fw / w.fh) : 0;
+    if (whole && this.fs && (this.fs.ar || 0) !== ar) this.fsStale = true;
+    if (whole === !!this.fs && !this.fsStale) return;
+    this.fsStale = false;
     const send = (params) => e.cdp.send('Emulation.setDeviceMetricsOverride', params, e.session);
     if (whole) {
         // A large window is rendered at half its size each way (960 x 360 for the whole 1920 x 720), a small one
@@ -2114,12 +2136,13 @@ Daemon.prototype.applyFs = async function (e, on) {
         // The direct path (the engine's window straight into the video file) costs about a fifth of that a pixel
         // (development machine, 2026-11-19): two thirds there, 1280 x 480. Not yet measured on the car.
         const k = w.fw > 1280 ? (this.direct ? 2 / 3 : 1 / 2) : 1;
-        const cw = Math.round(w.fw * k) & ~3, ch = Math.round(w.fh * k) & ~1;
+        const ch = Math.round(w.fh * k) & ~1;
+        const cw = ar ? Math.max(320, Math.round(ch * ar) & ~3) : Math.round(w.fw * k) & ~3;
         this.frameSize(cw, ch);
         await send({ width: cw, height: ch, deviceScaleFactor: 1, mobile: this.policy().mobile !== 'off', screenWidth: cw, screenHeight: ch });
-        this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw };
+        this.fs = { w: w.fw, h: w.fh, scale: w.fw / cw, sy: w.fh / ch, ar: ar };
         this.changed('full screen on');
-        this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + ')');
+        this.log('full screen: the whole centre screen ' + w.fw + 'x' + w.fh + ' (picture ' + cw + 'x' + ch + (ar ? ', stretched: the film\'s shape is ' + ar : '') + ')');
         this.set({ w: w.fw, h: w.fh });
     } else {
         const css = pageCss(w.w, w.h, this.zoom, this.picture());
@@ -2132,6 +2155,17 @@ Daemon.prototype.applyFs = async function (e, on) {
     }
     } finally { this.fsBusy = false; }
     this.push(true);
+};
+// the shape (width / height) of the film that is in full screen, for the stretch; 16:9 when the page does not say
+// (a player inside a frame of another site). 0: the film is as wide as the screen already, nothing to stretch.
+const FS_SHAPE = '(function(){var f=document.fullscreenElement,v=null,b=0,l,i,a;if(!f)return 0;if(f.tagName==="VIDEO")v=f;l=f.querySelectorAll?f.querySelectorAll("video"):[];'
+    + 'for(i=0;i<l.length;i++){a=l[i].videoWidth*l[i].videoHeight;if(a>b){b=a;v=l[i];}}return v&&v.videoWidth>0&&v.videoHeight>0?v.videoWidth/v.videoHeight:0;})()';
+Daemon.prototype.fsShape = async function (e, screenShape) {
+    let v = 0;
+    try { const r = await e.cdp.send('Runtime.evaluate', { expression: FS_SHAPE, returnByValue: true }, e.session); v = Number(r && r.result && r.result.value) || 0; } catch (x) { /* the page is on its way */ }
+    if (!(v > 0)) v = 16 / 9;
+    v = Math.max(1, Math.min(screenShape, v));
+    return screenShape - v < 0.05 ? 0 : Math.round(v * 100) / 100;
 };
 // the page that is on the screen at the size of the page area the app asked for (each tab has its own)
 Daemon.prototype.fitPage = async function (e) {
@@ -3358,6 +3392,7 @@ Daemon.prototype.start = async function () {
      * down, or lost its power with the browser open).
      */
     try {
+        this.stretch = this.settings().stretch === 'on';
         if (this.gpuHung) this.saveSettings({ gpu: 'off' });
         else if (this.settings().gpu === 'on') { this.gpuWant = true; this.log('gpu: the GPU mode is on (the owner\'s switch, kept)'); }
     } catch (e) { this.log('gpu: settings: ' + e.message); }

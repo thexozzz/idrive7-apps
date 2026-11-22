@@ -417,7 +417,7 @@ function AirPlayApp() {
     });
     this._menu = menuDraw.createMenuSurface({
         note: noteStart,
-        version: (this._packageJson && this._packageJson.version) || '0.2.16',
+        version: (this._packageJson && this._packageJson.version) || '0.2.17',
         choose: function (name) {
             self._onMenuChoice(name);
         },
@@ -583,7 +583,7 @@ AirPlayApp.prototype._appInitialized = function () {
     noteStart('app-init');
     logger.info(
         'g21_airplay ' + this.getAppId() +
-        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.16') +
+        ' v' + ((this._packageJson && this._packageJson.version) || '0.2.17') +
         ' starting'
     );
     this._writeAirplayAuth();
@@ -5442,6 +5442,7 @@ AirPlayApp.prototype._paintWeb = function () {
         cx: this._mouseX,
         cy: this._mouseY,
         fs: !!s.fs,
+        stretch: !!s.stretch,
         film: s.film || null,
         fsBox: this._webFsBox(),
         fsFull: !!this._webFsFull,
@@ -6380,6 +6381,10 @@ AirPlayApp.prototype._onWebChoice = function (name) {
         // THEiPlay Player's buttons
         web.send(name === 'web-film-play' ? { op: 'film', a: 'toggle' } : (name === 'web-film-rw' ? { op: 'film', a: 'seek', d: -10 } : (name === 'web-film-ff' ? { op: 'film', a: 'seek', d: 10 }
             : (name === 'web-film-q' ? { op: 'film', a: 'quality' } : { op: 'film', a: 'zoom' }))));
+    } else if (name === 'web-stretch') {
+        // the round sign beside the way out: the film over the whole screen (the daemon keeps the switch)
+        noteStart('web-stretch ' + (s.stretch ? 'off' : 'on'));
+        web.send({ op: 'stretch', on: !s.stretch });
     } else if (name === 'web-fs-exit') {
         // out of a player's full screen
         web.send({ op: 'key', k: 'Escape' });
@@ -6704,6 +6709,12 @@ AirPlayApp.prototype._mouseMove = function (dx, dy) {
     this._scrX = Math.max(0, Math.min(scr.w - 1, (this._scrX || 0) + dx * gain));
     this._scrY = Math.max(0, Math.min(scr.h - 1, (this._scrY || 0) + dy * gain));
     this._mouseIn = this._scrX >= box.x && this._scrX < box.x + box.w && this._scrY >= box.y && this._scrY < box.y + box.h;
+    // A button of ours that floats over the page (full screen: the way out, the stretch) is ours, not the page's.
+    // In full screen the page is the whole screen, so every click went into the page and the way out could only
+    // be touched with a finger (owner, 2026-11-22).
+    if (this._mouseIn && this._menu && typeof this._menu.webHitAt === 'function' && this._menu.webHitAt(this._scrX, this._scrY)) {
+        this._mouseIn = false;
+    }
     // THEiPlay's keyboard is over the page: the cursor types on it, the page under it gets nothing
     if (this._menu && typeof this._menu.editing === 'function' && this._menu.editing()) {
         this._mouseIn = false;

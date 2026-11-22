@@ -83,6 +83,16 @@ server.listen(SOCK, async function () {
         for (i = 0; i < 20; i += 1) { surf.setPointer({ x: 760, y: 400 }); await sleep(4); }
         await sleep(60);
         assert.ok(frames.length - f0 <= 1, 'a cursor that does not move draws nothing: ' + (frames.length - f0));
+        // the knob pressed after the cursor was moved: a click where the cursor is, not on the selected tile
+        surf.setPointer({ x: lay.bubbles[0].x + 40, y: lay.bubbles[0].y + 40 }); await sleep(60);
+        await push(); await sleep(60);
+        assert.deepStrictEqual(chosen, ['youtube'], 'the knob clicks where the cursor points');
+        chosen.length = 0;
+        // the knob turned: its press is for what it selected again, wherever the cursor rests
+        await turn(1); await turn(1);
+        await push(); await sleep(60);
+        assert.ok(chosen.length === 1 && chosen[0] !== 'youtube', 'after a turn the press is the selected tile\'s: ' + chosen.join());
+        chosen.length = 0;
         surf.setPointer(null); await sleep(60);
 
         // ---- the knob: head, list, foot

@@ -235,6 +235,38 @@ function ext(port, word, origin, onAsk) {
             assert.strictEqual(line, 'the unit: 75% of ' + cores + ' cores busy, most: hmi_main__x_ ' + share(600) + '%, engine ' + share(400) + '%, node:g21-audiod.js ' + share(200) + '%, node ' + share(160) + '%', line);
         }
         console.log('ok native: the GPU switch is kept; the performance line names the mode and who has the processor');
+        // full screen and its stretch: the engine's window takes the film's shape, the screen's size stays
+        {
+            const sizes = [];
+            let shape = 16 / 9;
+            const e = { session: 's', cdp: { send: async (m) => (m === 'Runtime.evaluate' ? { result: { value: shape } } : {}) } };
+            const f = Object.create(d.Daemon.prototype);
+            Object.assign(f, { want: { w: 1796, h: 548, fw: 1920, fh: 720 }, policy: () => ({ fullscreen: 'screen', mobile: 'off' }), direct: true, zoom: 1, picture: () => 1,
+                frameSize: (w, h) => sizes.push(w + 'x' + h), changed: () => {}, log: () => {}, set: () => {}, push: () => {}, engine: e, s: {} });
+            await f.applyFs(e, true);
+            assert.deepStrictEqual([sizes.pop(), f.fs.scale, f.fs.sy, f.fs.ar], ['1280x480', 1.5, 1.5, 0], 'full screen as it was: the screen\'s own shape');
+            f.stretch = true;
+            await f.applyFs(e, true);
+            assert.deepStrictEqual([sizes.pop(), f.fs.w, f.fs.h, f.fs.sy, f.fs.ar], ['852x480', 1920, 720, 1.5, 1.78], 'stretched: a 16:9 window over the whole screen');
+            assert.ok(Math.abs(f.fs.scale - 1920 / 852) < 1e-9, 'and its own scale across');
+            await f.applyFs(e, true);
+            assert.strictEqual(sizes.length, 0, 'nothing is done again while the film\'s shape is the same');
+            shape = 2.4;
+            await f.applyFs(e, true);
+            assert.strictEqual(sizes.pop(), '1152x480', 'a wide film: its own shape');
+            shape = 3;
+            await f.applyFs(e, true);
+            assert.deepStrictEqual([sizes.pop(), f.fs.ar], ['1280x480', 0], 'a film as wide as the screen: nothing to stretch');
+            shape = 0;
+            await f.applyFs(e, true);
+            assert.strictEqual(sizes.pop(), '852x480', 'the page does not say: 16:9');
+            f.stretch = false;
+            await f.applyFs(e, true);
+            assert.strictEqual(sizes.pop(), '1280x480', 'the stretch off: the screen\'s shape again');
+            await f.applyFs(e, false);
+            assert.strictEqual(f.fs, null, 'out of full screen');
+            console.log('ok native: the stretch of a full screen takes the film\'s shape');
+        }
         fs.rmSync(base, { recursive: true, force: true });
     }
     console.log('ok native: the GPU mode is tried only when all it needs is there, by hand; its library folder, marker and arguments');

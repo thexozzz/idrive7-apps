@@ -279,6 +279,27 @@ function glueApp() {
     g.sent.length = 0;
     g._mouseButton(true); g._mouseButton(true); g._mouseTap(); g._mouseButton(false); g._mouseTap();
     assert.deepStrictEqual(g.sent.map(function (o) { return o.op + ' ' + o.t; }), ['mouse down', 'mouse up'], 'one press of the knob is one click');
+    // full screen: the page is the whole screen, and our floating signs (the way out, the stretch) are still ours
+    (function () {
+        var fsFrame = menu.buildWebFrame(1920, 720, Object.assign({}, last, { video: true, live: true, fs: true, stretch: true, fsBox: { x: 0, y: 0, w: 1920, h: 720 } }));
+        var names = fsFrame.layout.webHits.map(function (h) { return h.name; });
+        assert.deepStrictEqual(names, ['web-fs-exit', 'web-stretch'], 'the full screen has the way out and the stretch');
+        var wide = fsFrame.layout.webHits[1];
+        g._menu.webHitAt = function (x, y) { return x >= wide.x && x < wide.x + wide.w && y >= wide.y && y < wide.y + wide.h ? 'web-stretch' : ''; };
+        g._mouseHome();
+        g._scrX = wide.x + 10; g._scrY = wide.y + 10;
+        g._mouseMove(1, 0);
+        assert.strictEqual(g._mouseIn, false, 'the cursor over a floating sign is not in the page');
+        g.sent.length = 0;
+        g._mouseTapAt = 0; g._mouseTap();
+        g._mouseButton(true); g._mouseButton(false);
+        assert.deepStrictEqual(g.sent.filter(function (o) { return o.op === 'mouse' && o.t !== 'move'; }), [], 'a click there does not go into the page');
+        delete g._menu.webHitAt;
+        g._mouseHome();
+        g.sent.length = 0;
+        g._onWebChoice('web-stretch');
+        assert.deepStrictEqual(g.sent, [{ op: 'stretch', on: true }], 'the sign asks the daemon for the stretch');
+    }());
     g._mouseTapAt = 0; g.sent.length = 0;
     g._mouseTap();
     assert.deepStrictEqual(g.sent.map(function (o) { return o.t; }), ['down', 'up'], 'a tap is a click');

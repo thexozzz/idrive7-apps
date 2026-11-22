@@ -4113,6 +4113,12 @@ function buildWebFrame(width, height, web) {
         var fsOut = { name: 'web-fs-exit', x: FULL_EXIT.x, y: FULL_EXIT.y, w: FULL_EXIT.w, h: FULL_EXIT.h };
         drawIconBtn(draw, fsOut, 'close', false);
         var fsHits = [fsOut];
+        if (!info.film) {
+            // left of it, as AirPlay's full screen has: the film over the whole screen, its shape given up
+            var fsWide = { name: 'web-stretch', x: FULL_STRETCH.x, y: FULL_STRETCH.y, w: FULL_STRETCH.w, h: FULL_STRETCH.h };
+            drawIconBtn(draw, fsWide, 'stretch', !!info.stretch);
+            fsHits.push(fsWide);
+        }
         if (info.film) {
             drawFilmUi(draw, info.film, fsHits);
         }
@@ -4375,6 +4381,10 @@ function createMenuSurface(opts) {
     var pressAt = null;
     var pressTimer = null;
     var pointerTimer = null;
+    // how far the cursor went since the knob was last turned or tilted, and whether the knob holds a button down
+    // at the cursor (see onControl)
+    var pointerTravel = 0;
+    var knobDown = false;
     /*
      * Where the knob is (owner, 2026-11-20: everything on the screen can be reached with it):
      *   'list'  the page's rows and tiles (a turn goes through them; in a grid a tilt goes to the row above or below)
@@ -4696,7 +4706,7 @@ function createMenuSurface(opts) {
             var webInfo = {
                 connected: webView.connected, engine: webView.engine, err: webView.err, url: webView.url, title: webView.title,
                 loading: webView.loading, back: webView.back, fwd: webView.fwd, live: webView.live, zoom: webView.zoom,
-                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!(whereOpen && whereMode === 'web'), whereCursor: whereCursor, video: native
+                editable: webView.editable, pct: webView.pct, ask: webView.ask, w: webView.w, h: webView.h, mouse: !!webView.mouse && !pointer, cx: webView.cx, cy: webView.cy, fs: !!webView.fs, stretch: !!webView.stretch, film: webView.film || null, fsBox: webView.fsBox, fsFull: !!webView.fsFull, app: webView.app || '', appName: webView.appName || '', where: !!(whereOpen && whereMode === 'web'), whereCursor: whereCursor, video: native
             };
             var webBuilt;
             useTheme(webView.app ? 'store' : 'browser');
@@ -5395,6 +5405,17 @@ function createMenuSurface(opts) {
         return name === '@panel';
     }
 
+    // a touch made here (the cursor's click and drag), handled after what is being handled now
+    function feedTouch(phase, x, y) {
+        var b = Buffer.alloc(12);
+        b.writeUInt32LE(phase, 0);
+        b.writeFloatLE(x, 4);
+        b.writeFloatLE(y, 8);
+        setImmediate(function () {
+            take(message(TOUCH, b));
+        });
+    }
+
     function tiltName(df) {
         if (df === 1) {
             return 'n';
@@ -5457,6 +5478,9 @@ function createMenuSurface(opts) {
         var tilted = tilt && tilt !== lastTilt;
         lastOp = operation;
         lastTilt = tilt;
+        if (step || tilted) {
+            pointerTravel = 0;      // the knob is in use: its press is for what it selected
+        }
         if (webActive() && !edit) {
             if (whereOpen) {
                 whereKnob(step, tilt, tilted, push);
@@ -5545,6 +5569,26 @@ function createMenuSurface(opts) {
             }
             lastPush = push;
             return;
+        }
+        /*
+         * "Kursor w menu": the knob pressed is the mouse's button where the cursor is, as it is in a page of
+         * Przeglądarka. It used to act on the selected row whatever the cursor pointed at, so what is not a row
+         * (AirPlay's window and its chips, the signs of the full screen) could not be reached without a finger
+         * (owner, 2026-11-22). Held down while the cursor moves it is a drag: the window goes with it.
+         * Only after the cursor was moved (24 px) since the knob was last turned: a turn and a press stay what
+         * they were, also when a finger brushes the pad on the knob's top.
+         */
+        if (pointer && (knobDown || pointerTravel >= 24) && !step && !tilted) {
+            if ((push === 1) !== (lastPush === 1)) {
+                knobDown = push === 1;
+                feedTouch(knobDown ? 1 : 3, pointer.x, pointer.y);
+            }
+            lastPush = push;
+            return;
+        }
+        if (knobDown) {
+            knobDown = false;
+            feedTouch(3, pointer ? pointer.x : 0, pointer ? pointer.y : 0);
         }
         if (airState && airState.full && !edit) {
             // full screen: the knob shows the way out; pressed while shown, it leaves
@@ -6410,8 +6454,17 @@ function createMenuSurface(opts) {
             var was = pointer;
             pointer = p ? { x: Number(p.x) || 0, y: Number(p.y) || 0 } : null;
             if (!pointer || !was) {
+                pointerTravel = 0;
+                if (knobDown && was) {
+                    knobDown = false;
+                    feedTouch(3, was.x, was.y);
+                }
                 paintSoon();
                 return;
+            }
+            pointerTravel += Math.abs(pointer.x - was.x) + Math.abs(pointer.y - was.y);
+            if (knobDown && (was.x !== pointer.x || was.y !== pointer.y)) {
+                feedTouch(2, pointer.x, pointer.y);     // the knob is held: a drag
             }
             if (was.x === pointer.x && was.y === pointer.y) {
                 return;     // (it did not move: nothing to draw)
@@ -6428,6 +6481,19 @@ function createMenuSurface(opts) {
             if (pointerTimer.unref) {
                 pointerTimer.unref();
             }
+        },
+        /** the name of Przeglądarka's own button (bar, floating signs) at this place of the screen, or '' */
+        webHitAt: function (x, y) {
+            var i;
+            if (!webActive() || edit) {
+                return '';
+            }
+            for (i = webHits.length - 1; i >= 0; i -= 1) {
+                if (pointIn(webHits[i], x, y)) {
+                    return webHits[i].name;
+                }
+            }
+            return '';
         },
         /** a tap of the touchpad where the cursor is: the same as a finger put down and lifted there */
         tapAt: function (x, y) {
@@ -6570,7 +6636,7 @@ function createMenuSurface(opts) {
         setWeb: function (info) {
             var next = info && info.on ? info : null;
             var key = next ? [next.connected ? 1 : 0, next.engine, next.err, next.url, next.title, next.loading ? 1 : 0, next.back ? 1 : 0, next.fwd ? 1 : 0,
-                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.held ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
+                next.live ? 1 : 0, next.zoom, next.editable ? 1 : 0, next.pct, next.ring, next.ask || '', next.w | 0, next.h | 0, next.mouse ? 1 : 0, Math.round(next.cx || 0), Math.round(next.cy || 0), next.fs ? 1 : 0, next.stretch ? 1 : 0, next.fsFull ? 1 : 0, next.film ? [next.film.loading ? 1 : 0, next.film.paused ? 1 : 0, next.film.pos, next.film.dur, next.film.q, next.film.fill ? 1 : 0, next.film.seek ? 1 : 0].join(',') : '', next.app || '', next.appName || '', next.held ? 1 : 0, next.fsBox ? [next.fsBox.x, next.fsBox.y, next.fsBox.w, next.fsBox.h].join(',') : ''].join('|') : '';
             if (key === webKey && !!next === !!webView) {
                 return;
             }

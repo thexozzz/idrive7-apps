@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.17
+
+- Przeglądarka, pełny ekran: nowy okrągły przycisk „rozciągnij" obok wyjścia (taki sam jak w pełnym ekranie AirPlay). Włączony – film wypełnia cały ekran środkowy, bez czarnych pasów po bokach (obraz jest wtedy szerszy niż w oryginale). Przełącznik jest zapamiętywany. `g21-browser` 0.1.63: okno silnika dostaje kształt filmu (dla 16:9 – 852 × 480 zamiast 1280 × 480, więc mniej pikseli do narysowania), a aplikacja rysuje je na całym ekranie; kształt filmu odczytywany ze strony, 16:9, gdy strona go nie podaje (odtwarzacz w ramce innej witryny). Nie dotyczy THEiPlay Player, który ma własny przycisk.
+- Kursor w pełnym ekranie przeglądarki: kliknięcie (stuknięcie w gładzik albo wciśnięcie pokrętła) w pływający przycisk – wyjście, rozciągnięcie – trafia teraz w przycisk. Dotąd w pełnym ekranie cała powierzchnia była „stroną", więc każde kliknięcie szło do strony i wyjść dało się tylko palcem.
+- „Kursor w menu": wciśnięcie pokrętła jest kliknięciem w miejscu kursora, jeśli kursor został poruszony (24 px) od ostatniego obrotu albo wychylenia pokrętła. Dotąd wciśnięcie zawsze dotyczyło zaznaczonego kafla, więc tego, co kaflem nie jest (okno AirPlay na ekranie środkowym i jego przyciski „pozycja" / „rozmiar", znaki pełnego ekranu AirPlay), nie dało się użyć bez palca. Pokrętło przytrzymane podczas ruchu kursora to przeciąganie: okno AirPlay jedzie za kursorem. Po obrocie pokrętła wciśnięcie znów dotyczy zaznaczenia.
+- Sprawdzone testami na stanowisku; w aucie jeszcze nie.
+
 ## 0.2.16
 
 - Z logu auta (2026-11-22, film 21 minut, wersja 0.2.15, rysowanie procesorem): 21–24 klatki/s, silnik 105–125 % jednego rdzenia, jednostka zajęta w ok. 90 %. Obok silnika: `node` 36–37 %, `NavigationBasic` 31–35 %, `avb_streamhandl` 14 %, `AlsaRoutingAdap` 14 %. Właściciel: „już wszystko jest płynnie". Trybu GPU nadal nikt nie włączył, więc nie jest zmierzony.
